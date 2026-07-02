@@ -1,0 +1,203 @@
+kalau ini gimana, untuk //group buyer kebawah ada settingan untuk groupbuyer_filter 
+@extends('layouts.master')
+
+@section('content')
+<div class="container-fluid" style="border-radius: 20px;">
+	<div class="row" style="margin-top: 7rem">
+		<div class="col-sm-12">
+			<div class="box box-danger">
+				<div class="box-header with-border">
+					<h3 class="box-title">
+						<strong>Report Good Issue Lab</strong>
+					</h3>
+				</div>
+				<div class="box-body">
+					<div class="row" style="margin-bottom: 2.4rem">
+
+						<div class="col-md-2 col-sm-5">
+                            <b>Filter :</b>
+                            <select name="filter" id="filter" class="select2 form-control" style="width: 100%">
+                                <option value="">-- Select Filter --</option>
+                                <option value="groupbuyer_filter">Group Buyer</option>
+                                <option value="po_filter">PO</option>
+                            </select>
+                        </div>
+						<div class="col-md-2 col-sm-5" id="groupbuyer_container">
+							<b>Group Buyer :</b>
+							<select class="select2 form-control" id="group_buyer" style="width: 100%"></select>
+						</div>
+						<div class="col-md-2 col-sm-5" id="season_container">
+							<b>Season :</b>
+							<select class="select2 form-control" id="season" style="width: 100%"></select>
+						</div>
+						<div class="col-md-4 col-sm-3" style="padding-top: 2rem">
+							<button type="button" class="btn btn-sm btn-primary" id="findbtn">Find</button>
+							<button type="button" class="btn btn-sm btn-warning" id="resetbtn">Reset</button>
+						</div>
+					</div>
+					<table id="datalist" class="table table-bordered table-striped" style="width: 100%">
+						<thead>
+							<tr>
+								<th>No</th>
+								<th>Carton Code</th>
+								<th>Buyer</th>
+								<th>Season</th>
+								<th>Style</th>
+								<th>Sub-Style</th>
+								<th>PO</th>
+								<th>QTY</th>
+								<th>Date</th>
+								<th>User</th>
+								<th>Detail</th>
+							</tr>
+						</thead>
+					</table>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+@endsection
+
+@section('extrascript')
+<script type="text/javascript">
+    $(document).ready(function(){
+
+    $('#groupbuyer_container').show();
+    $('#season_container').show();
+    $('#po_container').hide();
+
+    $('#filter').val('').trigger('change');
+
+   $('#filter').on('change', function(){
+    var selectedValue = $(this).val();
+    console.log("Value yang dipilih:", selectedValue);
+
+    if(selectedValue === 'groupbuyer_filter') {
+
+        $('#groupbuyer_container').show();
+        $('#season_container').show();
+        $('#po_container').hide();
+
+    } else if(selectedValue === 'po_filter') {
+
+        $('#groupbuyer_container').show();
+        $('#season_container').show();
+        $('#po_container').show();
+
+    } else {
+
+        $('#groupbuyer_container').show();
+        $('#season_container').show();
+        $('#po_container').hide();
+    }
+});
+
+
+
+
+    // Group Buyer
+    $('#group_buyer').select2({
+    placeholder: 'Select Group Buyer',
+    ajax: {
+        url: '{{ route("reportgoodissuelab.listgroupbuyer") }}',
+        type: 'GET',
+        dataType: 'json',
+        delay: 250,
+        data: function (params) {
+            return {
+                term: params.term
+            };
+        },
+
+        processResults: function(data) {
+            return {
+                results: $.map(data, function(item) {
+                    return {
+                        id: item.id,
+                        text: item.group_name
+                        }
+                    })
+                };
+            }
+        }
+    });
+
+    // Onchange Group Buyer
+    $('#group_buyer').on('change', function () {
+        let buyerId = $(this).val();
+
+        $('#season').val(null).trigger('change');
+    });
+
+    // Filter Season
+   $('#season').select2({
+        placeholder: 'Select Season',
+        ajax: {
+            url: '{{ route("reportgoodissuelab.listseason") }}',
+            type: 'GET',
+            dataType: 'json',
+
+            data: function (params) {
+                return {
+                    idbuyer: $('#group_buyer').val(),
+                    search: params.term || ''
+                };
+            },
+
+            processResults: function (data) {
+                return {
+                    results: $.map(data, function (item) {
+                        return {
+                            id: item.season,
+                            text: item.season
+                        };
+                    })
+                };
+            }
+        },
+    });
+
+    // Data Table
+    let table = $('#datalist').DataTable({
+        processing: true,
+        serverSide: true,
+        deferLoading: 0,
+        ajax: {
+            url: '{{ route("reportgoodissuelab.datatable") }}',
+            data: function (d) {
+                d.group_buyer = $('#group_buyer').val();
+                d.season = $('#season').val();
+            }
+        },
+        columns: [
+            { data: 'no' },
+            { data: 'cartoncode' },
+            { data: 'buyer' },
+            { data: 'season' },
+            { data: 'style' },
+            { data: 'sub_style' },
+            { data: 'po' },
+            { data: 'qty' },
+            { data: 'date' },
+            { data: 'user' },
+            { data: 'detail' }
+        ]
+    });
+
+    // Button Find
+    $('#findbtn').on('click', function () {
+        table.ajax.reload();
+    });
+
+    // Button Reset
+    $('#resetbtn').on('click', function () {
+        $('#group_buyer').val(null).trigger('change');
+        $('#season').val(null).trigger('change');
+
+        table.ajax.reload();
+    });
+
+	});
+</script>
+@endsection
