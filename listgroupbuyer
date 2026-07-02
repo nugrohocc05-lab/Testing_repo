@@ -1,0 +1,19 @@
+public function listGroupBuyer(Request $request)
+{
+    $filterType = $request->filter_type; // Tangkap dari AJAX
+    $term = $request->term;
+
+    $query = GroupBuyer::query();
+
+    // Logika kustom berdasarkan filter
+    if ($filterType == 'po_filter') {
+        // Misalnya: hanya ambil group buyer yang punya PO aktif
+        $query->whereHas('purchaseOrders'); 
+    }
+
+    if (!empty($term)) {
+        $query->where('group_name', 'LIKE', '%' . $term . '%');
+    }
+
+    return response()->json($query->get());
+}
