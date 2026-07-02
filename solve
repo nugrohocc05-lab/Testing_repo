@@ -1,0 +1,221 @@
+$(document).ready(function() {
+    $.fn.dataTable.ext.errMode = 'none';
+    $('.dropdown-submenu > a').on('click', function(event) {
+        event.preventDefault();
+    });
+    $('[data-tooltip="tooltip"]').tooltip();
+    
+    // ... (biarkan kode tooltip dan toggle-button tetap ada di sini) ...
+
+    @if(session('authenticated'))
+        @if(session('maintenance'))
+            $('#maintenance').modal('show');
+            countdown(15);
+        @endif
+
+        // 1. SAAT HALAMAN DIMUAT: HANYA PANGGIL 1 AJAX UNTUK TOTAL ANGKA
+        $.ajax({
+            type: "GET",
+            url: "{!! route('notif_total_count') !!}", // Nanti buat route ini di web.php
+            dataType: "json",
+            success: function(total) {
+                if (total > 0) {
+                    $('.notification-count').text(total);
+                    $('.messages-menu').show();
+                }
+            }
+        });
+
+        // 2. SAAT LONCENG DIKLIK: BARU LOAD SEMUA DETAILNYA
+        let isNotifDetailLoaded = false;
+        
+        $('.messages-menu .dropdown-toggle').on('click', function() {
+            if (isNotifDetailLoaded) return; // Mencegah reload kalau sudah diklik
+            
+            // Matrix Skill
+            $.ajax({
+                type: "GET",
+                url: "{!! route('ie_matrixscoringgetemployeecount') !!}",
+                dataType: "json",
+                success: function(res) {
+                    if (res > 0) {
+                        $('.matrix-skill-scoring-count').text(res);
+                        $('#matrix-skill-scoring-list').show();
+                    }
+                }
+            });
+
+            // Gate Alarm
+            $.ajax({
+                type: "GET",
+                url: "{!! route('gatealarmrelease_alert') !!}",
+                dataType: "json",
+                success: res => {
+                    if (res > 0) {
+                        $('.gatealarm-count').text(res);
+                        $('#gatealarm-release').show();
+                        $('.release-menu').show();
+                    }
+                }
+            });
+
+            // Unpack
+            $.ajax({
+                type: "GET",
+                url: "{!! route('wms_approvalinputcheckunpackapproval') !!}",
+                dataType: "json",
+                success: function(res) {
+                    if (res > 0) {
+                        $('.approval-unpack-count').text(res);
+                        $('#approval-unpack-list').show();
+                    }
+                }
+            });
+
+            // Unclose
+            $.ajax({
+                type: "GET",
+                url: "{!! route('wms_approvalinputcheckuncloseapproval') !!}",
+                dataType: "json",
+                success: function(res) {
+                    if (res > 0) {
+                        $('.approval-unclose-count').text(res);
+                        $('#approval-unclose-list').show();
+                    }
+                }
+            });
+
+            // Warehouse Request
+            $.ajax({
+                type: "GET",
+                url: "{!! route('wms_requestlistgetrequestqty') !!}",
+                dataType: "json",
+                success: res => {
+                    if (res > 0) {
+                        $('.warehouse-request-count').text(res);
+                        $('#warehouse-request-list').show();
+                    }
+                }
+            });
+
+            // Telegram Request
+            $.ajax({
+                type: "GET",
+                url: "{!! route('telegramuserrequestgetcount') !!}",
+                dataType: "json",
+                success: res => {
+                    if (res > 0) {
+                        $('.telegram-request-count').text(res);
+                        $('#telegram-request-list').show();
+                    }
+                }
+            });
+
+            // Alert Notif
+            $.ajax({
+                type: "GET",
+                url: "{!! route('alertget_notif_count') !!}",
+                dataType: "json",
+                success: res => {
+                    if (res > 0) {
+                        $('.alert-count').text(res);
+                        $('#alert-notification').show();
+                    }
+                }
+            });
+
+            // Cutting Alert
+            $.ajax({
+                type: "GET",
+                url: "{!! route('alertget_notif_cutting_count') !!}",
+                dataType: "json",
+                success: res => {
+                    if (res > 0) {
+                        $('.cutting-alert-count').text(res);
+                        $('#cutting-alert-notification').show();
+                    }
+                }
+            });
+
+            // Validation DO
+            $.ajax({
+                type: "GET",
+                url: "{!! route('deliveryordervalidationcountvalidation') !!}",
+                dataType: "json",
+                success: res => {
+                    if (res > 0) {
+                        $('.validationdo-count').text(res);
+                        $('#validationdo-notification').show();
+                    }
+                }
+            });
+
+            // Approval Dept
+            $.ajax({
+                type: "GET",
+                url: "{!! route('deliveryorderapprovaldeptcountapprovaldept') !!}",
+                dataType: "json",
+                success: res => {
+                    if (res > 0) {
+                        $('.approvaldept-count').text(res);
+                        $('#approvaldept-notification').show();
+                    }
+                }
+            });
+
+            // Approval Manager
+            $.ajax({
+                type: "GET",
+                url: "{!! route('deliveryorderapprovalmanagercountapprovalmanager') !!}",
+                dataType: "json",
+                success: res => {
+                    if (res > 0) {
+                        $('.approvalmanager-count').text(res);
+                        $('#approvalmanager-notification').show();
+                    }
+                }
+            });
+
+            // Approval Stock
+            $.ajax({
+                type: "GET",
+                url: "{!! route('approvalstockcountnotif') !!}",
+                dataType: "json",
+                success: res => {
+                    if (res > 0) {
+                        $('.approvalstock-count').text(res);
+                        $('#approvalstock-notification').show();
+                    }
+                }
+            });
+
+            // Approval Storage
+            $.ajax({
+                type: "GET",
+                url: "{!! route('approvalstoragecountnotif') !!}",
+                dataType: "json",
+                success: res => {
+                    if (res > 0) {
+                        $('.approvalstorage-count').text(res);
+                        $('#approvalstorage-notification').show();
+                    }
+                }
+            });
+
+            // Missing Needle
+            $.ajax({
+                type: "GET",
+                url: "{!! route('mechanic_missingneedleapprovalcountnotif') !!}",
+                dataType: "json",
+                success: res => {
+                    if (res > 0) {
+                        $('.approval-nemoappr-count').text(res);
+                        $('#approval-nemoappr-list').show();
+                    }
+                }
+            });
+
+            isNotifDetailLoaded = true; // Tandai selesai agar tidak nge-load ulang
+        });
+    @endif
+});
