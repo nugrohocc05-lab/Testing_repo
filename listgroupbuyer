@@ -1,43 +1,45 @@
-   public function listGroupBuyer(Request $request)
-    {
-        if (!$request->ajax()) {
-                return;
-        }
-
-        preconnect(session('db'));
-
-         // $fr = (new FGReceiveGarmentStock())->getTable();
-        // $do = (new DOStock())->getTable();
-        // $mb = (new Buyer())->getTable();
-        // $mgb = (new MasterGroupBuyer())->getTable();
-
-        // $data = FGReceiveGarmentStock::select(
-        //         "$mgb.id",
-        //         "$mgb.group_name"
-        //     )
-        //     ->join($do, "$fr.delivery_order", "=", "$do.delivery_order")
-        //     ->join($mb, "$do.masterbuyer_id", "=", "$mb.idbuyer")
-        //     ->join($mgb, "$mb.groupbuyer", "=", "$mgb.id")
-        //     ->whereNotNull("$fr.date_gi")
-        //     ->distinct()
-        //     ->orderBy("$mgb.group_name")
-        //     ->get();
-
-        // return response()->json($data);
-
-        $gbuyer = DB::table('mesprima1_restore.fgreceivegarment_stocks as fr')
-                 ->join('mesprima1_restore.delivery_order_stocks as do', function ($join) {
-                    $join->on('fr.delivery_order', '=', 'do.delivery_order');
-                })
-                ->join('mainmes.masterbuyer as mb', 'do.masterbuyer_id', '=', 'mb.idbuyer')
-                ->join('mainmes.master_group_buyers as mgb', 'mb.groupbuyer', '=', 'mgb.id')
-                ->whereNotNull('fr.date_gi')
-                ->select(
-                    'mgb.id',
-                    'mgb.group_name'
-                )
-                ->distinct()
-                ->orderBy('mgb.group_name')
-                ->get();
-        return response()->json($gbuyer);
+public function listGroupBuyer(Request $request)
+{
+    if (!$request->ajax()) {
+        return;
     }
+
+    preconnect(session('db'));
+
+    // Tangkap parameter dari AJAX (Select2)
+    $term = $request->term;
+    $filterType = $request->filter_type;
+
+    // Inisialisasi Query dasar
+    $query = DB::table('mesprima1_restore.fgreceivegarment_stocks as fr')
+        ->join('mesprima1_restore.delivery_order_stocks as do', 'fr.delivery_order', '=', 'do.delivery_order')
+        ->join('mainmes.masterbuyer as mb', 'do.masterbuyer_id', '=', 'mb.idbuyer')
+        ->join('mainmes.master_group_buyers as mgb', 'mb.groupbuyer', '=', 'mgb.id')
+        ->whereNotNull('fr.date_gi')
+        ->select(
+            'mgb.id',
+            'mgb.group_name'
+        );
+
+    // 1. Logika Pencarian untuk Select2
+    if (!empty($term)) {
+        $query->where('mgb.group_name', 'LIKE', '%' . $term . '%');
+    }
+
+    // 2. Logika Berdasarkan Filter Utama (Group Buyer vs PO)
+    if ($filterType === 'po_filter') {
+        // Tambahkan kondisi khusus jika yang dipilih adalah PO Filter
+        // Misalnya: Hanya tampilkan group buyer yang PO-nya aktif/tidak kosong
+        // $query->whereNotNull('do.po_number'); 
+    } elseif ($filterType === 'groupbuyer_filter') {
+        // Tambahkan kondisi khusus jika yang dipilih adalah Group Buyer Filter
+        // Jika tidak ada perbedaan kondisi, bagian if-else ini bisa diabaikan atau dihapus
+    }
+
+    // Eksekusi Query dengan distinct dan order
+    $gbuyer = $query->distinct()
+        ->orderBy('mgb.group_name')
+        ->get();
+
+    return response()->json($gbuyer);
+}
