@@ -1,33 +1,435 @@
-@foreach ($data as $m)
-@php
+ <style>
+            .content-wrapper {
+                padding-top: 20px;
+                padding-bottom: 80px;
+            }
 
-$child = $menu->where('parent_id', $m->id)->where('is_show', 1);
-@endphp
-@if ($child->count() > 0)
-<li class="dropdown-submenu">
-    <a href="javascript:void(0)"
-       tabindex="-1"
-       @if($m->module_name == 'tools') data-tooltip="{{$m->tooltip}}" @endif>
-        {{$m->alias}}
-    </a>
-    <ul class="dropdown-menu" style="background-color: {{$color}}; border:none">
-        {!! renderchild($child, $menu, $level + 1) !!}
-    </ul>
-</li>
-@else
-<li>
-    <a href="javascript:void(0)"
-        onclick="goShortcut(this)"
-        data-url="{{ ($m->route != '#' && \Route::has($m->route)) ? route($m->route) : '#' }}"
-        tabindex="-1"
-        @if($m->module_name == 'tools') data-tooltip="{{$m->tooltip}}" @endif>
-    {{$m->alias}}
-    </a>
-</li>
-@endif
-@if($m->controller_name == 'shipping' && $m->route = '#')
-<div style="border-top: 1px solid #b7b6b6;"></div>
-@elseif($m->controller_name == 'SummaryMesDashboardController')
-<div style="border-top: 1px solid #b7b6b6"></div>
-@endif
-@endforeach
+            .navbar {
+                min-height: 70px;
+                margin-bottom: 50px;
+                font-weight: 600;
+            }
+
+            .navbar-brand {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                height: 70px;
+                padding: 0 15px;
+            }
+
+            .navbar-brand b {
+                line-height: 1;
+            }
+
+            .navbar-logo {
+                max-height: 40px;
+                width: auto;
+                object-fit: contain;
+            }
+
+            .dropdown-menu>li>a {
+                color: #fff !important;
+            }
+
+            .dropdown-menu a:hover,
+            .dropdown-menu a:focus {
+                background-color: transparent !important;
+                color: #fff !important;
+
+            }
+
+            .card-bg:hover {
+                background:  rgba(191, 191, 191, 0.3)
+            }
+
+            .text-bg {
+                color: white;
+            }
+
+            @media (min-width: 768px) {
+
+                .custom-nav-container {
+                    margin-left: 120px;
+                    margin-right: 120px;
+                }
+
+                .navbar-nav>li>a {
+                    padding-top: 25px !important;
+                    padding-bottom: 25px !important;
+                }
+            }
+
+            @media (max-width: 767px) {
+                .content-wrapper {
+                    margin-bottom: 30px;
+                    height: 100%;
+                }
+
+                .custom-nav-container {
+                    margin-left: 0 !important;
+                    margin-right: 0 !important;
+                }
+
+                .navbar>.container::before,
+                .navbar>.container::after {
+                    display: none !important;
+                }
+
+                .navbar>.container {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    flex-wrap: wrap;
+                }
+
+                div.navbar-collapse.pull-left{
+                    position: fixed;
+                    top: 70px;
+                    left: 0;
+                    width: 50%;
+                    margin: 0 !important;
+                    background: #21409A;
+                    z-index: 999;
+                    overflow-y: auto;
+                }
+
+                .navbar-header {
+                    order: 1;
+                    display: flex;
+                    align-items: center;
+                    margin: 0;
+                    padding: 0 15px;
+                    height: 70px;
+                }
+
+            .navbar-custom-menu {
+                display: flex;
+                align-items: center;
+                height: 70px;
+                margin-left: auto;
+                }
+
+                .navbar-custom-menu .navbar-nav {
+                    display: flex;
+                    flex-direction: row;
+                    align-items: center;
+                    margin: 0;
+                }
+
+                .navbar-custom-menu .navbar-nav > li {
+                    display: flex;
+                    align-items: center;
+                    height: 70px;
+                }
+
+                .navbar-toggle {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    height: 70px;
+                    margin: 0 12px 0 0;
+                    padding: 0 12px;
+                    background: transparent;
+                    border: 0;
+                    color: #fff;
+                    font-size: 20px;
+                }
+
+                .dropdown-submenu > .dropdown-menu {
+                    display: none;
+                    position: static;
+                }
+
+                .dropdown-submenu.open > .dropdown-menu {
+                    display: block;
+                }
+
+                .dropdown-submenu:hover > .dropdown-menu {
+                    display: none;
+                }
+            }
+
+        </style>
+
+        @yield('extracss')
+    </head>
+
+    <body class="skin-blue layout-top-nav" style="background-color: #ECF0F5;">
+        <audio id="warningSound" src="{{ asset('sounds/warning_sound.mp3') }}" preload="auto"></audio>
+        <audio id="successSound" src="{{ asset('sounds/success_sound.mp3') }}" preload="auto"></audio>
+        <!-- Wrapper -->
+        <div class="wrapper">
+            <!-- Header -->
+            <div class="main-header">
+                <div class="navbar navbar-fixed-top" style="background-color: #21409A;">
+                    <div class="container-fluid custom-nav-container" >
+                        <div class="navbar-header" >
+                            <button
+                                type="button"
+                                class="navbar-toggle collapsed"
+                                data-toggle="collapse"
+                                data-target="#navbar-collapse">
+                                <span class="glyphicon glyphicon-menu-hamburger"></span>
+                            </button>
+                            <a href="{{ route('home') }}" class="navbar-brand">
+                                <img src="{{ asset('img/imageslogin/logo_mes.png') }}" class="navbar-logo" alt="Logo MES">
+                            </a>
+                        </div>
+                        @if(session('authenticated'))
+                        @php
+                        $menus = session('menu');
+                        $head_menu = $menus->where('module_name', 'menu')->where('is_show', 1);
+                        @endphp
+                        <div class="collapse navbar-collapse pull-left" id="navbar-collapse">
+                            <ul class="nav navbar-nav">
+                                @foreach($head_menu as $hm)
+                                @php
+                                $child = $menus->where('parent_id', $hm->id);
+                                @endphp
+                                <li class="dropdown">
+                                    <a href="#" class="dropdown-toggle" data-toggle="dropdown" style="height: 100%;">
+                                        {{$hm->alias}}
+                                        @if($child->count() > 0)
+                                        <span class="caret"></span>
+                                        @endif
+                                    </a>
+                                    @if ($child->count() > 0)
+                                    <ul class="dropdown-menu" role="menu" style="background-color: rgb(43, 87, 215); border:none ">
+                                        {!! renderchild($child, $menus, 1) !!}
+                                    </ul>
+                                    @endif
+                                </li>
+                                @endforeach
+                            </ul>
+                        </div>
+                        <div class="navbar-custom-menu" style=" display:flex; ">
+
+                        <ul class="nav navbar-nav">
+                                <li class="dropdown messages-menu"> <!-- style="display: none" -->
+                                    <a href="#" class="dropdown-toggle" data-toggle="dropdown">
+                                        <i class="fa fa-bell animated infinite wobble"></i>
+                                        <span class="label label-success notification-count">0</span>
+                                    </a>
+                                    <ul class="dropdown-menu">
+                                        <li class="header">You have <span class="notification-count">0</span> notification approval</li>
+                                        <li>
+                                            <ul class="menu">
+                                                <li class="card-bg" id="approval-nemoappr-list" style="display: none">
+                                                    <a href="{{route('mechanic_missingneedleapproval')}}">
+                                                        <div class="pull-left">
+                                                            <img src="{{ _asset('img/iconsNotification/approval-nemo-list.png') }}">
+                                                        </div>
+                                                        <h4>
+                                                            <small><i class="fa fa-clock-o"></i></small>
+                                                        </h4>
+                                                        <p>There is <b class="approval-nemoappr-count"></b> Approval Missing Needle <br> which must be processed.</p>
+                                                    </a>
+                                                </li>
+                                                <li class="card-bg" id="approval-unclose-list" style="display: none">
+                                                    <a href="{{route('dataorder_uncloseapprove')}}">
+                                                        <div class="pull-left">
+                                                            <img src="{{ _asset('img/iconsNotification/approval-unclose-list.png') }}">
+                                                        </div>
+                                                        <h4>
+                                                            <small><i class="fa fa-clock-o"></i></small>
+                                                        </h4>
+                                                        <p>There is <b class="approval-unclose-count"></b> Approval Unclose PO <br> which must be processed.</p>
+                                                    </a>
+                                                </li>
+                                                <li class="card-bg" id="warehouse-request-list" style="display: none">
+                                                    <a href="{{route('wms_requestlist')}}">
+                                                        <div class="pull-left">
+                                                            <img src="{{ _asset('img/iconsNotification/warehouse-request-list.png') }}">
+                                                        </div>
+                                                        <h4>
+                                                            <small><i class="fa fa-clock-o"></i></small>
+                                                        </h4>
+                                                        <p>There is <b class="warehouse-request-count"></b> Material Request <br> you need to process</p>
+                                                    </a>
+                                                </li>
+                                                <li class="card-bg" id="telegram-request-list" style="display: none">
+                                                    <a href="{{route('telegramuserrequest')}}">
+                                                        <div class="pull-left">
+                                                            <img src="{{ _asset('img/iconsNotification/telegram-request-list.png') }}">
+                                                        </div>
+                                                        <h4>
+                                                            <small><i class="fa fa-clock-o"></i></small>
+                                                        </h4>
+                                                        <p>There is <b class="telegram-request-count"></b> Telegram Request <br> you need to process</p>
+                                                    </a>
+                                                </li>
+                                                <li class="card-bg" id="matrix-skill-scoring-list" style="display: none;">
+                                                    <a href="{{route('ie_matrixscoring')}}">
+                                                        <div class="pull-left">
+                                                            <img src="{{ _asset('img/iconsNotification/matrix-skill-scoring-list.png') }}">
+                                                        </div>
+                                                        <h4>
+                                                            <small><i class="fa fa-clock-o"></i></small>
+                                                        </h4>
+                                                        <p>There is <b class="matrix-skill-scoring-count"></b> Skill matrix scoring <br> which must be processed.</p>
+                                                    </a>
+                                                </li>
+                                                <li class="card-bg" id="alert-notification" style="display: none">
+                                                    <a href="{{route('alert')}}">
+                                                        <div class="pull-left">
+                                                            <img src="{{ _asset('img/iconsNotification/alert-notification.png') }}">
+                                                        </div>
+                                                        <h4>
+                                                            <small><i class="fa fa-clock-o"></i></small>
+                                                        </h4>
+                                                        <p>There is <b class="alert-count"></b> warning of process<br> you need to be processed</p>
+                                                    </a>
+                                                </li>
+                                                <li class="card-bg" id="cutting-alert-notification" style="display: none">
+                                                    <a href="{{route('cuttingalert')}}">
+                                                        <div class="pull-left">
+                                                            <img src="{{ _asset('img/iconsNotification/cutting-alert-notification.png') }}">
+                                                        </div>
+                                                        <h4>
+                                                            <small><i class="fa fa-clock-o"></i></small>
+                                                        </h4>
+                                                        <p>There is <b class="cutting-alert-count"></b> cutting T3 warning<br> you need to be processed</p>
+                                                    </a>
+                                                </li>
+                                                <li class="card-bg" id="validationdo-notification" style="display: none">
+                                                    <a href="{{route('deliveryordervalidation')}}">
+                                                        <div class="pull-left">
+                                                            <img src="{{ _asset('img/iconsNotification/validation-notification.png') }}">
+                                                        </div>
+                                                        <h4>
+                                                            <small><i class="fa fa-clock-o"></i></small>
+                                                        </h4>
+                                                        <p>There is <b class="validationdo-count"></b> delivery order validation<br> you need to be processed</p>
+                                                    </a>
+                                                </li>
+                                                <li class="card-bg" id="approvaldept-notification" style="display: none">
+                                                    <a href="{{route('deliveryorderapprovaldept')}}">
+                                                        <div class="pull-left">
+                                                            <img src="{{ _asset('img/iconsNotification/approval-dept.png') }}">
+                                                        </div>
+                                                        <h4>
+                                                            <small><i class="fa fa-clock-o"></i></small>
+                                                        </h4>
+                                                        <p>There is <b class="approvaldept-count"></b> delivery order approval<br> you need to be processed</p>
+                                                    </a>
+                                                </li>
+                                                <li class="card-bg" id="approvalmanager-notification" style="display: none">
+                                                    <a href="{{route('deliveryorderapprovalmanager')}}">
+                                                        <div class="pull-left">
+                                                            <img src="{{ _asset('img/iconsNotification/approval-manager.png') }}">
+                                                        </div>
+                                                        <h4>
+                                                            <small><i class="fa fa-clock-o"></i></small>
+                                                        </h4>
+                                                        <p>There is <b class="approvalmanager-count"></b> delivery order approval<br> you need to be processed</p>
+                                                    </a>
+                                                </li>
+                                                <li class="card-bg" id="approvalstock-notification" style="display: none">
+                                                    <a href="{{route('approvalstock')}}">
+                                                        <div class="pull-left">
+                                                            <img src="{{ _asset('img/iconsNotification/approval-stock.png') }}">
+                                                        </div>
+                                                        <h4>
+                                                            <small><i class="fa fa-clock-o"></i></small>
+                                                        </h4>
+                                                        <p>There is <b class="approvalstock-count"></b> stock approval FG<br> you need to be processed</p>
+                                                    </a>
+                                                </li>
+                                                <li class="card-bg" id="approvalstorage-notification" style="display: none">
+                                                    <a href="{{route('approvalstorage')}}">
+                                                        <div class="pull-left">
+                                                            <img src="{{ _asset('img/iconsNotification/approval-storage.png') }}">
+                                                        </div>
+                                                        <h4>
+                                                            <small><i class="fa fa-clock-o"></i></small>
+                                                        </h4>
+                                                        <p>There is <b class="approvalstorage-count"></b> storage approval FG<br> you need to be processed</p>
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </li>
+                                    </ul>
+                                </li>
+                                <li class="card-bg" class="dropdown messages-menu release-menu" style="display: none">
+                                    <a href="#" class="dropdown-toggle" data-toggle="dropdown">
+                                        <i class="fa fa-bell animated infinite wobble"></i>
+                                        <span class="label label-warning gatealarm-count">0</span>
+                                    </a>
+                                    <ul class="dropdown-menu">
+                                        <li class="header">You have <span class="gatealarm-count">0</span> gate alarm notification </li>
+                                        <li>
+                                            <ul class="menu">
+                                                <li id="gatealarm-release" style="display: none">
+                                                    <a href="{{route('gatealarmrelease')}}">
+                                                        <div class="pull-left">
+                                                            <img src="{{_asset('img/DATAORDER.png')}}" alt="gate alarm list">
+                                                        </div>
+                                                        <h4>
+                                                            <small><i class="fa fa-clock-o"></i></small>
+                                                        </h4>
+                                                        <p>There is <b class="gatealarm-count"></b> gate alarm<br> you need to be processed</p>
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </li>
+                                    </ul>
+                                </li>
+                                <li class="dropdown user user-menu">
+                                    <a href="#" class="dropdown-toggle" data-toggle="dropdown">
+                                        <span class="hidden-xs">{{ explode(' ', trim(session('user')->name))[0] }} </span>&nbsp; (Sign Out)
+                                    </a>
+                                    <ul class="dropdown-menu" >
+                                        <li class="user-header" style="height: auto; background-color: #21409A; padding:20px; display:flex-col; justify-content: center; align-items:center">
+                                            <p>{{ session('user')->name }}
+                                            <p>{{ session('factoryname') }}</p>
+                                            </p>
+                                        </li>
+                                        <li class="user-footer" style="margin-top: 5px;">
+                                            <div class="pull-right">
+                                                <form action="{{ route('logout') }}" method="POST">
+                                                    @csrf
+                                                    <button type="submit" class="btn btn-danger">Logout <span class="glyphicon glyphicon-log-out"></span></button>
+                                                </form>
+                                            </div>
+                                        </li>
+                                    </ul>
+                                </li>
+                            </ul>
+                        </div>
+                        @endif
+                    </div>
+                    <div id="tooltips" class="tooltips" style="z-index: 1000 !important; position: absolute; background-color: white;"></div>
+                </div>
+            </div>
+            <!-- Header End -->
+
+            <!-- Content -->
+            <div class="content-wrapper" >
+
+                @yield('content')
+            </div>
+            @include('layouts.maintenance')
+            @include('layouts.image')
+            @include('layouts.loading')
+            <!-- Content End -->
+        </div>
+        <!-- Wrapper End -->
+
+        <!-- Footer -->
+        @hasSection('description_menu')
+        <div class="main-footer navbar-fixed-bottom" style="background-color: #ffff;bottom: 20px;">
+            <button class="toggle-button">Hide</button>
+            <div class="container sticky-content">
+                <p> @yield('description_menu') </p>
+            </div>
+        </div>
+        @endif
+        <div class="main-footer navbar-fixed-bottom" style="background-color: #21409A; padding: 2rem;">
+            <div class="container" style="color:#fff; width:87%; font-size: medium; font-weight: 600;padding:0; ">
+                <div class="pull-right hidden-xs">
+                    PT PAN BROTHERS Tbk. & Groups
+                </div>
+                <strong>Copyright © {{ Carbon\Carbon::now()->format('Y') }} Manufacturing Execution System</strong>
+            </div>
+        </div>
