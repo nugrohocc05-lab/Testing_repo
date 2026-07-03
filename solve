@@ -1,221 +1,119 @@
-$(document).ready(function() {
-    $.fn.dataTable.ext.errMode = 'none';
-    $('.dropdown-submenu > a').on('click', function(event) {
-        event.preventDefault();
-    });
-    $('[data-tooltip="tooltip"]').tooltip();
-    
-    // ... (biarkan kode tooltip dan toggle-button tetap ada di sini) ...
+/* 1. Layar Desktop Besar */
+@media (min-width: 1025px) {
+    .custom-nav-container {
+        margin-left: 120px;
+        margin-right: 120px;
+    }
+    .navbar-nav>li>a {
+        padding-top: 25px !important;
+        padding-bottom: 25px !important;
+    }
+}
 
-    @if(session('authenticated'))
-        @if(session('maintenance'))
-            $('#maintenance').modal('show');
-            countdown(15);
-        @endif
+/* 2. Layar Tablet (Potret dan Lanskap) */
+@media (min-width: 768px) and (max-width: 1024px) {
+    .custom-nav-container {
+        margin-left: 15px; /* Margin dikurangi agar menu memiliki ruang */
+        margin-right: 15px; 
+    }
+    .navbar-nav>li>a {
+        padding-top: 25px !important;
+        padding-bottom: 25px !important;
+        padding-left: 10px !important; /* Padding antar item dibuat lebih rapat */
+        padding-right: 10px !important;
+    }
+    .navbar-custom-menu {
+        margin-right: 15px;
+    }
+}
 
-        // 1. SAAT HALAMAN DIMUAT: HANYA PANGGIL 1 AJAX UNTUK TOTAL ANGKA
-        $.ajax({
-            type: "GET",
-            url: "{!! route('notif_total_count') !!}", // Nanti buat route ini di web.php
-            dataType: "json",
-            success: function(total) {
-                if (total > 0) {
-                    $('.notification-count').text(total);
-                    $('.messages-menu').show();
-                }
-            }
-        });
+/* 3. Layar Mobile (HP) */
+@media (max-width: 767px) {
+    .content-wrapper {
+        margin-bottom: 30px;
+        height: 100%;
+    }
 
-        // 2. SAAT LONCENG DIKLIK: BARU LOAD SEMUA DETAILNYA
-        let isNotifDetailLoaded = false;
-        
-        $('.messages-menu .dropdown-toggle').on('click', function() {
-            if (isNotifDetailLoaded) return; // Mencegah reload kalau sudah diklik
-            
-            // Matrix Skill
-            $.ajax({
-                type: "GET",
-                url: "{!! route('ie_matrixscoringgetemployeecount') !!}",
-                dataType: "json",
-                success: function(res) {
-                    if (res > 0) {
-                        $('.matrix-skill-scoring-count').text(res);
-                        $('#matrix-skill-scoring-list').show();
-                    }
-                }
-            });
+    .custom-nav-container {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+    }
 
-            // Gate Alarm
-            $.ajax({
-                type: "GET",
-                url: "{!! route('gatealarmrelease_alert') !!}",
-                dataType: "json",
-                success: res => {
-                    if (res > 0) {
-                        $('.gatealarm-count').text(res);
-                        $('#gatealarm-release').show();
-                        $('.release-menu').show();
-                    }
-                }
-            });
+    .navbar>.container::before,
+    .navbar>.container::after {
+        display: none !important;
+    }
 
-            // Unpack
-            $.ajax({
-                type: "GET",
-                url: "{!! route('wms_approvalinputcheckunpackapproval') !!}",
-                dataType: "json",
-                success: function(res) {
-                    if (res > 0) {
-                        $('.approval-unpack-count').text(res);
-                        $('#approval-unpack-list').show();
-                    }
-                }
-            });
+    .navbar>.container {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+    }
 
-            // Unclose
-            $.ajax({
-                type: "GET",
-                url: "{!! route('wms_approvalinputcheckuncloseapproval') !!}",
-                dataType: "json",
-                success: function(res) {
-                    if (res > 0) {
-                        $('.approval-unclose-count').text(res);
-                        $('#approval-unclose-list').show();
-                    }
-                }
-            });
+    div.navbar-collapse.pull-left {
+        position: fixed;
+        top: 70px;
+        left: 0;
+        width: 50%;
+        margin: 0 !important;
+        background: #21409A;
+        z-index: 999;
+        overflow-y: auto;
+    }
 
-            // Warehouse Request
-            $.ajax({
-                type: "GET",
-                url: "{!! route('wms_requestlistgetrequestqty') !!}",
-                dataType: "json",
-                success: res => {
-                    if (res > 0) {
-                        $('.warehouse-request-count').text(res);
-                        $('#warehouse-request-list').show();
-                    }
-                }
-            });
+    .navbar-header {
+        order: 1;
+        display: flex;
+        align-items: center;
+        margin: 0;
+        padding: 0 15px;
+        height: 70px;
+    }
 
-            // Telegram Request
-            $.ajax({
-                type: "GET",
-                url: "{!! route('telegramuserrequestgetcount') !!}",
-                dataType: "json",
-                success: res => {
-                    if (res > 0) {
-                        $('.telegram-request-count').text(res);
-                        $('#telegram-request-list').show();
-                    }
-                }
-            });
+    .navbar-custom-menu {
+        display: flex;
+        align-items: center;
+        height: 70px;
+        margin-left: auto;
+    }
 
-            // Alert Notif
-            $.ajax({
-                type: "GET",
-                url: "{!! route('alertget_notif_count') !!}",
-                dataType: "json",
-                success: res => {
-                    if (res > 0) {
-                        $('.alert-count').text(res);
-                        $('#alert-notification').show();
-                    }
-                }
-            });
+    .navbar-custom-menu .navbar-nav {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        margin: 0;
+    }
 
-            // Cutting Alert
-            $.ajax({
-                type: "GET",
-                url: "{!! route('alertget_notif_cutting_count') !!}",
-                dataType: "json",
-                success: res => {
-                    if (res > 0) {
-                        $('.cutting-alert-count').text(res);
-                        $('#cutting-alert-notification').show();
-                    }
-                }
-            });
+    .navbar-custom-menu .navbar-nav > li {
+        display: flex;
+        align-items: center;
+        height: 70px;
+    }
 
-            // Validation DO
-            $.ajax({
-                type: "GET",
-                url: "{!! route('deliveryordervalidationcountvalidation') !!}",
-                dataType: "json",
-                success: res => {
-                    if (res > 0) {
-                        $('.validationdo-count').text(res);
-                        $('#validationdo-notification').show();
-                    }
-                }
-            });
+    .navbar-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 70px;
+        margin: 0 12px 0 0;
+        padding: 0 12px;
+        background: transparent;
+        border: 0;
+        color: #fff;
+        font-size: 20px;
+    }
 
-            // Approval Dept
-            $.ajax({
-                type: "GET",
-                url: "{!! route('deliveryorderapprovaldeptcountapprovaldept') !!}",
-                dataType: "json",
-                success: res => {
-                    if (res > 0) {
-                        $('.approvaldept-count').text(res);
-                        $('#approvaldept-notification').show();
-                    }
-                }
-            });
+    .dropdown-submenu > .dropdown-menu {
+        display: none;
+        position: static;
+    }
 
-            // Approval Manager
-            $.ajax({
-                type: "GET",
-                url: "{!! route('deliveryorderapprovalmanagercountapprovalmanager') !!}",
-                dataType: "json",
-                success: res => {
-                    if (res > 0) {
-                        $('.approvalmanager-count').text(res);
-                        $('#approvalmanager-notification').show();
-                    }
-                }
-            });
+    .dropdown-submenu.open > .dropdown-menu {
+        display: block;
+    }
 
-            // Approval Stock
-            $.ajax({
-                type: "GET",
-                url: "{!! route('approvalstockcountnotif') !!}",
-                dataType: "json",
-                success: res => {
-                    if (res > 0) {
-                        $('.approvalstock-count').text(res);
-                        $('#approvalstock-notification').show();
-                    }
-                }
-            });
-
-            // Approval Storage
-            $.ajax({
-                type: "GET",
-                url: "{!! route('approvalstoragecountnotif') !!}",
-                dataType: "json",
-                success: res => {
-                    if (res > 0) {
-                        $('.approvalstorage-count').text(res);
-                        $('#approvalstorage-notification').show();
-                    }
-                }
-            });
-
-            // Missing Needle
-            $.ajax({
-                type: "GET",
-                url: "{!! route('mechanic_missingneedleapprovalcountnotif') !!}",
-                dataType: "json",
-                success: res => {
-                    if (res > 0) {
-                        $('.approval-nemoappr-count').text(res);
-                        $('#approval-nemoappr-list').show();
-                    }
-                }
-            });
-
-            isNotifDetailLoaded = true; // Tandai selesai agar tidak nge-load ulang
-        });
-    @endif
-});
+    .dropdown-submenu:hover > .dropdown-menu {
+        display: none;
+    }
+}
