@@ -1,965 +1,372 @@
-    <!DOCTYPE html>
-    <html lang="en">
+@extends('layouts.master')
 
-    <head>
-        <meta charset="utf-8">
-        <noscript>
-            <meta http-equiv="refresh" content="0;url={{route('nojs')}}">
-        </noscript>
-        <meta http-equiv="X-UA-Compatible" content="IE=edge">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <!-- CSRF Token -->
-        <meta name="csrf-token" content="{{ csrf_token() }}">
-        <title>{{ config('app.shortname') }}</title>
-        <link rel="icon" href="{!! _asset('img/pbtico.ico') !!}">
-        <link rel="stylesheet" href="{{ _asset('css/all.min.css') }}">
-        <link rel="stylesheet" href="{{ _asset('css/dropdownsubmenu.css') }}">
-        <link rel="stylesheet" href="{{ _asset('adminltecomponents/bootstrap/dist/css/bootstrap.min.css') }}">
-        <link rel="stylesheet" href="{{ _asset('adminltecomponents/select2/dist/css/select2.min.css') }}">
-        <link rel="stylesheet" href="{{ _asset('adminltecomponents/datepicker/dist/css/datepicker.min.css') }}">
-        <link rel="stylesheet" href="{{ _asset('css/selectreadonly.css') }}">
-        {{-- <link rel="stylesheet" href="{{ _asset('css/fixedColumns.bootstrap.min.css') }}"> --}}
-        {{-- <link rel="stylesheet" href="{{ _asset('css/dataTables.bootstrap.min.css') }}"> --}}
-        <link rel="stylesheet" href="{{ _asset('css/datatables.min.css') }}">
-        {{-- <link rel="stylesheet" href="{{ _asset('css/rowReorder.dataTables.min.css') }}">
-        <link rel="stylesheet" href="{{ _asset('css/buttons.dataTables.min.css') }}"> --}}
-        <link rel="stylesheet" href="{{ _asset('css/loading.css') }}">
-        <link rel="stylesheet" href="{{ _asset('css/custom.css') }}">
-        <link rel="stylesheet" href="{{ _asset('adminltecomponents/icheck/all.css') }}">
-        <link rel="stylesheet" href="{{ _asset('css/AdminLTE.min.css') }}">
-        <link rel="stylesheet" href="{{ _asset('css/skins/_all-skins.min.css') }}">
-        <link rel="stylesheet" href="{{ _asset('css/jquery.datetimepicker.css') }}">
-        <link rel="stylesheet" href="{{ _asset('css/jquery.wysiwyg.css') }}">
-        <link rel="stylesheet" href="{{ _asset('css/animate.css') }}">
-        <link rel="stylesheet" href="{{ _asset('css/imgenlarge.css') }}">
-        <link rel="stylesheet" href="{{ asset('css/newLoading.css') }}">
+@section('extracss')
+<style>
+    .wrapper-custom {
+        margin-top: 6rem;
+        padding-left: 35px;
+        padding-right: 35px;
+        border: 0 !important;
+        box-shadow: none;
+    }
 
-        <style>
-            .content-wrapper {
-                padding-top: 20px;
-                padding-bottom: 80px;
+    .wrapper-custom .row {
+        margin: 0;
+    }
+
+    .box {
+        border: 0 !important;
+        box-shadow: none;
+        border-radius: 20px;
+        overflow: hidden;
+    }
+
+    .box-header {
+        position: relative;
+        text-align: center;
+        min-height: 80px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 50px 0 50px;
+    }
+
+    .box-body {
+        padding: 0 !important;
+        box-shadow: none;
+    }
+
+    .box-footer {
+        background-color: transparent;
+    }
+
+    .box-footer-title {
+        min-height: 65px;
+        border: none;
+    }
+
+    .icon-img {
+        display: block;
+        max-width: 75%;
+        min-width: 75%;
+        margin: auto;
+        text-align: center;
+    }
+
+    .icon-img>img {
+        max-width: 75%;
+        min-width: 75%;
+        aspect-ratio: 1/1;
+        background: linear-gradient(to bottom, rgba(191, 191, 191, 0.1) 0%, rgba(191, 191, 191, 1) 100%);
+        border-radius: 15px;
+        transition: transform 0.5s ease;
+    }
+
+    .icon-img>img:hover {
+        background: linear-gradient(to bottom, rgba(60, 141, 188, 0.1) 0%, rgba(60, 141, 188, 1) 100%);
+        transform: scale(1.03);
+    }
+
+    .text-title {
+        font-size: 20px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .text-subtitle {
+        padding: 15px 4%;
+        font-size: 22px;
+        font-weight: 600;
+        color: #444;
+        display: flex;
+        align-items: center;
+    }
+
+    .text-subtitle span {
+        height: 1px;
+        background-color: #d0d0d0;
+        display: block;
+        width: 100%;
+        margin: 0 5px 0 15px;
+    }
+
+    .text-footer {
+        font-size: 15px;
+        font-weight: bold;
+        text-transform: capitalize;
+    }
+
+    .no-access {
+        height: calc(100vh - 250px);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 17px;
+    }
+
+    .card {
+        background-color: transparent;
+        transition: transform 0.5s ease;
+        margin-bottom: 25px;
+        margin-left: 10px;
+        margin-right: 10px;
+    }
+
+    .card:hover {
+        transform: scale(1.1);
+    }
+
+    a.menu-link {
+        text-decoration: none;
+        color: inherit;
+        display: block;
+    }
+
+    .bg-icon {
+        position: absolute;
+        top: 20%;
+        left: 15%;
+        width: 70%;
+        height: 70%;
+        z-index: 0;
+        opacity: 0.15;
+        pointer-events: none;
+        justify-content: center;
+        text-align: center;
+        display: flex;
+    }
+
+    .img-bg {
+        max-width: 900px;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+
+    @media screen and (max-width: 768px) {
+        .wrapper-custom {
+            margin-top: 2rem;
+            padding-left: 20px;
+            padding-right: 20px;
+        }
+
+        .box-header {
+            margin: 25px 10px 0 10px !important;
+            padding: 0 !important;
+        }
+
+        .img-bg {
+            max-width: 500px;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .bg-icon {
+            position: absolute;
+            top: 25%;
+            left: 25%;
+            width: 50%;
+            height: 50%;
+            z-index: 0;
+            opacity: 0.15;
+            pointer-events: none;
+            justify-content: center;
+            text-align: center;
+            display: flex;
+        }
+
+        .text-title {
+            font-size: 16px
+        }
+
+        .text-subtitle {
+            font-size: 16px;
+        }
+
+        .text-back {
+            display: none;
+        }
+
+        .text-body {
+            font-size: 16px;
+        }
+
+        .text-footer {
+            font-size: 9pt;
+            font-weight: bold;
+            text-transform: capitalize;
+        }
+
+        .card {
+            background-color: transparent;
+            transition: transform 0.5s ease;
+            margin-bottom: 25px;
+            margin-left: 10px;
+            margin-right: 10px;
+        }
+
+         .icon-img {
+            display: block;
+            max-width: 100%;
+            min-width: 100%;
+            margin: auto;
+            text-align: center;
+        }
+
+        .icon-img>img {
+            max-width: 100%;
+            min-width: 100%;
+            aspect-ratio: 1/1;
+            background: linear-gradient(to bottom, rgba(191, 191, 191, 0.1) 0%, rgba(191, 191, 191, 1) 100%);
+            border-radius: 15px;
+            transition: transform 0.5s ease;
+        }
+        }
+
+        @media (max-width: 1366px) {
+            .text-footer {
+                font-size: 13px;
+                font-weight: bold;
+                text-transform: capitalize;
             }
 
-            .navbar {
-                min-height: 70px;
-                margin-bottom: 50px;
-                font-weight: 600;
-            }
+        }
+</style>
+@endsection
 
-            .navbar-brand {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                height: 70px;
-                padding: 0 15px;
-            }
+@section('content')
+<div class="container-fluid wrapper-custom">
+    <div class="row" style="margin-top: 0rem">
+        <div class="col-sm-12">
+            <div class="box-header" style="position: relative; text-align: center; display: flex; align-items: center; justify-content: center;   ">
+                <span class="text-title" style="font-weight: 700; font-size: 20px; ">{{ $title }}</span>
+                <div style="position: absolute; left: 15px;">
+                    @if($parent)
+                    <a href="{{ route('submenu',['ctrl' => encrypt($parent->controller_name), 'module' => encrypt($parent->module_name), 'first' => 'x'])}}" style="display: flex;color:orange; font-size: 19px; align-items: center; justify-content: center; gap: 8px">
+                        <img src="{{ _asset('img/Icon_black/Back.svg') }}" style="width:18px">
+                        <span class="text-back" style="margin-left: 5px">
+                            Back
+                        </span>
+                    </a>
+                    @else
+                    <a href="{{ route('home')}}" class="" style="display: flex;color:orange; font-size: 19px; align-items: center; justify-content: center; gap: 8px" >
+                        <img src="{{ _asset('img/Icon_black/Back.svg') }}" style="width:18px">
+                        <span class="text-back" style="margin-left: 5px">
+                            Back
+                        </span>
+                    </a>
+                    @endif
+                </div>
+            </div>
+            <div class="box box-danger box-holder" style="margin-bottom: 5rem !important;   ">
+                <div class="bg-icon">
+                    <img src="{{ asset('img/imageslogin/mes-blur.png') }}" class="img-bg">
+                </div>
 
-            .navbar-brand b {
-                line-height: 1;
-            }
+                <div class="box-body">
+                    @if(isset($menu) && $menu->count() > 0)
+                    <div class="row">
+                        <div class="col-sm-12" style="margin-top: 40px; ">
+                            @if($firstmenu)
+                            <div class="text-subtitle">Transaction <span style="background-color: #DDDDDD;"></span> </div>
+                            @endif
 
-            .navbar-logo {
-                max-height: 40px;
-                width: auto;
-                object-fit: contain;
-            }
+                            @foreach($menu as $m)
+                            <div class="col-lg-2 col-md-3 col-sm-6 col-xs-6">
 
-            .dropdown-menu>li>a {
-                color: #fff !important;
-            }
-
-            .dropdown-menu a:hover,
-            .dropdown-menu a:focus {
-                background-color: transparent !important;
-                color: #fff !important;
-
-            }
-
-            .card-bg:hover {
-                background:  rgba(191, 191, 191, 0.3)
-            }
-
-            .text-bg {
-                color: white;
-            }
-
-            @media (max-width: 767px) {
-                .content-wrapper {
-                    margin-bottom: 30px;
-                    height: 100%;
-                }
-
-                .custom-nav-container {
-                    margin-left: 0 !important;
-                    margin-right: 0 !important;
-                }
-
-                .navbar>.container::before,
-                .navbar>.container::after {
-                    display: none !important;
-                }
-
-                .navbar>.container {
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    flex-wrap: wrap;
-                }
-
-                div.navbar-collapse.pull-left{
-                    position: fixed;
-                    top: 70px;
-                    left: 0;
-                    width: 50%;
-                    margin: 0 !important;
-                    background: #21409A;
-                    z-index: 999;
-                    overflow-y: auto;
-                }
-
-                .navbar-header {
-                    order: 1;
-                    display: flex;
-                    align-items: center;
-                    margin: 0;
-                    padding: 0 15px;
-                    height: 70px;
-                }
-
-                .navbar-custom-menu {
-                display: flex;
-                align-items: center;
-                height: 70px;
-                margin-left: auto;
-                }
-
-                .navbar-custom-menu .navbar-nav {
-                    display: flex;
-                    flex-direction: row;
-                    align-items: center;
-                    margin: 0;
-                }
-
-                .navbar-custom-menu .navbar-nav > li {
-                    display: flex;
-                    align-items: center;
-                    height: 70px;
-                }
-
-                .navbar-toggle {
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    height: 70px;
-                    margin: 0 12px 0 0;
-                    padding: 0 12px;
-                    background: transparent;
-                    border: 0;
-                    color: #fff;
-                    font-size: 20px;
-                }
-
-                .dropdown-submenu > .dropdown-menu {
-                    display: none;
-                    position: static;
-                }
-
-                .dropdown-submenu.open > .dropdown-menu {
-                    display: block;
-                }
-
-                .dropdown-submenu:hover > .dropdown-menu {
-                    display: none;
-                }
-            }
-
-            /* Ukuran Desktop */
-                @media (min-width: 1025px) {
-                    .custom-nav-container {
-                        margin-left: 120px;
-                        margin-right: 120px;
-                    }
-                    .navbar-nav>li>a {
-                        padding-top: 25px !important;
-                        padding-bottom: 25px !important;
-                    }
-                }
-
-                /* Tablet */
-                @media (min-width: 768px) and (max-width: 1024px) {
-                    .custom-nav-container {
-                        margin-left: 15px;
-                        margin-right: 15px;
-                    }
-                    .navbar-nav>li>a {
-                        padding-top: 25px !important;
-                        padding-bottom: 25px !important;
-                        padding-left: 10px !important;
-                        padding-right: 10px !important;
-                    }
-                    .navbar-custom-menu {
-                        margin-right: 15px;
-                    }
-                }
-
-
-
-        </style>
-
-        @yield('extracss')
-    </head>
-
-    <body class="skin-blue layout-top-nav" style="background-color: #ECF0F5;">
-        <audio id="warningSound" src="{{ asset('sounds/warning_sound.mp3') }}" preload="auto"></audio>
-        <audio id="successSound" src="{{ asset('sounds/success_sound.mp3') }}" preload="auto"></audio>
-        <!-- Wrapper -->
-        <div class="wrapper">
-            <!-- Header -->
-            <div class="main-header">
-                <div class="navbar navbar-fixed-top" style="background-color: #21409A;">
-                    <div class="container-fluid custom-nav-container" >
-                        <div class="navbar-header" >
-                            <button
-                                type="button"
-                                class="navbar-toggle collapsed"
-                                data-toggle="collapse"
-                                data-target="#navbar-collapse">
-                                <span class="glyphicon glyphicon-menu-hamburger"></span>
-                            </button>
-                            <a href="{{ route('home') }}" class="navbar-brand">
-                                <img src="{{ asset('img/imageslogin/logo_mes.png') }}" class="navbar-logo" alt="Logo MES">
-                            </a>
-                        </div>
-                        @if(session('authenticated'))
-                        @php
-                        $menus = session('menu');
-                        $head_menu = $menus->where('module_name', 'menu')->where('is_show', 1);
-                        @endphp
-                        <div class="collapse navbar-collapse pull-left" id="navbar-collapse">
-                            <ul class="nav navbar-nav">
-                                @foreach($head_menu as $hm)
-                                @php
-                                $child = $menus->where('parent_id', $hm->id);
-                                @endphp
-                                <li class="dropdown">
-                                    <a href="#" class="dropdown-toggle" data-toggle="dropdown" style="height: 100%;">
-                                        {{$hm->alias}}
-                                        @if($child->count() > 0)
-                                        <span class="caret"></span>
-                                        @endif
-                                    </a>
-                                    @if ($child->count() > 0)
-                                    <ul class="dropdown-menu" role="menu" style="background-color: rgb(43, 87, 215); border:none ">
-                                        {!! renderchild($child, $menus, 1) !!}
-                                    </ul>
+                                @if($m->route == '#')
+                                <a href="{{ route('submenu',['ctrl' => encrypt($m->controller_name), 'module' => encrypt($m->module_name), 'first' => 0])}}"  class="menu-link">
+                                @else
+                                    @if($m->ip_check == 1)
+                                    <a href="{{ \Route::has($m->route) && $ipcheck == 1 ? route($m->route) : '#' }}"  class="menu-link">
+                                    @else
+                                    <a href="{{ \Route::has($m->route) ? route($m->route) : '#' }}"  class="menu-link">
                                     @endif
-                                </li>
-                                @endforeach
-                            </ul>
-                        </div>
-                        <div class="navbar-custom-menu" style=" display:flex; ">
+                                @endif
 
-                        <ul class="nav navbar-nav">
-                                <li class="dropdown messages-menu"> <!-- style="display: none" -->
-                                    <a href="#" class="dropdown-toggle" data-toggle="dropdown">
-                                        <i class="fa fa-bell animated infinite wobble"></i>
-                                        <span class="label label-success notification-count">0</span>
-                                    </a>
-                                    <ul class="dropdown-menu">
-                                        <li class="header">You have <span class="notification-count">0</span> notification approval</li>
-                                        <li>
-                                            <ul class="menu">
-                                                <li class="card-bg" id="approval-nemoappr-list" style="display: none">
-                                                    <a href="{{route('mechanic_missingneedleapproval')}}">
-                                                        <div class="pull-left">
-                                                            <img src="{{ _asset('img/iconsNotification/approval-nemo-list.png') }}">
-                                                        </div>
-                                                        <h4>
-                                                            <small><i class="fa fa-clock-o"></i></small>
-                                                        </h4>
-                                                        <p>There is <b class="approval-nemoappr-count"></b> Approval Missing Needle <br> which must be processed.</p>
-                                                    </a>
-                                                </li>
-                                                <li class="card-bg" id="approval-unclose-list" style="display: none">
-                                                    <a href="{{route('dataorder_uncloseapprove')}}">
-                                                        <div class="pull-left">
-                                                            <img src="{{ _asset('img/iconsNotification/approval-unclose-list.png') }}">
-                                                        </div>
-                                                        <h4>
-                                                            <small><i class="fa fa-clock-o"></i></small>
-                                                        </h4>
-                                                        <p>There is <b class="approval-unclose-count"></b> Approval Unclose PO <br> which must be processed.</p>
-                                                    </a>
-                                                </li>
-                                                <li class="card-bg" id="warehouse-request-list" style="display: none">
-                                                    <a href="{{route('wms_requestlist')}}">
-                                                        <div class="pull-left">
-                                                            <img src="{{ _asset('img/iconsNotification/warehouse-request-list.png') }}">
-                                                        </div>
-                                                        <h4>
-                                                            <small><i class="fa fa-clock-o"></i></small>
-                                                        </h4>
-                                                        <p>There is <b class="warehouse-request-count"></b> Material Request <br> you need to process</p>
-                                                    </a>
-                                                </li>
-                                                <li class="card-bg" id="telegram-request-list" style="display: none">
-                                                    <a href="{{route('telegramuserrequest')}}">
-                                                        <div class="pull-left">
-                                                            <img src="{{ _asset('img/iconsNotification/telegram-request-list.png') }}">
-                                                        </div>
-                                                        <h4>
-                                                            <small><i class="fa fa-clock-o"></i></small>
-                                                        </h4>
-                                                        <p>There is <b class="telegram-request-count"></b> Telegram Request <br> you need to process</p>
-                                                    </a>
-                                                </li>
-                                                <li class="card-bg" id="matrix-skill-scoring-list" style="display: none;">
-                                                    <a href="{{route('ie_matrixscoring')}}">
-                                                        <div class="pull-left">
-                                                            <img src="{{ _asset('img/iconsNotification/matrix-skill-scoring-list.png') }}">
-                                                        </div>
-                                                        <h4>
-                                                            <small><i class="fa fa-clock-o"></i></small>
-                                                        </h4>
-                                                        <p>There is <b class="matrix-skill-scoring-count"></b> Skill matrix scoring <br> which must be processed.</p>
-                                                    </a>
-                                                </li>
-                                                <li class="card-bg" id="alert-notification" style="display: none">
-                                                    <a href="{{route('alert')}}">
-                                                        <div class="pull-left">
-                                                            <img src="{{ _asset('img/iconsNotification/alert-notification.png') }}">
-                                                        </div>
-                                                        <h4>
-                                                            <small><i class="fa fa-clock-o"></i></small>
-                                                        </h4>
-                                                        <p>There is <b class="alert-count"></b> warning of process<br> you need to be processed</p>
-                                                    </a>
-                                                </li>
-                                                <li class="card-bg" id="cutting-alert-notification" style="display: none">
-                                                    <a href="{{route('cuttingalert')}}">
-                                                        <div class="pull-left">
-                                                            <img src="{{ _asset('img/iconsNotification/cutting-alert-notification.png') }}">
-                                                        </div>
-                                                        <h4>
-                                                            <small><i class="fa fa-clock-o"></i></small>
-                                                        </h4>
-                                                        <p>There is <b class="cutting-alert-count"></b> cutting T3 warning<br> you need to be processed</p>
-                                                    </a>
-                                                </li>
-                                                <li class="card-bg" id="validationdo-notification" style="display: none">
-                                                    <a href="{{route('deliveryordervalidation')}}">
-                                                        <div class="pull-left">
-                                                            <img src="{{ _asset('img/iconsNotification/validation-notification.png') }}">
-                                                        </div>
-                                                        <h4>
-                                                            <small><i class="fa fa-clock-o"></i></small>
-                                                        </h4>
-                                                        <p>There is <b class="validationdo-count"></b> delivery order validation<br> you need to be processed</p>
-                                                    </a>
-                                                </li>
-                                                <li class="card-bg" id="approvaldept-notification" style="display: none">
-                                                    <a href="{{route('deliveryorderapprovaldept')}}">
-                                                        <div class="pull-left">
-                                                            <img src="{{ _asset('img/iconsNotification/approval-dept.png') }}">
-                                                        </div>
-                                                        <h4>
-                                                            <small><i class="fa fa-clock-o"></i></small>
-                                                        </h4>
-                                                        <p>There is <b class="approvaldept-count"></b> delivery order approval<br> you need to be processed</p>
-                                                    </a>
-                                                </li>
-                                                <li class="card-bg" id="approvalmanager-notification" style="display: none">
-                                                    <a href="{{route('deliveryorderapprovalmanager')}}">
-                                                        <div class="pull-left">
-                                                            <img src="{{ _asset('img/iconsNotification/approval-manager.png') }}">
-                                                        </div>
-                                                        <h4>
-                                                            <small><i class="fa fa-clock-o"></i></small>
-                                                        </h4>
-                                                        <p>There is <b class="approvalmanager-count"></b> delivery order approval<br> you need to be processed</p>
-                                                    </a>
-                                                </li>
-                                                <li class="card-bg" id="approvalstock-notification" style="display: none">
-                                                    <a href="{{route('approvalstock')}}">
-                                                        <div class="pull-left">
-                                                            <img src="{{ _asset('img/iconsNotification/approval-stock.png') }}">
-                                                        </div>
-                                                        <h4>
-                                                            <small><i class="fa fa-clock-o"></i></small>
-                                                        </h4>
-                                                        <p>There is <b class="approvalstock-count"></b> stock approval FG<br> you need to be processed</p>
-                                                    </a>
-                                                </li>
-                                                <li class="card-bg" id="approvalstorage-notification" style="display: none">
-                                                    <a href="{{route('approvalstorage')}}">
-                                                        <div class="pull-left">
-                                                            <img src="{{ _asset('img/iconsNotification/approval-storage.png') }}">
-                                                        </div>
-                                                        <h4>
-                                                            <small><i class="fa fa-clock-o"></i></small>
-                                                        </h4>
-                                                        <p>There is <b class="approvalstorage-count"></b> storage approval FG<br> you need to be processed</p>
-                                                    </a>
-                                                </li>
-                                            </ul>
-                                        </li>
-                                    </ul>
-                                </li>
-                                <li class="card-bg" class="dropdown messages-menu release-menu" style="display: none">
-                                    <a href="#" class="dropdown-toggle" data-toggle="dropdown">
-                                        <i class="fa fa-bell animated infinite wobble"></i>
-                                        <span class="label label-warning gatealarm-count">0</span>
-                                    </a>
-                                    <ul class="dropdown-menu">
-                                        <li class="header">You have <span class="gatealarm-count">0</span> gate alarm notification </li>
-                                        <li>
-                                            <ul class="menu">
-                                                <li id="gatealarm-release" style="display: none">
-                                                    <a href="{{route('gatealarmrelease')}}">
-                                                        <div class="pull-left">
-                                                            <img src="{{_asset('img/DATAORDER.png')}}" alt="gate alarm list">
-                                                        </div>
-                                                        <h4>
-                                                            <small><i class="fa fa-clock-o"></i></small>
-                                                        </h4>
-                                                        <p>There is <b class="gatealarm-count"></b> gate alarm<br> you need to be processed</p>
-                                                    </a>
-                                                </li>
-                                            </ul>
-                                        </li>
-                                    </ul>
-                                </li>
-                                <li class="dropdown user user-menu">
-                                    <a href="#" class="dropdown-toggle" data-toggle="dropdown">
-                                        <span class="hidden-xs">{{ explode(' ', trim(session('user')->name))[0] }} </span>&nbsp; (Sign Out)
-                                    </a>
-                                    <ul class="dropdown-menu" >
-                                        <li class="user-header" style="height: auto; background-color: #21409A; padding:20px; display:flex-col; justify-content: center; align-items:center">
-                                            <p>{{ session('user')->name }}
-                                            <p>{{ session('factoryname') }}</p>
-                                            </p>
-                                        </li>
-                                        <li class="user-footer" style="margin-top: 5px;">
-                                            <div class="pull-right">
-                                                <form action="{{ route('logout') }}" method="POST">
-                                                    @csrf
-                                                    <button type="submit" class="btn btn-danger">Logout <span class="glyphicon glyphicon-log-out"></span></button>
-                                                </form>
-                                            </div>
-                                        </li>
-                                    </ul>
-                                </li>
-                            </ul>
+                                    <div class="card no-border" style="border:none; box-shadow:none;">
+                                        <div class="box-body">
+                                            <span class="icon-img"><img src="{{ $m->image_path ? _asset($m->image_path) :_asset('img/DATAORDER.png') }}"></span>
+                                        </div>
+                                        <div class="box-footer text-center box-footer-title">
+                                            <span class="text-footer"> {{ $m->alias }}</span>
+                                        </div>
+                                    </div>
+                                </a>
+                            </div>
+                            @endforeach
+
                         </div>
-                        @endif
                     </div>
-                    <div id="tooltips" class="tooltips" style="z-index: 1000 !important; position: absolute; background-color: white;"></div>
+                    @endif
+
+                    @if(isset($menu2) && $menu2->count() > 0)
+                    <div class="row">
+                        <div class="col-sm-12">
+                            @if($firstmenu)
+                            <div class="text-subtitle">Report <span style="background-color: #DDDDDD;"></span> </div>
+                            @endif
+
+                            @foreach($menu2 as $m)
+                            <div class="col-lg-2 col-md-3 col-sm-6 col-xs-6">
+
+                                @if($m->route == '#')
+                                <a href="{{ route('submenu',['ctrl' => encrypt($m->controller_name), 'module' => encrypt($m->module_name), 'first' => 0])}}"  class="menu-link">
+                                @else
+                                    @if($m->ip_check == 1)
+                                    <a href="{{ \Route::has($m->route) && $ipcheck == 1 ? route($m->route) : '#' }}"  class="menu-link">
+                                    @else
+                                    <a href="{{ \Route::has($m->route) ? route($m->route) : '#' }}"  class="menu-link">
+                                    @endif
+                                @endif
+
+                                    <div class="card no-border" style="border:none; box-shadow:none;">
+                                        <div class="box-body">
+                                            <span class="icon-img"><img src="{{ $m->image_path ? _asset($m->image_path) :_asset('img/DATAORDER.png') }}"></span>
+                                        </div>
+                                        <div class="box-footer text-center box-footer-title">
+                                            <span class="text-footer">{{ $m->alias }}</span>
+                                        </div>
+                                    </div>
+                                </a>
+                            </div>
+                            @endforeach
+
+                        </div>
+                    </div>
+                    @endif
+
+                    @if(!$menu && !$menu2)
+                    <div class="row">
+                        <div class="col-sm-12">
+                            <div class="no-access">
+                                You dont have any access
+                            </div>
+                        </div>
+                    </div>
+                    @endif
                 </div>
             </div>
-            <!-- Header End -->
-
-            <!-- Content -->
-            <div class="content-wrapper" >
-
-                @yield('content')
-            </div>
-            @include('layouts.maintenance')
-            @include('layouts.image')
-            @include('layouts.loading')
-            <!-- Content End -->
         </div>
-        <!-- Wrapper End -->
+    </div>
+</div>
+@include('layouts.loading')
+@endsection
 
-        <!-- Footer -->
-        @hasSection('description_menu')
-        <div class="main-footer navbar-fixed-bottom" style="background-color: #ffff;bottom: 20px;">
-            <button class="toggle-button">Hide</button>
-            <div class="container sticky-content">
-                <p> @yield('description_menu') </p>
-            </div>
-        </div>
-        @endif
-        <div class="main-footer navbar-fixed-bottom" style="background-color: #21409A; padding: 2rem;">
-            <div class="container" style="color:#fff; width:87%; font-size: medium; font-weight: 600;padding:0; ">
-                <div class="pull-right hidden-xs">
-                    PT PAN BROTHERS Tbk. & Groups
-                </div>
-                <strong>Copyright © {{ Carbon\Carbon::now()->format('Y') }} Manufacturing Execution System</strong>
-            </div>
-        </div>
-        <!-- Footer End -->
+@section('extrascript')
+<script type="text/javascript">
+    $(document).on('click', '.menu-link', function (e) {
 
-        <script src="{{ _asset('adminltecomponents/jquery/dist/jquery.min.js') }}"></script>
-        <script src="{{ _asset('adminltecomponents/bootstrap/dist/js/bootstrap.min.js') }}"></script>
-        <script src="{{ _asset('js/adminlte.min.js') }}"></script>
-        {{-- <script src="{{ _asset('js/jquery.dataTables.min.js') }}"></script> --}}
-        {{-- <script src="{{ _asset('js/dataTables.bootstrap.min.js') }}"></script> --}}
-        <script src="{{ _asset('js/webcam.js') }}"></script>
-        <script src="{{ _asset('js/webcam.min.js') }}"></script>
-        <script src="{{ _asset('js/datatables.min.js') }}"></script>
-        <script src="{{ _asset('js/jquery.inputmask.js') }}"></script>
-        <script src="{{ _asset('js/jquery.inputmask.extensions.js') }}"></script>
-        {{-- <script src="{{ _asset('js/dataTables.fixedColumns.min.js') }}"></script> --}}
-        <script src="{{ _asset('js/moment.min.js') }}"></script>
-        <script src="{{ _asset('js/Chart.js') }}"></script>
-        <script src="{{ _asset('js/highcharts.js') }}"></script>
-        <script src="{{ _asset('js/highcharts-more.js') }}"></script>
-        <script src="{{ _asset('adminltecomponents/icheck/icheck.min.js') }}"></script>
-        <script src="{{ _asset('js/jquery.inputmask.js') }}"></script>
-        <script src="{{ _asset('js/jquery.wysiwyg.js') }}"></script>
-        <script src="{{ _asset('js/jquery.inputmask.extensions.js') }}"></script>
-        <script src="{{ _asset('js/jquery.datetimepicker.js') }}"></script>
-        <script src="{{ _asset('adminltecomponents/datepicker/dist/js/datepicker.min.js') }}"></script>
-        <script src="{{ _asset('adminltecomponents/select2/dist/js/select2.min.js') }}"></script>
-        {{-- <script src="{!! _asset('js/dataTables.buttons.min.js') !!}"></script> --}}
-        {{-- <script src="{!! _asset('js/jszip.min.js') !!}"></script>
-        <script src="{!! _asset('js/pdfmake.min.js') !!}"></script> --}}
-        <script src="{!! _asset('js/vfs_fonts.js') !!}"></script>
-        {{-- <script src="{!! _asset('js/buttons.html5.min.js') !!}"></script>
-        <script src="{!! _asset('js/buttons.print.min.js') !!}"></script> --}}
-        <script src="{{ _asset('js/custom.js') }}"></script>
-        <script src="{{ _asset('js/sweetalert.min.js') }}"></script>
-        <script src="{{ _asset('js/solid-gauge.js') }}"></script>
-        <script src="{{ _asset('js/imgenlarge.js') }}"></script>
-        <script src="{{ asset('js/utils/barcode.js') }}"></script>
-        {{-- <script src="{{ _asset('js/dataTables.rowReorder.min.js') }}"></script> --}}
-        <script type="text/javascript">
-            $('.modal').on('shown.bs.modal', function() {
-                $(this).find('[autofocus]').focus();
-            });
-        </script>
+    const href = $(this).attr('href');
 
-        <script type="text/javascript">
-            $(document).ready(function() {
-                let notifMaterialCount = 0;
-                let notifUnpackCount = 0;
-                let notifUncloseCount = 0;
-                let notifRequestMaterialCount = 0;
-                let notifRequestTelegramCount = 0;
-                let notifAlertCount = 0;
-                let notifCuttingAlertCount = 0;
-                let notifDoValidationCount = 0;
-                let notifDoApprDeptCount = 0;
-                let notifDoApprManagerCount = 0;
-                let notifApprStockCount = 0;
-                let notifApprStorageCount = 0;
-                let notifApprNemoCount = 0;
+    if (!href || href === '#' || href === 'javascript:void(0)') {
+        return;
+    }
 
-                // Trigger tekan icon notif
-                $('.messages-menu .dropdown-toggle').on('click', function () {
+    $('#loading').show();
+});
+</script>
+@endsection
 
-                    $.ajax({
-                    type: "GET",
-                    url: "{!! route('alertget_notif_count') !!}",
-                    dataType: "json",
-                    success: res => {
-                        if (res > 0) {
-                            $('.alert-count').text(res);
-                            $('#alert-notification').show();
-                            $('.messages-menu').show();
-                            notifAlertCount = res;
-                            setNotifCount();
-                        }
-                    }
-                });
-                $.ajax({
-                    type: "GET",
-                    url: "{!! route('alertget_notif_cutting_count') !!}",
-                    dataType: "json",
-                    success: res => {
-                        if (res > 0) {
-                            $('.cutting-alert-count').text(res);
-                            $('#cutting-alert-notification').show();
-                            $('.messages-menu').show();
-                            notifCuttingAlertCount = res;
-                            setNotifCount();
-                        }
-                    }
-                });
-
-                $.ajax({
-                    type: "GET",
-                    url: "{!! route('ie_matrixscoringgetemployeecount') !!}",
-                    dataType: "json",
-                    success: function(res) {
-                        if (res > 0) {
-                            $('.matrix-skill-scoring-count').text(res);
-                            $('#matrix-skill-scoring-list').show();
-                            $('.messages-menu').show();
-                            notifMaterialCount = res;
-                            setNotifCount();
-                        }
-                    }
-                });
-
-                $.ajax({
-                    type: "GET",
-                    url: "{!! route('gatealarmrelease_alert') !!}",
-                    dataType: "json",
-                    success: res => {
-                        if (res > 0) {
-                            $('.gatealarm-count').text(res);
-                            $('#gatealarm-release').show();
-                            $('.release-menu').show();
-                        } else {
-                            $('.release-menu').removeClass('messages-menu').hide();
-                        }
-                    }
-                });
-                $.ajax({
-                    type: "GET",
-                    url: "{!! route('wms_approvalinputcheckunpackapproval') !!}",
-                    dataType: "json",
-                    success: function(res) {
-                        if (res > 0) {
-                            $('.approval-unpack-count').text(res);
-                            $('#approval-unpack-list').show();
-                            $('.messages-menu').show();
-                            notifUnpackCount = res;
-                            setNotifCount();
-                        }
-                    }
-                });
-                $.ajax({
-                    type: "GET",
-                    url: "{!! route('wms_approvalinputcheckuncloseapproval') !!}",
-                    dataType: "json",
-                    success: function(res) {
-                        if (res > 0) {
-                            $('.approval-unclose-count').text(res);
-                            $('#approval-unclose-list').show();
-                            $('.messages-menu').show();
-                            notifUncloseCount = res;
-                            setNotifCount();
-                        }
-                    }
-                });
-                $.ajax({
-                    type: "GET",
-                    url: "{!! route('wms_requestlistgetrequestqty') !!}",
-                    dataType: "json",
-                    success: res => {
-                        if (res > 0) {
-                            $('.warehouse-request-count').text(res);
-                            $('#warehouse-request-list').show();
-                            $('.messages-menu').show();
-                            notifRequestMaterialCount = res;
-                            setNotifCount();
-                        }
-                    }
-                });
-                $.ajax({
-                    type: "GET",
-                    url: "{!! route('telegramuserrequestgetcount') !!}",
-                    dataType: "json",
-                    success: res => {
-                        if (res > 0) {
-                            $('.telegram-request-count').text(res);
-                            $('#telegram-request-list').show();
-                            $('.messages-menu').show();
-                            notifRequestTelegramCount = res;
-                            setNotifCount();
-                        }
-                    }
-                });
-                $.ajax({
-                    type: "GET",
-                    url: "{!! route('deliveryordervalidationcountvalidation') !!}",
-                    dataType: "json",
-                    success: res => {
-                        if (res > 0) {
-                            $('.validationdo-count').text(res);
-                            $('#validationdo-notification').show();
-                            $('.messages-menu').show();
-                            notifDoValidationCount = res;
-                            setNotifCount();
-                        }
-                    }
-                });
-                $.ajax({
-                    type: "GET",
-                    url: "{!! route('deliveryorderapprovaldeptcountapprovaldept') !!}",
-                    dataType: "json",
-                    success: res => {
-                        if (res > 0) {
-                            $('.approvaldept-count').text(res);
-                            $('#approvaldept-notification').show();
-                            $('.messages-menu').show();
-                            notifDoApprDeptCount = res;
-                            setNotifCount();
-                        }
-                    }
-                });
-                $.ajax({
-                    type: "GET",
-                    url: "{!! route('deliveryorderapprovalmanagercountapprovalmanager') !!}",
-                    dataType: "json",
-                    success: res => {
-                        if (res > 0) {
-                            $('.approvalmanager-count').text(res);
-                            $('#approvalmanager-notification').show();
-                            $('.messages-menu').show();
-                            notifDoApprManagerCount = res;
-                            setNotifCount();
-                        }
-                    }
-                });
-
-                $.ajax({
-                    type: "GET",
-                    url: "{!! route('approvalstockcountnotif') !!}",
-                    dataType: "json",
-                    success: res => {
-                        if (res > 0) {
-                            $('.approvalstock-count').text(res);
-                            $('#approvalstock-notification').show();
-                            $('.messages-menu').show();
-                            notifApprStockCount = res;
-                            setNotifCount();
-                        }
-                    }
-                });
-
-                $.ajax({
-                    type: "GET",
-                    url: "{!! route('approvalstoragecountnotif') !!}",
-                    dataType: "json",
-                    success: res => {
-                        if (res > 0) {
-                            $('.approvalstorage-count').text(res);
-                            $('#approvalstorage-notification').show();
-                            $('.messages-menu').show();
-                            notifApprStorageCount = res;
-                            setNotifCount();
-                        }
-                    }
-                });
-                $.ajax({
-                    type: "GET",
-                    url: "{!! route('mechanic_missingneedleapprovalcountnotif') !!}",
-                    dataType: "json",
-                    success: res => {
-                        if (res > 0) {
-                            $('.approval-nemoappr-count').text(res);
-                            $('#approval-nemoappr-list').show();
-                            $('.messages-menu').show();
-                            notifApprNemoCount = res;
-                            setNotifCount();
-                        }
-                    }
-                });
-
-                });
-
-                $.fn.dataTable.ext.errMode = 'none';
-                $('.dropdown-submenu > a').on('click', function(event) {
-                    event.preventDefault();
-                });
-                $('[data-tooltip="tooltip"]').tooltip();
-                var tooltipTimeout;
-                function attachTooltipHandlers() {
-                    clearTimeout(tooltipTimeout);
-
-                    const isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-
-                    if (isTouchDevice) {
-                        $('.dropdown-menu li > a').off('touchstart').on('touchstart', function() {
-                            const tooltipText = $(this).data('tooltip');
-                            if (tooltipText != '' && tooltipText != undefined) {
-                                $('#tooltips').text(tooltipText)
-                                    .css({
-                                        top: $(this).offset().top - $('#tooltips').outerHeight() - 10,
-                                        left: $(this).offset().left + ($(this).outerWidth() / 2) - ($('#tooltips').outerWidth() / 2),
-                                        border: '1px solid black',
-                                    })
-                                    .fadeIn();
-                            }
-                        });
-
-                        $('.dropdown-menu li > a').off('touchend').on('touchend', function() {
-                            tooltipTimeout = setTimeout(function() {
-                                $('#tooltips').fadeOut();
-                            }, 10000);
-                        });
-                    } else {
-                        $('.dropdown-menu li > a').hover(
-                            function() {
-                                const tooltipText = $(this).data('tooltip');
-                                if (tooltipText != '' && tooltipText != undefined) {
-                                    $('#tooltips').text(tooltipText)
-                                        .css({
-                                            top: $(this).offset().top - $('#tooltips').outerHeight() - 10,
-                                            left: $(this).offset().left + ($(this).outerWidth() / 2) - ($('#tooltips').outerWidth() / 2),
-                                            border: '1px solid black',
-                                        })
-                                        .fadeIn();
-                                }
-                            },
-                            function() {
-                                tooltipTimeout = setTimeout(function() {
-                                    $('#tooltips').fadeOut();
-                                }, 10000);
-                            }
-                        );
-                    }
-                }
-
-
-                attachTooltipHandlers();
-                $('.toggle-button').on('click', function() {
-                    if ($(this).text() == 'Hide') {
-                        $('.sticky-content').hide();
-                        $(this).text('Show');
-                    } else {
-                        $('.sticky-content').show();
-                        $(this).text('Hide');
-                    }
-                });
-
-                @if(session('authenticated'))
-                @if(session('maintenance'))
-                $('#maintenance').modal('show');
-                countdown(15);
-                @endif
-                const setNotifCount = () => {
-                    $('.notification-count')
-                        .text(notifMaterialCount + notifUnpackCount + notifUncloseCount + notifRequestMaterialCount + notifRequestTelegramCount + notifAlertCount +
-                            notifCuttingAlertCount + notifDoValidationCount + notifDoApprDeptCount + notifDoApprManagerCount + notifApprStockCount + notifApprStorageCount + notifApprNemoCount);
-                }
-                // $.ajax({
-                //     type: "GET",
-                //     url: "{!! route('alertget_notif_count') !!}",
-                //     dataType: "json",
-                //     success: res => {
-                //         if (res > 0) {
-                //             $('.alert-count').text(res);
-                //             $('#alert-notification').show();
-                //             $('.messages-menu').show();
-                //             notifAlertCount = res;
-                //             setNotifCount();
-                //         }
-                //     }
-                // });
-                // $.ajax({
-                //     type: "GET",
-                //     url: "{!! route('alertget_notif_cutting_count') !!}",
-                //     dataType: "json",
-                //     success: res => {
-                //         if (res > 0) {
-                //             $('.cutting-alert-count').text(res);
-                //             $('#cutting-alert-notification').show();
-                //             $('.messages-menu').show();
-                //             notifCuttingAlertCount = res;
-                //             setNotifCount();
-                //         }
-                //     }
-                // });
-
-                @endif
-            });
-            $.ajaxSetup({
-                headers: {
-                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
-                }
-            });
-            $(function() {
-                $('[data-toggle="tooltip"]').tooltip()
-            });
-
-            function disableBack() {
-                history.pushState(null, null, window.location.href);
-                window.onpopstate = () => history.forward();
-                $('.loading').on("contextmenu", function() {
-                    return false;
-                });
-            }
-
-            function countdown(tl) {
-                let timeleft = tl;
-                let downloadTimer = setInterval(function() {
-                    if (timeleft <= 0) {
-                        clearInterval(downloadTimer);
-                        $('#form_logout').submit();
-                    }
-                    $('#countdown').text(timeleft);
-                    timeleft--;
-                }, 1000);
-            }
-
-            function playWarningSound() {
-                var audio = document.getElementById('warningSound');
-                audio.play();
-            }
-
-            function playSuccessSound() {
-                var audio2 = document.getElementById('successSound');
-                audio2.play();
-            }
-
-            // Solve bug dropdown
-            $(document).on('click', '.dropdown-submenu > a', function(e) {
-            const $li = $(this).parent('.dropdown-submenu');
-
-            e.preventDefault();
-            e.stopPropagation();
-
-            const isOpen = $li.hasClass('open');
-
-            $li.siblings('.dropdown-submenu').removeClass('open');
-            $li.siblings('.dropdown-submenu').find('.dropdown-menu').hide();
-
-            if (isOpen) {
-                $li.removeClass('open');
-                $li.children('.dropdown-menu').hide();
-            } else {
-                $li.addClass('open');
-                $li.children('.dropdown-menu').show();
-            }
-            });
-
-            $('.navbar-nav').on('hidden.bs.dropdown', function() {
-                $(this).find('.dropdown-submenu').removeClass('open');
-                $(this).find('.dropdown-submenu .dropdown-menu').hide();
-            });
-
-            function goShortcut(el) {
-                $('#loading').show();
-
-                const url = el.getAttribute('data-url');
-
-                setTimeout(function () {
-                    window.location.href = url;
-                }, 200);
-            }
-
-
-
-            $(document).ready(function () {
-                $('#loading').hide();
-            });
-
-            window.addEventListener("pageshow", function (event) {
-                $('#loading').hide();
-            });
-
-            $(document).on('click', function (e) {
-                var $navbar = $('#navbar-collapse');
-                var $toggle = $('.navbar-toggle');
-
-                if (!$navbar.is(e.target) && $navbar.has(e.target).length === 0 &&
-                    !$toggle.is(e.target) && $toggle.has(e.target).length === 0) {
-
-                    if ($navbar.hasClass('in')) {
-                        $navbar.collapse('hide');
-                    }
-                }
-            });
-
-        </script>
-
-        <script src="{{ asset('js/newLoading.js') }}"></script>
-
-        @yield('extrascript')
-    </body>
-
-    </html>
+kenapa disini saat ditampilan mobile, dibagian text footer nya itu kalau isinya panjang, membuat seakan akan kolom bawahnya kosong itu kenapa
