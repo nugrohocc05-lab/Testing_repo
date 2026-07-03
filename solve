@@ -1,38 +1,36 @@
-@foreach ($data as $m)
-@php
-    $child = $menu->where('parent_id', $m->id)->where('is_show', 1);
-    // Buat variabel URL agar lebih rapi
-    $url = ($m->route != '#' && \Route::has($m->route)) ? route($m->route) : '#';
-@endphp
+// SATU-SATUNYA SCRIPT UNTUK SUBMENU (Desktop & Mobile)
+$(document).on('click', '.dropdown-submenu > a', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
 
-@if ($child->count() > 0)
-    <li class="dropdown-submenu">
-        {{-- Untuk parent menu yang hanya membuka dropdown, biarkan javascript:void(0) atau # --}}
-        <a href="javascript:void(0)"
-           tabindex="-1"
-           @if($m->module_name == 'tools') data-tooltip="{{$m->tooltip}}" @endif>
-            {{$m->alias}}
-        </a>
-        <ul class="dropdown-menu" style="background-color: {{$color}}; border:none">
-            {!! renderchild($child, $menu, $level + 1) !!}
-        </ul>
-    </li>
-@else
-    <li>
-        {{-- Masukkan URL asli ke dalam href, dan kirimkan 'this' ke goShortcut --}}
-        <a href="{{ $url }}"
-            onclick="goShortcut(event, this)"
-            tabindex="-1"
-            @if($m->module_name == 'tools') data-tooltip="{{$m->tooltip}}" @endif>
-            {{$m->alias}}
-        </a>
-    </li>
-@endif
+    var $submenu = $(this).parent('.dropdown-submenu');
+    var isOpen = $submenu.hasClass('open');
 
-{{-- Perbaikan: $m->route == '#' (Gunakan dua sama dengan) --}}
-@if($m->controller_name == 'shipping' && $m->route == '#')
-    <div style="border-top: 1px solid #b7b6b6;"></div>
-@elseif($m->controller_name == 'SummaryMesDashboardController')
-    <div style="border-top: 1px solid #b7b6b6"></div>
-@endif
-@endforeach
+    // Tutup semua submenu lain yang sejajar (opsional, agar rapi)
+    $submenu.siblings('.dropdown-submenu').removeClass('open');
+
+    // Toggle (Buka/Tutup) submenu yang sedang diklik
+    if (isOpen) {
+        $submenu.removeClass('open');
+    } else {
+        $submenu.addClass('open');
+    }
+});
+
+// Pastikan semua submenu tertutup saat dropdown utama ditutup
+$('.navbar-nav').on('hidden.bs.dropdown', function() {
+    $(this).find('.dropdown-submenu').removeClass('open');
+});
+
+// Menutup navbar saat area di luar navbar diklik (Fix tambahan untuk mobile)
+$(document).on('click', function (e) {
+    var $navbar = $('#navbar-collapse');
+    var $toggle = $('.navbar-toggle');
+
+    if (!$navbar.is(e.target) && $navbar.has(e.target).length === 0 &&
+        !$toggle.is(e.target) && $toggle.has(e.target).length === 0) {
+        if ($navbar.hasClass('in')) {
+            $navbar.collapse('hide');
+        }
+    }
+});
