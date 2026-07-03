@@ -1,28 +1,38 @@
-// Solve bug dropdown
-$(document).on('click', '.dropdown-submenu > a', function(e) {
-    // Hentikan aksi default agar link tidak memuat ulang halaman
-    e.preventDefault();
-    e.stopPropagation();
+@foreach ($data as $m)
+@php
+    $child = $menu->where('parent_id', $m->id)->where('is_show', 1);
+    // Buat variabel URL agar lebih rapi
+    $url = ($m->route != '#' && \Route::has($m->route)) ? route($m->route) : '#';
+@endphp
 
-    // Hanya terapkan logika klik ini jika sedang di layar tablet/mobile (<= 767px).
-    // Untuk desktop, kita percayakan penuh pada efek Hover dari CSS.
-    if ($(window).width() <= 767) {
-        const $li = $(this).parent('.dropdown-submenu');
-        const isOpen = $li.hasClass('open');
+@if ($child->count() > 0)
+    <li class="dropdown-submenu">
+        {{-- Untuk parent menu yang hanya membuka dropdown, biarkan javascript:void(0) atau # --}}
+        <a href="javascript:void(0)"
+           tabindex="-1"
+           @if($m->module_name == 'tools') data-tooltip="{{$m->tooltip}}" @endif>
+            {{$m->alias}}
+        </a>
+        <ul class="dropdown-menu" style="background-color: {{$color}}; border:none">
+            {!! renderchild($child, $menu, $level + 1) !!}
+        </ul>
+    </li>
+@else
+    <li>
+        {{-- Masukkan URL asli ke dalam href, dan kirimkan 'this' ke goShortcut --}}
+        <a href="{{ $url }}"
+            onclick="goShortcut(event, this)"
+            tabindex="-1"
+            @if($m->module_name == 'tools') data-tooltip="{{$m->tooltip}}" @endif>
+            {{$m->alias}}
+        </a>
+    </li>
+@endif
 
-        // Tutup submenu lain yang setingkat (sibling)
-        $li.siblings('.dropdown-submenu').removeClass('open');
-
-        // Toggle class 'open'
-        if (isOpen) {
-            $li.removeClass('open');
-        } else {
-            $li.addClass('open');
-        }
-    }
-});
-
-// Bersihkan semua class 'open' di submenu ketika dropdown utama ditutup
-$('.navbar-nav').on('hidden.bs.dropdown', function() {
-    $(this).find('.dropdown-submenu').removeClass('open');
-});
+{{-- Perbaikan: $m->route == '#' (Gunakan dua sama dengan) --}}
+@if($m->controller_name == 'shipping' && $m->route == '#')
+    <div style="border-top: 1px solid #b7b6b6;"></div>
+@elseif($m->controller_name == 'SummaryMesDashboardController')
+    <div style="border-top: 1px solid #b7b6b6"></div>
+@endif
+@endforeach
