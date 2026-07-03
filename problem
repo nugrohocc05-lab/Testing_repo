@@ -1,435 +1,2151 @@
- <style>
-            .content-wrapper {
-                padding-top: 20px;
-                padding-bottom: 80px;
-            }
+@extends('layouts.master')
 
-            .navbar {
-                min-height: 70px;
-                margin-bottom: 50px;
-                font-weight: 600;
-            }
+@section('extracss')
+<style>
+    .icon-img {
+        width: 100px;
+        margin: 0 auto;
+    }
 
-            .navbar-brand {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                height: 70px;
-                padding: 0 15px;
-            }
+    .icon-img > img {
+        width: 100%;
+        max-width: 100%;
+        height: auto;
+        display: block;
+        aspect-ratio: 1/1;
+        background: linear-gradient(to bottom, rgba(191, 191, 191, 0.1) 0%, rgba(191, 191, 191, 1) 100%);
+        border-radius: 15px;
+    }
 
-            .navbar-brand b {
-                line-height: 1;
-            }
+    .icon-img>img:hover {
+        background: linear-gradient(to bottom, rgba(60, 141, 188, 0.1) 0%, rgba(60, 141, 188, 1) 100%);
+    }
 
-            .navbar-logo {
-                max-height: 40px;
-                width: auto;
-                object-fit: contain;
-            }
+    .no-border {
+        border: none !important;
+    }
 
-            .dropdown-menu>li>a {
-                color: #fff !important;
-            }
+    .box {
+        box-shadow: none;
+        border-radius: 20px;
+        overflow: hidden;
+    }
 
-            .dropdown-menu a:hover,
-            .dropdown-menu a:focus {
-                background-color: transparent !important;
-                color: #fff !important;
+    .box-body {
+        padding: 0;
+        box-shadow: none;
+    }
 
-            }
+    .box-footer {
+        background: transparent;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 40px;
+    }
 
-            .card-bg:hover {
-                background:  rgba(191, 191, 191, 0.3)
-            }
+    .text-footer {
+        font-size: 11pt;
+        font-weight: bold;
+        line-height: 1.2;
+        text-align: center;
+    }
 
-            .text-bg {
-                color: white;
-            }
+    .text-title {
+        font-size: 3rem;
+    }
 
-            @media (min-width: 768px) {
+    .wrapper-custom {
+        margin-top: 7rem;
+        padding-left: 50px;
+        padding-right: 50px;
+    }
 
-                .custom-nav-container {
-                    margin-left: 120px;
-                    margin-right: 120px;
-                }
+    .wrapper-custom .row {
+        margin: 0;
+    }
 
-                .navbar-nav>li>a {
-                    padding-top: 25px !important;
-                    padding-bottom: 25px !important;
-                }
-            }
+    .bg-icon {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 0;
+        opacity: 0.15;
+        pointer-events: none;
+        text-align: center;
+    }
 
-            @media (max-width: 767px) {
-                .content-wrapper {
-                    margin-bottom: 30px;
-                    height: 100%;
-                }
+    .img-bg {
+        max-width: 900px;
+        width: 100%;
+        height: auto;
+    }
 
-                .custom-nav-container {
-                    margin-left: 0 !important;
-                    margin-right: 0 !important;
-                }
+    .card {
+        width: 100%;
+        background: transparent;
+        display: flex;
+        justify-content: center;
+        transition: transform 0.5s ease;
+    }
 
-                .navbar>.container::before,
-                .navbar>.container::after {
-                    display: none !important;
-                }
+    .card > a {
+        width: 160px;
+        text-align: center;
+    }
 
-                .navbar>.container {
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    flex-wrap: wrap;
-                }
+    .card:hover {
+        transform: scale(1.1);
+    }
 
-                div.navbar-collapse.pull-left{
-                    position: fixed;
-                    top: 70px;
-                    left: 0;
-                    width: 50%;
-                    margin: 0 !important;
-                    background: #21409A;
-                    z-index: 999;
-                    overflow-y: auto;
-                }
+    .card-custom {
+        background-color: red;
+        width: 200px;
+        height: 200px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin: 0;
+        padding: 0;
+    }
 
-                .navbar-header {
-                    order: 1;
-                    display: flex;
-                    align-items: center;
-                    margin: 0;
-                    padding: 0 15px;
-                    height: 70px;
-                }
+    .card,
+    .card .box-body,
+    .card a {
+        padding: 0;
+        margin: 0;
+    }
 
-            .navbar-custom-menu {
-                display: flex;
-                align-items: center;
-                height: 70px;
-                margin-left: auto;
-                }
 
-                .navbar-custom-menu .navbar-nav {
-                    display: flex;
-                    flex-direction: row;
-                    align-items: center;
-                    margin: 0;
-                }
+    @media screen and (max-width: 768px) {
+        .text-title {
+            font-size: 16px;
+        }
 
-                .navbar-custom-menu .navbar-nav > li {
-                    display: flex;
-                    align-items: center;
-                    height: 70px;
-                }
+        .wrapper-custom {
+            margin-top: 6rem;
+            padding-left: 10px;
+            padding-right: 10px;
+        }
 
-                .navbar-toggle {
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    height: 70px;
-                    margin: 0 12px 0 0;
-                    padding: 0 12px;
-                    background: transparent;
-                    border: 0;
-                    color: #fff;
-                    font-size: 20px;
-                }
+        .box.no-border {
+            padding: 1.5rem !important;
+        }
 
-                .dropdown-submenu > .dropdown-menu {
-                    display: none;
-                    position: static;
-                }
+        .icon-img {
+            width: 75px;
+        }
 
-                .dropdown-submenu.open > .dropdown-menu {
-                    display: block;
-                }
+        .card {
+            margin-bottom: 1.5rem;
+        }
 
-                .dropdown-submenu:hover > .dropdown-menu {
-                    display: none;
-                }
-            }
+        .card > a {
+            width: 100%;
+            max-width: 130px;
+            height: auto;
+            min-height: 130px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            margin: 0 auto;
+        }
 
-        </style>
+        .box-footer {
+            min-height: auto;
+            margin-top: 8px;
+            border: none;
 
-        @yield('extracss')
-    </head>
+        }
 
-    <body class="skin-blue layout-top-nav" style="background-color: #ECF0F5;">
-        <audio id="warningSound" src="{{ asset('sounds/warning_sound.mp3') }}" preload="auto"></audio>
-        <audio id="successSound" src="{{ asset('sounds/success_sound.mp3') }}" preload="auto"></audio>
-        <!-- Wrapper -->
-        <div class="wrapper">
-            <!-- Header -->
-            <div class="main-header">
-                <div class="navbar navbar-fixed-top" style="background-color: #21409A;">
-                    <div class="container-fluid custom-nav-container" >
-                        <div class="navbar-header" >
-                            <button
-                                type="button"
-                                class="navbar-toggle collapsed"
-                                data-toggle="collapse"
-                                data-target="#navbar-collapse">
-                                <span class="glyphicon glyphicon-menu-hamburger"></span>
-                            </button>
-                            <a href="{{ route('home') }}" class="navbar-brand">
-                                <img src="{{ asset('img/imageslogin/logo_mes.png') }}" class="navbar-logo" alt="Logo MES">
+        .text-footer {
+            font-size: 9pt;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            line-height: 1.2;
+            min-height: 2.4em;
+            border: none;
+        }
+    }
+
+    @media (max-width: 1366px) {
+        .icon-img {
+            width: 50px;
+            background-color: red;
+        }
+
+        .card > a {
+            width: 100%;
+            max-width: 120px;
+            height: auto;
+            min-height: 130px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            margin: 0 auto;
+        }
+
+        .text-footer {
+            font-size: 9pt;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            line-height: 1.2;
+            min-height: 2.4em;
+            border: none;
+        }
+
+        .box.no-border {
+            padding: 2rem !important;
+
+        }
+
+    }
+
+    @keyframes spin {
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+</style>
+@endsection
+
+@section('content')
+<div class="container-fluid" style="margin: 0;">
+    <div class="wrapper-custom justify-content-center align-items-center">
+        <div class="col-auto text-center">
+            <div class="box-header" style="font-size: 14pt">
+                <b>WELCOME TO {{ config('app.shortname') }} - {{ str_replace('GMS ', '', session('factoryname')) }}</b>
+            </div>
+        </div>
+
+        <div class="box no-border" style="margin-bottom: 5rem !important; padding: 5rem; margin-top: 1rem;">
+            <div class="bg-icon">
+                <img src="{{ asset('img/imageslogin/mes-blur.png') }}" class="img-bg">
+            </div>
+            <div class="box-body">
+                <div class="row justify-content-center">
+                    <div class="col-lg-2 col-md-3 col-sm-6 col-xs-6">
+                        <div class="card no-border">
+                            <a href="javascript:void(0)"
+                                onclick="goShortcut(this)"
+                                data-url="{{ route('submenu',['ctrl' => encrypt('warehouse'), 'module' => encrypt('transaction-report')])}}">
+                                <div class="box-body no-border">
+                                    <span class="icon-img"><img src="{{ _asset('img/iconsmenu/home/warehouse.png') }}"></span>
+                                </div>
+                                <div class="box-footer text-center">
+                                    <span class="text-footer">WAREHOUSE</span>
+                                </div>
                             </a>
                         </div>
-                        @if(session('authenticated'))
-                        @php
-                        $menus = session('menu');
-                        $head_menu = $menus->where('module_name', 'menu')->where('is_show', 1);
-                        @endphp
-                        <div class="collapse navbar-collapse pull-left" id="navbar-collapse">
-                            <ul class="nav navbar-nav">
-                                @foreach($head_menu as $hm)
-                                @php
-                                $child = $menus->where('parent_id', $hm->id);
-                                @endphp
-                                <li class="dropdown">
-                                    <a href="#" class="dropdown-toggle" data-toggle="dropdown" style="height: 100%;">
-                                        {{$hm->alias}}
-                                        @if($child->count() > 0)
-                                        <span class="caret"></span>
-                                        @endif
-                                    </a>
-                                    @if ($child->count() > 0)
-                                    <ul class="dropdown-menu" role="menu" style="background-color: rgb(43, 87, 215); border:none ">
-                                        {!! renderchild($child, $menus, 1) !!}
-                                    </ul>
-                                    @endif
-                                </li>
-                                @endforeach
-                            </ul>
-                        </div>
-                        <div class="navbar-custom-menu" style=" display:flex; ">
+                    </div>
 
-                        <ul class="nav navbar-nav">
-                                <li class="dropdown messages-menu"> <!-- style="display: none" -->
-                                    <a href="#" class="dropdown-toggle" data-toggle="dropdown">
-                                        <i class="fa fa-bell animated infinite wobble"></i>
-                                        <span class="label label-success notification-count">0</span>
-                                    </a>
-                                    <ul class="dropdown-menu">
-                                        <li class="header">You have <span class="notification-count">0</span> notification approval</li>
-                                        <li>
-                                            <ul class="menu">
-                                                <li class="card-bg" id="approval-nemoappr-list" style="display: none">
-                                                    <a href="{{route('mechanic_missingneedleapproval')}}">
-                                                        <div class="pull-left">
-                                                            <img src="{{ _asset('img/iconsNotification/approval-nemo-list.png') }}">
-                                                        </div>
-                                                        <h4>
-                                                            <small><i class="fa fa-clock-o"></i></small>
-                                                        </h4>
-                                                        <p>There is <b class="approval-nemoappr-count"></b> Approval Missing Needle <br> which must be processed.</p>
-                                                    </a>
-                                                </li>
-                                                <li class="card-bg" id="approval-unclose-list" style="display: none">
-                                                    <a href="{{route('dataorder_uncloseapprove')}}">
-                                                        <div class="pull-left">
-                                                            <img src="{{ _asset('img/iconsNotification/approval-unclose-list.png') }}">
-                                                        </div>
-                                                        <h4>
-                                                            <small><i class="fa fa-clock-o"></i></small>
-                                                        </h4>
-                                                        <p>There is <b class="approval-unclose-count"></b> Approval Unclose PO <br> which must be processed.</p>
-                                                    </a>
-                                                </li>
-                                                <li class="card-bg" id="warehouse-request-list" style="display: none">
-                                                    <a href="{{route('wms_requestlist')}}">
-                                                        <div class="pull-left">
-                                                            <img src="{{ _asset('img/iconsNotification/warehouse-request-list.png') }}">
-                                                        </div>
-                                                        <h4>
-                                                            <small><i class="fa fa-clock-o"></i></small>
-                                                        </h4>
-                                                        <p>There is <b class="warehouse-request-count"></b> Material Request <br> you need to process</p>
-                                                    </a>
-                                                </li>
-                                                <li class="card-bg" id="telegram-request-list" style="display: none">
-                                                    <a href="{{route('telegramuserrequest')}}">
-                                                        <div class="pull-left">
-                                                            <img src="{{ _asset('img/iconsNotification/telegram-request-list.png') }}">
-                                                        </div>
-                                                        <h4>
-                                                            <small><i class="fa fa-clock-o"></i></small>
-                                                        </h4>
-                                                        <p>There is <b class="telegram-request-count"></b> Telegram Request <br> you need to process</p>
-                                                    </a>
-                                                </li>
-                                                <li class="card-bg" id="matrix-skill-scoring-list" style="display: none;">
-                                                    <a href="{{route('ie_matrixscoring')}}">
-                                                        <div class="pull-left">
-                                                            <img src="{{ _asset('img/iconsNotification/matrix-skill-scoring-list.png') }}">
-                                                        </div>
-                                                        <h4>
-                                                            <small><i class="fa fa-clock-o"></i></small>
-                                                        </h4>
-                                                        <p>There is <b class="matrix-skill-scoring-count"></b> Skill matrix scoring <br> which must be processed.</p>
-                                                    </a>
-                                                </li>
-                                                <li class="card-bg" id="alert-notification" style="display: none">
-                                                    <a href="{{route('alert')}}">
-                                                        <div class="pull-left">
-                                                            <img src="{{ _asset('img/iconsNotification/alert-notification.png') }}">
-                                                        </div>
-                                                        <h4>
-                                                            <small><i class="fa fa-clock-o"></i></small>
-                                                        </h4>
-                                                        <p>There is <b class="alert-count"></b> warning of process<br> you need to be processed</p>
-                                                    </a>
-                                                </li>
-                                                <li class="card-bg" id="cutting-alert-notification" style="display: none">
-                                                    <a href="{{route('cuttingalert')}}">
-                                                        <div class="pull-left">
-                                                            <img src="{{ _asset('img/iconsNotification/cutting-alert-notification.png') }}">
-                                                        </div>
-                                                        <h4>
-                                                            <small><i class="fa fa-clock-o"></i></small>
-                                                        </h4>
-                                                        <p>There is <b class="cutting-alert-count"></b> cutting T3 warning<br> you need to be processed</p>
-                                                    </a>
-                                                </li>
-                                                <li class="card-bg" id="validationdo-notification" style="display: none">
-                                                    <a href="{{route('deliveryordervalidation')}}">
-                                                        <div class="pull-left">
-                                                            <img src="{{ _asset('img/iconsNotification/validation-notification.png') }}">
-                                                        </div>
-                                                        <h4>
-                                                            <small><i class="fa fa-clock-o"></i></small>
-                                                        </h4>
-                                                        <p>There is <b class="validationdo-count"></b> delivery order validation<br> you need to be processed</p>
-                                                    </a>
-                                                </li>
-                                                <li class="card-bg" id="approvaldept-notification" style="display: none">
-                                                    <a href="{{route('deliveryorderapprovaldept')}}">
-                                                        <div class="pull-left">
-                                                            <img src="{{ _asset('img/iconsNotification/approval-dept.png') }}">
-                                                        </div>
-                                                        <h4>
-                                                            <small><i class="fa fa-clock-o"></i></small>
-                                                        </h4>
-                                                        <p>There is <b class="approvaldept-count"></b> delivery order approval<br> you need to be processed</p>
-                                                    </a>
-                                                </li>
-                                                <li class="card-bg" id="approvalmanager-notification" style="display: none">
-                                                    <a href="{{route('deliveryorderapprovalmanager')}}">
-                                                        <div class="pull-left">
-                                                            <img src="{{ _asset('img/iconsNotification/approval-manager.png') }}">
-                                                        </div>
-                                                        <h4>
-                                                            <small><i class="fa fa-clock-o"></i></small>
-                                                        </h4>
-                                                        <p>There is <b class="approvalmanager-count"></b> delivery order approval<br> you need to be processed</p>
-                                                    </a>
-                                                </li>
-                                                <li class="card-bg" id="approvalstock-notification" style="display: none">
-                                                    <a href="{{route('approvalstock')}}">
-                                                        <div class="pull-left">
-                                                            <img src="{{ _asset('img/iconsNotification/approval-stock.png') }}">
-                                                        </div>
-                                                        <h4>
-                                                            <small><i class="fa fa-clock-o"></i></small>
-                                                        </h4>
-                                                        <p>There is <b class="approvalstock-count"></b> stock approval FG<br> you need to be processed</p>
-                                                    </a>
-                                                </li>
-                                                <li class="card-bg" id="approvalstorage-notification" style="display: none">
-                                                    <a href="{{route('approvalstorage')}}">
-                                                        <div class="pull-left">
-                                                            <img src="{{ _asset('img/iconsNotification/approval-storage.png') }}">
-                                                        </div>
-                                                        <h4>
-                                                            <small><i class="fa fa-clock-o"></i></small>
-                                                        </h4>
-                                                        <p>There is <b class="approvalstorage-count"></b> storage approval FG<br> you need to be processed</p>
-                                                    </a>
-                                                </li>
-                                            </ul>
-                                        </li>
-                                    </ul>
-                                </li>
-                                <li class="card-bg" class="dropdown messages-menu release-menu" style="display: none">
-                                    <a href="#" class="dropdown-toggle" data-toggle="dropdown">
-                                        <i class="fa fa-bell animated infinite wobble"></i>
-                                        <span class="label label-warning gatealarm-count">0</span>
-                                    </a>
-                                    <ul class="dropdown-menu">
-                                        <li class="header">You have <span class="gatealarm-count">0</span> gate alarm notification </li>
-                                        <li>
-                                            <ul class="menu">
-                                                <li id="gatealarm-release" style="display: none">
-                                                    <a href="{{route('gatealarmrelease')}}">
-                                                        <div class="pull-left">
-                                                            <img src="{{_asset('img/DATAORDER.png')}}" alt="gate alarm list">
-                                                        </div>
-                                                        <h4>
-                                                            <small><i class="fa fa-clock-o"></i></small>
-                                                        </h4>
-                                                        <p>There is <b class="gatealarm-count"></b> gate alarm<br> you need to be processed</p>
-                                                    </a>
-                                                </li>
-                                            </ul>
-                                        </li>
-                                    </ul>
-                                </li>
-                                <li class="dropdown user user-menu">
-                                    <a href="#" class="dropdown-toggle" data-toggle="dropdown">
-                                        <span class="hidden-xs">{{ explode(' ', trim(session('user')->name))[0] }} </span>&nbsp; (Sign Out)
-                                    </a>
-                                    <ul class="dropdown-menu" >
-                                        <li class="user-header" style="height: auto; background-color: #21409A; padding:20px; display:flex-col; justify-content: center; align-items:center">
-                                            <p>{{ session('user')->name }}
-                                            <p>{{ session('factoryname') }}</p>
-                                            </p>
-                                        </li>
-                                        <li class="user-footer" style="margin-top: 5px;">
-                                            <div class="pull-right">
-                                                <form action="{{ route('logout') }}" method="POST">
-                                                    @csrf
-                                                    <button type="submit" class="btn btn-danger">Logout <span class="glyphicon glyphicon-log-out"></span></button>
-                                                </form>
-                                            </div>
-                                        </li>
-                                    </ul>
-                                </li>
-                            </ul>
+                    <div class="col-lg-2 col-md-3 col-sm-6 col-xs-6">
+                        <div class="card no-border">
+                             <a href="javascript:void(0)"
+                                onclick="goShortcut(this)"
+                                data-url="{{ route('submenu',['ctrl' => encrypt('cutting'), 'module' => encrypt('transaction-report')])}}">
+                                <div class="box-body">
+                                    <span class="icon-img"><img src="{{ _asset('img/iconsmenu/home/cutting.png') }}"></span>
+                                </div>
+                                <div class="box-footer text-center">
+                                    <span class="text-footer">CUTTING</span>
+                                </div>
+                            </a>
                         </div>
+                    </div>
+
+                    <div class="col-lg-2 col-md-3 col-sm-6 col-xs-6">
+                        <div class="card no-border">
+                            <a href="javascript:void(0)"
+                                onclick="goShortcut(this)"
+                                data-url="{{ route('submenu',['ctrl' => encrypt('artwork'), 'module' => encrypt('transaction-report')])}}">
+                                <div class="box-body">
+                                    <span class="icon-img"><img src="{{ _asset('img/iconsmenu/home/artwork.png') }}"></span>
+                                </div>
+                                <div class="box-footer text-center">
+                                    <span class="text-footer">ARTWORK</span>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-2 col-md-3 col-sm-6 col-xs-6">
+                        <div class="card no-border">
+                            <a href="javascript:void(0)"
+                                onclick="goShortcut(this)"
+                                data-url="{{ route('submenu',['ctrl' => encrypt('ppa'), 'module' => encrypt('transaction-report')])}}">
+                                <div class="box-body">
+                                    <span class="icon-img"><img src="{{ _asset('img/iconsmenu/home/ppa.png') }}"></span>
+                                </div>
+                                <div class="box-footer text-center">
+                                    <span class="text-footer">PPA</span>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-2 col-md-3 col-sm-6 col-xs-6">
+                        <div class="card no-border">
+                            <a href="javascript:void(0)"
+                                onclick="goShortcut(this)"
+                                data-url="{{ route('submenu',['ctrl' => encrypt('dc'), 'module' => encrypt('transaction-report')])}}">
+                                <div class="box-body">
+                                    <span class="icon-img"><img src="{{ _asset('img/iconsmenu/home/supermarket.png') }}"></span>
+                                </div>
+                                <div class="box-footer text-center">
+                                    <span class="text-footer">SUPERMARKET</span>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-2 col-md-3 col-sm-6 col-xs-6">
+                        <div class="card no-border">
+                            <a href="javascript:void(0)"
+                                onclick="goShortcut(this)"
+                                data-url="{{ route('submenu',['ctrl' => encrypt('sewing'), 'module' => encrypt('transaction-report')])}}">
+                                <div class="box-body">
+                                    <span class="icon-img"><img src="{{ _asset('img/iconsmenu/home/sewing.png') }}"></span>
+                                </div>
+                                <div class="box-footer text-center">
+                                    <span class="text-footer">SEWING</span>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-2 col-md-3 col-sm-6 col-xs-6">
+                        <div class="card no-border">
+                            <a href="javascript:void(0)"
+                                onclick="goShortcut(this)"
+                                data-url="{{ route('submenu',['ctrl' => encrypt('qc'), 'module' => encrypt('transaction-report')])}}">
+                                <div class="box-body">
+                                    <span class="icon-img"><img src="{{ _asset('img/iconsmenu/home/qc.png') }}"></span>
+                                </div>
+                                <div class="box-footer text-center">
+                                    <span class="text-footer">QC</span>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-2 col-md-3 col-sm-6 col-xs-6">
+                        <div class="card no-border">
+                            <a href="javascript:void(0)"
+                                onclick="goShortcut(this)"
+                                data-url="{{ route('submenu',['ctrl' => encrypt('washing'), 'module' => encrypt('transaction-report')])}}">
+                                <div class="box-body">
+                                    <span class="icon-img"><img src="{{ _asset('img/iconsmenu/home/washing.png') }}"></span>
+                                </div>
+                                <div class="box-footer text-center">
+                                    <span class="text-footer">WASHING</span>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-2 col-md-3 col-sm-6 col-xs-6">
+                        <div class="card no-border">
+                            <a href="javascript:void(0)"
+                                onclick="goShortcut(this)"
+                                data-url="{{ route('submenu',['ctrl' => encrypt('packing'), 'module' => encrypt('transaction-report')])}}">
+                                <div class="box-body">
+                                    <span class="icon-img"><img src="{{ _asset('img/iconsmenu/home/packing.png') }}"></span>
+                                </div>
+                                <div class="box-footer text-center">
+                                    <span class="text-footer">PACKING</span>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-2 col-md-3 col-sm-6 col-xs-6">
+                        <div class="card no-border">
+                            <a href="javascript:void(0)"
+                                onclick="goShortcut(this)"
+                                data-url="{{ route('submenu',['ctrl' => encrypt('scanpack'), 'module' => encrypt('transaction-report')])}}">
+                                <div class="box-body">
+                                    <span class="icon-img"><img src="{{ _asset('img/iconsmenu/home/scan-pack.png') }}"></span>
+                                </div>
+                                <div class="box-footer text-center">
+                                    <span class="text-footer">SCAN & PACK</span>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-2 col-md-3 col-sm-6 col-xs-6">
+                        <div class="card no-border">
+                            <a href="javascript:void(0)"
+                                onclick="goShortcut(this)"
+                                data-url="{{ route('submenu',['ctrl' => encrypt('finishgoods'), 'module' => encrypt('transaction-report')])}}">
+                                <div class="box-body">
+                                    <span class="icon-img"><img src="{{ _asset('img/iconsmenu/home/finish-goods.png') }}"></span>
+                                </div>
+                                <div class="box-footer text-center">
+                                    <span class="text-footer">FINISH GOODS</span>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-2 col-md-3 col-sm-6 col-xs-6">
+                        <div class="card no-border">
+                            <a href="javascript:void(0)"
+                                onclick="goShortcut(this)"
+                                data-url="{{ route('submenu',['ctrl' => encrypt('shipping'), 'module' => encrypt('transaction-report')])}}">
+                                <div class="box-body">
+                                    <span class="icon-img"><img src="{{ _asset('img/iconsmenu/home/shipping.png') }}"></span>
+                                </div>
+                                <div class="box-footer text-center">
+                                    <span class="text-footer">SHIPPING</span>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-2 col-md-3 col-sm-6 col-xs-6">
+                        <div class="card no-border">
+                              <a href="javascript:void(0)"
+                                onclick="goShortcut(this)"
+                                data-url="{{ route('submenu',['ctrl' => encrypt('dashboard'), 'module' => encrypt('transaction-report-menu')]) }}">
+                                <div class="box-body">
+                                    <span class="icon-img"><img src="{{ _asset('img/iconsmenu/home/dashboard.png') }}"></span>
+                                </div>
+                                <div class="box-footer text-center">
+                                    <span class="text-footer">DASHBOARD</span>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-2 col-md-3 col-sm-6 col-xs-6">
+                        <div class="card no-border">
+                            <a href="javascript:void(0)"
+                                onclick="goShortcut(this)"
+                                data-url="{{ route('submenu',['ctrl' => encrypt('dataorder'), 'module' => encrypt('transaction-report')])}}">
+                                <div class="box-body">
+                                    <span class="icon-img"><img src="{{ _asset('img/iconsmenu/home/data-order.png') }}"></span>
+                                </div>
+                                <div class="box-footer text-center">
+                                    <span class="text-footer">DATA ORDER</span>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-2 col-md-3 col-sm-6 col-xs-6">
+                        <div class="card no-border">
+                            <a href="javascript:void(0)"
+                                onclick="goShortcut(this)"
+                                data-url="{{ route('submenu',['ctrl' => encrypt('ie'), 'module' => encrypt('transaction-report')])}}">
+                                <div class="box-body">
+                                    <span class="icon-img"><img src="{{ _asset('img/iconsmenu/home/ie.png') }}"></span>
+                                </div>
+                                <div class="box-footer text-center">
+                                    <span class="text-footer">IE</span>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-2 col-md-3 col-sm-6 col-xs-6">
+                        <div class="card no-border">
+                            <a href="javascript:void(0)"
+                                onclick="goShortcut(this)"
+                                data-url="{{ route('submenu',['ctrl' => encrypt('nemo'), 'module' => encrypt('transaction-report')])}}">
+                                <div class="box-body">
+                                    <span class="icon-img"><img src="{{ _asset('img/iconsmenu/home/nemo.png') }}"></span>
+                                </div>
+                                <div class="box-footer text-center">
+                                    <span class="text-footer">NEMO</span>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-2 col-md-3 col-sm-6 col-xs-6">
+                        <div class="card no-border">
+                            <a href="javascript:void(0)"
+                                onclick="goShortcut(this)"
+                                data-url="{{ route('submenu',['ctrl' => encrypt('laboratory'), 'module' => encrypt('transaction-report')])}}">
+                                <div class="box-body">
+                                    <span class="icon-img"><img src="{{ _asset('img/iconsmenu/home/laboratory.png') }}"></span>
+                                </div>
+                                <div class="box-footer text-center">
+                                    <span class="text-footer">LABORATORY</span>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+
+                    @if (checkmenu('sustainability', 'SustainabilityDashboardController'))
+                    <div class="col-lg-2 col-md-3 col-sm-6 col-xs-6">
+                        <div class="card no-border">
+                            <a href="javascript:void(0)"
+                                onclick="goShortcut(this)"
+                                data-url="{{ route('electricity_dashboardelectricityplantmonitoring') }}">
+                                <div class="box-body">
+                                    <span class="icon-img">
+                                        <img src="{{ _asset('img/iconsmenu/home/sustainability-dashboard.png') }}">
+                                    </span>
+                                </div>
+                                <div class="box-footer text-center">
+                                    <span class="text-footer">SUSTAINABILITY</span>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                    @else
+                    <div class="col-lg-2 col-md-3 col-sm-6 col-xs-6">
+                        <div class="card no-border">
+                            <a href="#">
+                                <div class="box-body">
+                                    <span class="icon-img">
+                                        <img src="{{ _asset('img/iconsmenu/home/sustainability-dashboard.png') }}">
+                                    </span>
+                                </div>
+                                <div class="box-footer text-center">
+                                    <span class="text-footer">SUSTAINABILITY</span>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                    @endif
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+@if (checkmenu('wms', 'PackingListController') or checkmenu('wms', 'RequestController') or checkmenu('wms', 'MonthlyClosingController') or checkmenu('wms', 'ReturnOutController') or checkmenu('wms', 'ReturnLgController') or checkmenu('wms', 'QcDecisionController') or checkmenu('wms', 'UnclosingMaterialController'))
+<div class="modal fade" id="wms" tabindex="-1" role="dialog" aria-labelledby="wmslabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="wmslabel">MENU WAREHOUSE</h5>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-sm-12">
+                        @if (checkmenu('wms', 'PackingListController'))
+                        <a href="{{ route('wms_packinglist') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/DATAORDER.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Generate Material Code</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('wms', 'RequestController'))
+                        <a href="{{ route('wms_requestmaterial') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SECONDARY.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Request Material</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('wms', 'ReturnOutController'))
+                        <a href="{{ route('wms_returnout') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SECONDARY.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Return Out</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('wms', 'ReturnLgController'))
+                        <a href="{{ route('wms_requestlgauth') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SECONDARY.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Return LG</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('wms', 'QcDecisionController'))
+                        <a href="{{ route('wms_materialqcdecision') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SECONDARY.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Material QC Decision</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('wms', 'MonthlyClosingController'))
+                        <a href="{{ route('wms_monthlyclosing') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/MASTERDATA.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Monthly Closing Material</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('wms', 'UnclosingMaterialController'))
+                        <a href="{{ route('wms_unclosingmaterial') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/MASTERDATA.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Unclosing Material</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
                         @endif
                     </div>
-                    <div id="tooltips" class="tooltips" style="z-index: 1000 !important; position: absolute; background-color: white;"></div>
                 </div>
             </div>
-            <!-- Header End -->
-
-            <!-- Content -->
-            <div class="content-wrapper" >
-
-                @yield('content')
-            </div>
-            @include('layouts.maintenance')
-            @include('layouts.image')
-            @include('layouts.loading')
-            <!-- Content End -->
-        </div>
-        <!-- Wrapper End -->
-
-        <!-- Footer -->
-        @hasSection('description_menu')
-        <div class="main-footer navbar-fixed-bottom" style="background-color: #ffff;bottom: 20px;">
-            <button class="toggle-button">Hide</button>
-            <div class="container sticky-content">
-                <p> @yield('description_menu') </p>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary btn-sm" data-dismiss="modal">Close</button>
             </div>
         </div>
+    </div>
+</div>
+@else
+<div class="modal fade" id="wms" tabindex="-1" role="dialog" aria-labelledby="wmslabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="wmslabel">NO ACCESS</h5>
+            </div>
+            <div class="modal-body">
+                <h4>You dont have any access</h4>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+@if (checkmenu('dataorder', 'ImportController') or checkmenu('dataorder', 'InputDataOrderController') or checkmenu('dataorder', 'SummaryDataController') or checkmenu('dataorder', 'GarmentProcessController') or checkmenu('dataorder', 'MpsController'))
+<div class="modal fade" id="dataorder" tabindex="-1" role="dialog" aria-labelledby="dataorderlabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="dataorderlabel">MENU DATA ORDER</h5>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-sm-12">
+                        @if (checkmenu('dataorder', 'InputDataOrderController'))
+                        <a href="{{ route('dataorder_inputdataorder') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/DATAORDER.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Input Data Order</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('dataorder', 'SummaryDataController'))
+                        <a href="{{ route('dataorder_summarydataorder') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/DATAORDER.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Summary Order Data</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('dataorder', 'GarmentProcessController'))
+                        <a href="{{ route('dataorder_garmentprocess') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/DATAORDER.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Setting Proses Garment</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('dataorder', 'MpsController'))
+                        <a href="{{ route('dataorder_mps') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/DATAORDER.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">MPS</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary btn-sm" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+@else
+<div class="modal fade" id="dataorder" tabindex="-1" role="dialog" aria-labelledby="dataorderlabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="dataorderlabel">NO ACCESS</h5>
+            </div>
+            <div class="modal-body">
+                <h4>You dont have any access</h4>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+<div class="modal fade" id="dashboard" tabindex="-1" role="dialog" aria-labelledby="dashboardlabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="dashboardlabel">MENU DASHBOARD</h5>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-sm-12">
+                        @if (checkmenu('report', 'DashboardOrderStatusController'))
+                        <a href="{{ route('monitoring_dashboardorderstatus') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/postatus.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Order Status</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('wms', 'WarehouseDashboardController'))
+                        <a href="{{ route('wms_dashboard') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/pngview.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Warehouse Dashboard</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('dc', 'PrepDashboardController'))
+                        @php
+                        $prepToken = new \stdClass();
+                        $prepToken->factory = session('idfactory');
+                        $prepToken->internal = true;
+                        $prepToken = encrypt($prepToken);
+                        @endphp
+                        <a href="{{ route('dc_prepdashboardclaim', ['token' => $prepToken]) }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/pngview.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Preparation Monitoring</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('report', 'EndlineController'))
+                        <a href="{{ route('monitoring_endlineindexreset') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/pngview.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Production Line Monitoring</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('ie', 'IEController'))
+                        <a href="{{ route('ie_index') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/pngview.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Library Sketch</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary btn-sm" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+@if (checkmenu('cutting', 'c_cuttingtargetshell') or checkmenu('wms', 'RequestController') or checkmenu('cutting', 'ArtworkAllowanceController') or checkmenu('cutting', 'CuttingReplacementController') or checkmenu('cutting', 'CutplanController'))
+<div class="modal fade" id="cutting" tabindex="-1" role="dialog" aria-labelledby="cuttinglabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="cuttinglabel">MENU CUTTING</h5>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-sm-12">
+                        @if (checkmenu('cutting', 'c_cuttingtargetshell'))
+                        <a href="{{ route('cutting_targetshell') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Setting Panel & Shell</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('wms', 'RequestController'))
+                        <a href="{{ route('wms_requestmaterial') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Request Material</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('cutting', 'ArtworkAllowanceController'))
+                        <a href="{{ route('cutting_artworkallowance') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Artwork Allowance</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('cutting', 'CuttingReplacementController'))
+                        <a href="{{ route('cutting_cuttingreplacement') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Cutting Replacement</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('cutting', 'CutplanController'))
+                        <a href="{{ route('cutting_cutplan') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Cut Plan</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary btn-sm" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+@else
+<div class="modal fade" id="cutting" tabindex="-1" role="dialog" aria-labelledby="cuttinglabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="cuttinglabel">NO ACCESS</h5>
+            </div>
+            <div class="modal-body">
+                <h4>You dont have any access</h4>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+@if (checkmenu('master', 'SmvController'))
+<div class="modal fade" id="sewing" tabindex="-1" role="dialog" aria-labelledby="sewinglabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="sewinglabel">MENU SEWING</h5>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-sm-12">
+                        @if (checkmenu('master', 'SmvController'))
+                        <a href="{{ route('smv') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">SMV</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary btn-sm" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+@else
+<div class="modal fade" id="sewing" tabindex="-1" role="dialog" aria-labelledby="sewinglabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="sewinglabel">NO ACCESS</h5>
+            </div>
+            <div class="modal-body">
+                <h4>You dont have any access</h4>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+@if (checkmenu('qc', 'DailyInlineController'))
+<div class="modal fade" id="qc" tabindex="-1" role="dialog" aria-labelledby="qclabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="qclabel">MENU QC</h5>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-sm-12">
+                        @if (checkmenu('qc', 'DailyInlineController'))
+                        <a href="{{ route('qc_dailyinline') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Daily Inline Inspection</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary btn-sm" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+@else
+<div class="modal fade" id="qc" tabindex="-1" role="dialog" aria-labelledby="qclabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="qclabel">NO ACCESS</h5>
+            </div>
+            <div class="modal-body">
+                <h4>You dont have any access</h4>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+
+@if (checkmenu('scanpack', 'SummaryListCartonController'))
+<div class="modal fade" id="scanpack" tabindex="-1" role="dialog" aria-labelledby="scanpacklabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="scanpacklabel">MENU SCANPACK</h5>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-sm-12">
+                        @if (checkmenu('scanpack', 'SummaryListCartonController'))
+                        <a href="{{ route('scanpack_summarylistcarton') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img src="{{ _asset('img/QC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Summary List Carton</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary btn-sm" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+@else
+<div class="modal fade" id="scanpack" tabindex="-1" role="dialog" aria-labelledby="scanpacklabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="scanpacklabel">NO ACCESS</h5>
+            </div>
+            <div class="modal-body">
+                <h4>You dont have any access</h4>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+@if (checkmenu('finishgoods', 'GrReportController'))
+<div class="modal fade" id="finishgoods" tabindex="-1" role="dialog" aria-labelledby="finishgoodslabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="finishgoodslabel">MENU FG</h5>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-sm-12">
+                        @if (checkmenu('finishgoods', 'GrReportController'))
+                        <a href="{{ route('finishgoods_reportgr') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img src="{{ _asset('img/QC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Report GR</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary btn-sm" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+@else
+<div class="modal fade" id="finishgoods" tabindex="-1" role="dialog" aria-labelledby="finishgoodslabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="finishgoodslabel">NO ACCESS</h5>
+            </div>
+            <div class="modal-body">
+                <h4>You dont have any access</h4>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+@if (checkmenu('secondary', 'ReportSecondary'))
+<div class="modal fade" id="artwork" tabindex="-1" role="dialog" aria-labelledby="artworklabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="artworklabel">ARTWORK</h5>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-sm-12">
+                        @if (checkmenu('secondary', 'ReportSecondary'))
+                        <a href="{{ route('secondary_reportbonding') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBBONDING.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Report Bonding</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('secondary', 'ReportSecondary'))
+                        <a href="{{ route('secondary_reportembroidery') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBEMBRO.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Report Embroidery</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('secondary', 'ReportSecondary'))
+                        <a href="{{ route('secondary_reportlaser') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBLASER.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Report Laser</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('secondary', 'ReportSecondary'))
+                        <a href="{{ route('secondary_reportpadprinting') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBPADPRINT.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Report Pad Printing</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('secondary', 'ReportSecondary'))
+                        <a href="{{ route('secondary_reportprinting') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBPRINTING.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Report Printing</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('secondary', 'ReportSecondary'))
+                        <a href="{{ route('secondary_reporthtt') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBHT.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Report Heat Transfer</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('secondary', 'ReportSecondary'))
+                        <a href="{{ route('secondary_reportreportfilling') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBFILLING.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Report Fillling</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@else
+<div class="modal fade" id="artwork" tabindex="-1" role="dialog" aria-labelledby="artworklabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="artworklabel">NO ACCESS</h5>
+            </div>
+            <div class="modal-body">
+                <h4>You dont have any access</h4>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+@if (checkmenu('secondary', 'ReportSecondary'))
+<div class="modal fade" id="ppa" tabindex="-1" role="dialog" aria-labelledby="ppalabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="ppalabel">PPA</h5>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-sm-12">
+                        @if (checkmenu('secondary', 'ReportSecondary'))
+                        <a href="{{ route('secondary_reportppaa') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBPPA1.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Report PPA 1</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('secondary', 'ReportSecondary'))
+                        <a href="{{ route('secondary_reportppab') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBPPA2.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Report PPA 2</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('secondary', 'ReportSecondary'))
+                        <a href="{{ route('secondary_reportquilting') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBQUILTING.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Report Quilting</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@else
+<div class="modal fade" id="ppa" tabindex="-1" role="dialog" aria-labelledby="ppalabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="ppalabel">NO ACCESS</h5>
+            </div>
+            <div class="modal-body">
+                <h4>You dont have any access</h4>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+@if (checkmenu('dc', 'SummaryPrintBarcodeController') or checkmenu('dc', 'SummaryStockDCController') or checkmenu('dc', 'SummaryReturnDCController') or checkmenu('dc', 'SummaryReprintBarcodeController'))
+<div class="modal fade" id="dc" tabindex="-1" role="dialog" aria-labelledby="dclabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="dclabel">SUPERMARKET</h5>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-sm-12">
+                        @if (checkmenu('dc', 'SummaryPrintBarcodeController'))
+                        <a href="{{ route('dc_summaryprintbarcode') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Report Print Garment ID</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('dc', 'SummaryStockDCController'))
+                        <a href="{{ route('dc_summaryrstockdc') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Summary Stock Supermarket</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('dc', 'SummaryReturnDCController'))
+                        <a href="{{ route('dc_summaryreturndc') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Report Return Supermarket</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('dc', 'SummaryReprintBarcodeController'))
+                        <a href="{{ route('dc_summaryreprintbarcode') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Report Reprint Garment ID</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@else
+<div class="modal fade" id="dc" tabindex="-1" role="dialog" aria-labelledby="dclabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="dclabel">NO ACCESS</h5>
+            </div>
+            <div class="modal-body">
+                <h4>You dont have any access</h4>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+@if (checkmenu('dc', 'SummaryWashingOutputController'))
+<div class="modal fade" id="washing" tabindex="-1" role="dialog" aria-labelledby="washinglabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="washinglabel">WASHING</h5>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-sm-12">
+                        @if (checkmenu('dc', 'SummaryWashingOutputController'))
+                        <a href="{{ route('secondary_summarywashingoutput') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Summary Washing</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@else
+<div class="modal fade" id="washing" tabindex="-1" role="dialog" aria-labelledby="washinglabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="washinglabel">NO ACCESS</h5>
+            </div>
+            <div class="modal-body">
+                <h4>You dont have any access</h4>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+@if (
+checkmenu('packing', 'SummaryIroningOutputController') or checkmenu('packing', 'SummaryPackingOutputController') or
+checkmenu('scanpack', 'ImportNgcSystemCodeController') or checkmenu('scanpack', 'ImportPackingTypeController') or
+checkmenu('scanpack', 'SummaryPackingTypeController') or checkmenu('scanpack', 'ImportNGCCartonCodeController')
+)
+<div class="modal fade" id="packing" tabindex="-1" role="dialog" aria-labelledby="packinglabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="packinglabel">PACKING</h5>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-sm-12">
+                        @if (checkmenu('packing', 'SummaryIroningOutputController'))
+                        <a href="{{ route('packing_summaryironingoutput') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Summary Ironing</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('packing', 'SummaryPackingOutputController'))
+                        <a href="{{ route('packing_summarypackingoutput') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Summary Packing</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('packing', 'ImportNgcSystemCodeController'))
+                        <a href="{{ route('packing_importngcsystemcode') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img src="{{ _asset('img/QC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Import NGC System Code</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('packing', 'ImportPackingTypeController'))
+                        <a href="{{ route('packing_importpackingtype') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img src="{{ _asset('img/QC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Input Packing Type</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('packing', 'SummaryPackingTypeController'))
+                        <a href="{{ route('packing_summarypackingtype') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img src="{{ _asset('img/QC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Summary Packing Type</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('packing', 'ImportNGCCartonCodeController'))
+                        <a href="{{ route('packing_importngccartoncode') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img src="{{ _asset('img/QC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Import NGC Carton Code</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@else
+<div class="modal fade" id="packing" tabindex="-1" role="dialog" aria-labelledby="packinglabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="packinglabel">NO ACCESS</h5>
+            </div>
+            <div class="modal-body">
+                <h4>You dont have any access</h4>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+@if (checkmenu('shipping', 'LoadingContainerController') or checkmenu('shipping', 'UnloadContainerController') or checkmenu('shipping', 'ActualPackingListController') or checkmenu('shipping', 'ReportSkuController') or checkmenu('shipping', 'DetailPackingListController') or checkmenu('shipping', 'StatusClosingController'))
+<div class="modal fade" id="shipping" tabindex="-1" role="dialog" aria-labelledby="shippinglabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="shippinglabel">SHIPPING</h5>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-sm-12">
+                        @if (checkmenu('shipping', 'LoadingContainerController'))
+                        <a href="{{ route('shipping_loadingcontainer') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Report Loading Container</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('shipping', 'UnloadContainerController'))
+                        <a href="{{ route('shipping_unloadfromcontainer') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Report Unloading Container</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('shipping', 'ActualPackingListController'))
+                        <a href="{{ route('shipping_actualpackinglist') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Report Actual Packing List</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('shipping', 'ReportSkuController'))
+                        <a href="{{ route('shipping_reportsku') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Report SKU</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('shipping', 'BreakdownPackingListController'))
+                        <a href="{{ route('shipping_breakdownpackinglist') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Report Breakdown Packing List</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('shipping', 'DetailPackingListController'))
+                        <a href="{{ route('shipping_detailpackinglist') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Report Detail Packing List</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('shipping', 'StatusClosingController'))
+                        <a href="{{ route('shipping_statusclosing') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Report Status Closing</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@else
+<div class="modal fade" id="shipping" tabindex="-1" role="dialog" aria-labelledby="shippinglabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="shippinglabel">NO ACCESS</h5>
+            </div>
+            <div class="modal-body">
+                <h4>You dont have any access</h4>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+@if (checkmenu('master', 'SmvController'))
+<div class="modal fade" id="ie" tabindex="-1" role="dialog" aria-labelledby="ielabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="ielabel">IE</h5>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-sm-12">
+                        @if (checkmenu('master', 'SmvController'))
+                        <a href="{{ route('smv') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">SMV</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@else
+<div class="modal fade" id="ie" tabindex="-1" role="dialog" aria-labelledby="ielabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="ielabel">NO ACCESS</h5>
+            </div>
+            <div class="modal-body">
+                <h4>You dont have any access</h4>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+@if (checkmenu('sewing', 'NeedleStockController') or checkmenu('sewing', 'NeedleListController') or checkmenu('sewing', 'NeedleRequestApprovalController') or checkmenu('mechanic', 'MachineController'))
+<div class="modal fade" id="mechanic" tabindex="-1" role="dialog" aria-labelledby="mechaniclabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="mechaniclabel">MECHANIC</h5>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-sm-12">
+                        @if (checkmenu('sewing', 'NeedleStockController'))
+                        <a href="{{ route('sewing_needlestock') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Needle Stock</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('sewing', 'NeedleListController'))
+                        <a href="{{ route('sewing_needlelist') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Needle List</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('sewing', 'NeedleRequestApprovalController'))
+                        <a href="{{ route('sewing_needleapproval') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Needle Request Approval</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('mechanic', 'MachineController'))
+                        <a href="{{ route('mechanic_machinesummary') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Machine Stock</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('mechanic', 'MachineController'))
+                        <a href="{{ route('mechanic_machine') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Machine List</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('mechanic', 'AssetController'))
+                        <a href="{{ route('mechanic_assetsummary') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Asset Stock</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('mechanic', 'AssetController'))
+                        <a href="{{ route('mechanic_asset') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Asset List</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@else
+<div class="modal fade" id="mechanic" tabindex="-1" role="dialog" aria-labelledby="mechaniclabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="mechaniclabel">NO ACCESS</h5>
+            </div>
+            <div class="modal-body">
+                <h4>You dont have any access</h4>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+@if (checkmenu('laboratory', 'ReceiveLaboratoryController')
+or checkmenu('laboratory', 'ResultTestLaboratoryController')
+or checkmenu('laboratory', 'GILaboratoryController')
+or checkmenu('laboratory', 'ReportReceiveLabController')
+or checkmenu('laboratory', 'ReportProcessLabController')
+or checkmenu('laboratory', 'ReportResultLabController')
+or checkmenu('laboratory', 'LaboratoryMonitoringController')
+)
+<div class="modal fade" id="laboratory" tabindex="-1" role="dialog" aria-labelledby="laboratorylabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="laboratorylabel">LABORATORY</h5>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-sm-12">
+                        @if (checkmenu('laboratory', 'ReceiveLaboratoryController'))
+                        <a href="{{ route('receivelaboratory') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SECONDARY.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Receive Lab</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('laboratory', 'ResultTestLaboratoryController'))
+                        <a href="{{ route('resulttestlaboratory') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SECONDARY.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Result Test Lab</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('laboratory', 'GILaboratoryController'))
+                        <a href="{{ route('gilaboratory') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SECONDARY.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Good Issue Lab</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('laboratory', 'ReportReceiveLabController'))
+                        <a href="{{ route('reportreceivelab') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Report Receive Lab</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('laboratory', 'ReportProcessLabController'))
+                        <a href="{{ route('reportprocesslab') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Report Process Lab</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('laboratory', 'ReportResultLabController'))
+                        <a href="{{ route('reportresultlab') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/SUBDC.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Report Result Lab</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                        @if (checkmenu('laboratory', 'LaboratoryMonitoringController'))
+                        <a href="{{ route('laboratorymonitoring') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/pngview.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Laboratory Monitoring</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@else
+<div class="modal fade" id="electricity" tabindex="-1" role="dialog" aria-labelledby="electricitylabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="mechaniclabel">NO ACCESS</h5>
+            </div>
+            <div class="modal-body">
+                <h4>You dont have any access</h4>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+@if (checkmenu('sustainability', 'SustainabilityDashboardController'))
+<div class="modal fade" id="electricity" tabindex="-1" role="dialog" aria-labelledby="electricitylabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="electricitylabel">SUSTAINABILITY</h5>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-sm-12">
+                        @if (checkmenu('sustainability', 'SustainabilityDashboardController'))
+                        <a href="{{ route('electricity_dashboardelectricityplantmonitoring') }}">
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <div class="info-box">
+                                    <span class="info-box-icon"><img
+                                            src="{{ _asset('img/pngview.png') }}"></span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-number">Dashboard Sustainability</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@else
+<div class="modal fade" id="electricity" tabindex="-1" role="dialog" aria-labelledby="electricitylabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h5 class="modal-title" id="mechaniclabel">NO ACCESS</h5>
+            </div>
+            <div class="modal-body">
+                <h4>You dont have any access</h4>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+@include('layouts.loading')
+@endsection
+
+@section('extrascript')
+<script type="text/javascript">
+    $(document).ready(function() {
+        @if(session('note'))
+        @foreach(session('note') as $n)
+        @if($n == 'late_first_send')
+        swal('Cutting Warning', 'You have some panel not sent to tier-3 yet, please complete your panel sending',
+            'warning');
+        @elseif($n == 'late_last_send')
+        swal('Cutting Warning', 'You have some panel not sent to tier-3 yet, please complete your panel sending',
+            'warning');
         @endif
-        <div class="main-footer navbar-fixed-bottom" style="background-color: #21409A; padding: 2rem;">
-            <div class="container" style="color:#fff; width:87%; font-size: medium; font-weight: 600;padding:0; ">
-                <div class="pull-right hidden-xs">
-                    PT PAN BROTHERS Tbk. & Groups
-                </div>
-                <strong>Copyright © {{ Carbon\Carbon::now()->format('Y') }} Manufacturing Execution System</strong>
-            </div>
-        </div>
+        @endforeach
+        @endif
+        @if(session('information'))
+        swal('{{session('
+            information ')['
+            title '] ?? '
+            '}}', '{{session('
+            information ')['
+            message '] ?? '
+            ' }}', '{{session('
+            information ')['
+            status '] ?? '
+            info ' }}', {
+                closeOnClickOutside: false,
+            });
+        @endif
+    });
+    Array.from(document.getElementsByTagName("meta"))
+        .filter(elem => elem.getAttributeNames().includes("http-equiv") && elem.getAttribute("http-equiv") === "refresh")[0];
+</script>
+@endsection
