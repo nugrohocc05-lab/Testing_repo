@@ -1,43 +1,25 @@
-/* Aturan Default (Desktop & Mobile) */
-.dropdown-submenu {
-    position: relative;
-}
-.dropdown-submenu > .dropdown-menu {
-    display: none;
-    position: absolute;
-    /* Pastikan tidak ada inline style display yang mengganggu */
-    display: none !important; 
-}
 
-/* -------------------------------------------
-   ATURAN DESKTOP (Gunakan Hover Murni)
-------------------------------------------- */
-@media (min-width: 768px) {
-    .dropdown-submenu:hover > .dropdown-menu {
-        display: block !important;
-        top: 0;
-        left: 100%; /* Membuka submenu ke arah luar kanan */
-        margin-top: -1px; /* Sesuaikan sedikit margin jika meleset */
-    }
-}
+function goShortcut(event, element) {
+    let url = element.getAttribute('href');
 
-/* -------------------------------------------
-   ATURAN MOBILE (Matikan Hover, Gunakan Click Class)
-------------------------------------------- */
-@media (max-width: 767px) {
-    .dropdown-submenu > .dropdown-menu {
-        position: static; /* Mode accordion, dorong konten ke bawah */
-        background-color: transparent !important;
+    // 1. Cek apakah user mencoba membuka di tab baru (Ctrl+Click, Meta/Cmd+Click, Middle Click)
+    if (event.ctrlKey || event.shiftKey || event.metaKey || (event.button && event.button === 1)) {
+        // Biarkan browser yang bekerja, JANGAN tampilkan loading dan JANGAN preventDefault
+        return; 
     }
+
+    // 2. Jika link adalah '#', tidak perlu melakukan apa-apa
+    if (url === '#' || url === 'javascript:void(0)') {
+        event.preventDefault();
+        return;
+    }
+
+    // 3. Untuk klik kiri biasa, cegah perpindahan instan, tampilkan loading, lalu pindah halaman
+    event.preventDefault(); 
     
-    /* Paksa matikan hover di mobile agar tidak merespons sentuhan acak */
-    .dropdown-submenu:hover > .dropdown-menu {
-        display: none !important;
-    }
+    // Tampilkan animasi loading kamu
+    document.getElementById('loading').style.display = 'block'; 
 
-    /* Submenu hanya tampil jika Javascript memasang class .open */
-    .dropdown-submenu.open > .dropdown-menu,
-    .dropdown-submenu.open:hover > .dropdown-menu {
-        display: block !important;
-    }
+    // Pindah ke halaman tujuan
+    window.location.href = url;
 }
