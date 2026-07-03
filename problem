@@ -81,7 +81,7 @@
             .dropdown-submenu > .dropdown-menu {
                     display: none;
                     position: absolute;
-                    display: none !important;
+                    display: none;
             }
 
             .card-bg:hover {
@@ -174,13 +174,13 @@
                         background-color: transparent !important;
                     }
 
-                    .dropdown-submenu:hover > .dropdown-menu {
-                        display: none !important;
+                .dropdown-submenu:hover > .dropdown-menu {
+                        display: none;
                     }
 
                     .dropdown-submenu.open > .dropdown-menu,
                     .dropdown-submenu.open:hover > .dropdown-menu {
-                        display: block !important;
+                        display: block ;
                     }
                 }
 
@@ -997,17 +997,21 @@
                     const isOpen = $li.hasClass('open');
 
                     $li.siblings('.dropdown-submenu').removeClass('open');
+                    $li.siblings('.dropdown-submenu').find('dropdown-menu').hide();
 
                     if (isOpen) {
                         $li.removeClass('open');
+                        $li.children('.dropdown-menu').hide();
                     } else {
                         $li.addClass('open');
+                        $li.children('.dropdown-submenu .dropdown-menu').hide()
                     }
                 }
             });
 
             $('.navbar-nav').on('hidden.bs.dropdown', function() {
                 $(this).find('.dropdown-submenu').removeClass('open');
+                $(this).find('.dropdown-submenu .dropdown-menu').hide();
             });
 
         </script>
@@ -1018,41 +1022,4 @@
     </body>
 
     </html>
-
-
-@foreach ($data as $m)
-@php
-
-$child = $menu->where('parent_id', $m->id)->where('is_show', 1);
-@endphp
-@if ($child->count() > 0)
-<li class="dropdown-submenu">
-    <a href="javascript:void(0)"
-       tabindex="-1"
-       @if($m->module_name == 'tools') data-tooltip="{{$m->tooltip}}" @endif>
-        {{$m->alias}}
-    </a>
-    <ul class="dropdown-menu" style="background-color: {{$color}}; border:none">
-        {!! renderchild($child, $menu, $level + 1) !!}
-    </ul>
-</li>
-@else
-<li>
-    <a href="javascript:void(0)"
-        onclick="goShortcut(event)"
-        data-url="{{ ($m->route != '#' && \Route::has($m->route)) ? route($m->route) : '#' }}"
-        tabindex="-1"
-        @if($m->module_name == 'tools') data-tooltip="{{$m->tooltip}}" @endif>
-    {{$m->alias}}
-    </a>
-</li>
-@endif
-@if($m->controller_name == 'shipping' && $m->route = '#')
-<div style="border-top: 1px solid #b7b6b6;"></div>
-@elseif($m->controller_name == 'SummaryMesDashboardController')
-<div style="border-top: 1px solid #b7b6b6"></div>
-@endif
-@endforeach
-
-
-kenapa malah dropdown submenu nya tidak bisa dan tidak tampil, diklik tidak bisa tampil  ? 
+dimobile masih tidak bisa diklik 
