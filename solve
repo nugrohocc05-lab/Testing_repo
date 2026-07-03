@@ -1,119 +1,28 @@
-/* 1. Layar Desktop Besar */
-@media (min-width: 1025px) {
-    .custom-nav-container {
-        margin-left: 120px;
-        margin-right: 120px;
-    }
-    .navbar-nav>li>a {
-        padding-top: 25px !important;
-        padding-bottom: 25px !important;
-    }
-}
+// Solve bug dropdown
+$(document).on('click', '.dropdown-submenu > a', function(e) {
+    // Hentikan aksi default agar link tidak memuat ulang halaman
+    e.preventDefault();
+    e.stopPropagation();
 
-/* 2. Layar Tablet (Potret dan Lanskap) */
-@media (min-width: 768px) and (max-width: 1024px) {
-    .custom-nav-container {
-        margin-left: 15px; /* Margin dikurangi agar menu memiliki ruang */
-        margin-right: 15px; 
-    }
-    .navbar-nav>li>a {
-        padding-top: 25px !important;
-        padding-bottom: 25px !important;
-        padding-left: 10px !important; /* Padding antar item dibuat lebih rapat */
-        padding-right: 10px !important;
-    }
-    .navbar-custom-menu {
-        margin-right: 15px;
-    }
-}
+    // Hanya terapkan logika klik ini jika sedang di layar tablet/mobile (<= 767px).
+    // Untuk desktop, kita percayakan penuh pada efek Hover dari CSS.
+    if ($(window).width() <= 767) {
+        const $li = $(this).parent('.dropdown-submenu');
+        const isOpen = $li.hasClass('open');
 
-/* 3. Layar Mobile (HP) */
-@media (max-width: 767px) {
-    .content-wrapper {
-        margin-bottom: 30px;
-        height: 100%;
-    }
+        // Tutup submenu lain yang setingkat (sibling)
+        $li.siblings('.dropdown-submenu').removeClass('open');
 
-    .custom-nav-container {
-        margin-left: 0 !important;
-        margin-right: 0 !important;
+        // Toggle class 'open'
+        if (isOpen) {
+            $li.removeClass('open');
+        } else {
+            $li.addClass('open');
+        }
     }
+});
 
-    .navbar>.container::before,
-    .navbar>.container::after {
-        display: none !important;
-    }
-
-    .navbar>.container {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        flex-wrap: wrap;
-    }
-
-    div.navbar-collapse.pull-left {
-        position: fixed;
-        top: 70px;
-        left: 0;
-        width: 50%;
-        margin: 0 !important;
-        background: #21409A;
-        z-index: 999;
-        overflow-y: auto;
-    }
-
-    .navbar-header {
-        order: 1;
-        display: flex;
-        align-items: center;
-        margin: 0;
-        padding: 0 15px;
-        height: 70px;
-    }
-
-    .navbar-custom-menu {
-        display: flex;
-        align-items: center;
-        height: 70px;
-        margin-left: auto;
-    }
-
-    .navbar-custom-menu .navbar-nav {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        margin: 0;
-    }
-
-    .navbar-custom-menu .navbar-nav > li {
-        display: flex;
-        align-items: center;
-        height: 70px;
-    }
-
-    .navbar-toggle {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        height: 70px;
-        margin: 0 12px 0 0;
-        padding: 0 12px;
-        background: transparent;
-        border: 0;
-        color: #fff;
-        font-size: 20px;
-    }
-
-    .dropdown-submenu > .dropdown-menu {
-        display: none;
-        position: static;
-    }
-
-    .dropdown-submenu.open > .dropdown-menu {
-        display: block;
-    }
-
-    .dropdown-submenu:hover > .dropdown-menu {
-        display: none;
-    }
-}
+// Bersihkan semua class 'open' di submenu ketika dropdown utama ditutup
+$('.navbar-nav').on('hidden.bs.dropdown', function() {
+    $(this).find('.dropdown-submenu').removeClass('open');
+});
