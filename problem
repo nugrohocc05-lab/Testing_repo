@@ -1,9 +1,8 @@
-cek kode ini, apakah ini sudah best practice dari penulisannya ? 
 @extends('layouts.master')
 
 @section('content')
-<div class="container-fluid" style="border-radius: 20px;">
-	<div class="row" style="margin-top: 7rem">
+<div class="container-fluid rounded-lg">
+	<div class="row pt-5 mt-4">
 		<div class="col-sm-12">
 			<div class="box box-danger">
 				<div class="box-header with-border">
@@ -12,10 +11,10 @@ cek kode ini, apakah ini sudah best practice dari penulisannya ?
 					</h3>
 				</div>
 				<div class="box-body">
-					<div class="row" style="margin-bottom: 2.4rem">
+					<div class="row mb-4">
 						<div class="col-md-2 col-sm-5">
                             <b>Filter :</b>
-                            <select name="filter" id="filter" class="select2 form-control" style="width: 100%">
+                            <select name="filter" id="filter" class="select2 form-control w-100">
                                 <option value=""></option>
                                 <option value="groupbuyer_filter">Group Buyer</option>
                                 <option value="po_filter">PO</option>
@@ -23,18 +22,22 @@ cek kode ini, apakah ini sudah best practice dari penulisannya ?
                         </div>
 						<div class="col-md-2 col-sm-5" id="groupbuyer_container">
 							<b>Group Buyer :</b>
-							<select class="select2 form-control" id="group_buyer" style="width: 100%"></select>
+							<select class="select2 form-control w-100" id="group_buyer"></select>
 						</div>
 						<div class="col-md-2 col-sm-5" id="season_container">
 							<b>Season :</b>
-							<select class="select2 form-control" id="season" style="width: 100%"></select>
+							<select class="select2 form-control w-100" id="season"></select>
 						</div>
-						<div class="col-md-4 col-sm-3" style="padding-top: 2rem">
+                        <div class="col-md-2 col-sm-5" id="po_container" style="display: none;">
+							<b>PO :</b>
+							<select class="select2 form-control w-100" id="po"></select>
+						</div>
+						<div class="col-md-4 col-sm-3 pt-4">
 							<button type="button" class="btn btn-sm btn-primary" id="findbtn">Find</button>
 							<button type="button" class="btn btn-sm btn-warning" id="resetbtn">Reset</button>
 						</div>
 					</div>
-					<table id="datalist" class="table table-bordered table-striped" style="width: 100%">
+					<table id="datalist" class="table table-bordered table-striped w-100">
 						<thead>
 							<tr>
 								<th>No</th>
@@ -59,160 +62,103 @@ cek kode ini, apakah ini sudah best practice dari penulisannya ?
 @endsection
 
 @section('extrascript')
-
 <script type="text/javascript">
 $(document).ready(function(){
 
-    $('#groupbuyer_container').show();
-    $('#season_container').show();
-    $('#po_container').hide();
+    // 1. INISIALISASI AWAL SELECT2 (Cukup Sekali)
+    $('#filter').select2({ placeholder: "Select Filter" });
 
-    $('#filter').select2({
-        placeholder: "Select Folder"
-    }).on('change', function(){
+    $('#group_buyer').select2({
+        placeholder: 'Select Group Buyer',
+        ajax: {
+            // URL dibuat dinamis mendeteksi nilai dari tipe filter yang aktif
+            url: function() {
+                let filter = $('#filter').val();
+                return filter === 'po_filter' 
+                    ? '{{ route("reportgoodissuelab.listgroupbuyerpo") }}' 
+                    : '{{ route("reportgoodissuelab.listgroupbuyer") }}';
+            },
+            type: 'GET',
+            dataType: 'json',
+            delay: 250,
+            data: function (params) {
+                return { term: params.term, filter_type: $('#filter').val() };
+            },
+            processResults: function(data) {
+                return {
+                    results: $.map(data, function(item) {
+                        return { id: item.id, text: item.group_name };
+                    })
+                };
+            }
+        }
+    });
+
+    $('#season').select2({
+        placeholder: 'Select Season',
+        ajax: {
+            url: function() {
+                let filter = $('#filter').val();
+                return filter === 'po_filter' 
+                    ? '{{ route("reportgoodissuelab.listseasonpo") }}' 
+                    : '{{ route("reportgoodissuelab.listseason") }}';
+            },
+            type: 'GET',
+            dataType: 'json',
+            data: function (params) {
+                return {
+                    idbuyer: $('#group_buyer').val(),
+                    filter_type: $('#filter').val(),
+                    search: params.term || ''
+                };
+            },
+            processResults: function (data) {
+                return {
+                    results: $.map(data, function (item) {
+                        return { id: item.season, text: item.season };
+                    })
+                };
+            }
+        },
+    });
+
+    // TODO: Inisialisasi Select2 untuk #po jika nanti dibutuhkan pencarian ajax
+    $('#po').select2({ placeholder: 'Select PO' });
+
+
+    // 2. EVENT HANDLER (Kontrol visibilitas & Reset data)
+    $('#filter').on('change', function(){
         var selectedValue = $(this).val();
 
-        $('#group_buyer').val(null).trigger('change');
-        $('#season').val(null).trigger('change');
-        $('#po').val(null).trigger('change');
+        // Reset semua pilihan di bawahnya setiap kali filter utama berubah
+        clearSelectFields(['#group_buyer', '#season', '#po']);
 
-        if(selectedValue === 'groupbuyer_filter') {
-            $('#groupbuyer_container').show();
-            $('#season_container').show();
-            $('#po_container').hide();
-
-            // Filtering Group Buyer
-            $('#group_buyer').select2({
-                placeholder: 'Select Group Buyer',
-                ajax: {
-                    url: '{{ route("reportgoodissuelab.listgroupbuyer") }}',
-                    type: 'GET',
-                    dataType: 'json',
-                    delay: 250,
-                    data: function (params) {
-                        return {
-                            term: params.term,
-                            filter_type: $('#filter').val()
-                        };
-                    },
-                    processResults: function(data) {
-                        return {
-                            results: $.map(data, function(item) {
-                                return {
-                                    id: item.id,
-                                    text: item.group_name
-                                }
-                            })
-                        };
-                    }
-                }
-            });
-
-            $('#group_buyer').on('change', function () {
-                $('#season').val(null).trigger('change');
-                $('#po').val(null).trigger('change');
-            });
-
-            $('#season').select2({
-                placeholder: 'Select Season',
-                ajax: {
-                    url: '{{ route("reportgoodissuelab.listseason") }}',
-                    type: 'GET',
-                    dataType: 'json',
-                    data: function (params) {
-                        return {
-                            idbuyer: $('#group_buyer').val(),
-                            filter_type: $('#filter').val(),
-                            search: params.term || ''
-                        };
-                    },
-                    processResults: function (data) {
-                        return {
-                            results: $.map(data, function (item) {
-                                return {
-                                    id: item.season,
-                                    text: item.season
-                                };
-                            })
-                        };
-                    }
-                },
-            });
-
-        // Filtering PO
-        } else if(selectedValue === 'po_filter') {
-            $('#groupbuyer_container').show();
-            $('#season_container').show();
-            $('#po_container').show();
-
-            $('#group_buyer').select2({
-                placeholder: 'Select Group Buyer',
-                ajax: {
-                    url: '{{ route("reportgoodissuelab.listgroupbuyerpo") }}',
-                    type: 'GET',
-                    dataType: 'json',
-                    delay: 250,
-                    data: function (params) {
-                        return {
-                            term: params.term,
-                            filter_type: $('#filter').val()
-                        };
-                    },
-                    processResults: function(data) {
-                        return {
-                            results: $.map(data, function(item) {
-                                return {
-                                    id: item.id,
-                                    text: item.group_name
-                                }
-                            })
-                        };
-                    }
-                }
-            });
-
-            $('#group_buyer').on('change', function () {
-                $('#season').val(null).trigger('change');
-                $('#po').val(null).trigger('change');
-            });
-
-            $('#season').select2({
-                placeholder: 'Select Season',
-                ajax: {
-                    url: '{{ route("reportgoodissuelab.listseasonpo") }}',
-                    type: 'GET',
-                    dataType: 'json',
-                    data: function (params) {
-                        return {
-                            idbuyer: $('#group_buyer').val(),
-                            filter_type: $('#filter').val(),
-                            search: params.term || ''
-                        };
-                    },
-                    processResults: function (data) {
-                        return {
-                            results: $.map(data, function (item) {
-                                return {
-                                    id: item.season,
-                                    text: item.season
-                                };
-                            })
-                        };
-                    }
-                },
-            });
+        // Toggle Container berdasarkan pilihan
+        if(selectedValue === 'po_filter') {
+            $('#groupbuyer_container, #season_container, #po_container').show();
         } else {
-            $('#groupbuyer_container').show();
-            $('#season_container').show();
+            $('#groupbuyer_container, #season_container').show();
             $('#po_container').hide();
         }
     });
 
-    $('#season').on('change', function () {
-        $('#po').val(null).trigger('change');
+    $('#group_buyer').on('change', function () {
+        clearSelectFields(['#season', '#po']);
     });
 
-    // Data Table
+    $('#season').on('change', function () {
+        clearSelectFields(['#po']);
+    });
+
+    // Helper function untuk mereset Select2 agar tidak mengulang kode .val(null).trigger('change')
+    function clearSelectFields(elements) {
+        elements.forEach(function(selector) {
+            $(selector).val(null).trigger('change.select2'); 
+        });
+    }
+
+
+    // 3. DATATABLES
     let table = $('#datalist').DataTable({
         processing: true,
         serverSide: true,
@@ -223,6 +169,7 @@ $(document).ready(function(){
                 d.filter_type = $('#filter').val();
                 d.group_buyer = $('#group_buyer').val();
                 d.season = $('#season').val();
+                d.po = $('#po').val(); // Menambahkan parameter PO ke server side datatable
             }
         },
         columns: [
@@ -240,35 +187,25 @@ $(document).ready(function(){
                 data: 'id',
                 orderable: false,
                 searchable: false,
-                render: function (data, type, row) {
+                render: function (data) {
                     let url = '{{ route("reportgoodissuelab.detail", ":id" ) }}';
-                    url = url.replace(':id', data);
-                    return `
-                        <a href="${url}">
-                            <i class="fa fa-info-circle fa-lg text-blue actiona"></i>
-                        </a>
-                    `;
+                    return `<a href="${url.replace(':id', data)}">
+                                <i class="fa fa-info-circle fa-lg text-blue actiona"></i>
+                            </a>`;
                 }
             }
         ]
     });
 
-    // Button Find
+    // 4. BUTTON ACTIONS
     $('#findbtn').on('click', function () {
         table.ajax.reload();
     });
 
-    // Button Reset
     $('#resetbtn').on('click', function () {
         $('#filter').val('').trigger('change');
-        $('#group_buyer').val(null).trigger('change');
-        $('#season').val(null).trigger('change');
-        $('#po').val(null).trigger('change');
         table.ajax.reload();
     });
-
 });
 </script>
 @endsection
-
-apakah malah berulang ulang, tapi untuk yang bagian po_filter itu belum, cuman bikin misal diklik po filter maka akan tampil itu 
