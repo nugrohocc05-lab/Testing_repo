@@ -1,36 +1,37 @@
-// SATU-SATUNYA SCRIPT UNTUK SUBMENU (Desktop & Mobile)
-$(document).on('click', '.dropdown-submenu > a', function(e) {
-    e.preventDefault();
-    e.stopPropagation();
+function dataTable(Request $request)
+{
+    preconnect(session('db'));
 
-    var $submenu = $(this).parent('.dropdown-submenu');
-    var isOpen = $submenu.hasClass('open');
+    // Cek jika request datang dari halaman detail
+    if ($request->has('detail_id') && $request->detail_id != '') {
+        
+        $data = DB::table('mesprima1_restore.delivery_order_stocks as do')
+            ->join('mesprima1_restore.fgreceivegarment_stocks as fr', 'fr.delivery_order', '=', 'do.delivery_order')
+            ->join('mesprima1_restore.outputdetail as od', 'od.barcode', '=', 'fr.barcode')
+            ->join('mesprima1_restore.purchase_order as po', 'po.idpo', '=', 'od.idpo')
+            ->join('mainmes.masterbuyer as mb', 'do.masterbuyer_id', '=', 'mb.idbuyer')
+            ->join('mainmes.masterstyle as ms', 'do.masterstyle_id', '=', 'ms.idstyle')
+            ->join('mainmes.sub_styles as ss', 'ms.sub_style_id', '=', 'ss.id')
+            // Tambahkan join ke tabel warna/ukuran jika ada, contoh:
+            // ->leftJoin('mainmes.colors as c', 'od.color_id', '=', 'c.id')
+            // ->leftJoin('mainmes.sizes as sz', 'od.size_id', '=', 'sz.id')
+            ->select(
+                DB::raw('ROW_NUMBER() OVER (ORDER BY fr.barcode) as no'),
+                'fr.barcode',
+                'mb.nmbuyer as buyer',
+                'do.season',
+                'ms.nmstyle as style',
+                'ss.name as sub_style',
+                'po.po',
+                DB::raw("'' as color"),   // Ganti dengan field asli jika ada (misal: c.color_name)
+                DB::raw("'' as size"),    // Ganti dengan field asli jika ada (misal: sz.size_name)
+                DB::raw("'' as remark")   // Ganti dengan field asli jika ada
+            )
+            ->where('do.id', $request->detail_id);
 
-    // Tutup semua submenu lain yang sejajar (opsional, agar rapi)
-    $submenu.siblings('.dropdown-submenu').removeClass('open');
-
-    // Toggle (Buka/Tutup) submenu yang sedang diklik
-    if (isOpen) {
-        $submenu.removeClass('open');
-    } else {
-        $submenu.addClass('open');
+        return DataTables::of($data)->toJson();
     }
-});
 
-// Pastikan semua submenu tertutup saat dropdown utama ditutup
-$('.navbar-nav').on('hidden.bs.dropdown', function() {
-    $(this).find('.dropdown-submenu').removeClass('open');
-});
-
-// Menutup navbar saat area di luar navbar diklik (Fix tambahan untuk mobile)
-$(document).on('click', function (e) {
-    var $navbar = $('#navbar-collapse');
-    var $toggle = $('.navbar-toggle');
-
-    if (!$navbar.is(e.target) && $navbar.has(e.target).length === 0 &&
-        !$toggle.is(e.target) && $toggle.has(e.target).length === 0) {
-        if ($navbar.hasClass('in')) {
-            $navbar.collapse('hide');
-        }
-    }
-});
+    // ... KODE QUERY UTAMA ANDA YANG LAMA DI SINI ...
+    // (Query yang memakai groupBy cartoncode untuk halaman index)
+}
