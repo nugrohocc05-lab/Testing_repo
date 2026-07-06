@@ -1,0 +1,113 @@
+function dataTable(Request $request)
+    {
+        preconnect(session('db'));
+
+        // Data Detail
+        if ($request->has('detail_id') && $request->detail_id != '') {
+
+            $data = DB::table('mesprima1_restore.delivery_order_stocks as do')
+                ->join('mesprima1_restore.fgreceivegarment_stocks as fr', 'fr.delivery_order', '=', 'do.delivery_order')
+                ->join('mesprima1_restore.outputdetail as od', 'od.barcode', '=', 'fr.barcode')
+                ->join('mesprima1_restore.purchase_order as po', 'po.idpo', '=', 'od.idpo')
+                ->join('mesprima1_restore.mastercolor as mc', 'do.mastercolor_id', '=', 'mc.idcolor')
+                ->join('mesprima1_restore.mastersize as mz', 'do.mastersize_id', '=', 'mz.idsize')
+                ->join('mainmes.masterbuyer as mb', 'do.masterbuyer_id', '=', 'mb.idbuyer')
+                ->join('mainmes.masterstyle as ms', 'do.masterstyle_id', '=', 'ms.idstyle')
+                ->join('mainmes.sub_styles as ss', 'ms.sub_style_id', '=', 'ss.id')
+
+                ->select(
+                    DB::raw('ROW_NUMBER() OVER (ORDER BY do.cartoncode) as no'),
+                    'fr.barcode',
+                    'mb.nmbuyer as buyer',
+                    'ms.nmstyle as style',
+                    'mc.nmcolor as color',
+                    'mz.nmsize as size',
+                    'do.season',
+                    'do.remark',
+                    'ss.name as sub_style',
+                    'po.po',
+                )
+                ->where('do.id', $request->detail_id);
+
+            return DataTables::of($data)->toJson();
+        }
+
+        $filterType   = $request->filter_type;
+        $groupBuyer   = $request->group_buyer;
+        $season       = $request->season;
+        $po           = $request->po;
+
+        if (!$filterType) {
+            return DataTables::of(collect([]))->toJson();
+        }
+
+        if ($filterType == 'groupbuyer_filter' && (!$groupBuyer || !$season)) {
+            return DataTables::of(collect([]))->toJson();
+        }
+
+        if ($filterType == 'po_filter' && !$po) {
+            return DataTables::of(collect([]))->toJson();
+        }
+
+        $fg = DB::table('mesprima1_restore.fgreceivegarment_stocks')
+            ->select('delivery_order', 'barcode', 'date_out', 'user_id')
+            ->whereNotNull('date_gi');
+
+        $od = DB::table('mesprima1_restore.outputdetail as od')
+            ->join('mesprima1_restore.purchase_order as po', 'po.idpo', '=', 'od.idpo')
+            ->select(
+                'od.barcode',
+                'po.po'
+            );
+
+        $data = DB::table('mesprima1_restore.delivery_order_stocks as do')
+
+            ->joinSub($fg, 'fr', function ($join) {
+                $join->on('fr.delivery_order', '=', 'do.delivery_order');
+            })
+
+            ->joinSub($od, 'od', function ($join) {
+                $join->on('od.barcode', '=', 'fr.barcode');
+            })
+
+            ->join('mainmes.masterbuyer as mb', 'do.masterbuyer_id', '=', 'mb.idbuyer')
+            ->join('mainmes.masterstyle as ms', 'do.masterstyle_id', '=', 'ms.idstyle')
+            ->join('mainmes.sub_styles as ss', 'ms.sub_style_id', '=', 'ss.id')
+
+            ->select(
+                DB::raw('ROW_NUMBER() OVER (ORDER BY do.cartoncode) as no'),
+                'do.id',
+                'do.cartoncode',
+                'do.season',
+                'do.qty',
+                'fr.user_id as user',
+                'fr.date_out as date',
+                'mb.nmbuyer as buyer',
+                'ms.nmstyle as style',
+                'ss.name as sub_style',
+                DB::raw("GROUP_CONCAT(DISTINCT od.po SEPARATOR ', ') as po")
+            )
+
+            ->groupBy(
+                'do.id',
+                'do.cartoncode',
+                'do.season',
+                'do.qty',
+                'fr.user_id',
+                'fr.date_out',
+                'mb.nmbuyer',
+                'ms.nmstyle',
+                'ss.name'
+            );
+
+        if ($filterType == 'groupbuyer_filter') {
+            $data->where('mb.groupbuyer', $groupBuyer);
+            $data->where('do.season', $season);
+        }
+
+        if ($filterType == 'po_filter') {
+            $data->where('od.po', $po);
+        }
+
+        return DataTables::of($data)->toJson();
+    }
