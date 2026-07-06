@@ -1,37 +1,246 @@
-function dataTable(Request $request)
-{
-    preconnect(session('db'));
+<?php
 
-    // Cek jika request datang dari halaman detail
-    if ($request->has('detail_id') && $request->detail_id != '') {
-        
-        $data = DB::table('mesprima1_restore.delivery_order_stocks as do')
-            ->join('mesprima1_restore.fgreceivegarment_stocks as fr', 'fr.delivery_order', '=', 'do.delivery_order')
+namespace Modules\Laboratory\Http\Controllers;
+
+use Illuminate\Http\Request;
+use App\Http\Controllers\Controller;
+use App\Http\Controllers\TlogController;
+use App\Http\Controllers\WatchController;
+use App\Http\Models\Color;
+use App\Http\Models\DeliveryOrder;
+use App\Http\Models\DOStock;
+use App\Http\Models\FGReceiveGarmentStock;
+use App\Http\Models\Main\Buyer;
+use App\Http\Models\Main\Employee;
+use App\Http\Models\Main\MasterFactory;
+use App\Http\Models\Main\MasterGroupBuyer;
+use App\Http\Models\Main\MethodLabs;
+use App\Http\Models\Main\ProcessLabs;
+use App\Http\Models\Main\ProcessRoutingLab;
+use App\Http\Models\Main\ReceivedLab;
+use App\Http\Models\Main\ResultTestLabDetail;
+use App\Http\Models\Main\ResultTestLabHeader;
+use App\Http\Models\Main\StandardValueLabs;
+use App\Http\Models\Main\Style;
+use App\Http\Models\Main\SubStyle;
+use App\Http\Models\Main\TestItemLabs;
+use App\Http\Models\Main\ValueLabs;
+use App\Http\Models\OutputDetail;
+use App\Http\Models\PurchaseOrder;
+use App\Http\Models\Shell;
+use App\Http\Models\ShellTarget;
+use Yajra\DataTables\DataTables;
+use App\Http\Models\Size;
+use Barryvdh\DomPDF\Facade as PDF;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
+use Modules\Shipping\Http\Controllers\DeliveryOrderStockController;
+
+class ReportGoodIssueLabController extends Controller
+{
+    protected $m_modul = 'laboratory';
+
+    function __construct()
+    {
+        $this->middleware('auth');
+    }
+
+    function index()
+    {
+        if ($this->myaccess() == '0') {
+            return redirect()
+                ->back()
+                ->with('alert', [
+                    'title' => 'Unauthorized!',
+                    'message' => 'You Dont Have Any Access Here!',
+                    'status' => 'warning',
+                ]);
+        }
+
+        return view('laboratory::reportgoodissuelab.index', [
+            'access' => $this->myaccess(),
+        ]);
+    }
+
+    public function listGroupBuyer(Request $request)
+    {
+        if (!$request->ajax()) {
+            return;
+        }
+
+        preconnect(session('db'));
+
+        $fgreceive = "mesprima1_restore.fgreceivegarment_stocks";
+        $dos = "mesprima1_restore.delivery_order_stocks";
+
+        $gbuyer = DB::table($fgreceive . ' as fr')
+                ->join($dos . ' as do', function ($join) {
+                    $join->on('fr.delivery_order', '=', 'do.delivery_order');
+                })
+                ->join('mainmes.masterbuyer as mb', 'do.masterbuyer_id', '=', 'mb.idbuyer')
+                ->join('mainmes.master_group_buyers as mgb', 'mb.groupbuyer', '=', 'mgb.id')
+                ->whereNotNull('fr.date_gi')
+                ->select(
+                    'mgb.id',
+                    'mgb.group_name'
+                )
+                ->distinct()
+                ->orderBy('mgb.group_name')
+                ->get();
+        return response()->json($gbuyer);
+    }
+
+    function listSeason(Request $request)
+    {
+        $query = DB::table('mesprima1_restore.fgreceivegarment_stocks as fr')
+            ->join('mesprima1_restore.delivery_order_stocks as do', 'fr.delivery_order', '=', 'do.delivery_order')
+            ->join('mainmes.masterbuyer as mb', 'do.masterbuyer_id', '=', 'mb.idbuyer')
+            ->whereNotNull('fr.date_gi');
+
+        // PERBAIKAN: Disesuaikan dengan key 'idbuyer' yang dikirim dari select2 AJAX di view
+        if ($request->idbuyer) {
+            $query->where('mb.groupbuyer', $request->idbuyer);
+        }
+
+        $data = $query
+            ->select('do.season')
+            ->whereNotNull('do.season')
+            ->distinct()
+            ->orderBy('do.season')
+            ->get();
+
+        return response()->json($data);
+    }
+
+    function listPO(Request $request)
+    {
+        $query = DB::table('mesprima1_restore.fgreceivegarment_stocks as fr')
             ->join('mesprima1_restore.outputdetail as od', 'od.barcode', '=', 'fr.barcode')
             ->join('mesprima1_restore.purchase_order as po', 'po.idpo', '=', 'od.idpo')
+            ->whereNotNull('fr.date_gi');
+
+        // Opsional: Jika ingin menambahkan fitur live-search di select2 PO
+        if ($request->term) {
+            $query->where('po.po', 'LIKE', '%' . $request->term . '%');
+        }
+
+        $data = $query
+            ->select('po.po')
+            ->distinct()
+            ->get();
+
+        return response()->json($data);
+    }
+
+    function dataTable(Request $request)
+    {
+        preconnect(session('db'));
+
+        // Data Detail
+        if ($request->has('detail_id') && $request->detail_id != '') {
+
+            $data = DB::table('mesprima1_restore.delivery_order_stocks as do')
+                ->join('mesprima1_restore.fgreceivegarment_stocks as fr', 'fr.delivery_order', '=', 'do.delivery_order')
+                ->join('mesprima1_restore.outputdetail as od', 'od.barcode', '=', 'fr.barcode')
+                ->join('mesprima1_restore.purchase_order as po', 'po.idpo', '=', 'od.idpo')
+                ->join('mesprima1_restore.mastercolor as mc', 'do.mastercolor_id', '=', 'mc.idcolor')
+                ->join('mesprima1_restore.mastersize as mz', 'do.mastersize_id', '=', 'mz.idsize')
+                ->join('mainmes.masterbuyer as mb', 'do.masterbuyer_id', '=', 'mb.idbuyer')
+                ->join('mainmes.masterstyle as ms', 'do.masterstyle_id', '=', 'ms.idstyle')
+                ->join('mainmes.sub_styles as ss', 'ms.sub_style_id', '=', 'ss.id')
+                ->select(
+                    DB::raw('ROW_NUMBER() OVER (ORDER BY do.cartoncode) as no'),
+                    'fr.barcode',
+                    'mb.nmbuyer as buyer',
+                    'ms.nmstyle as style',
+                    'mc.nmcolor as color',
+                    'mz.nmsize as size',
+                    'do.season',
+                    'do.remark',
+                    'ss.name as sub_style',
+                    'po.po'
+                )
+                ->where('do.id', $request->detail_id);
+
+            return DataTables::of($data)->toJson();
+        }
+
+        $fg = DB::table('mesprima1_restore.fgreceivegarment_stocks')
+            ->select('delivery_order', 'barcode', 'date_out', 'user_id')
+            ->whereNotNull('date_gi');
+
+        $od = DB::table('mesprima1_restore.outputdetail as od')
+            ->join('mesprima1_restore.purchase_order as po', 'po.idpo', '=', 'od.idpo')
+            ->select(
+                'od.barcode',
+                DB::raw('MAX(po.po) as po')
+            )
+            ->groupBy('od.barcode');
+
+        $data = DB::table('mesprima1_restore.delivery_order_stocks as do')
+            ->joinSub($fg, 'fr', function ($join) {
+                $join->on('fr.delivery_order', '=', 'do.delivery_order');
+            })
+            ->joinSub($od, 'od', function ($join) {
+                $join->on('od.barcode', '=', 'fr.barcode');
+            })
             ->join('mainmes.masterbuyer as mb', 'do.masterbuyer_id', '=', 'mb.idbuyer')
             ->join('mainmes.masterstyle as ms', 'do.masterstyle_id', '=', 'ms.idstyle')
             ->join('mainmes.sub_styles as ss', 'ms.sub_style_id', '=', 'ss.id')
-            // Tambahkan join ke tabel warna/ukuran jika ada, contoh:
-            // ->leftJoin('mainmes.colors as c', 'od.color_id', '=', 'c.id')
-            // ->leftJoin('mainmes.sizes as sz', 'od.size_id', '=', 'sz.id')
             ->select(
-                DB::raw('ROW_NUMBER() OVER (ORDER BY fr.barcode) as no'),
-                'fr.barcode',
-                'mb.nmbuyer as buyer',
+                DB::raw('ROW_NUMBER() OVER (ORDER BY do.cartoncode) as no'),
+                'do.id',
+                'do.cartoncode',
                 'do.season',
+                'do.qty',
+                'fr.user_id as user',
+                'fr.date_out as date',
+                'mb.nmbuyer as buyer',
                 'ms.nmstyle as style',
                 'ss.name as sub_style',
-                'po.po',
-                DB::raw("'' as color"),   // Ganti dengan field asli jika ada (misal: c.color_name)
-                DB::raw("'' as size"),    // Ganti dengan field asli jika ada (misal: sz.size_name)
-                DB::raw("'' as remark")   // Ganti dengan field asli jika ada
+                DB::raw('MAX(od.po) as po')
             )
-            ->where('do.id', $request->detail_id);
+            ->groupBy(
+                'do.id', // Menambahkan do.id ke dalam Group By agar valid secara SQL standard
+                'do.cartoncode',
+                'do.season',
+                'do.qty',
+                'fr.user_id',
+                'fr.date_out',
+                'mb.nmbuyer',
+                'ms.nmstyle',
+                'ss.name'
+            );
+
+        // PERBAIKAN: Menyesuaikan string filter dengan value dari HTML blade
+        if ($request->filter == 'groupbuyer_filter') {
+            if ($request->group_buyer) {
+                $data->where('mb.groupbuyer', $request->group_buyer);
+            }
+
+            if ($request->season) {
+                $data->where('do.season', $request->season);
+            }
+        }
+
+        // PERBAIKAN: Menyesuaikan string filter dan melakukan filtering berdasarkan kolom po alias od.po
+        if ($request->filter == 'po_filter') {
+            if ($request->po) {
+                // Menggunakan having karena kolom po dibungkus fungsi MAX() aggregation, 
+                // atau langsung merujuk ke field alias 'od.po' jika query sub-join diizinkan.
+                $data->where('od.po', $request->po);
+            }
+        }
 
         return DataTables::of($data)->toJson();
     }
 
-    // ... KODE QUERY UTAMA ANDA YANG LAMA DI SINI ...
-    // (Query yang memakai groupBy cartoncode untuk halaman index)
+    function detail($id)
+    {
+        $data = DB::table('mesprima1_restore.delivery_order_stocks as do')
+            ->where('do.id', $id)
+            ->first();
+
+        return view('laboratory::reportgoodissuelab.detail', compact('data', 'id'));
+    }
 }
