@@ -1,0 +1,182 @@
+<script type="text/javascript">
+$(document).ready(function(){
+
+    $('#groupbuyer_container').hide();
+    $('#season_container').hide();
+    $('#po_container').hide();
+
+    // Bind ONCE, di luar handler filter, supaya tidak numpuk
+    $('#group_buyer').on('change', function () {
+        $('#season').val(null).trigger('change');
+        $('#po').val(null).trigger('change');
+    });
+
+    $('#season').on('change', function () {
+        $('#po').val(null).trigger('change');
+    });
+
+    $('#filter').select2({
+        placeholder: "Select Folder"
+    }).on('change', function(){
+        var selectedValue = $(this).val();
+
+        $('#group_buyer').val(null).trigger('change');
+        $('#season').val(null).trigger('change');
+        $('#po').val(null).trigger('change');
+
+        if(selectedValue === 'groupbuyer_filter') {
+            $('#groupbuyer_container').show();
+            $('#season_container').show();
+            $('#po_container').hide();
+
+            // Filtering Group Buyer
+            $('#group_buyer').select2({
+                placeholder: 'Select Group Buyer',
+                ajax: {
+                    url: '{{ route("reportgoodissuelab.listgroupbuyer") }}',
+                    type: 'GET',
+                    dataType: 'json',
+                    delay: 250,
+                    data: function (params) {
+                        return {
+                            term: params.term,
+                            filter_type: $('#filter').val()
+                        };
+                    },
+                    processResults: function(data) {
+                        return {
+                            results: $.map(data, function(item) {
+                                return {
+                                    id: item.id,
+                                    text: item.group_name
+                                }
+                            })
+                        };
+                    }
+                }
+            });
+
+            $('#season').select2({
+                placeholder: 'Select Season',
+                ajax: {
+                    url: '{{ route("reportgoodissuelab.listseason") }}',
+                    type: 'GET',
+                    dataType: 'json',
+                    data: function (params) {
+                        return {
+                            group_buyer: $('#group_buyer').val(),
+                            filter_type: $('#filter').val(),
+                            search: params.term || ''
+                        };
+                    },
+                    processResults: function (data) {
+                        return {
+                            results: $.map(data, function (item) {
+                                return {
+                                    id: item.season,
+                                    text: item.season
+                                };
+                            })
+                        };
+                    }
+                },
+            });
+
+        // Filtering PO
+        } else if(selectedValue === 'po_filter') {
+            $('#groupbuyer_container').hide();
+            $('#season_container').hide();
+            $('#po_container').show();
+
+            $('#po').select2({
+                placeholder: 'Select PO',
+                ajax: {
+                    url: '{{ route("reportgoodissuelab.listpo") }}',
+                    type: 'GET',
+                    dataType: 'json',
+                    delay: 250,
+                    data: function (params) {
+                        return {
+                            term: params.term,
+                            filter_type: $('#filter').val()
+                        };
+                    },
+                    processResults: function(data) {
+                        return {
+                            results: $.map(data, function(item) {
+                                return {
+                                    id: item.po,
+                                    text: item.po
+                                }
+                            })
+                        };
+                    }
+                }
+            });
+
+        } else {
+            // Filter dikosongkan -> sembunyikan semua container, tampilkan semua data
+            $('#groupbuyer_container').hide();
+            $('#season_container').hide();
+            $('#po_container').hide();
+        }
+    });
+
+    // Data Table
+    let table = $('#datalist').DataTable({
+        processing: true,
+        serverSide: true,
+        deferLoading: 0,
+        ajax: {
+            url: '{{ route("reportgoodissuelab.datatable") }}',
+            data: function (d) {
+                d.filter_type = $('#filter').val();
+                d.group_buyer = $('#group_buyer').val();
+                d.season = $('#season').val();
+                d.po = $('#po').val();
+            }
+        },
+        columns: [
+            { data: 'no' },
+            { data: 'cartoncode' },
+            { data: 'buyer' },
+            { data: 'season' },
+            { data: 'style' },
+            { data: 'sub_style' },
+            { data: 'po' },
+            { data: 'qty' },
+            { data: 'date' },
+            { data: 'user' },
+            {
+                data: 'id',
+                orderable: false,
+                searchable: false,
+                render: function (data, type, row) {
+                    let url = '{{ route("reportgoodissuelab.detail", ":id" ) }}';
+                    url = url.replace(':id', data);
+                    return `
+                        <a href="${url}">
+                            <i class="fa fa-info-circle fa-lg text-blue actiona"></i>
+                        </a>
+                    `;
+                }
+            }
+        ]
+    });
+
+    // Button Find
+    $('#findbtn').on('click', function () {
+        table.ajax.reload();
+    });
+
+    // Button Reset
+    $('#resetbtn').on('click', function () {
+        $('#filter').val('').trigger('change');
+        $('#group_buyer').val(null).trigger('change');
+        $('#season').val(null).trigger('change');
+        $('#po').val(null).trigger('change');
+        table.ajax.reload();
+    });
+
+});
+</script>
