@@ -1,25 +1,80 @@
+@extends('layouts.master')
 
-function goShortcut(event, element) {
-    let url = element.getAttribute('href');
-
-    // 1. Cek apakah user mencoba membuka di tab baru (Ctrl+Click, Meta/Cmd+Click, Middle Click)
-    if (event.ctrlKey || event.shiftKey || event.metaKey || (event.button && event.button === 1)) {
-        // Biarkan browser yang bekerja, JANGAN tampilkan loading dan JANGAN preventDefault
-        return; 
+@section('extracss')
+    <style>
+    .custom-header {
+        display: flex !important;
+        align-items: center !important;
+        padding: 6px 10px !important;
     }
-
-    // 2. Jika link adalah '#', tidak perlu melakukan apa-apa
-    if (url === '#' || url === 'javascript:void(0)') {
-        event.preventDefault();
-        return;
+    .custom-header .box-title {
+        margin: 0 !important;
     }
+    </style>
+@endsection
 
-    // 3. Untuk klik kiri biasa, cegah perpindahan instan, tampilkan loading, lalu pindah halaman
-    event.preventDefault(); 
-    
-    // Tampilkan animasi loading kamu
-    document.getElementById('loading').style.display = 'block'; 
+@section('content')
+<div class="container-fluid" style="border-radius: 20px;">
+	<div class="row" style="margin-top: 7rem">
+		<div class="col-sm-12">
+			<div class="box box-danger">
+				<div class="box-header with-border custom-header">
+                    <h3 class="box-title">
+                        <strong>Detail Carton: {{ $data->cartoncode ?? '' }}</strong>
+                    </h3>
+                </div>
+				<div class="box-body">
+					<table id="datalist" class="table table-bordered table-striped" style="width: 100%">
+						<thead>
+							<tr>
+								<th>No</th>
+								<th>Barcode</th>
+								<th>Buyer</th>
+								<th>Season</th>
+								<th>Style</th>
+								<th>Sub-Style</th>
+								<th>PO</th>
+								<th>Color</th>
+								<th>Size</th>
+								<th>Remark</th>
+							</tr>
+						</thead>
+					</table>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+@endsection
 
-    // Pindah ke halaman tujuan
-    window.location.href = url;
-}
+@section('extrascript')
+<script type="text/javascript">
+    $(document).ready(function(){
+        let table = $('#datalist').DataTable({
+            processing: true,
+            serverSide: true,
+            // Hapus atau komentari deferLoading agar data langsung ter-load saat halaman dibuka
+            // deferLoading: 0, 
+            ajax: {
+                url: '{{ route("reportgoodissuelab.datatable") }}',
+                data: function (d) {
+                    // Kirim ID dari controller ke request ajax datatable
+                    d.detail_id = '{{ $id }}'; 
+                }
+            },
+            columns: [
+                { data: 'no' },
+                { data: 'barcode' },
+                { data: 'buyer' },
+                { data: 'season' },
+                { data: 'style' },
+                { data: 'sub_style' },
+                { data: 'po' },
+                { data: 'color' },
+                { data: 'size' },
+                { data: 'remark' },
+            ]
+        });
+    });
+</script>
+@endsection
