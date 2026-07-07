@@ -1,4 +1,4 @@
-function dataTable(Request $request)
+    function dataTable(Request $request)
     {
         preconnect(session('db'));
 
@@ -27,24 +27,28 @@ function dataTable(Request $request)
                     'ss.name as sub_style',
                     'po.po',
                 )
-                ->where('do.id', $request->detail_id);
+                ->where('do.cartoncode', $request->detail_id);
 
             return DataTables::of($data)->toJson();
         }
 
+        // ==== Validasi filter sebelum query jalan ====
         $filterType   = $request->filter_type;
         $groupBuyer   = $request->group_buyer;
         $season       = $request->season;
         $po           = $request->po;
 
+        // Wajib pilih salah satu filter dulu (Group Buyer / PO), kalau belum -> tabel kosong
         if (!$filterType) {
             return DataTables::of(collect([]))->toJson();
         }
 
+        // Filter Group Buyer dipilih, tapi Group Buyer / Season belum lengkap -> tabel kosong
         if ($filterType == 'groupbuyer_filter' && (!$groupBuyer || !$season)) {
             return DataTables::of(collect([]))->toJson();
         }
 
+        // Filter PO dipilih, tapi PO belum dipilih -> tabel kosong
         if ($filterType == 'po_filter' && !$po) {
             return DataTables::of(collect([]))->toJson();
         }
@@ -59,13 +63,18 @@ function dataTable(Request $request)
                 'od.barcode',
                 'po.po'
             );
+        // Catatan: 1 barcode = 1 po (lewat outputdetail -> purchase_order).
+        // Karena 1 cartoncode bisa punya banyak barcode dengan po berbeda-beda,
+        // semua po unik digabung jadi satu string di select utama (GROUP_CONCAT DISTINCT).
 
         $data = DB::table('mesprima1_restore.delivery_order_stocks as do')
 
+            // join fg (barcode)
             ->joinSub($fg, 'fr', function ($join) {
                 $join->on('fr.delivery_order', '=', 'do.delivery_order');
             })
 
+            // join outputdetail + po
             ->joinSub($od, 'od', function ($join) {
                 $join->on('od.barcode', '=', 'fr.barcode');
             })
@@ -76,36 +85,28 @@ function dataTable(Request $request)
 
             ->select(
                 DB::raw('ROW_NUMBER() OVER (ORDER BY do.cartoncode) as no'),
-                'do.id',
                 'do.cartoncode',
-                'do.season',
-                'do.qty',
-                'fr.user_id as user',
-                'fr.date_out as date',
-                'mb.nmbuyer as buyer',
-                'ms.nmstyle as style',
-                'ss.name as sub_style',
+                DB::raw('MAX(do.season) as season'),
+                DB::raw('SUM(do.qty) as qty'),
+                // user & date: berpasangan, keduanya dari baris dengan date_out TERBARU
+                DB::raw("SUBSTRING_INDEX(GROUP_CONCAT(fr.user_id ORDER BY fr.date_out DESC, do.id DESC SEPARATOR ','), ',', 1) as user"),
+                DB::raw('MAX(fr.date_out) as date'),
+                DB::raw('MAX(mb.nmbuyer) as buyer'),
+                DB::raw('MAX(ms.nmstyle) as style'),
+                DB::raw('MAX(ss.name) as sub_style'),
                 DB::raw("GROUP_CONCAT(DISTINCT od.po SEPARATOR ', ') as po")
             )
 
-            ->groupBy(
-                'do.id',
-                'do.cartoncode',
-                'do.season',
-                'do.qty',
-                'fr.user_id',
-                'fr.date_out',
-                'mb.nmbuyer',
-                'ms.nmstyle',
-                'ss.name'
-            );
+            ->groupBy('do.cartoncode');
 
         if ($filterType == 'groupbuyer_filter') {
+            // di titik ini group_buyer & season dipastikan sudah ada (lolos validasi di atas)
             $data->where('mb.groupbuyer', $groupBuyer);
             $data->where('do.season', $season);
         }
 
         if ($filterType == 'po_filter') {
+            // di titik ini $po dipastikan sudah ada (lolos validasi di atas)
             $data->where('od.po', $po);
         }
 
