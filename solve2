@@ -1,24 +1,118 @@
-id	int	10	0	0	0	-1	0									0	0	0	0	-1	-1	0
-process	tinyint	4	0	-1	0	0	0									0	0	0	0	0	0	0
-delivery_order	char	50	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-delivery_item	char	10	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-package	char	50	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-cartoncode	varchar	50	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-masterbuyer_id	int	11	0	-1	0	0	0									0	0	0	0	0	0	0
-masterstyle_id	int	11	0	-1	0	0	0									0	0	0	0	0	0	0
-season	varchar	100	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-mastercolor_id	int	11	0	-1	0	0	0									0	0	0	0	0	0	0
-mastersize_id	int	11	0	-1	0	0	0									0	0	0	0	0	0	0
-qty	int	11	0	-1	0	0	0									0	0	0	0	0	0	0
-delivery_date	date	0	0	-1	0	0	0									0	0	0	0	0	0	0
-is_internal	tinyint	4	0	-1	0	0	0									0	0	0	0	0	0	0
-is_approve	tinyint	1	0	-1	0	0	0									0	0	0	0	0	0	0
-date_approve	datetime	0	0	-1	0	0	0									0	0	0	0	0	0	0
-userid_approve	char	15	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-remark	varchar	255	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-kp_bulk_ref	varchar	30	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-po_original	varchar	50	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-idbuyer_original	int	11	0	-1	0	0	0									0	0	0	0	0	0	0
-created_at	datetime	0	0	-1	0	0	0									0	0	0	0	0	0	0
-updated_at	datetime	0	0	-1	0	0	0									0	0	0	0	0	0	0
-user_id	char	10	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
+    function dataTable(Request $request)
+    {
+        preconnect(session('db'));
+
+        // Data Detail
+        if ($request->has('detail_id') && $request->detail_id != '') {
+
+            $data = DB::table('mesprima1_restore.delivery_order_stocks as do')
+                ->join('mesprima1_restore.fgreceivegarment_stocks as fr', function ($join) {
+                    $join->on('fr.delivery_order', '=', 'do.delivery_order')
+                         ->on('fr.delivery_item', '=', 'do.delivery_item');
+                })
+                ->join('mesprima1_restore.outputdetail as od', 'od.barcode', '=', 'fr.barcode')
+                ->join('mesprima1_restore.purchase_order as po', 'po.idpo', '=', 'od.idpo')
+                ->join('mesprima1_restore.mastercolor as mc', 'do.mastercolor_id', '=', 'mc.idcolor')
+                ->join('mesprima1_restore.mastersize as mz', 'do.mastersize_id', '=', 'mz.idsize')
+                ->join('mainmes.masterbuyer as mb', 'do.masterbuyer_id', '=', 'mb.idbuyer')
+                ->join('mainmes.masterstyle as ms', 'do.masterstyle_id', '=', 'ms.idstyle')
+                ->join('mainmes.sub_styles as ss', 'ms.sub_style_id', '=', 'ss.id')
+
+                ->select(
+                    DB::raw('ROW_NUMBER() OVER (ORDER BY do.cartoncode) as no'),
+                    'fr.barcode',
+                    'mb.nmbuyer as buyer',
+                    'ms.nmstyle as style',
+                    'mc.nmcolor as color',
+                    'mz.nmsize as size',
+                    'do.season',
+                    'do.remark',
+                    'ss.name as sub_style',
+                    'po.po',
+                )
+                ->where('do.cartoncode', $request->detail_id);
+
+            return DataTables::of($data)->toJson();
+        }
+
+        // ==== Validasi filter sebelum query jalan ====
+        $filterType   = $request->filter_type;
+        $groupBuyer   = $request->group_buyer;
+        $season       = $request->season;
+        $po           = $request->po;
+
+        // Wajib pilih salah satu filter dulu (Group Buyer / PO), kalau belum -> tabel kosong
+        if (!$filterType) {
+            return DataTables::of(collect([]))->toJson();
+        }
+
+        // Filter Group Buyer dipilih, tapi Group Buyer / Season belum lengkap -> tabel kosong
+        if ($filterType == 'groupbuyer_filter' && (!$groupBuyer || !$season)) {
+            return DataTables::of(collect([]))->toJson();
+        }
+
+        // Filter PO dipilih, tapi PO belum dipilih -> tabel kosong
+        if ($filterType == 'po_filter' && !$po) {
+            return DataTables::of(collect([]))->toJson();
+        }
+
+        $fg = DB::table('mesprima1_restore.fgreceivegarment_stocks')
+            ->select('delivery_order', 'delivery_item', 'barcode', 'date_out', 'user_id')
+            ->whereNotNull('date_gi');
+
+        $od = DB::table('mesprima1_restore.outputdetail as od')
+            ->join('mesprima1_restore.purchase_order as po', 'po.idpo', '=', 'od.idpo')
+            ->select(
+                'od.barcode',
+                'po.po'
+            );
+        // Catatan: 1 barcode = 1 po (lewat outputdetail -> purchase_order).
+        // Karena 1 cartoncode bisa punya banyak barcode dengan po berbeda-beda,
+        // semua po unik digabung jadi satu string di select utama (GROUP_CONCAT DISTINCT).
+
+        $data = DB::table('mesprima1_restore.delivery_order_stocks as do')
+
+            // join fg (barcode) — pakai delivery_order + delivery_item supaya 1 barcode match 1 warna/size do yang tepat
+            ->joinSub($fg, 'fr', function ($join) {
+                $join->on('fr.delivery_order', '=', 'do.delivery_order')
+                     ->on('fr.delivery_item', '=', 'do.delivery_item');
+            })
+
+            // join outputdetail + po
+            ->joinSub($od, 'od', function ($join) {
+                $join->on('od.barcode', '=', 'fr.barcode');
+            })
+
+            ->join('mainmes.masterbuyer as mb', 'do.masterbuyer_id', '=', 'mb.idbuyer')
+            ->join('mainmes.masterstyle as ms', 'do.masterstyle_id', '=', 'ms.idstyle')
+            ->join('mainmes.sub_styles as ss', 'ms.sub_style_id', '=', 'ss.id')
+
+            ->select(
+                DB::raw('ROW_NUMBER() OVER (ORDER BY do.cartoncode) as no'),
+                'do.cartoncode',
+                DB::raw('MAX(do.season) as season'),
+                DB::raw('SUM(do.qty) as qty'),
+                // user & date: berpasangan, keduanya dari baris dengan date_out TERBARU
+                DB::raw("SUBSTRING_INDEX(GROUP_CONCAT(fr.user_id ORDER BY fr.date_out DESC, do.id DESC SEPARATOR ','), ',', 1) as user"),
+                DB::raw('MAX(fr.date_out) as date'),
+                DB::raw('MAX(mb.nmbuyer) as buyer'),
+                DB::raw('MAX(ms.nmstyle) as style'),
+                DB::raw('MAX(ss.name) as sub_style'),
+                DB::raw("GROUP_CONCAT(DISTINCT od.po SEPARATOR ', ') as po")
+            )
+
+            ->groupBy('do.cartoncode');
+
+        if ($filterType == 'groupbuyer_filter') {
+            // di titik ini group_buyer & season dipastikan sudah ada (lolos validasi di atas)
+            $data->where('mb.groupbuyer', $groupBuyer);
+            $data->where('do.season', $season);
+        }
+
+        if ($filterType == 'po_filter') {
+            // di titik ini $po dipastikan sudah ada (lolos validasi di atas)
+            $data->where('od.po', $po);
+        }
+
+        return DataTables::of($data)->toJson();
+    }
