@@ -1,111 +1,228 @@
-coba cek kode ini 
-function datatable(Request $request)
-    {
-        preconnect(session('db'));
-        $header = (new ResultTestLabHeader())->getTable();
-        $routing = (new ProcessRoutingLab())->getTable();
-        $rcv = (new ReceivedLab())->getTable();
-        $data = ResultTestLabHeader::select(
-                "$header.id", "$rcv.factory_id", "$rcv.barcode", "$rcv.idbuyer", "$rcv.season",
-                "$rcv.idstyle", "$rcv.sub_style_id", "$rcv.idcolor", "$header.date_in", 
-                "$header.date_out", "$rcv.idsize", "$routing.received_lab_id", "$rcv.idpo"
-            )
-            ->join($routing, "$routing.id", "=", "$header.process_routing_id")
-            ->join($rcv, "$rcv.id", "=", "$routing.received_lab_id")
-            ->whereNotNull("$header.date_out");
-        if($request->has('buyer') and $request->buyer != null){
-            $data = $data->where("$rcv.idbuyer", $request->buyer);
-        }
-        if($request->has('style') and $request->style != null){
-            $data = $data->where("$rcv.idstyle", $request->style);
-        }
-        $data = $data
-            ->groupBy("$rcv.barcode", "$rcv.idstyle", "$rcv.idcolor", "$rcv.idsize");
+<?php
 
-        return DataTables::of($data)
-            ->addIndexColumn()
-            ->filterColumn('barcode', function($q, $key){
-                $q->where("barcode", "like", "%$key%");
-            })
-            ->filterColumn('season', function($q, $key){
-                $q->where("season", "like", "%$key%");
-            })
-            ->addColumn('buyer', function($d){
-                $b = Buyer::find($d->idbuyer);
-                return $b ? $b->nmbuyer : '';
-            })
-            ->addColumn('po', function($d){
-                $po = PurchaseOrder::where("idpo", $d->idpo)
-                    ->first();
-                return $po ? $po->po : '';
-            })
-            ->addColumn('style', function($d){
-                $s = Style::find($d->idstyle);
-                return $s ? $s->nmstyle : '';
-            })
-            ->addColumn('substyle', function($d){
-                $ss = SubStyle::find($d->sub_style_id);
-                return $ss ? $ss->name : '';
-            })
-            ->addColumn('article', function($d){
-                $db = get_db($d->factory_id);
-                $c = Color::on($db)->find($d->idcolor);
-                return $c ? $c->nmcolor : '';
-            })
-            ->filterColumn('article', function($q, $key){
-                $db = getconnection(session('db'));
-                $c = Color::on($db)
-                    ->where("nmcolor", 'like', "%$key%")
-                    ->get();
-                $q->whereIn("idcolor", $c->pluck('idcolor'));
-            })
-            ->addColumn('size', function($d){
-                $db = get_db($d->factory_id);
-                $s = Size::on($db)->find($d->idsize);
-                return $s ? $s->nmsize : '';
-            })
-            ->filterColumn('size', function($q, $key){
-                $db = getconnection(session('db'));
-                $s = Size::on($db)
-                    ->where("nmsize", 'like', "%$key%")
-                    ->get();
-                $q->whereIn("idsize", $s->pluck('idsize'));
-            })
-            ->addColumn('date', function($d){
-                $date = Carbon::parse($d->date_in)->format("Y/m/d H:i")." - ".Carbon::parse($d->date_out)->format("Y/m/d H:i");
-                return $date ?? '';
-            })
-            ->addColumn('status', function($d){
-                $detail = ResultTestLabDetail::where("result_test_header_id", $d->id)
-                    ->where("result", 0)
-                    ->first();
-                return $detail ? "Fail" : "Pass";
-            })
-            ->addColumn('action', function($d){
-                $kode = encrypt($d->received_lab_id);
-                return '<a href="#" class="detailbtn" data-id="'.
-                $kode
-                .'"><i class="fa fa-info-circle fa-lg text-blue actiona"></i></a>';
-            })
-            ->toJson();
+namespace Modules\Laboratory\Http\Controllers;
+
+use Illuminate\Http\Request;
+use App\Http\Controllers\Controller;
+use App\Http\Controllers\TlogController;
+use App\Http\Controllers\WatchController;
+use App\Http\Models\Color;
+use App\Http\Models\DeliveryOrder;
+use App\Http\Models\DOStock;
+use App\Http\Models\FGReceiveGarmentStock;
+use App\Http\Models\Main\Buyer;
+use App\Http\Models\Main\Employee;
+use App\Http\Models\Main\MasterFactory;
+use App\Http\Models\Main\MasterGroupBuyer;
+use App\Http\Models\Main\MethodLabs;
+use App\Http\Models\Main\ProcessLabs;
+use App\Http\Models\Main\ProcessRoutingLab;
+use App\Http\Models\Main\ReceivedLab;
+use App\Http\Models\Main\ResultTestLabDetail;
+use App\Http\Models\Main\ResultTestLabHeader;
+use App\Http\Models\Main\StandardValueLabs;
+use App\Http\Models\Main\Style;
+use App\Http\Models\Main\SubStyle;
+use App\Http\Models\Main\TestItemLabs;
+use App\Http\Models\Main\ValueLabs;
+use App\Http\Models\OutputDetail;
+use App\Http\Models\PurchaseOrder;
+use App\Http\Models\Shell;
+use App\Http\Models\ShellTarget;
+use Yajra\DataTables\DataTables;
+use App\Http\Models\Size;
+use Barryvdh\DomPDF\Facade as PDF;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
+use Modules\Shipping\Http\Controllers\DeliveryOrderStockController;
+
+class ReportGoodIssueLabController extends Controller
+{
+    protected $m_modul = 'laboratory';
+
+    function __construct()
+    {
+        $this->middleware('auth');
     }
 
-TERUS LIHAT KODE SAYA INI 
-function dataTable(Request $request)
+    function index()
+    {
+        if ($this->myaccess() == '0') {
+            return redirect()
+                ->back()
+                ->with('alert', [
+                    'title' => 'Unauthorized!',
+                    'message' => 'You Dont Have Any Access Here!',
+                    'status' => 'warning',
+                ]);
+        }
+
+        return view('laboratory::reportgoodissuelab.index', [
+            'access' => $this->myaccess(),
+        ]);
+
+    }
+
+    public function listGroupBuyer(Request $request)
+    {
+        if (!$request->ajax()) {
+            return;
+        }
+
+        preconnect(session('db'));
+
+        $result = collect();
+        $data = FGReceiveGarmentStock::withTrashed()
+            ->select(['delivery_order'])
+            ->whereNotNull('date_gi')
+            ->distinct()
+            ->get();
+
+
+        foreach ($data as $d) {
+            $do = DOStock::select(['masterbuyer_id'])
+                ->where('delivery_order', $d->delivery_order)
+                ->first();
+
+            if ($do) {
+                $buyer = Buyer::select(['groupbuyer'])
+                    ->where('idbuyer', $do->masterbuyer_id)
+                    ->first();
+                if ($buyer) {
+                    $group = MasterGroupBuyer::select(['id','group_name'])
+                        ->where('id', $buyer->groupbuyer)
+                        ->first();
+
+                    if ($group) {
+                        $result->push([
+                            'id' => $group->id,
+                            'group_name' => $group->group_name
+                        ]);
+                    }
+                }
+            }
+        }
+
+
+        $result = $result->unique('id')->values();
+        return response()->json($result);
+    }
+
+    function listSeason(Request $request)
+    {
+        if (!$request->ajax()) {
+            return;
+        }
+
+        preconnect(session('db'));
+
+        $result = collect();
+
+        $data = FGReceiveGarmentStock::withTrashed()
+            ->select(['delivery_order'])
+            ->whereNotNull('date_gi')
+            ->distinct()
+            ->get();
+
+        foreach ($data as $d) {
+            $do = DOStock::select(['season','masterbuyer_id'])
+                ->where('delivery_order', $d->delivery_order)
+                ->first();
+            if ($do) {
+                $buyer = Buyer::select(['groupbuyer'])
+                    ->where('idbuyer', $do->masterbuyer_id)
+                    ->first();
+                if ($buyer) {
+                    if ($request->group_buyer == $buyer->groupbuyer) {
+                        if ($do->season) {
+                            $result->push([
+                                'season' => $do->season
+                            ]);
+                        }
+                    }
+                }
+            }
+        }
+
+        $result = $result
+            ->unique('season')
+            ->values();
+
+        return response()->json($result);
+    }
+
+    function listPO(Request $request)
+    {
+        if (!$request->ajax()) {
+            return;
+        }
+
+        preconnect(session('db'));
+
+        $result = collect();
+        $data = FGReceiveGarmentStock::withTrashed()
+            ->select(['barcode'])
+            ->whereNotNull('date_gi')
+            ->distinct()
+            ->get();
+
+        foreach ($data as $d) {
+
+            $od = OutputDetail::select(['idpo'])
+                ->where('barcode', $d->barcode)
+                ->first();
+
+            if ($od) {
+                $po = PurchaseOrder::select(['po'])
+                    ->where('idpo', $od->idpo)
+                    ->first();
+
+                if ($po) {
+                    $result->push(['po' => $po->po]);
+                }
+            }
+        }
+
+        $result = $result
+            ->unique('po')
+            ->values();
+
+        return response()->json($result);
+    }
+
+    function detail($cartoncode)
+    {
+        try {
+            $cartoncode = decrypt($cartoncode);
+        } catch (\Exception $e) {
+            abort(404);
+        }
+
+        preconnect(session('db'));
+
+        $data = DOStock::where('cartoncode', $cartoncode)
+            ->first();
+
+        return view('laboratory::reportgoodissuelab.detail', [
+            'data' => $data,
+            'id'   => $cartoncode,
+        ]);
+    }
+
+    function dataTable(Request $request)
     {
         preconnect(session('db'));
 
-        // Data Detail
+        // Detail Data Filtering
         if ($request->has('detail_id') && $request->detail_id != '') {
-
             $do = DB::table('mesprima1_restore.delivery_order_stocks')
                 ->select(
                     'delivery_order',
                     'cartoncode',
-                    DB::raw('MAX(masterbuyer_id) as masterbuyer_id'),
-                    DB::raw('MAX(masterstyle_id) as masterstyle_id'),
-                    DB::raw('MAX(season) as season'),
-                    DB::raw('MAX(remark) as remark')
+                    'masterbuyer_id',
+                    'masterstyle_id',
+                    'season',
+                    'remark'
                 )
                 ->groupBy('delivery_order', 'cartoncode');
 
@@ -122,8 +239,8 @@ function dataTable(Request $request)
                 ->join('mainmes.masterstyle as ms', 'ms.idstyle', '=', 'do.masterstyle_id')
                 ->join('mainmes.sub_styles as ss', 'ss.id', '=', 'ms.sub_style_id')
                 ->select(
-                    DB::raw('ROW_NUMBER() OVER (ORDER BY fr.barcode) as no'),
                     'fr.barcode',
+                    'do.cartoncode',
                     'mb.nmbuyer as buyer',
                     'ms.nmstyle as style',
                     'mc.nmcolor as color',
@@ -133,11 +250,18 @@ function dataTable(Request $request)
                     'ss.name as sub_style',
                     'po.po'
                 )
-                ->where('fr.cartoncode', $request->detail_id);
+                ->where('do.cartoncode', $request->detail_id);
+
 
             return DataTables::of($data)
-            ->addIndexColumn()
-            ->toJson();
+                ->filterColumn('barcode', function($query, $keyword){
+                    $query->where('fr.barcode', 'like', "%{$keyword}%");
+                })
+                ->filterColumn('buyer', function($query, $keyword){
+                    $query->where('mb.nmbuyer', 'like', "%{$keyword}%");
+                })
+                ->addIndexColumn()
+                ->toJson();
         }
 
         $filterType   = $request->filter_type;
@@ -168,6 +292,14 @@ function dataTable(Request $request)
                 'po.po'
             );
 
+        $doQty = DB::table('mesprima1_restore.delivery_order_stocks')
+            ->select(
+                'delivery_order',
+                'cartoncode',
+                DB::raw('SUM(qty) as qty')
+            )
+            ->groupBy('delivery_order', 'cartoncode');
+
         $data = DB::table('mesprima1_restore.delivery_order_stocks as do')
 
             ->joinSub($fg, 'fr', function ($join) {
@@ -178,19 +310,24 @@ function dataTable(Request $request)
                 $join->on('od.barcode', '=', 'fr.barcode');
             })
 
+            ->joinSub($doQty, 'dq', function ($join) {
+                $join->on('dq.delivery_order', '=', 'do.delivery_order')
+                    ->on('dq.cartoncode', '=', 'do.cartoncode');
+            })
+
             ->join('mainmes.masterbuyer as mb', 'do.masterbuyer_id', '=', 'mb.idbuyer')
             ->join('mainmes.masterstyle as ms', 'do.masterstyle_id', '=', 'ms.idstyle')
             ->join('mainmes.sub_styles as ss', 'ms.sub_style_id', '=', 'ss.id')
             ->select(
-                DB::raw('ROW_NUMBER() OVER (ORDER BY do.cartoncode) as no'),
+                'do.cartoncode as no',
                 'do.cartoncode',
-                DB::raw('MAX(do.season) as season'),
-                DB::raw('SUM(DISTINCT do.qty) as qty'),
+                'do.season as season',
+                'dq.qty as qty',
                 DB::raw("SUBSTRING_INDEX(GROUP_CONCAT(fr.user_id ORDER BY fr.date_out DESC, do.id DESC SEPARATOR ','), ',', 1) as user"),
-                DB::raw('MAX(fr.date_out) as date'),
-                DB::raw('MAX(mb.nmbuyer) as buyer'),
-                DB::raw('MAX(ms.nmstyle) as style'),
-                DB::raw('MAX(ss.name) as sub_style'),
+                'fr.date_out as date',
+                'mb.nmbuyer as buyer',
+                'ms.nmstyle as style',
+                'ss.name as sub_style',
                 DB::raw("GROUP_CONCAT(DISTINCT od.po SEPARATOR ', ') as po")
             )
 
@@ -206,297 +343,172 @@ function dataTable(Request $request)
         }
 
         return DataTables::of($data)
+            ->filterColumn('cartoncode', function($query, $keyword){
+                $query->where('do.cartoncode', 'like', "%{$keyword}%");
+            })
             ->filterColumn('buyer', function($query, $keyword){
                 $query->where('mb.nmbuyer', 'like', "%{$keyword}%");
-            })
-            ->filterColumn('style', function($query, $keyword){
-                $query->where('ms.nmstyle', 'like', "%{$keyword}%");
-            })
-            ->filterColumn('sub_style', function($query, $keyword){
-                $query->where('ss.name', 'like', "%{$keyword}%");
             })
             ->filterColumn('po', function($query, $keyword){
                 $query->where('od.po', 'like', "%{$keyword}%");
             })
+             ->addColumn('encrypted_cartoncode', function ($row) {
+                return encrypt($row->cartoncode);
+            })
             ->addIndexColumn()
             ->toJson();
-
-        return DataTables::of($data)
-        ->toJson();
     }
 
-UNTUK KODE SAYA AGAR BISA MENERAPKAN SEARCHING SEPERTI KODE ATAS BAGAIMANA ? BISA TIDAK ? 
+    // function dataTable(Request $request)
+    // {
+    //     preconnect(session('db'));
 
-INI VIEW NYA 
-@extends('layouts.master')
+    //     // Detail Data Filtering
+    //     if ($request->has('detail_id') && $request->detail_id != '') {
+    //         $do = DB::table('mesprima1_restore.delivery_order_stocks')
+    //             ->select(
+    //                 'delivery_order',
+    //                 'cartoncode',
+    //                 'masterbuyer_id',
+    //                 'masterstyle_id',
+    //                 'season',
+    //                 'remark'
+    //             )
+    //             ->groupBy('delivery_order', 'cartoncode');
 
-@section('content')
-<div class="container-fluid" style="border-radius: 20px;">
-	<div class="row" style="margin-top: 7rem">
-		<div class="col-sm-12">
-			<div class="box box-danger">
-				<div class="box-header with-border">
-					<h3 class="box-title">
-						<strong>Report Good Issue Lab</strong>
-					</h3>
-				</div>
-				<div class="box-body">
-					<div class="row" style="margin-bottom: 2.4rem">
-						<div class="col-md-2 col-sm-5">
-                            <b>Filter :</b>
-                            <select name="filter" id="filter" class="select2 form-control" style="width: 100%">
-                                <option value=""></option>
-                                <option value="groupbuyer_filter">Group Buyer</option>
-                                <option value="po_filter">PO</option>
-                            </select>
-                        </div>
-						<div class="col-md-2 col-sm-5" id="groupbuyer_container">
-							<b>Group Buyer :</b>
-							<select class="select2 form-control" id="group_buyer" style="width: 100%"></select>
-						</div>
-						<div class="col-md-2 col-sm-5" id="season_container">
-							<b>Season :</b>
-							<select class="select2 form-control" id="season" style="width: 100%"></select>
-						</div>
-						<div class="col-md-2 col-sm-5" id="po_container">
-							<b>PO :</b>
-							<select class="select2 form-control" id="po" style="width: 100%"></select>
-						</div>
-						<div class="col-md-4 col-sm-3" style="padding-top: 2rem">
-							<button type="button" class="btn btn-sm btn-primary" id="findbtn">Find</button>
-							<button type="button" class="btn btn-sm btn-warning" id="resetbtn">Reset</button>
-						</div>
-					</div>
-					<table id="datalist" class="table table-bordered table-striped" style="width: 100%">
-						<thead>
-							<tr>
-								<th>No</th>
-								<th>Carton Code</th>
-								<th>Buyer</th>
-								<th>Season</th>
-								<th>Style</th>
-								<th>Sub-Style</th>
-								<th>PO</th>
-								<th>QTY</th>
-								<th>Date</th>
-								<th>User</th>
-								<th>Detail</th>
-							</tr>
-						</thead>
-					</table>
-				</div>
-			</div>
-		</div>
-	</div>
-</div>
-@endsection
+    //         $data = DB::table('mesprima1_restore.fgreceivegarment_stocks as fr')
+    //             ->joinSub($do, 'do', function ($join) {
+    //                 $join->on('do.delivery_order', '=', 'fr.delivery_order')
+    //                     ->on('do.cartoncode', '=', 'fr.cartoncode');
+    //             })
+    //             ->join('mesprima1_restore.outputdetail as od', 'od.barcode', '=', 'fr.barcode')
+    //             ->join('mesprima1_restore.purchase_order as po', 'po.idpo', '=', 'od.idpo')
+    //             ->join('mesprima1_restore.mastercolor as mc', 'mc.idcolor', '=', 'od.idcolor')
+    //             ->join('mesprima1_restore.mastersize as mz', 'mz.idsize', '=', 'od.idsize')
+    //             ->join('mainmes.masterbuyer as mb', 'mb.idbuyer', '=', 'do.masterbuyer_id')
+    //             ->join('mainmes.masterstyle as ms', 'ms.idstyle', '=', 'do.masterstyle_id')
+    //             ->join('mainmes.sub_styles as ss', 'ss.id', '=', 'ms.sub_style_id')
+    //             ->select(
+    //                 'fr.barcode',
+    //                 'do.cartoncode',
+    //                 'mb.nmbuyer as buyer',
+    //                 'ms.nmstyle as style',
+    //                 'mc.nmcolor as color',
+    //                 'mz.nmsize as size',
+    //                 'do.season',
+    //                 'do.remark',
+    //                 'ss.name as sub_style',
+    //                 'po.po'
+    //             )
+    //             ->where('do.cartoncode', $request->detail_id);
 
-@section('extrascript')
 
-<script type="text/javascript">
-$(document).ready(function(){
+    //         return DataTables::of($data)
+    //             ->filterColumn('barcode', function($query, $keyword){
+    //                 $query->where('fr.barcode', 'like', "%{$keyword}%");
+    //             })
+    //             ->filterColumn('buyer', function($query, $keyword){
+    //                 $query->where('mb.nmbuyer', 'like', "%{$keyword}%");
+    //             })
+    //             ->addIndexColumn()
+    //             ->toJson();
+    //     }
 
-    $('#groupbuyer_container').hide();
-    $('#season_container').hide();
-    $('#po_container').hide();
+    //     $filterType   = $request->filter_type;
+    //     $groupBuyer   = $request->group_buyer;
+    //     $season       = $request->season;
+    //     $po           = $request->po;
 
-    $('#group_buyer').on('change', function () {
-        $('#season').val(null).trigger('change');
-        $('#po').val(null).trigger('change');
-    });
+    //     if (!$filterType) {
+    //         return DataTables::of(collect([]))->toJson();
+    //     }
 
-    $('#season').on('change', function () {
-        $('#po').val(null).trigger('change');
-    });
+    //     if ($filterType == 'groupbuyer_filter' && (!$groupBuyer || !$season)) {
+    //         return DataTables::of(collect([]))->toJson();
+    //     }
 
-    $('#filter').select2({
-        placeholder: "Select Filter"
-    }).on('change', function(){
-        var selectedValue = $(this).val();
+    //     if ($filterType == 'po_filter' && !$po) {
+    //         return DataTables::of(collect([]))->toJson();
+    //     }
 
-        $('#group_buyer').val(null).trigger('change');
-        $('#season').val(null).trigger('change');
-        $('#po').val(null).trigger('change');
+    //     $fg = DB::table('mesprima1_restore.fgreceivegarment_stocks')
+    //         ->select('delivery_order', 'barcode', 'date_out', 'user_id')
+    //         ->whereNotNull('date_gi');
 
-        if(selectedValue === 'groupbuyer_filter') {
-            $('#groupbuyer_container').show();
-            $('#season_container').show();
-            $('#po_container').hide();
+    //     $od = DB::table('mesprima1_restore.outputdetail as od')
+    //         ->join('mesprima1_restore.purchase_order as po', 'po.idpo', '=', 'od.idpo')
+    //         ->select(
+    //             'od.barcode',
+    //             'po.po'
+    //         );
 
-            // Filtering Group Buyer
-            $('#group_buyer').select2({
-                placeholder: 'Select Group Buyer',
-                ajax: {
-                    url: '{{ route("reportgoodissuelab.listgroupbuyer") }}',
-                    type: 'GET',
-                    dataType: 'json',
-                    delay: 250,
-                    data: function (params) {
-                        return {
-                            term: params.term,
-                            filter_type: $('#filter').val()
-                        };
-                    },
-                    processResults: function(data) {
-                        return {
-                            results: $.map(data, function(item) {
-                                return {
-                                    id: item.id,
-                                    text: item.group_name
-                                }
-                            })
-                        };
-                    }
-                }
-            });
+    //     $doQty = DB::table('mesprima1_restore.delivery_order_stocks')
+    //         ->select(
+    //             'delivery_order',
+    //             'cartoncode',
+    //             DB::raw('SUM(qty) as qty')
+    //         )
+    //         ->groupBy('delivery_order', 'cartoncode');
 
-            $('#season').select2({
-                placeholder: 'Select Season',
-                ajax: {
-                    url: '{{ route("reportgoodissuelab.listseason") }}',
-                    type: 'GET',
-                    dataType: 'json',
-                    data: function (params) {
-                        return {
-                            group_buyer: $('#group_buyer').val(),
-                            filter_type: $('#filter').val(),
-                            search: params.term || ''
-                        };
-                    },
-                    processResults: function (data) {
-                        return {
-                            results: $.map(data, function (item) {
-                                return {
-                                    id: item.season,
-                                    text: item.season
-                                };
-                            })
-                        };
-                    }
-                },
-            });
+    //     $data = DB::table('mesprima1_restore.delivery_order_stocks as do')
 
-        // Filtering PO
-        } else if(selectedValue === 'po_filter') {
-            $('#groupbuyer_container').hide();
-            $('#season_container').hide();
-            $('#po_container').show();
+    //         ->joinSub($fg, 'fr', function ($join) {
+    //             $join->on('fr.delivery_order', '=', 'do.delivery_order');
+    //         })
 
-            $('#po').select2({
-                placeholder: 'Select PO',
-                ajax: {
-                    url: '{{ route("reportgoodissuelab.listpo") }}',
-                    type: 'GET',
-                    dataType: 'json',
-                    delay: 250,
-                    data: function (params) {
-                        return {
-                            term: params.term,
-                            filter_type: $('#filter').val()
-                        };
-                    },
-                    processResults: function(data) {
-                        return {
-                            results: $.map(data, function(item) {
-                                return {
-                                    id: item.po,
-                                    text: item.po
-                                }
-                            })
-                        };
-                    }
-                }
-            });
+    //         ->joinSub($od, 'od', function ($join) {
+    //             $join->on('od.barcode', '=', 'fr.barcode');
+    //         })
 
-        } else {
-            $('#groupbuyer_container').hide();
-            $('#season_container').hide();
-            $('#po_container').hide();
-        }
-    });
+    //         ->joinSub($doQty, 'dq', function ($join) {
+    //             $join->on('dq.delivery_order', '=', 'do.delivery_order')
+    //                 ->on('dq.cartoncode', '=', 'do.cartoncode');
+    //         })
 
-    // Data Table
-    let table = $('#datalist').DataTable({
-        processing: true,
-        serverSide: true,
-        searching: true,
-        deferLoading: 0,
-        ajax: {
-            url: '{{ route("reportgoodissuelab.datatable") }}',
-            data: function (d) {
-                d.filter_type = $('#filter').val();
-                d.group_buyer = $('#group_buyer').val();
-                d.season = $('#season').val();
-                d.po = $('#po').val();
-            }
-        },
-        columns: [
-            { data: 'DT_RowIndex', name: 'no' },
-            { data: 'cartoncode',searchable:true, orderable:false },
-            { data: 'buyer',searchable:true, orderable:false },
-            { data: 'season',searchable:false, orderable:false },
-            { data: 'style',searchable:false, orderable:false },
-            { data: 'sub_style',searchable:false, orderable:false },
-            { data: 'po',searchable:false, orderable:false },
-            { data: 'qty',searchable:false, orderable:false },
-            { data: 'date',searchable:false, orderable:false },
-            { data: 'user',searchable:false, orderable:false },
-            {
-                data: 'cartoncode',
-                orderable: false,
-                searchable: false,
-                render: function (data, type, row) {
-                    let url = '{{ route("reportgoodissuelab.detail", ":id" ) }}';
-                    url = url.replace(':id', data);
-                    return `
-                        <a href="${url}">
-                            <i class="fa fa-info-circle fa-lg text-blue actiona"></i>
-                        </a>
-                    `;
-                }
-            }
-        ]
-    });
+    //         ->join('mainmes.masterbuyer as mb', 'do.masterbuyer_id', '=', 'mb.idbuyer')
+    //         ->join('mainmes.masterstyle as ms', 'do.masterstyle_id', '=', 'ms.idstyle')
+    //         ->join('mainmes.sub_styles as ss', 'ms.sub_style_id', '=', 'ss.id')
+    //         ->select(
+    //             'do.cartoncode as no',
+    //             'do.cartoncode',
+    //             'do.season as season',
+    //             'dq.qty as qty',
+    //             DB::raw("SUBSTRING_INDEX(GROUP_CONCAT(fr.user_id ORDER BY fr.date_out DESC, do.id DESC SEPARATOR ','), ',', 1) as user"),
+    //             'fr.date_out as date',
+    //             'mb.nmbuyer as buyer',
+    //             'ms.nmstyle as style',
+    //             'ss.name as sub_style',
+    //             DB::raw("GROUP_CONCAT(DISTINCT od.po SEPARATOR ', ') as po")
+    //         )
 
-    // Button Find
-    $('#findbtn').on('click', function () {
+    //         ->groupBy('do.cartoncode');
 
-        let filter = $('#filter').val();
-        let groupBuyer = $('#group_buyer').val();
-        let season = $('#season').val();
-        let po = $('#po').val();
+    //     if ($filterType == 'groupbuyer_filter') {
+    //         $data->where('mb.groupbuyer', $groupBuyer);
+    //         $data->where('do.season', $season);
+    //     }
 
-        if (filter == null || filter == '') {
-            swal('Warning!', 'Please select Filter first!', 'warning');
-            return;
-        }
+    //     if ($filterType == 'po_filter') {
+    //         $data->where('od.po', $po);
+    //     }
 
-        if (filter === 'groupbuyer_filter') {
-            if (groupBuyer == null || groupBuyer == '' || season == null || season == '') {
-                swal('Warning!', 'Please select Group Buyer and Season!', 'warning');
-                return;
-            }
-        }
+    //     return DataTables::of($data)
+    //         ->filterColumn('cartoncode', function($query, $keyword){
+    //             $query->where('do.cartoncode', 'like', "%{$keyword}%");
+    //         })
+    //         ->filterColumn('buyer', function($query, $keyword){
+    //             $query->where('mb.nmbuyer', 'like', "%{$keyword}%");
+    //         })
+    //         ->filterColumn('po', function($query, $keyword){
+    //             $query->where('od.po', 'like', "%{$keyword}%");
+    //         })
+    //          ->addColumn('encrypted_cartoncode', function ($row) {
+    //             return encrypt($row->cartoncode);
+    //         })
+    //         ->addIndexColumn()
+    //         ->toJson();
+    // }
+}
 
-        if (filter === 'po_filter') {
-            if (po == null || po == '') {
-                swal('Warning!', 'Please select PO!', 'warning');
-                return;
-            }
-        }
 
-        table.ajax.reload();
-    });
-
-    // Button Reset
-    $('#resetbtn').on('click', function () {
-        $('#filter').val('').trigger('change');
-        $('#group_buyer').val(null).trigger('change');
-        $('#season').val(null).trigger('change');
-        $('#po').val(null).trigger('change');
-        table.ajax.reload();
-    });
-
-});
-</script>
-@endsection
+apakah datatable ini bisa diimplementasikan seperti konsep penulisan lainnya, seperti foreach, tujuan utamanya agar tidak langsung menyebut database nya langsung, tapi lewat model nya
