@@ -1,222 +1,21 @@
-<?php
-
-namespace Modules\Laboratory\Http\Controllers;
-
-use Illuminate\Http\Request;
-use App\Http\Controllers\Controller;
-use App\Http\Controllers\TlogController;
-use App\Http\Controllers\WatchController;
-use App\Http\Models\Color;
-use App\Http\Models\DeliveryOrder;
-use App\Http\Models\DOStock;
-use App\Http\Models\FGReceiveGarmentStock;
-use App\Http\Models\Main\Buyer;
-use App\Http\Models\Main\Employee;
-use App\Http\Models\Main\MasterFactory;
-use App\Http\Models\Main\MasterGroupBuyer;
-use App\Http\Models\Main\MethodLabs;
-use App\Http\Models\Main\ProcessLabs;
-use App\Http\Models\Main\ProcessRoutingLab;
-use App\Http\Models\Main\ReceivedLab;
-use App\Http\Models\Main\ResultTestLabDetail;
-use App\Http\Models\Main\ResultTestLabHeader;
-use App\Http\Models\Main\StandardValueLabs;
-use App\Http\Models\Main\Style;
-use App\Http\Models\Main\SubStyle;
-use App\Http\Models\Main\TestItemLabs;
-use App\Http\Models\Main\ValueLabs;
-use App\Http\Models\OutputDetail;
-use App\Http\Models\PurchaseOrder;
-use App\Http\Models\Shell;
-use App\Http\Models\ShellTarget;
-use Yajra\DataTables\DataTables;
-use App\Http\Models\Size;
-use Barryvdh\DomPDF\Facade as PDF;
-use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
-use Modules\Shipping\Http\Controllers\DeliveryOrderStockController;
-
-class ReportGoodIssueLabController extends Controller
-{
-    protected $m_modul = 'laboratory';
-
-    function __construct()
-    {
-        $this->middleware('auth');
-    }
-
-    function index()
-    {
-        if ($this->myaccess() == '0') {
-            return redirect()
-                ->back()
-                ->with('alert', [
-                    'title' => 'Unauthorized!',
-                    'message' => 'You Dont Have Any Access Here!',
-                    'status' => 'warning',
-                ]);
-        }
-
-        return view('laboratory::reportgoodissuelab.index', [
-            'access' => $this->myaccess(),
-        ]);
-
-    }
-
-    public function listGroupBuyer(Request $request)
-    {
-        if (!$request->ajax()) {
-            return;
-        }
-
-        preconnect(session('db'));
-
-        $result = collect();
-        $data = FGReceiveGarmentStock::withTrashed()
-            ->select(['delivery_order'])
-            ->whereNotNull('date_gi')
-            ->distinct()
-            ->get();
-
-
-        foreach ($data as $d) {
-            $do = DOStock::select(['masterbuyer_id'])
-                ->where('delivery_order', $d->delivery_order)
-                ->first();
-
-            if ($do) {
-                $buyer = Buyer::select(['groupbuyer'])
-                    ->where('idbuyer', $do->masterbuyer_id)
-                    ->first();
-                if ($buyer) {
-                    $group = MasterGroupBuyer::select(['id','group_name'])
-                        ->where('id', $buyer->groupbuyer)
-                        ->first();
-
-                    if ($group) {
-                        $result->push([
-                            'id' => $group->id,
-                            'group_name' => $group->group_name
-                        ]);
-                    }
-                }
-            }
-        }
-
-
-        $result = $result->unique('id')->values();
-        return response()->json($result);
-    }
-
-    function listSeason(Request $request)
-    {
-        if (!$request->ajax()) {
-            return;
-        }
-
-        preconnect(session('db'));
-
-        $result = collect();
-
-        $data = FGReceiveGarmentStock::withTrashed()
-            ->select(['delivery_order'])
-            ->whereNotNull('date_gi')
-            ->distinct()
-            ->get();
-
-        foreach ($data as $d) {
-            $do = DOStock::select(['season','masterbuyer_id'])
-                ->where('delivery_order', $d->delivery_order)
-                ->first();
-            if ($do) {
-                $buyer = Buyer::select(['groupbuyer'])
-                    ->where('idbuyer', $do->masterbuyer_id)
-                    ->first();
-                if ($buyer) {
-                    if ($request->group_buyer == $buyer->groupbuyer) {
-                        if ($do->season) {
-                            $result->push([
-                                'season' => $do->season
-                            ]);
-                        }
-                    }
-                }
-            }
-        }
-
-        $result = $result
-            ->unique('season')
-            ->values();
-
-        return response()->json($result);
-    }
-
-    function listPO(Request $request)
-    {
-        if (!$request->ajax()) {
-            return;
-        }
-
-        preconnect(session('db'));
-
-        $result = collect();
-        $data = FGReceiveGarmentStock::withTrashed()
-            ->select(['barcode'])
-            ->whereNotNull('date_gi')
-            ->distinct()
-            ->get();
-
-        foreach ($data as $d) {
-
-            $od = OutputDetail::select(['idpo'])
-                ->where('barcode', $d->barcode)
-                ->first();
-
-            if ($od) {
-                $po = PurchaseOrder::select(['po'])
-                    ->where('idpo', $od->idpo)
-                    ->first();
-
-                if ($po) {
-                    $result->push(['po' => $po->po]);
-                }
-            }
-        }
-
-        $result = $result
-            ->unique('po')
-            ->values();
-
-        return response()->json($result);
-    }
-
-    function detail($cartoncode)
-    {
-        try {
-            $cartoncode = decrypt($cartoncode);
-        } catch (\Exception $e) {
-            abort(404);
-        }
-
-        preconnect(session('db'));
-
-        $data = DOStock::where('cartoncode', $cartoncode)
-            ->first();
-
-        return view('laboratory::reportgoodissuelab.detail', [
-            'data' => $data,
-            'id'   => $cartoncode,
-        ]);
-    }
-
     function dataTable(Request $request)
     {
-        preconnect(session('db'));
+        // Instansiasi model untuk mendapatkan nama tabel beserta koneksi databasenya secara dinamis
+        $doTable = (new DOStock())->getTable();
+        $fgTable = (new FGReceiveGarmentStock())->getTable();
+        $odTable = (new OutputDetail())->getTable();
+        $poTable = (new PurchaseOrder())->getTable();
+        $buyerTable = (new Buyer())->getTable();
+        $styleTable = (new Style())->getTable(); // Asumsi MasterFactory/Style
+        $subStyleTable = (new SubStyle())->getTable();
+        $colorTable = (new Color())->getTable();
+        $sizeTable = (new Size())->getTable();
 
-        // Detail Data Filtering
+        // 1. Detail Data Filtering
         if ($request->has('detail_id') && $request->detail_id != '') {
-            $do = DB::table('mesprima1_restore.delivery_order_stocks')
-                ->select(
+            
+            // Subquery DO Stock menggunakan Model
+            $doSub = DOStock::select(
                     'delivery_order',
                     'cartoncode',
                     'masterbuyer_id',
@@ -226,18 +25,20 @@ class ReportGoodIssueLabController extends Controller
                 )
                 ->groupBy('delivery_order', 'cartoncode');
 
-            $data = DB::table('mesprima1_restore.fgreceivegarment_stocks as fr')
-                ->joinSub($do, 'do', function ($join) {
+            // Query utama menggunakan FGReceiveGarmentStock Model
+            $data = FGReceiveGarmentStock::query()
+                ->from("$fgTable as fr")
+                ->joinSub($doSub, 'do', function ($join) {
                     $join->on('do.delivery_order', '=', 'fr.delivery_order')
                         ->on('do.cartoncode', '=', 'fr.cartoncode');
                 })
-                ->join('mesprima1_restore.outputdetail as od', 'od.barcode', '=', 'fr.barcode')
-                ->join('mesprima1_restore.purchase_order as po', 'po.idpo', '=', 'od.idpo')
-                ->join('mesprima1_restore.mastercolor as mc', 'mc.idcolor', '=', 'od.idcolor')
-                ->join('mesprima1_restore.mastersize as mz', 'mz.idsize', '=', 'od.idsize')
-                ->join('mainmes.masterbuyer as mb', 'mb.idbuyer', '=', 'do.masterbuyer_id')
-                ->join('mainmes.masterstyle as ms', 'ms.idstyle', '=', 'do.masterstyle_id')
-                ->join('mainmes.sub_styles as ss', 'ss.id', '=', 'ms.sub_style_id')
+                ->join("$odTable as od", 'od.barcode', '=', 'fr.barcode')
+                ->join("$poTable as po", 'po.idpo', '=', 'od.idpo')
+                ->join("$colorTable as mc", 'mc.idcolor', '=', 'od.idcolor')
+                ->join("$sizeTable as mz", 'mz.idsize', '=', 'od.idsize')
+                ->join("$buyerTable as mb", 'mb.idbuyer', '=', 'do.masterbuyer_id')
+                ->join("$styleTable as ms", 'ms.idstyle', '=', 'do.masterstyle_id')
+                ->join("$subStyleTable as ss", 'ss.id', '=', 'ms.sub_style_id')
                 ->select(
                     'fr.barcode',
                     'do.cartoncode',
@@ -252,7 +53,6 @@ class ReportGoodIssueLabController extends Controller
                 )
                 ->where('do.cartoncode', $request->detail_id);
 
-
             return DataTables::of($data)
                 ->filterColumn('barcode', function($query, $keyword){
                     $query->where('fr.barcode', 'like', "%{$keyword}%");
@@ -264,6 +64,7 @@ class ReportGoodIssueLabController extends Controller
                 ->toJson();
         }
 
+        // 2. Main Data Filtering
         $filterType   = $request->filter_type;
         $groupBuyer   = $request->group_buyer;
         $season       = $request->season;
@@ -281,43 +82,37 @@ class ReportGoodIssueLabController extends Controller
             return DataTables::of(collect([]))->toJson();
         }
 
-        $fg = DB::table('mesprima1_restore.fgreceivegarment_stocks')
-            ->select('delivery_order', 'barcode', 'date_out', 'user_id')
+        // Subqueries menggunakan Model
+        $fg = FGReceiveGarmentStock::select('delivery_order', 'barcode', 'date_out', 'user_id')
             ->whereNotNull('date_gi');
 
-        $od = DB::table('mesprima1_restore.outputdetail as od')
-            ->join('mesprima1_restore.purchase_order as po', 'po.idpo', '=', 'od.idpo')
-            ->select(
-                'od.barcode',
-                'po.po'
-            );
+        $od = OutputDetail::from("$odTable as od")
+            ->join("$poTable as po", 'po.idpo', '=', 'od.idpo')
+            ->select('od.barcode', 'po.po');
 
-        $doQty = DB::table('mesprima1_restore.delivery_order_stocks')
-            ->select(
+        $doQty = DOStock::select(
                 'delivery_order',
                 'cartoncode',
                 DB::raw('SUM(qty) as qty')
             )
             ->groupBy('delivery_order', 'cartoncode');
 
-        $data = DB::table('mesprima1_restore.delivery_order_stocks as do')
-
+        // Main Query menggunakan DOStock Model
+        $data = DOStock::query()
+            ->from("$doTable as do")
             ->joinSub($fg, 'fr', function ($join) {
                 $join->on('fr.delivery_order', '=', 'do.delivery_order');
             })
-
             ->joinSub($od, 'od', function ($join) {
                 $join->on('od.barcode', '=', 'fr.barcode');
             })
-
             ->joinSub($doQty, 'dq', function ($join) {
                 $join->on('dq.delivery_order', '=', 'do.delivery_order')
                     ->on('dq.cartoncode', '=', 'do.cartoncode');
             })
-
-            ->join('mainmes.masterbuyer as mb', 'do.masterbuyer_id', '=', 'mb.idbuyer')
-            ->join('mainmes.masterstyle as ms', 'do.masterstyle_id', '=', 'ms.idstyle')
-            ->join('mainmes.sub_styles as ss', 'ms.sub_style_id', '=', 'ss.id')
+            ->join("$buyerTable as mb", 'do.masterbuyer_id', '=', 'mb.idbuyer')
+            ->join("$styleTable as ms", 'do.masterstyle_id', '=', 'ms.idstyle')
+            ->join("$subStyleTable as ss", 'ms.sub_style_id', '=', 'ss.id')
             ->select(
                 'do.cartoncode as no',
                 'do.cartoncode',
@@ -330,9 +125,9 @@ class ReportGoodIssueLabController extends Controller
                 'ss.name as sub_style',
                 DB::raw("GROUP_CONCAT(DISTINCT od.po SEPARATOR ', ') as po")
             )
-
             ->groupBy('do.cartoncode');
 
+        // Terapkan Filter
         if ($filterType == 'groupbuyer_filter') {
             $data->where('mb.groupbuyer', $groupBuyer);
             $data->where('do.season', $season);
@@ -352,163 +147,9 @@ class ReportGoodIssueLabController extends Controller
             ->filterColumn('po', function($query, $keyword){
                 $query->where('od.po', 'like', "%{$keyword}%");
             })
-             ->addColumn('encrypted_cartoncode', function ($row) {
+            ->addColumn('encrypted_cartoncode', function ($row) {
                 return encrypt($row->cartoncode);
             })
             ->addIndexColumn()
             ->toJson();
     }
-
-    // function dataTable(Request $request)
-    // {
-    //     preconnect(session('db'));
-
-    //     // Detail Data Filtering
-    //     if ($request->has('detail_id') && $request->detail_id != '') {
-    //         $do = DB::table('mesprima1_restore.delivery_order_stocks')
-    //             ->select(
-    //                 'delivery_order',
-    //                 'cartoncode',
-    //                 'masterbuyer_id',
-    //                 'masterstyle_id',
-    //                 'season',
-    //                 'remark'
-    //             )
-    //             ->groupBy('delivery_order', 'cartoncode');
-
-    //         $data = DB::table('mesprima1_restore.fgreceivegarment_stocks as fr')
-    //             ->joinSub($do, 'do', function ($join) {
-    //                 $join->on('do.delivery_order', '=', 'fr.delivery_order')
-    //                     ->on('do.cartoncode', '=', 'fr.cartoncode');
-    //             })
-    //             ->join('mesprima1_restore.outputdetail as od', 'od.barcode', '=', 'fr.barcode')
-    //             ->join('mesprima1_restore.purchase_order as po', 'po.idpo', '=', 'od.idpo')
-    //             ->join('mesprima1_restore.mastercolor as mc', 'mc.idcolor', '=', 'od.idcolor')
-    //             ->join('mesprima1_restore.mastersize as mz', 'mz.idsize', '=', 'od.idsize')
-    //             ->join('mainmes.masterbuyer as mb', 'mb.idbuyer', '=', 'do.masterbuyer_id')
-    //             ->join('mainmes.masterstyle as ms', 'ms.idstyle', '=', 'do.masterstyle_id')
-    //             ->join('mainmes.sub_styles as ss', 'ss.id', '=', 'ms.sub_style_id')
-    //             ->select(
-    //                 'fr.barcode',
-    //                 'do.cartoncode',
-    //                 'mb.nmbuyer as buyer',
-    //                 'ms.nmstyle as style',
-    //                 'mc.nmcolor as color',
-    //                 'mz.nmsize as size',
-    //                 'do.season',
-    //                 'do.remark',
-    //                 'ss.name as sub_style',
-    //                 'po.po'
-    //             )
-    //             ->where('do.cartoncode', $request->detail_id);
-
-
-    //         return DataTables::of($data)
-    //             ->filterColumn('barcode', function($query, $keyword){
-    //                 $query->where('fr.barcode', 'like', "%{$keyword}%");
-    //             })
-    //             ->filterColumn('buyer', function($query, $keyword){
-    //                 $query->where('mb.nmbuyer', 'like', "%{$keyword}%");
-    //             })
-    //             ->addIndexColumn()
-    //             ->toJson();
-    //     }
-
-    //     $filterType   = $request->filter_type;
-    //     $groupBuyer   = $request->group_buyer;
-    //     $season       = $request->season;
-    //     $po           = $request->po;
-
-    //     if (!$filterType) {
-    //         return DataTables::of(collect([]))->toJson();
-    //     }
-
-    //     if ($filterType == 'groupbuyer_filter' && (!$groupBuyer || !$season)) {
-    //         return DataTables::of(collect([]))->toJson();
-    //     }
-
-    //     if ($filterType == 'po_filter' && !$po) {
-    //         return DataTables::of(collect([]))->toJson();
-    //     }
-
-    //     $fg = DB::table('mesprima1_restore.fgreceivegarment_stocks')
-    //         ->select('delivery_order', 'barcode', 'date_out', 'user_id')
-    //         ->whereNotNull('date_gi');
-
-    //     $od = DB::table('mesprima1_restore.outputdetail as od')
-    //         ->join('mesprima1_restore.purchase_order as po', 'po.idpo', '=', 'od.idpo')
-    //         ->select(
-    //             'od.barcode',
-    //             'po.po'
-    //         );
-
-    //     $doQty = DB::table('mesprima1_restore.delivery_order_stocks')
-    //         ->select(
-    //             'delivery_order',
-    //             'cartoncode',
-    //             DB::raw('SUM(qty) as qty')
-    //         )
-    //         ->groupBy('delivery_order', 'cartoncode');
-
-    //     $data = DB::table('mesprima1_restore.delivery_order_stocks as do')
-
-    //         ->joinSub($fg, 'fr', function ($join) {
-    //             $join->on('fr.delivery_order', '=', 'do.delivery_order');
-    //         })
-
-    //         ->joinSub($od, 'od', function ($join) {
-    //             $join->on('od.barcode', '=', 'fr.barcode');
-    //         })
-
-    //         ->joinSub($doQty, 'dq', function ($join) {
-    //             $join->on('dq.delivery_order', '=', 'do.delivery_order')
-    //                 ->on('dq.cartoncode', '=', 'do.cartoncode');
-    //         })
-
-    //         ->join('mainmes.masterbuyer as mb', 'do.masterbuyer_id', '=', 'mb.idbuyer')
-    //         ->join('mainmes.masterstyle as ms', 'do.masterstyle_id', '=', 'ms.idstyle')
-    //         ->join('mainmes.sub_styles as ss', 'ms.sub_style_id', '=', 'ss.id')
-    //         ->select(
-    //             'do.cartoncode as no',
-    //             'do.cartoncode',
-    //             'do.season as season',
-    //             'dq.qty as qty',
-    //             DB::raw("SUBSTRING_INDEX(GROUP_CONCAT(fr.user_id ORDER BY fr.date_out DESC, do.id DESC SEPARATOR ','), ',', 1) as user"),
-    //             'fr.date_out as date',
-    //             'mb.nmbuyer as buyer',
-    //             'ms.nmstyle as style',
-    //             'ss.name as sub_style',
-    //             DB::raw("GROUP_CONCAT(DISTINCT od.po SEPARATOR ', ') as po")
-    //         )
-
-    //         ->groupBy('do.cartoncode');
-
-    //     if ($filterType == 'groupbuyer_filter') {
-    //         $data->where('mb.groupbuyer', $groupBuyer);
-    //         $data->where('do.season', $season);
-    //     }
-
-    //     if ($filterType == 'po_filter') {
-    //         $data->where('od.po', $po);
-    //     }
-
-    //     return DataTables::of($data)
-    //         ->filterColumn('cartoncode', function($query, $keyword){
-    //             $query->where('do.cartoncode', 'like', "%{$keyword}%");
-    //         })
-    //         ->filterColumn('buyer', function($query, $keyword){
-    //             $query->where('mb.nmbuyer', 'like', "%{$keyword}%");
-    //         })
-    //         ->filterColumn('po', function($query, $keyword){
-    //             $query->where('od.po', 'like', "%{$keyword}%");
-    //         })
-    //          ->addColumn('encrypted_cartoncode', function ($row) {
-    //             return encrypt($row->cartoncode);
-    //         })
-    //         ->addIndexColumn()
-    //         ->toJson();
-    // }
-}
-
-
-apakah datatable ini bisa diimplementasikan seperti konsep penulisan lainnya, seperti foreach, tujuan utamanya agar tidak langsung menyebut database nya langsung, tapi lewat model nya
