@@ -1,166 +1,216 @@
- function dataTable(Request $request)
-    {
-        preconnect(session('db'));
+function dataTable(Request $request)
+{
+    preconnect(session('db'));
 
-        // Detail
-        if ($request->has('detail_id') && $request->detail_id != '') {
-            $cartoncode = $request->detail_id;
+    // ============================================================
+    // DETAIL
+    // ============================================================
+    if ($request->has('detail_id') && $request->detail_id != '') {
+        $cartoncode = $request->detail_id;
 
-            $doRows = DOStock::select('delivery_order', 'cartoncode', 'masterbuyer_id', 'masterstyle_id', 'season', 'remark')
-                ->where('cartoncode', $cartoncode)
-                ->get()
-                ->unique(function ($item) {
-                    return $item->delivery_order . '-' . $item->cartoncode;
-                });
+        $doRows = DOStock::select('delivery_order', 'cartoncode', 'masterbuyer_id', 'masterstyle_id', 'season', 'remark')
+            ->where('cartoncode', $cartoncode)
+            ->get()
+            ->unique(fn($item) => $item->delivery_order . '-' . $item->cartoncode);
 
-            $result = collect();
-
-            foreach ($doRows as $do) {
-
-                $buyer    = Buyer::select('nmbuyer')->where('idbuyer', $do->masterbuyer_id)->first();
-                $style    = Style::select('nmstyle', 'sub_style_id')->where('idstyle', $do->masterstyle_id)->first();
-                $subStyle = $style ? SubStyle::select('name')->where('id', $style->sub_style_id)->first() : null;
-
-                // Menampilkan data yang sudah di softdelete
-                $frRows = FGReceiveGarmentStock::withTrashed()
-                    ->whereIn('delivery_order', $do)
-                    ->get();
-
-                // $frRows = FGReceiveGarmentStock::where('delivery_order', $do->delivery_order)->get();
-
-                foreach ($frRows as $fr) {
-                    $od = OutputDetail::select('idpo', 'idcolor', 'idsize')
-                        ->where('barcode', $fr->barcode)
-                        ->first();
-
-                    if (!$od) {
-                        continue;
-                    }
-
-                    $po    = PurchaseOrder::select('po')->where('idpo', $od->idpo)->first();
-                    $color = Color::select('nmcolor')->where('idcolor', $od->idcolor)->first();
-                    $size  = Size::select('nmsize')->where('idsize', $od->idsize)->first();
-
-                    $result->push([
-                        'barcode'    => $fr->barcode,
-                        'cartoncode' => $do->cartoncode,
-                        'buyer'      => $buyer->nmbuyer ?? '-',
-                        'style'      => $style->nmstyle ?? '-',
-                        'color'      => $color->nmcolor ?? '-',
-                        'size'       => $size->nmsize ?? '-',
-                        'season'     => $do->season,
-                        'remark'     => $do->remark,
-                        'sub_style'  => $subStyle->name ?? '-',
-                        'po'         => $po->po ?? '-',
-                    ]);
-                }
-            }
-
-            return DataTables::of($result)
-                ->addIndexColumn()
-                ->toJson();
-        }
-
-        // Listing Utama
-        $filterType = $request->filter_type;
-        $groupBuyer = $request->group_buyer;
-        $season     = $request->season;
-        $po         = $request->po;
-
-        if (!$filterType) {
+        if ($doRows->isEmpty()) {
             return DataTables::of(collect([]))->toJson();
         }
 
-        if ($filterType == 'groupbuyer_filter' && (!$groupBuyer || !$season)) {
-            return DataTables::of(collect([]))->toJson();
-        }
+        // --- Kumpulkan semua id yang dibutuhkan ---
+        $deliveryOrders = $doRows->pluck('delivery_order')->unique()->values();
+        $buyerIds       = $doRows->pluck('masterbuyer_id')->unique()->filter()->values();
+        $styleIds       = $doRows->pluck('masterstyle_id')->unique()->filter()->values();
 
-        if ($filterType == 'po_filter' && !$po) {
-            return DataTables::of(collect([]))->toJson();
-        }
+        // --- Ambil FG rows sekaligus untuk semua delivery_order (termasuk softdelete) ---
+        $frRows = FGReceiveGarmentStock::withTrashed()
+            ->whereIn('delivery_order', $deliveryOrders)
+            ->get();
 
-        // Query groupbuyer (db atas)
-        $buyerIds = null;
-        if ($filterType == 'groupbuyer_filter') {
-            $buyerIds = Buyer::where('groupbuyer', $groupBuyer)->pluck('idbuyer')->toArray();
-        }
+        $frGrouped = $frRows->groupBy('delivery_order');
+        $barcodes  = $frRows->pluck('barcode')->unique()->values();
 
-        // Query group per cartoncode (db bawah)
-        $doQuery = DOStock::select('delivery_order', 'cartoncode', 'masterbuyer_id', 'masterstyle_id', 'season')
-            ->selectRaw('SUM(qty) as total_qty')
-            ->groupBy('delivery_order', 'cartoncode', 'masterbuyer_id', 'masterstyle_id', 'season');
+        // --- Ambil OutputDetail sekaligus untuk semua barcode ---
+        $odRows = OutputDetail::select('barcode', 'idpo', 'idcolor', 'idsize')
+            ->whereIn('barcode', $barcodes)
+            ->get()
+            ->keyBy('barcode');
 
-        if ($filterType == 'groupbuyer_filter') {
-            $doQuery->whereIn('masterbuyer_id', $buyerIds)
-                    ->where('season', $season);
-        }
+        $poIds    = $odRows->pluck('idpo')->unique()->filter()->values();
+        $colorIds = $odRows->pluck('idcolor')->unique()->filter()->values();
+        $sizeIds  = $odRows->pluck('idsize')->unique()->filter()->values();
 
-        $doRows = $doQuery->get();
+        // --- Ambil master data sekaligus, jadikan map ---
+        $buyerMap = Buyer::select('idbuyer', 'nmbuyer')->whereIn('idbuyer', $buyerIds)->get()->keyBy('idbuyer');
+        $styleMap = Style::select('idstyle', 'nmstyle', 'sub_style_id')->whereIn('idstyle', $styleIds)->get()->keyBy('idstyle');
+
+        $subStyleIds = $styleMap->pluck('sub_style_id')->unique()->filter()->values();
+        $subStyleMap = SubStyle::select('id', 'name')->whereIn('id', $subStyleIds)->get()->keyBy('id');
+
+        $poMap    = PurchaseOrder::select('idpo', 'po')->whereIn('idpo', $poIds)->get()->keyBy('idpo');
+        $colorMap = Color::select('idcolor', 'nmcolor')->whereIn('idcolor', $colorIds)->get()->keyBy('idcolor');
+        $sizeMap  = Size::select('idsize', 'nmsize')->whereIn('idsize', $sizeIds)->get()->keyBy('idsize');
 
         $result = collect();
 
         foreach ($doRows as $do) {
+            $buyer    = $buyerMap->get($do->masterbuyer_id);
+            $style    = $styleMap->get($do->masterstyle_id);
+            $subStyle = $style ? $subStyleMap->get($style->sub_style_id) : null;
 
-        // Menampilkan data yang sudah di softdelete
-            $frRows = FGReceiveGarmentStock::withTrashed()
-                ->where('delivery_order', $do->delivery_order)
-                ->whereNotNull('date_gi')
-                ->orderByDesc('date_out')
-                ->get();
+            $relatedFr = $frGrouped->get($do->delivery_order, collect());
 
-            if ($frRows->isEmpty()) {
-                continue;
-            }
-
-            $poList          = collect();
-            $matchesPoFilter = $filterType != 'po_filter';
-
-            foreach ($frRows as $fr) {
-                $od = OutputDetail::select('idpo')->where('barcode', $fr->barcode)->first();
-
-                if ($od) {
-                    $poModel = PurchaseOrder::select('po')->where('idpo', $od->idpo)->first();
-
-                    if ($poModel) {
-                        $poList->push($poModel->po);
-
-                        if ($filterType == 'po_filter' && $poModel->po == $po) {
-                            $matchesPoFilter = true;
-                        }
-                    }
+            foreach ($relatedFr as $fr) {
+                $od = $odRows->get($fr->barcode);
+                if (!$od) {
+                    continue;
                 }
+
+                $po    = $poMap->get($od->idpo);
+                $color = $colorMap->get($od->idcolor);
+                $size  = $sizeMap->get($od->idsize);
+
+                $result->push([
+                    'barcode'    => $fr->barcode,
+                    'cartoncode' => $do->cartoncode,
+                    'buyer'      => $buyer->nmbuyer ?? '-',
+                    'style'      => $style->nmstyle ?? '-',
+                    'color'      => $color->nmcolor ?? '-',
+                    'size'       => $size->nmsize ?? '-',
+                    'season'     => $do->season,
+                    'remark'     => $do->remark,
+                    'sub_style'  => $subStyle->name ?? '-',
+                    'po'         => $po->po ?? '-',
+                ]);
             }
-
-            if (!$matchesPoFilter) {
-                continue;
-            }
-
-            $buyer    = Buyer::select('nmbuyer')->where('idbuyer', $do->masterbuyer_id)->first();
-            $style    = Style::select('nmstyle', 'sub_style_id')->where('idstyle', $do->masterstyle_id)->first();
-            $subStyle = $style ? SubStyle::select('name')->where('id', $style->sub_style_id)->first() : null;
-
-            $latestFr = $frRows->first();
-
-            $result->push([
-                'no'                   => $do->cartoncode,
-                'cartoncode'           => $do->cartoncode,
-                'season'               => $do->season,
-                'qty'                  => $do->total_qty,
-                'user'                 => $latestFr->user_id,
-                'date'                 => $latestFr->date_out,
-                'buyer'                => $buyer->nmbuyer ?? '-',
-                'style'                => $style->nmstyle ?? '-',
-                'sub_style'            => $subStyle->name ?? '-',
-                'po'                   => $poList->unique()->implode(', '),
-                'encrypted_cartoncode' => encrypt($do->cartoncode),
-            ]);
         }
-
-        $result = $result->unique('cartoncode')->values();
 
         return DataTables::of($result)
             ->addIndexColumn()
             ->toJson();
     }
 
-apakah kode ini bisa siubah menggunakan wherein agar tidak lemot dan menyebabkan n++1 query
+    // ============================================================
+    // LISTING UTAMA
+    // ============================================================
+    $filterType = $request->filter_type;
+    $groupBuyer = $request->group_buyer;
+    $season     = $request->season;
+    $po         = $request->po;
+
+    if (!$filterType) {
+        return DataTables::of(collect([]))->toJson();
+    }
+
+    if ($filterType == 'groupbuyer_filter' && (!$groupBuyer || !$season)) {
+        return DataTables::of(collect([]))->toJson();
+    }
+
+    if ($filterType == 'po_filter' && !$po) {
+        return DataTables::of(collect([]))->toJson();
+    }
+
+    $buyerIdsFilter = null;
+    if ($filterType == 'groupbuyer_filter') {
+        $buyerIdsFilter = Buyer::where('groupbuyer', $groupBuyer)->pluck('idbuyer');
+        if ($buyerIdsFilter->isEmpty()) {
+            return DataTables::of(collect([]))->toJson();
+        }
+    }
+
+    $doQuery = DOStock::select('delivery_order', 'cartoncode', 'masterbuyer_id', 'masterstyle_id', 'season')
+        ->selectRaw('SUM(qty) as total_qty')
+        ->groupBy('delivery_order', 'cartoncode', 'masterbuyer_id', 'masterstyle_id', 'season');
+
+    if ($filterType == 'groupbuyer_filter') {
+        $doQuery->whereIn('masterbuyer_id', $buyerIdsFilter)
+                ->where('season', $season);
+    }
+
+    $doRows = $doQuery->get();
+
+    if ($doRows->isEmpty()) {
+        return DataTables::of(collect([]))->toJson();
+    }
+
+    // --- Kumpulkan id-id yang dibutuhkan ---
+    $deliveryOrders = $doRows->pluck('delivery_order')->unique()->values();
+    $buyerIds       = $doRows->pluck('masterbuyer_id')->unique()->filter()->values();
+    $styleIds       = $doRows->pluck('masterstyle_id')->unique()->filter()->values();
+
+    // --- Ambil semua FG rows sekaligus (termasuk softdelete), group per delivery_order ---
+    $frRows = FGReceiveGarmentStock::withTrashed()
+        ->whereIn('delivery_order', $deliveryOrders)
+        ->whereNotNull('date_gi')
+        ->orderByDesc('date_out')
+        ->get();
+
+    $frGrouped = $frRows->groupBy('delivery_order');
+    $barcodes  = $frRows->pluck('barcode')->unique()->values();
+
+    // --- Ambil OutputDetail + PO sekaligus ---
+    $odRows = OutputDetail::select('barcode', 'idpo')
+        ->whereIn('barcode', $barcodes)
+        ->get()
+        ->keyBy('barcode');
+
+    $poIds = $odRows->pluck('idpo')->unique()->filter()->values();
+    $poMap = PurchaseOrder::select('idpo', 'po')->whereIn('idpo', $poIds)->get()->keyBy('idpo');
+
+    // --- Master buyer/style/substyle sekaligus ---
+    $buyerMap    = Buyer::select('idbuyer', 'nmbuyer')->whereIn('idbuyer', $buyerIds)->get()->keyBy('idbuyer');
+    $styleMap    = Style::select('idstyle', 'nmstyle', 'sub_style_id')->whereIn('idstyle', $styleIds)->get()->keyBy('idstyle');
+    $subStyleIds = $styleMap->pluck('sub_style_id')->unique()->filter()->values();
+    $subStyleMap = SubStyle::select('id', 'name')->whereIn('id', $subStyleIds)->get()->keyBy('id');
+
+    $result = collect();
+
+    foreach ($doRows as $do) {
+        $relatedFr = $frGrouped->get($do->delivery_order, collect());
+
+        if ($relatedFr->isEmpty()) {
+            continue;
+        }
+
+        // Cocokkan barcode -> od -> po, tanpa query per baris
+        $poList = collect();
+        foreach ($relatedFr as $fr) {
+            $od = $odRows->get($fr->barcode);
+            if ($od && $poMap->has($od->idpo)) {
+                $poList->push($poMap->get($od->idpo)->po);
+            }
+        }
+        $poList = $poList->unique()->values();
+
+        $matchesPoFilter = $filterType != 'po_filter' || $poList->contains($po);
+        if (!$matchesPoFilter) {
+            continue;
+        }
+
+        $buyer    = $buyerMap->get($do->masterbuyer_id);
+        $style    = $styleMap->get($do->masterstyle_id);
+        $subStyle = $style ? $subStyleMap->get($style->sub_style_id) : null;
+
+        $latestFr = $relatedFr->first(); // sudah diurutkan date_out desc
+
+        $result->push([
+            'no'                   => $do->cartoncode,
+            'cartoncode'           => $do->cartoncode,
+            'season'               => $do->season,
+            'qty'                  => $do->total_qty,
+            'user'                 => $latestFr->user_id,
+            'date'                 => $latestFr->date_out,
+            'buyer'                => $buyer->nmbuyer ?? '-',
+            'style'                => $style->nmstyle ?? '-',
+            'sub_style'            => $subStyle->name ?? '-',
+            'po'                   => $poList->implode(', '),
+            'encrypted_cartoncode' => encrypt($do->cartoncode),
+        ]);
+    }
+
+    $result = $result->unique('cartoncode')->values();
+
+    return DataTables::of($result)
+        ->addIndexColumn()
+        ->toJson();
+}
