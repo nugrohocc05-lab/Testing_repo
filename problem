@@ -1,74 +1,71 @@
-    function dataTable(Request $request)
+ function dataTable(Request $request)
     {
-        // Instansiasi model untuk mendapatkan nama tabel beserta koneksi databasenya secara dinamis
-        $doTable = (new DOStock())->getTable();
-        $fgTable = (new FGReceiveGarmentStock())->getTable();
-        $odTable = (new OutputDetail())->getTable();
-        $poTable = (new PurchaseOrder())->getTable();
-        $buyerTable = (new Buyer())->getTable();
-        $styleTable = (new Style())->getTable(); // Asumsi MasterFactory/Style
-        $subStyleTable = (new SubStyle())->getTable();
-        $colorTable = (new Color())->getTable();
-        $sizeTable = (new Size())->getTable();
+        preconnect(session('db'));
 
-        // 1. Detail Data Filtering
+        // Detail
         if ($request->has('detail_id') && $request->detail_id != '') {
-            
-            // Subquery DO Stock menggunakan Model
-            $doSub = DOStock::select(
-                    'delivery_order',
-                    'cartoncode',
-                    'masterbuyer_id',
-                    'masterstyle_id',
-                    'season',
-                    'remark'
-                )
-                ->groupBy('delivery_order', 'cartoncode');
+            $cartoncode = $request->detail_id;
 
-            // Query utama menggunakan FGReceiveGarmentStock Model
-            $data = FGReceiveGarmentStock::query()
-                ->from("$fgTable as fr")
-                ->joinSub($doSub, 'do', function ($join) {
-                    $join->on('do.delivery_order', '=', 'fr.delivery_order')
-                        ->on('do.cartoncode', '=', 'fr.cartoncode');
-                })
-                ->join("$odTable as od", 'od.barcode', '=', 'fr.barcode')
-                ->join("$poTable as po", 'po.idpo', '=', 'od.idpo')
-                ->join("$colorTable as mc", 'mc.idcolor', '=', 'od.idcolor')
-                ->join("$sizeTable as mz", 'mz.idsize', '=', 'od.idsize')
-                ->join("$buyerTable as mb", 'mb.idbuyer', '=', 'do.masterbuyer_id')
-                ->join("$styleTable as ms", 'ms.idstyle', '=', 'do.masterstyle_id')
-                ->join("$subStyleTable as ss", 'ss.id', '=', 'ms.sub_style_id')
-                ->select(
-                    'fr.barcode',
-                    'do.cartoncode',
-                    'mb.nmbuyer as buyer',
-                    'ms.nmstyle as style',
-                    'mc.nmcolor as color',
-                    'mz.nmsize as size',
-                    'do.season',
-                    'do.remark',
-                    'ss.name as sub_style',
-                    'po.po'
-                )
-                ->where('do.cartoncode', $request->detail_id);
+            $doRows = DOStock::select('delivery_order', 'cartoncode', 'masterbuyer_id', 'masterstyle_id', 'season', 'remark')
+                ->where('cartoncode', $cartoncode)
+                ->get()
+                ->unique(function ($item) {
+                    return $item->delivery_order . '-' . $item->cartoncode;
+                });
 
-            return DataTables::of($data)
-                ->filterColumn('barcode', function($query, $keyword){
-                    $query->where('fr.barcode', 'like', "%{$keyword}%");
-                })
-                ->filterColumn('buyer', function($query, $keyword){
-                    $query->where('mb.nmbuyer', 'like', "%{$keyword}%");
-                })
+            $result = collect();
+
+            foreach ($doRows as $do) {
+
+                $buyer    = Buyer::select('nmbuyer')->where('idbuyer', $do->masterbuyer_id)->first();
+                $style    = Style::select('nmstyle', 'sub_style_id')->where('idstyle', $do->masterstyle_id)->first();
+                $subStyle = $style ? SubStyle::select('name')->where('id', $style->sub_style_id)->first() : null;
+
+                // Menampilkan data yang sudah di softdelete
+                $frRows = FGReceiveGarmentStock::withTrashed()
+                    ->whereIn('delivery_order', $do)
+                    ->get();
+
+                // $frRows = FGReceiveGarmentStock::where('delivery_order', $do->delivery_order)->get();
+
+                foreach ($frRows as $fr) {
+                    $od = OutputDetail::select('idpo', 'idcolor', 'idsize')
+                        ->where('barcode', $fr->barcode)
+                        ->first();
+
+                    if (!$od) {
+                        continue;
+                    }
+
+                    $po    = PurchaseOrder::select('po')->where('idpo', $od->idpo)->first();
+                    $color = Color::select('nmcolor')->where('idcolor', $od->idcolor)->first();
+                    $size  = Size::select('nmsize')->where('idsize', $od->idsize)->first();
+
+                    $result->push([
+                        'barcode'    => $fr->barcode,
+                        'cartoncode' => $do->cartoncode,
+                        'buyer'      => $buyer->nmbuyer ?? '-',
+                        'style'      => $style->nmstyle ?? '-',
+                        'color'      => $color->nmcolor ?? '-',
+                        'size'       => $size->nmsize ?? '-',
+                        'season'     => $do->season,
+                        'remark'     => $do->remark,
+                        'sub_style'  => $subStyle->name ?? '-',
+                        'po'         => $po->po ?? '-',
+                    ]);
+                }
+            }
+
+            return DataTables::of($result)
                 ->addIndexColumn()
                 ->toJson();
         }
 
-        // 2. Main Data Filtering
-        $filterType   = $request->filter_type;
-        $groupBuyer   = $request->group_buyer;
-        $season       = $request->season;
-        $po           = $request->po;
+        // Listing Utama
+        $filterType = $request->filter_type;
+        $groupBuyer = $request->group_buyer;
+        $season     = $request->season;
+        $po         = $request->po;
 
         if (!$filterType) {
             return DataTables::of(collect([]))->toJson();
@@ -82,74 +79,88 @@
             return DataTables::of(collect([]))->toJson();
         }
 
-        // Subqueries menggunakan Model
-        $fg = FGReceiveGarmentStock::select('delivery_order', 'barcode', 'date_out', 'user_id')
-            ->whereNotNull('date_gi');
-
-        $od = OutputDetail::from("$odTable as od")
-            ->join("$poTable as po", 'po.idpo', '=', 'od.idpo')
-            ->select('od.barcode', 'po.po');
-
-        $doQty = DOStock::select(
-                'delivery_order',
-                'cartoncode',
-                DB::raw('SUM(qty) as qty')
-            )
-            ->groupBy('delivery_order', 'cartoncode');
-
-        // Main Query menggunakan DOStock Model
-        $data = DOStock::query()
-            ->from("$doTable as do")
-            ->joinSub($fg, 'fr', function ($join) {
-                $join->on('fr.delivery_order', '=', 'do.delivery_order');
-            })
-            ->joinSub($od, 'od', function ($join) {
-                $join->on('od.barcode', '=', 'fr.barcode');
-            })
-            ->joinSub($doQty, 'dq', function ($join) {
-                $join->on('dq.delivery_order', '=', 'do.delivery_order')
-                    ->on('dq.cartoncode', '=', 'do.cartoncode');
-            })
-            ->join("$buyerTable as mb", 'do.masterbuyer_id', '=', 'mb.idbuyer')
-            ->join("$styleTable as ms", 'do.masterstyle_id', '=', 'ms.idstyle')
-            ->join("$subStyleTable as ss", 'ms.sub_style_id', '=', 'ss.id')
-            ->select(
-                'do.cartoncode as no',
-                'do.cartoncode',
-                'do.season as season',
-                'dq.qty as qty',
-                DB::raw("SUBSTRING_INDEX(GROUP_CONCAT(fr.user_id ORDER BY fr.date_out DESC, do.id DESC SEPARATOR ','), ',', 1) as user"),
-                'fr.date_out as date',
-                'mb.nmbuyer as buyer',
-                'ms.nmstyle as style',
-                'ss.name as sub_style',
-                DB::raw("GROUP_CONCAT(DISTINCT od.po SEPARATOR ', ') as po")
-            )
-            ->groupBy('do.cartoncode');
-
-        // Terapkan Filter
+        // Query groupbuyer (db atas)
+        $buyerIds = null;
         if ($filterType == 'groupbuyer_filter') {
-            $data->where('mb.groupbuyer', $groupBuyer);
-            $data->where('do.season', $season);
+            $buyerIds = Buyer::where('groupbuyer', $groupBuyer)->pluck('idbuyer')->toArray();
         }
 
-        if ($filterType == 'po_filter') {
-            $data->where('od.po', $po);
+        // Query group per cartoncode (db bawah)
+        $doQuery = DOStock::select('delivery_order', 'cartoncode', 'masterbuyer_id', 'masterstyle_id', 'season')
+            ->selectRaw('SUM(qty) as total_qty')
+            ->groupBy('delivery_order', 'cartoncode', 'masterbuyer_id', 'masterstyle_id', 'season');
+
+        if ($filterType == 'groupbuyer_filter') {
+            $doQuery->whereIn('masterbuyer_id', $buyerIds)
+                    ->where('season', $season);
         }
 
-        return DataTables::of($data)
-            ->filterColumn('cartoncode', function($query, $keyword){
-                $query->where('do.cartoncode', 'like', "%{$keyword}%");
-            })
-            ->filterColumn('buyer', function($query, $keyword){
-                $query->where('mb.nmbuyer', 'like', "%{$keyword}%");
-            })
-            ->filterColumn('po', function($query, $keyword){
-                $query->where('od.po', 'like', "%{$keyword}%");
-            })
-            ->addColumn('encrypted_cartoncode', function ($row) {
-                return encrypt($row->cartoncode);
-            })
+        $doRows = $doQuery->get();
+
+        $result = collect();
+
+        foreach ($doRows as $do) {
+
+        // Menampilkan data yang sudah di softdelete
+            $frRows = FGReceiveGarmentStock::withTrashed()
+                ->where('delivery_order', $do->delivery_order)
+                ->whereNotNull('date_gi')
+                ->orderByDesc('date_out')
+                ->get();
+
+            if ($frRows->isEmpty()) {
+                continue;
+            }
+
+            $poList          = collect();
+            $matchesPoFilter = $filterType != 'po_filter';
+
+            foreach ($frRows as $fr) {
+                $od = OutputDetail::select('idpo')->where('barcode', $fr->barcode)->first();
+
+                if ($od) {
+                    $poModel = PurchaseOrder::select('po')->where('idpo', $od->idpo)->first();
+
+                    if ($poModel) {
+                        $poList->push($poModel->po);
+
+                        if ($filterType == 'po_filter' && $poModel->po == $po) {
+                            $matchesPoFilter = true;
+                        }
+                    }
+                }
+            }
+
+            if (!$matchesPoFilter) {
+                continue;
+            }
+
+            $buyer    = Buyer::select('nmbuyer')->where('idbuyer', $do->masterbuyer_id)->first();
+            $style    = Style::select('nmstyle', 'sub_style_id')->where('idstyle', $do->masterstyle_id)->first();
+            $subStyle = $style ? SubStyle::select('name')->where('id', $style->sub_style_id)->first() : null;
+
+            $latestFr = $frRows->first();
+
+            $result->push([
+                'no'                   => $do->cartoncode,
+                'cartoncode'           => $do->cartoncode,
+                'season'               => $do->season,
+                'qty'                  => $do->total_qty,
+                'user'                 => $latestFr->user_id,
+                'date'                 => $latestFr->date_out,
+                'buyer'                => $buyer->nmbuyer ?? '-',
+                'style'                => $style->nmstyle ?? '-',
+                'sub_style'            => $subStyle->name ?? '-',
+                'po'                   => $poList->unique()->implode(', '),
+                'encrypted_cartoncode' => encrypt($do->cartoncode),
+            ]);
+        }
+
+        $result = $result->unique('cartoncode')->values();
+
+        return DataTables::of($result)
             ->addIndexColumn()
             ->toJson();
     }
+
+apakah kode ini bisa siubah menggunakan wherein agar tidak lemot dan menyebabkan n++1 query
