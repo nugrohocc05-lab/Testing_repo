@@ -1,216 +1,209 @@
-function dataTable(Request $request)
-{
-    preconnect(session('db'));
+<template>
+    <div class="container mx-auto max-w-lg font-inter rounded-lg bg-white p-6 shadow-sm min-h-75">
+        <h2 class="mb-6 text-center text-2xl font-bold">
+            Create Token Menu
+        </h2>
 
-    // ============================================================
-    // DETAIL
-    // ============================================================
-    if ($request->has('detail_id') && $request->detail_id != '') {
-        $cartoncode = $request->detail_id;
+        <div class="space-y-4 text-sm">
+            <div>
+                <label class="mb-2 block text-sm font-medium text-gray-700">
+                    Menu
+                </label>
+                <Multiselect v-model="selected" :options="options" valueProp="value" label="label"
+                    placeholder="Select menu" searchable />
+            </div>
 
-        $doRows = DOStock::select('delivery_order', 'cartoncode', 'masterbuyer_id', 'masterstyle_id', 'season', 'remark')
-            ->where('cartoncode', $cartoncode)
-            ->get()
-            ->unique(fn($item) => $item->delivery_order . '-' . $item->cartoncode);
+            <div v-if="selected === 'mechanic'">
+                <label for="line" class="mb-2 block text-sm font-medium text-gray-700">
+                    Line
+                </label>
+                <input id="line" type="text" v-model="line" placeholder="Input line number"
+                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200" />
+            </div>
 
-        if ($doRows->isEmpty()) {
-            return DataTables::of(collect([]))->toJson();
+            <div v-if="selected === 'humidity'">
+                <label for="device_id" class="mb-2 block text-sm font-medium text-gray-700">
+                    Device ID
+                </label>
+                <input id="device_id" type="text" v-model="device_id" placeholder="Input device id"
+                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200" />
+            </div>
+            <div v-if="selected">
+                <label for="device_name" class="mb-2 block text-sm font-medium text-gray-700">
+                    IP
+                </label>
+                <input id="device_name" type="text" v-model="device_name" placeholder="Input IP device"
+                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200" />
+            </div>
+            <div class="mt-6 space-y-4">
+                <div class="grid grid-cols-2 gap-3">
+                    <button id="generate" v-if="selected" @click="createtoken"
+                        class="rounded-md text-sm hover:cursor-pointer bg-blue-600 px-4 py-2 font-medium text-white transition hover:bg-blue-700">
+                        <i class="fa-solid fa-wand-magic-sparkles mr-2"></i>
+                        Generate
+                    </button>
+
+                    <button v-if="isGenerated" @click="copyText"
+                        class="rounded-md text-sm hover:cursor-pointer bg-emerald-600 px-4 py-2 font-medium text-white transition hover:bg-emerald-700">
+                        <i class="fa-solid fa-copy mr-2"></i>{{ copied ? 'Copied!' : 'Copy' }}
+                    </button>
+                </div>
+
+                <textarea v-model="url" v-if="isGenerated" rows="4" readonly placeholder="..."
+                    class="w-full rounded-md border border-gray-300 bg-gray-50 p-3 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"></textarea>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script setup>
+import { ref, watch } from "vue"
+import api from "@/services/api"
+import Swal from "sweetalert2"
+import { useLoadingStore } from "@/stores/loading"
+
+const API_URL = import.meta.env.VITE_API_URL
+const VITE_URL = import.meta.env.VITE_URL
+
+const loading = useLoadingStore();
+const selected = ref(null)
+const line = ref("")
+const device_id = ref("")
+const device_name = ref("")
+const isGenerated = ref(false)
+const copied = ref(false)
+
+const token = ref("")
+const url = ref("")
+
+const options = [
+    {
+        value: "humidity",
+        label: "Humidity"
+    },
+    {
+        value: "mechanic",
+        label: "Mechanic"
+    }
+]
+
+// reset ketika ganti menu
+watch(selected, () => {
+    line.value = ""
+    device_id.value = ""
+    device_name.value = ""
+    isGenerated.value = false
+    url.value = ""
+})
+
+const createtoken = async () => {
+    try {
+
+        loading.show("Please wait...")
+        if (!selected.value) {
+            alert("Pilih menu terlebih dahulu")
+            return
         }
 
-        // --- Kumpulkan semua id yang dibutuhkan ---
-        $deliveryOrders = $doRows->pluck('delivery_order')->unique()->values();
-        $buyerIds       = $doRows->pluck('masterbuyer_id')->unique()->filter()->values();
-        $styleIds       = $doRows->pluck('masterstyle_id')->unique()->filter()->values();
+        const menu =
+            typeof selected.value === "object"
+                ? selected.value.value
+                : selected.value
 
-        // --- Ambil FG rows sekaligus untuk semua delivery_order (termasuk softdelete) ---
-        $frRows = FGReceiveGarmentStock::withTrashed()
-            ->whereIn('delivery_order', $deliveryOrders)
-            ->get();
-
-        $frGrouped = $frRows->groupBy('delivery_order');
-        $barcodes  = $frRows->pluck('barcode')->unique()->values();
-
-        // --- Ambil OutputDetail sekaligus untuk semua barcode ---
-        $odRows = OutputDetail::select('barcode', 'idpo', 'idcolor', 'idsize')
-            ->whereIn('barcode', $barcodes)
-            ->get()
-            ->keyBy('barcode');
-
-        $poIds    = $odRows->pluck('idpo')->unique()->filter()->values();
-        $colorIds = $odRows->pluck('idcolor')->unique()->filter()->values();
-        $sizeIds  = $odRows->pluck('idsize')->unique()->filter()->values();
-
-        // --- Ambil master data sekaligus, jadikan map ---
-        $buyerMap = Buyer::select('idbuyer', 'nmbuyer')->whereIn('idbuyer', $buyerIds)->get()->keyBy('idbuyer');
-        $styleMap = Style::select('idstyle', 'nmstyle', 'sub_style_id')->whereIn('idstyle', $styleIds)->get()->keyBy('idstyle');
-
-        $subStyleIds = $styleMap->pluck('sub_style_id')->unique()->filter()->values();
-        $subStyleMap = SubStyle::select('id', 'name')->whereIn('id', $subStyleIds)->get()->keyBy('id');
-
-        $poMap    = PurchaseOrder::select('idpo', 'po')->whereIn('idpo', $poIds)->get()->keyBy('idpo');
-        $colorMap = Color::select('idcolor', 'nmcolor')->whereIn('idcolor', $colorIds)->get()->keyBy('idcolor');
-        $sizeMap  = Size::select('idsize', 'nmsize')->whereIn('idsize', $sizeIds)->get()->keyBy('idsize');
-
-        $result = collect();
-
-        foreach ($doRows as $do) {
-            $buyer    = $buyerMap->get($do->masterbuyer_id);
-            $style    = $styleMap->get($do->masterstyle_id);
-            $subStyle = $style ? $subStyleMap->get($style->sub_style_id) : null;
-
-            $relatedFr = $frGrouped->get($do->delivery_order, collect());
-
-            foreach ($relatedFr as $fr) {
-                $od = $odRows->get($fr->barcode);
-                if (!$od) {
-                    continue;
-                }
-
-                $po    = $poMap->get($od->idpo);
-                $color = $colorMap->get($od->idcolor);
-                $size  = $sizeMap->get($od->idsize);
-
-                $result->push([
-                    'barcode'    => $fr->barcode,
-                    'cartoncode' => $do->cartoncode,
-                    'buyer'      => $buyer->nmbuyer ?? '-',
-                    'style'      => $style->nmstyle ?? '-',
-                    'color'      => $color->nmcolor ?? '-',
-                    'size'       => $size->nmsize ?? '-',
-                    'season'     => $do->season,
-                    'remark'     => $do->remark,
-                    'sub_style'  => $subStyle->name ?? '-',
-                    'po'         => $po->po ?? '-',
-                ]);
-            }
+        if (menu === "mechanic" && !line.value) {
+            await Swal.fire({
+                title: "Warning!",
+                text: "Please enter the line number.",
+                icon: "warning",
+                confirmButtonText: "OK"
+            })
+            return
         }
 
-        return DataTables::of($result)
-            ->addIndexColumn()
-            ->toJson();
-    }
-
-    // ============================================================
-    // LISTING UTAMA
-    // ============================================================
-    $filterType = $request->filter_type;
-    $groupBuyer = $request->group_buyer;
-    $season     = $request->season;
-    $po         = $request->po;
-
-    if (!$filterType) {
-        return DataTables::of(collect([]))->toJson();
-    }
-
-    if ($filterType == 'groupbuyer_filter' && (!$groupBuyer || !$season)) {
-        return DataTables::of(collect([]))->toJson();
-    }
-
-    if ($filterType == 'po_filter' && !$po) {
-        return DataTables::of(collect([]))->toJson();
-    }
-
-    $buyerIdsFilter = null;
-    if ($filterType == 'groupbuyer_filter') {
-        $buyerIdsFilter = Buyer::where('groupbuyer', $groupBuyer)->pluck('idbuyer');
-        if ($buyerIdsFilter->isEmpty()) {
-            return DataTables::of(collect([]))->toJson();
+        if (menu === "humidity" && !device_id.value) {
+            await Swal.fire({
+                title: "Warning!",
+                text: "Please enter device id.",
+                icon: "warning",
+                confirmButtonText: "OK"
+            })
+            return
         }
-    }
-
-    $doQuery = DOStock::select('delivery_order', 'cartoncode', 'masterbuyer_id', 'masterstyle_id', 'season')
-        ->selectRaw('SUM(qty) as total_qty')
-        ->groupBy('delivery_order', 'cartoncode', 'masterbuyer_id', 'masterstyle_id', 'season');
-
-    if ($filterType == 'groupbuyer_filter') {
-        $doQuery->whereIn('masterbuyer_id', $buyerIdsFilter)
-                ->where('season', $season);
-    }
-
-    $doRows = $doQuery->get();
-
-    if ($doRows->isEmpty()) {
-        return DataTables::of(collect([]))->toJson();
-    }
-
-    // --- Kumpulkan id-id yang dibutuhkan ---
-    $deliveryOrders = $doRows->pluck('delivery_order')->unique()->values();
-    $buyerIds       = $doRows->pluck('masterbuyer_id')->unique()->filter()->values();
-    $styleIds       = $doRows->pluck('masterstyle_id')->unique()->filter()->values();
-
-    // --- Ambil semua FG rows sekaligus (termasuk softdelete), group per delivery_order ---
-    $frRows = FGReceiveGarmentStock::withTrashed()
-        ->whereIn('delivery_order', $deliveryOrders)
-        ->whereNotNull('date_gi')
-        ->orderByDesc('date_out')
-        ->get();
-
-    $frGrouped = $frRows->groupBy('delivery_order');
-    $barcodes  = $frRows->pluck('barcode')->unique()->values();
-
-    // --- Ambil OutputDetail + PO sekaligus ---
-    $odRows = OutputDetail::select('barcode', 'idpo')
-        ->whereIn('barcode', $barcodes)
-        ->get()
-        ->keyBy('barcode');
-
-    $poIds = $odRows->pluck('idpo')->unique()->filter()->values();
-    $poMap = PurchaseOrder::select('idpo', 'po')->whereIn('idpo', $poIds)->get()->keyBy('idpo');
-
-    // --- Master buyer/style/substyle sekaligus ---
-    $buyerMap    = Buyer::select('idbuyer', 'nmbuyer')->whereIn('idbuyer', $buyerIds)->get()->keyBy('idbuyer');
-    $styleMap    = Style::select('idstyle', 'nmstyle', 'sub_style_id')->whereIn('idstyle', $styleIds)->get()->keyBy('idstyle');
-    $subStyleIds = $styleMap->pluck('sub_style_id')->unique()->filter()->values();
-    $subStyleMap = SubStyle::select('id', 'name')->whereIn('id', $subStyleIds)->get()->keyBy('id');
-
-    $result = collect();
-
-    foreach ($doRows as $do) {
-        $relatedFr = $frGrouped->get($do->delivery_order, collect());
-
-        if ($relatedFr->isEmpty()) {
-            continue;
+        
+        if (!device_name.value) {
+            await Swal.fire({
+                title: "Warning!",
+                text: "IP is required.",
+                icon: "warning",
+                confirmButtonText: "OK"
+            })
+            return
+        }
+        
+        const payload = {
+            menu,
+            device_name: device_name.value
         }
 
-        // Cocokkan barcode -> od -> po, tanpa query per baris
-        $poList = collect();
-        foreach ($relatedFr as $fr) {
-            $od = $odRows->get($fr->barcode);
-            if ($od && $poMap->has($od->idpo)) {
-                $poList->push($poMap->get($od->idpo)->po);
-            }
-        }
-        $poList = $poList->unique()->values();
-
-        $matchesPoFilter = $filterType != 'po_filter' || $poList->contains($po);
-        if (!$matchesPoFilter) {
-            continue;
+        if (menu === "mechanic") {
+            payload.line = line.value
         }
 
-        $buyer    = $buyerMap->get($do->masterbuyer_id);
-        $style    = $styleMap->get($do->masterstyle_id);
-        $subStyle = $style ? $subStyleMap->get($style->sub_style_id) : null;
+        if (menu === "humidity") {
+            payload.device_id = device_id.value
+        }
 
-        $latestFr = $relatedFr->first(); // sudah diurutkan date_out desc
-
-        $result->push([
-            'no'                   => $do->cartoncode,
-            'cartoncode'           => $do->cartoncode,
-            'season'               => $do->season,
-            'qty'                  => $do->total_qty,
-            'user'                 => $latestFr->user_id,
-            'date'                 => $latestFr->date_out,
-            'buyer'                => $buyer->nmbuyer ?? '-',
-            'style'                => $style->nmstyle ?? '-',
-            'sub_style'            => $subStyle->name ?? '-',
-            'po'                   => $poList->implode(', '),
-            'encrypted_cartoncode' => encrypt($do->cartoncode),
-        ]);
+        const { data } = await api.post( `${API_URL}api/token/v1/create`,
+            payload
+        )
+        token.value = data
+        url.value = `${VITE_URL}${menu}/token-claim/${token.value}`
+        isGenerated.value = true
+    } catch (err) {
+        console.log(err)
+        isGenerated.value = false
+    } finally {
+        loading.hide()
     }
-
-    $result = $result->unique('cartoncode')->values();
-
-    return DataTables::of($result)
-        ->addIndexColumn()
-        ->toJson();
 }
+
+const copyText = async () => {
+
+    if (!url.value){
+        console.log('null')
+        return
+        }
+
+    try {
+
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(url.value)
+        } else {
+            const textarea = document.createElement("textarea")
+            textarea.value = url.value
+
+            textarea.style.position = "fixed"
+            textarea.style.left = "-999999px"
+
+            document.body.appendChild(textarea)
+
+            textarea.focus()
+            textarea.select()
+            document.execCommand("copy")
+            textarea.remove()
+        }
+
+        copied.value = true
+
+        setTimeout(() => {
+            copied.value = false
+        }, 100000)
+
+    } catch (err) {
+        console.error("Copy gagal :", err)
+        alert("Tidak dapat menyalin text.")
+    }
+}
+</script>
+
+dari kode ini buatkan komponen yang reusable agar bisa digunakan dengan mudah dan tidak menyebabkan redundant, seperti label dan input, button dan lainnya 
