@@ -1,209 +1,168 @@
-<template>
-    <div class="container mx-auto max-w-lg font-inter rounded-lg bg-white p-6 shadow-sm min-h-75">
-        <h2 class="mb-6 text-center text-2xl font-bold">
-            Create Token Menu
-        </h2>
-
-        <div class="space-y-4 text-sm">
-            <div>
-                <label class="mb-2 block text-sm font-medium text-gray-700">
-                    Menu
-                </label>
-                <Multiselect v-model="selected" :options="options" valueProp="value" label="label"
-                    placeholder="Select menu" searchable />
-            </div>
-
-            <div v-if="selected === 'mechanic'">
-                <label for="line" class="mb-2 block text-sm font-medium text-gray-700">
-                    Line
-                </label>
-                <input id="line" type="text" v-model="line" placeholder="Input line number"
-                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200" />
-            </div>
-
-            <div v-if="selected === 'humidity'">
-                <label for="device_id" class="mb-2 block text-sm font-medium text-gray-700">
-                    Device ID
-                </label>
-                <input id="device_id" type="text" v-model="device_id" placeholder="Input device id"
-                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200" />
-            </div>
-            <div v-if="selected">
-                <label for="device_name" class="mb-2 block text-sm font-medium text-gray-700">
-                    IP
-                </label>
-                <input id="device_name" type="text" v-model="device_name" placeholder="Input IP device"
-                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200" />
-            </div>
-            <div class="mt-6 space-y-4">
-                <div class="grid grid-cols-2 gap-3">
-                    <button id="generate" v-if="selected" @click="createtoken"
-                        class="rounded-md text-sm hover:cursor-pointer bg-blue-600 px-4 py-2 font-medium text-white transition hover:bg-blue-700">
-                        <i class="fa-solid fa-wand-magic-sparkles mr-2"></i>
-                        Generate
-                    </button>
-
-                    <button v-if="isGenerated" @click="copyText"
-                        class="rounded-md text-sm hover:cursor-pointer bg-emerald-600 px-4 py-2 font-medium text-white transition hover:bg-emerald-700">
-                        <i class="fa-solid fa-copy mr-2"></i>{{ copied ? 'Copied!' : 'Copy' }}
-                    </button>
-                </div>
-
-                <textarea v-model="url" v-if="isGenerated" rows="4" readonly placeholder="..."
-                    class="w-full rounded-md border border-gray-300 bg-gray-50 p-3 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"></textarea>
-            </div>
-        </div>
-    </div>
+<!-- <template>
+  <div class="flex justify-center items-center h-screen">
+    <p>Checking token...</p>
+  </div>
 </template>
 
 <script setup>
-import { ref, watch } from "vue"
-import api from "@/services/api"
-import Swal from "sweetalert2"
-import { useLoadingStore } from "@/stores/loading"
+import { onMounted } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import api from "@/services/api";
+import { useAuthStore } from "@/stores/auth";
 
-const API_URL = import.meta.env.VITE_API_URL
-const VITE_URL = import.meta.env.VITE_URL
+const route = useRoute();
+const router = useRouter();
 
-const loading = useLoadingStore();
-const selected = ref(null)
-const line = ref("")
-const device_id = ref("")
-const device_name = ref("")
-const isGenerated = ref(false)
-const copied = ref(false)
+const auth = useAuthStore();
 
-const token = ref("")
-const url = ref("")
+const API_URL = import.meta.env.VITE_API_URL;
 
-const options = [
-    {
-        value: "humidity",
-        label: "Humidity"
-    },
-    {
-        value: "mechanic",
-        label: "Mechanic"
+// Test expired token local
+
+const claim = async () => {
+  try {
+    const menu = route.params.menu;
+    const token = route.params.token;
+
+    const { data } = await api.get(`${API_URL}api/token/v1/claim`, {
+      params: {
+        token,
+      },
+    });
+
+    console.log("Claim response:", data);
+
+    // simpan token hasil claim ke pinia
+    auth.token = data.access_token;
+
+    localStorage.setItem("access_token", data.access_token);
+    localStorage.setItem("factory", data.factory_id);
+
+    if (menu === "humidity") {
+      router.replace({
+        name: "humidity-token",
+      });
     }
-]
+  } catch (error) {
+    console.error("Claim error:", error);
 
-// reset ketika ganti menu
-watch(selected, () => {
-    line.value = ""
-    device_id.value = ""
-    device_name.value = ""
-    isGenerated.value = false
-    url.value = ""
-})
+    alert("Token tidak valid");
+  }
+};
 
-const createtoken = async () => {
-    try {
+onMounted(() => {
+  claim();
+});
+</script> -->
 
-        loading.show("Please wait...")
-        if (!selected.value) {
-            alert("Pilih menu terlebih dahulu")
-            return
-        }
+<template>
+  <div class="flex justify-center items-center h-screen">
+    <p>Checking token...</p>
+  </div>
+</template>
 
-        const menu =
-            typeof selected.value === "object"
-                ? selected.value.value
-                : selected.value
+<script setup>
+import { onMounted } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import api from "@/services/api";
+import { useAuthStore } from "@/stores/auth";
 
-        if (menu === "mechanic" && !line.value) {
-            await Swal.fire({
-                title: "Warning!",
-                text: "Please enter the line number.",
-                icon: "warning",
-                confirmButtonText: "OK"
-            })
-            return
-        }
+const route = useRoute();
+const router = useRouter();
 
-        if (menu === "humidity" && !device_id.value) {
-            await Swal.fire({
-                title: "Warning!",
-                text: "Please enter device id.",
-                icon: "warning",
-                confirmButtonText: "OK"
-            })
-            return
-        }
-        
-        if (!device_name.value) {
-            await Swal.fire({
-                title: "Warning!",
-                text: "IP is required.",
-                icon: "warning",
-                confirmButtonText: "OK"
-            })
-            return
-        }
-        
-        const payload = {
-            menu,
-            device_name: device_name.value
-        }
+const auth = useAuthStore();
 
-        if (menu === "mechanic") {
-            payload.line = line.value
-        }
+const API_URL = import.meta.env.VITE_API_URL;
 
-        if (menu === "humidity") {
-            payload.device_id = device_id.value
-        }
+const startExpireTimer = () => {
+  setTimeout(() => {
+    console.log("Token expired");
 
-        const { data } = await api.post( `${API_URL}api/token/v1/create`,
-            payload
-        )
-        token.value = data
-        url.value = `${VITE_URL}${menu}/token-claim/${token.value}`
-        isGenerated.value = true
-    } catch (err) {
-        console.log(err)
-        isGenerated.value = false
-    } finally {
-        loading.hide()
+    // hapus localStorage
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("factory");
+
+    // hapus pinia
+    auth.token = null;
+
+    // keluar otomatis
+    router.replace({
+      name: "login",
+    });
+  }, EXPIRE_TIME);
+};
+
+const EXPIRE_TIME = 1 * 60 * 1000;
+
+const setExpireStorage = (key, value) => {
+  const data = {
+    value: value,
+    expireAt: Date.now() + EXPIRE_TIME,
+  };
+
+  localStorage.setItem(key, JSON.stringify(data));
+};
+
+const getExpireStorage = (key) => {
+  const item = localStorage.getItem(key);
+
+  if (!item) {
+    return null;
+  }
+
+  try {
+    const data = JSON.parse(item);
+
+    if (Date.now() > data.expireAt) {
+      localStorage.removeItem(key);
+      return null;
     }
-}
 
-const copyText = async () => {
+    return data.value;
+  } catch (error) {
+    localStorage.removeItem(key);
+    return null;
+  }
+};
 
-    if (!url.value){
-        console.log('null')
-        return
-        }
+// claim token
+const claim = async () => {
+  try {
+    const menu = route.params.menu;
+    const token = route.params.token;
 
-    try {
+    const { data } = await api.get(`${API_URL}api/token/v1/claim`, {
+      params: {
+        token,
+      },
+    });
 
-        if (navigator.clipboard && window.isSecureContext) {
-            await navigator.clipboard.writeText(url.value)
-        } else {
-            const textarea = document.createElement("textarea")
-            textarea.value = url.value
+    console.log("Claim response:", data);
 
-            textarea.style.position = "fixed"
-            textarea.style.left = "-999999px"
+    auth.token = data.access_token;
 
-            document.body.appendChild(textarea)
+    setExpireStorage("access_token", data.access_token);
 
-            textarea.focus()
-            textarea.select()
-            document.execCommand("copy")
-            textarea.remove()
-        }
+    setExpireStorage("factory", data.factory_id);
 
-        copied.value = true
+    // mulai hitung expire
+    startExpireTimer();
 
-        setTimeout(() => {
-            copied.value = false
-        }, 100000)
+    console.log("Token:", getExpireStorage("access_token"));
 
-    } catch (err) {
-        console.error("Copy gagal :", err)
-        alert("Tidak dapat menyalin text.")
+    if (menu === "humidity") {
+      router.replace({
+        name: "humidity-token",
+      });
     }
-}
+  } catch (error) {
+    console.error("Claim error:", error);
+
+    alert("Token tidak valid");
+  }
+};
+
+onMounted(() => {
+  claim();
+});
 </script>
-
-dari kode ini buatkan komponen yang reusable agar bisa digunakan dengan mudah dan tidak menyebabkan redundant, seperti label dan input, button dan lainnya 
