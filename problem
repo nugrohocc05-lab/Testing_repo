@@ -1,646 +1,90 @@
-Tentu! Saya sudah menambahkan library DataTables (CSS dan JS khusus Bootstrap 5) ke dalam kodemu, menyesuaikan gayanya dengan tema *dark mode* yang sudah kamu buat, dan membuat simulasi pemanggilan AJAX berisi *dummy data* untuk tabelnya.
-Berikut adalah kode lengkap yang sudah diperbarui. Kamu bisa langsung *copy-paste* untuk melihat hasilnya:
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inline Performance</title>
-    <link href="https://unpkg.com/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/css/select2.min.css">
-    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
 
-    <style>
-        body{
-            background:#1C2536;
-        }
-
-        .bg-custom{
-            background:#1C2536;
-        }
-
-        .bg-custom-select{
-            background:#242E3E;
-            color:#fff;
-            border:0;
-        }
-
-        .btn-custom{
-            background:#222F4A;
-            color:#fff;
-            border:none;
-            border-radius:10px;
-        }
-
-        .border-custom{
-            border:1px solid #576376 !important;
-        }
-        .border-custom-datatable{
-            border:1px solid #4C8CF2 !important;
-        }
-
-        .border-end-custom{
-            border-right:1px solid #242E3E !important;
-        }
-
-        .min-h-custom{
-            min-height:250px;
-        }
-
-        .border-color-yellow{
-            border:1px solid #F2C94C;
-            border-radius:5px;
-        }
-
-        /* Select2 Dark Theme */
-        .select2-container--default .select2-selection--single{
-            background:#242E3E;
-            border:none;
-            height:38px;
-        }
-
-        .select2-container--default .select2-selection--single .select2-selection__rendered{
-            color:white;
-            line-height:38px;
-        }
-
-        .select2-container--default .select2-selection--single .select2-selection__arrow{
-            height:38px;
-        }
-
-        .select2-container--default .select2-selection--single .select2-selection__placeholder {
-            color: #ffffff !important;
-        }
-
-        .select2-container--default .select2-results__option--highlighted[aria-selected] {
-            background-color: transparent !important;
-            color: white !important;
-        }
-
-        .select2-container--default .select2-results__option[aria-selected="true"] {
-            background-color: transparent !important;
-            color: white !important;
-        }
-
-        .select2-dropdown{
-            background:#242E3E;
-            color:white;
-        }
-
-        .select2-results__option{
-            color:white;
-        }
-
-        .select2-search__field{
-            background:#242E3E;
-            color:white;
-        }
-
-        /* Date Input Dark Theme */
-        input[type="date"] {
-            background-color: #242E3E;
-            color: white;
-            border: none;
-        }
-
-        input[type="date"]:focus {
-            background-color: #242E3E;
-            color: white;
-            border-color: #576376;
-            box-shadow: none;
-        }
-
-        /* Icon kalender */
-        input[type="date"]::-webkit-calendar-picker-indicator {
-            filter: invert(1);
-            cursor: pointer;
-        }
-
-        .box-custom {
-            width: 35px;
-            height: 35px;
-        }
-
-        .color-box-yellow {
-            background-color: #363633;
-            border:1px solid #F2C94C;
-            border-radius:5px;
-            color: #F2C94C;
-        }
-        .color-box-red {
-            background-color: #352837;
-            border:1px solid #F24C4C;
-            border-radius:5px;
-        }
-        .color-box-blue {
-            background-color: #23304E;
-            border:1px solid #3F5588;
-            border-radius:5px;
-        }
-        .color-box-green {
-            background-color: #1A3B45;
-            border:1px solid #4CF299;
-            border-radius:5px;
-        }
-
-        .text-title {
-            color: #5A587E;
-        }
-        .text-yellow {
-            color: #F2C94C;
-        }
-        .text-red {
-            color: #F24C4C;
-        }
-        .text-blue {
-            color: #4C8CF2;
-        }
-        .text-green {
-            color: #4CF299;
-        }
-
-        /* DataTables Custom Dark Theme */
-        .table-dark {
-            --bs-table-bg: #242E3E;
-            --bs-table-striped-bg: #1C2536;
-            --bs-table-hover-bg: #2a3547;
-            border-color: #576376;
-        }
-        .dataTables_wrapper .dataTables_length select,
-        .dataTables_wrapper .dataTables_filter input {
-            background-color: #242E3E;
-            color: white;
-            border: 1px solid #576376;
-            border-radius: 5px;
-            padding: 4px 8px;
-        }
-        .dataTables_wrapper .dataTables_info,
-        .dataTables_wrapper .dataTables_length,
-        .dataTables_wrapper .dataTables_filter {
-            color: white !important;
-            margin-bottom: 10px;
-        }
-        .page-item.disabled .page-link {
-            background-color: #242E3E;
-            border-color: #576376;
-            color: #576376;
-        }
-        .page-item .page-link {
-            background-color: #242E3E;
-            border-color: #576376;
-            color: white;
-        }
-        .page-item.active .page-link {
-            background-color: #4C8CF2;
-            border-color: #4C8CF2;
-        }
-    </style>
-
-</head>
-<body class="m-4">
-
-<div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center">
-        <div class="d-flex align-items-center gap-3">
-            <div class="">
-                <img src="{{ _asset('svg/inlinePerformance/machine.svg') }}">
-            </div>
-            <div>
-                <h2 class="text-white mb-1">
-                    INLINE PERFORMANCE DASHBOARD
-                </h2>
-                <p class="text-white fs-5">
-                    Real-time monitoring of inline production performance
-                </p>
-            </div>
-        </div>
-        <div class="d-flex gap-3">
-            <div class="">
-                <a href="{{ route('monitoring_inlineperformanceinlinetls') }}" class="btn-custom px-4 py-3   text-decoration-none px-4">
-                <img src="{{ _asset('svg/inlinePerformance/inline.svg') }}" class="me-2">
-                 INLINE TLS</a>
-            </div>
-
-            <button class="btn-custom" onclick="location.reload()">
-                <img src="{{ _asset('svg/inlinePerformance/reload.svg') }}">
-            </button>
-        </div>
-    </div>
-
-    <div class="row mt-4 border-custom rounded p-3 text-white">
-        <div class="col-md-3 border-end-custom d-flex gap-4">
-            <div class="">
-                <div class="box-custom bg-transparent"></div>
-                <div class="">
-                    <img src="{{ _asset('svg/inlinePerformance/line.svg') }}" style="width: 30px; height: 30px">
-                </div>
-            </div>
-            <div class=" gap-4 w-100" style="margin-right:10px">
-                <label class="mb-2 text-title">
-                Line
-                </label>
-                <div class="w-100">
-                    <select id="line" class="form-select select2">
-                        <option></option>
-                    </select>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4 border-end-custom d-flex gap-4">
-            <div>
-                <div class="box-custom bg-transparent"></div>
-                <div class="">
-                    <img src="{{ _asset('svg/inlinePerformance/calendar.svg') }}" style="width: 30px; height: 30px; margin-left: 10px">
-                </div>
-            </div>
-            <div class=" align-items-center gap-2">
-                <label class="mb-2 text-title">
-                Periode Date
-                </label>
-                <div class="d-flex align-items-center gap-4">
-                    <input type="date" id="datea"
-                        class="form-control"
-                        style="width: 200px;"
-                        placeholder="Date">
-                    <span>to</span>
-                    <input type="date" id="dateb"
-                        class="form-control"
-                        style="width: 200px;"
-                        placeholder="Date">
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4 d-flex gap-4">
-            <div>
-                <div class="box-custom bg-transparent"></div>
-                <div class="">
-                    <img src="{{ _asset('svg/inlinePerformance/user.svg') }}" style="width: 30px; height: 30px; margin-left: 10px">
-                </div>
-            </div>
-            <div class="w-100">
-                <label class="mb-2 text-title">
-                    Group Buyer
-                </label>
-                <div class="d-flex justify-content-between align-items-center w-100">
-                    <div class="w-100">
-                        <select id="groupbuyer" class="form-select select2">
-                            <option></option>
-                        </select>
-
-                        <button class="btn btn-custom ms-5" id="findbtn">
-                            <img src="{{ _asset('svg/inlinePerformance/search.svg') }}" class="justify-content-center align-items-center" style="width: 20px; height: 15px;margin-right:2px">
-                            Find
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-1 d-flex justify-content-center align-items-center">
-            <button class="bg-transparent border-0 p-0">
-                <img src="{{ _asset('svg/inlinePerformance/export.svg') }}"
-                    style="width: 30px; height: 30px;">
-            </button>
-        </div>
-    </div>
-
-    <div class="row mt-1 g-3 min-h-custom">
-        <div class="col-md-2">
-            <div class="color-box-yellow h-100 d-flex flex-column justify-content-center align-items-center text-white">
-                <div>
-                    <img src="{{ _asset('svg/inlinePerformance/export.svg') }}"
-                        style="width: 30px; height: 30px;">
-                </div>
-                <div class="mt-4 text-yellow">
-                    <h3 class="fw-bold">QTY INSPECT</h3>
-                </div>
-                <div class="mb-0">
-                    <div class="d-flex align-items-end m-0">
-                        <h1 class="mb-0">312</h1>
-                        <p class="mb-0 ms-1 fs-6">pcs</p>
-                    </div>
-
-                </div>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-white">
-                <div>
-                    <img src="{{ _asset('svg/inlinePerformance/export.svg') }}"
-                        style="width: 30px; height: 30px;">
-                </div>
-                <div class="mt-4 text-red">
-                    <h3 class="fw-bold">QTY DEFECT</h3>
-                </div>
-                <div class="mb-0">
-                    <div class="d-flex align-items-end m-0">
-                        <h1 class="mb-0">312</h1>
-                        <p class="mb-0 ms-1 fs-6">pcs</p>
-                    </div>
-
-                </div>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="color-box-green h-100 d-flex flex-column justify-content-center align-items-center text-white">
-                <div>
-                    <img src="{{ _asset('svg/inlinePerformance/export.svg') }}"
-                        style="width: 30px; height: 30px;">
-                </div>
-                <div class="mt-4 text-green">
-                    <h3 class="fw-bold">RFT</h3>
-                </div>
-                <div class="mb-0">
-                    <div class="d-flex align-items-end m-0">
-                        <h1 class="mb-0">96 %</h1>
-                    </div>
-
-                </div>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="color-box-blue h-100 d-flex flex-column justify-content-center align-items-center text-white">
-                <div>
-                    <img src="{{ _asset('svg/inlinePerformance/export.svg') }}"
-                        style="width: 30px; height: 30px;">
-                </div>
-                <div class="mt-4 text-blue">
-                    <h3 class="fw-bold">WFT</h3>
-                </div>
-                <div class="mb-0">
-                    <div class="d-flex align-items-end m-0">
-                        <h1 class="mb-0">4%</h1>
-                    </div>
-
-                </div>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-white">
-                <div>
-                    <img src="{{ _asset('svg/inlinePerformance/export.svg') }}"
-                        style="width: 30px; height: 30px;">
-                </div>
-                <div class="mt-4 text-red">
-                    <h3 class="fw-bold">TARGET</h3>
-                </div>
-                <div class="mb-0">
-                    <div class="d-flex align-items-end m-0">
-                        <h1 class="mb-0">3 %</h1>
-                    </div>
-
-                </div>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-white">
-                <div class="d-flex gap-2 align-items-center">
-                    <img src="{{ _asset('svg/inlinePerformance/export.svg') }}"
-                        style="width: 30px; height: 30px;">
-                    <h3 class="fw-bold">TOP DEFECT</h3>
-                </div>
-                <div class="mt-4 text-red">
-                   <div class="d-flex justify-content-center align-items-center ">
-                        <div style="width:10px; height:10px; background-color:blue;"></div>
-                        <p class="mb-0 ms-2 text-white">3 Open Seam</p>
-                        <p class="mb-0 ms-2">100 %</p>
-                    </div>
-                   <div class="d-flex justify-content-center align-items-center ">
-                        <div style="width:10px; height:10px; background-color:green;"></div>
-                        <p class="mb-0 ms-2 text-white">3 Open Seam</p>
-                        <p class="mb-0 ms-2">100 %</p>
-                    </div>
-                   <div class="d-flex justify-content-center align-items-center ">
-                        <div style="width:10px; height:10px; background-color:yellow    ;"></div>
-                        <p class="mb-0 ms-2 text-white">3 Open Seam</p>
-                        <p class="mb-0 ms-2">100 %</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="row mt-3 border-custom-datatable rounded p-3 text-white" style="min-height:370px" >
-        <div class="col-12 mb-3 d-flex align-items-center gap-4">
-            <img src="{{ _asset('svg/inlinePerformance/line.svg') }}" style="width: 30px; height: 30px;">
-            <h4 class="mb-0 fw-normal">DETAIL PER LINE INLINE PERFORMANCE</h4>
-        </div>
-        <div class="col-12 table-responsive">
-            <table id="performanceTable" class="table table-dark table-hover table-striped w-100">
-                <thead>
-                    <tr>
-                        <th>No</th>
-                        <th>Line Name</th>
-                        <th>Group Buyer</th>
-                        <th>Qty Inspect</th>
-                        <th>Qty Defect</th>
-                        <th>RFT (%)</th>
-                        <th>WFT (%)</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    </tbody>
-            </table>
-        </div>
-    </div>
-
-    <div class="mt-4 text-white d-flex justify-content-between align-items-center">
-        <div class="d-flex align-items-center gap-2">
-            <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" style="width: 20px; height: 20px;">
-            Data Update
-            <span id="liveClock"></span>
-        </div>
-        <div class="d-flex align-items-center">
-            <div class="mb-0 d-flex align-items-center gap-2">
-                System Connected
-                <div class="rounded-pill" style="background-color:#4CF299; width:20px;height:20px"></div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://unpkg.com/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/js/select2.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
 
-<script>
-$(function(){
-    $(document).ready(function() {
 
-        // Time Tracking
-        function updateClock(){
-            let now = new Date();
-            let day = String(now.getDate()).padStart(2,'0');
-            let month = [
-                "January", "February", "March", "April", "May", "June",
-                "July", "August", "September", "October", "November", "December"
-            ];
-            let year = now.getFullYear();
-            let hour = String(now.getHours()).padStart(2,'0');
-            let minute = String(now.getMinutes()).padStart(2,'0');
-            let second = String(now.getSeconds()).padStart(2,'0');
+<div class="row mt-3 border-custom-datatable rounded p-3 text-white" style="min-height:370px">
+    <div class="col-12 mb-3 d-flex align-items-center gap-4">
+        <img src="{{ _asset('svg/inlinePerformance/line.svg') }}" style="width: 30px; height: 30px;">
+        <h4 class="mb-0 fw-normal">DETAIL PER LINE INLINE PERFORMANCE</h4>
+    </div>
+    
+    <div class="col-12 table-responsive">
+        <table id="performanceTable" class="table table-dark table-hover table-striped w-100">
+            <thead>
+                <tr>
+                    <th>No</th>
+                    <th>Line Name</th>
+                    <th>Group Buyer</th>
+                    <th>Qty Inspect</th>
+                    <th>Qty Defect</th>
+                    <th>RFT (%)</th>
+                    <th>WFT (%)</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                </tbody>
+        </table>
+    </div>
+</div>
 
-            document.getElementById('liveClock').innerHTML =
-                `${day} ${month[now.getMonth()]} ${year} - ${hour} : ${minute} : ${second}`;
-        }
-        updateClock();
-        setInterval(updateClock,1000);
-
-
-        let today = new Date().toISOString().split('T')[0];
-        $('#datea').val(today);
-        $('#dateb').val(today);
-
-        $('#line').select2({
-            placeholder: 'Select Line',
-            width: '100%',
-            ajax: {
-                url: "{{ route('monitoring_inlineperformanceselectline') }}",
-                type: "GET",
-                dataType: "json",
-                delay: 500,
-                data: function(params){
-                    return{
-                        q: params.term,
-                        page: params.page || 1
-                    }
-                },
-                processResults:function(data){
-                    if(data.current_page == 1){
-                        data.data.unshift({ kodegroup:'all' });
-                    }
-                    return{
-                        results: $.map(data.data,function(item){
-                            if(item.kodegroup == 'all'){
-                                return{ id:'all', text:'All Lines' }
-                            }
-                            return{
-                                id:item.kodegroup,
-                                text:item.namabagian + ' - ' + item.namagroup
-                            }
-                        }),
-                        pagination:{ more:data.to < data.total }
-                    }
-                },
-                cache:true
-            }
-        });
-
-        $('#groupbuyer').select2({
-            placeholder: 'Select Buyer',
-            width: '60%',
-            ajax: {
-                url: "{{ route('monitoring_inlineperformancegroupbuyer') }}",
-                type: "GET",
-                dataType: "json",
-                delay: 500,
-                data: function(params){
-                    return {
-                        q: params.term,
-                        page: params.page || 1
-                    };
-                },
-                processResults: function(data){
-                    return { results: data.results };
-                },
-                cache: true
-            }
-        });
-
-        // ==========================================
-        // INISIALISASI DATATABLES DENGAN DUMMY AJAX
-        // ==========================================
-        let dataTable = $('#performanceTable').DataTable({
-            processing: true,
-            serverSide: false, // Set false dulu karena pakai dummy client-side
-            ajax: function (data, callback, settings) {
-                // Simulasi loading dari server menggunakan setTimeout
-                setTimeout(function() {
-                    callback({
-                        data: [
-                            { no: 1, line_name: "Line A - Sewing", group_buyer: "Nike", qty_inspect: 312, qty_defect: 12, rft: 96, wft: 4, status: "Good" },
-                            { no: 2, line_name: "Line B - Assembling", group_buyer: "Adidas", qty_inspect: 250, qty_defect: 25, rft: 90, wft: 10, status: "Warning" },
-                            { no: 3, line_name: "Line C - Packing", group_buyer: "Puma", qty_inspect: 400, qty_defect: 4, rft: 99, wft: 1, status: "Excellent" },
-                            { no: 4, line_name: "Line D - Sewing", group_buyer: "Nike", qty_inspect: 150, qty_defect: 30, rft: 80, wft: 20, status: "Critical" },
-                            { no: 5, line_name: "Line E - Cutting", group_buyer: "Reebok", qty_inspect: 500, qty_defect: 10, rft: 98, wft: 2, status: "Excellent" }
-                        ]
-                    });
-                }, 800); // delay 800ms
-            },
-            columns: [
-                { data: 'no', className: 'text-center' },
-                { data: 'line_name' },
-                { data: 'group_buyer' },
-                { data: 'qty_inspect', className: 'text-end' },
-                { data: 'qty_defect', className: 'text-end' },
-                { 
-                    data: 'rft', 
-                    className: 'text-end',
-                    render: function(data, type, row) {
-                        return `<span class="${data >= 95 ? 'text-success' : 'text-warning'}">${data}%</span>`;
-                    }
-                },
-                { 
-                    data: 'wft', 
-                    className: 'text-end',
-                    render: function(data, type, row) {
-                        return `<span class="${data <= 5 ? 'text-info' : 'text-danger'}">${data}%</span>`;
-                    }
-                },
-                {
-                    data: 'status',
-                    className: 'text-center',
-                    render: function(data, type, row) {
-                        let badgeClass = "bg-secondary";
-                        if(data === "Excellent" || data === "Good") badgeClass = "bg-success";
-                        if(data === "Warning") badgeClass = "bg-warning text-dark";
-                        if(data === "Critical") badgeClass = "bg-danger";
-                        return `<span class="badge ${badgeClass}">${data}</span>`;
-                    }
-                }
-            ],
-            language: {
-                search: "Search Data:",
-                lengthMenu: "Show _MENU_ entries"
-            }
-        });
-
-        // Filter Action Reload Datatable
-        $('#findbtn').on('click', function(e){
-            e.preventDefault();
-            
-            // Di sini kamu bisa menambahkan parameter filter ke URL AJAX real nanti, 
-            // sementara untuk dummy kita trigger reload saja.
-            dataTable.ajax.reload(); 
-
-            /* Kode Asli AJAX Filter-mu (Bisa di-uncomment nanti saat integrasi backend asli):
-            $.ajax({
-                url: "{{ route('monitoring_inlineperformancefilterdata') }}",
-                type: "GET",
-                data: {
-                    line: $('#line').val(),
-                    datea: $('#datea').val(),
-                    dateb: $('#dateb').val(),
-                    groupbuyer: $('#groupbuyer').val()
-                },
-                success:function(response){
-                    console.log(response);
-                    // dataTable.clear().rows.add(response.data).draw();
-                },
-                error:function(xhr){
-                    console.log(xhr.responseText);
-                }
+let dataTable = $('#performanceTable').DataTable({
+    processing: true, // Menampilkan tulisan "processing" saat loading data
+    serverSide: false, // Set false jika manipulasi data (pencarian/page) dilakukan di browser pembaca (Client-side)
+    
+    // Tempat melakukan Request AJAX
+    ajax: function (data, callback, settings) {
+        // Karena ini manual/dummy, kita simulasikan delay loading server selama 800ms
+        setTimeout(function() {
+            callback({
+                // Ini adalah replika format JSON yang biasanya dikirim oleh Controller/Backend Anda
+                data: [
+                    { no: 1, line_name: "Line A - Sewing", group_buyer: "Nike", qty_inspect: 312, qty_defect: 12, rft: 96, wft: 4, status: "Good" },
+                    { no: 2, line_name: "Line B - Assembling", group_buyer: "Adidas", qty_inspect: 250, qty_defect: 25, rft: 90, wft: 10, status: "Warning" },
+                    { no: 3, line_name: "Line C - Packing", group_buyer: "Puma", qty_inspect: 400, qty_defect: 4, rft: 99, wft: 1, status: "Excellent" }
+                ]
             });
-            */
-        });
-    })
+        }, 800);
+    },
+    
+    // Memetakan key dari JSON data dummy ke dalam kolom HTML <th> secara berurutan
+    columns: [
+        { data: 'no', className: 'text-center' },
+        { data: 'line_name' },
+        { data: 'group_buyer' },
+        { data: 'qty_inspect', className: 'text-end' },
+        { data: 'qty_defect', className: 'text-end' },
+        { 
+            data: 'rft', 
+            className: 'text-end',
+            render: function(data, type, row) {
+                // Di sini Anda bisa memodifikasi tampilan teks, misal memberi warna kuning jika RFT rendah
+                return `<span class="${data >= 95 ? 'text-green' : 'text-yellow'}">${data}%</span>`;
+            }
+        },
+        { 
+            data: 'wft', 
+            className: 'text-end',
+            render: function(data, type, row) { return data + '%'; }
+        },
+        {
+            data: 'status',
+            className: 'text-center',
+            render: function(data, type, row) {
+                // Modifikasi status menjadi bentuk badge Bootstrap
+                let badge = data === "Good" || data === "Excellent" ? "bg-success" : "bg-warning text-dark";
+                return `<span class="badge ${badge}">${data}</span>`;
+            }
+        }
+    ]
 });
-</script>
 
-</body>
-</html>
 
-```
+$('#findbtn').on('click', function(e){
+    e.preventDefault();
+    
+    // Perintah ini akan memicu fungsi `ajax:` di Langkah 3 untuk berjalan kembali
+    dataTable.ajax.reload(); 
+});
