@@ -1,3 +1,6 @@
+Tentu! Saya sudah menambahkan library DataTables (CSS dan JS khusus Bootstrap 5) ke dalam kodemu, menyesuaikan gayanya dengan tema *dark mode* yang sudah kamu buat, dan membuat simulasi pemanggilan AJAX berisi *dummy data* untuk tabelnya.
+Berikut adalah kode lengkap yang sudah diperbarui. Kamu bisa langsung *copy-paste* untuk melihat hasilnya:
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,6 +9,7 @@
     <title>Inline Performance</title>
     <link href="https://unpkg.com/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/css/select2.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
 
     <style>
         body{
@@ -155,13 +159,48 @@
         .text-green {
             color: #4CF299;
         }
+
+        /* DataTables Custom Dark Theme */
+        .table-dark {
+            --bs-table-bg: #242E3E;
+            --bs-table-striped-bg: #1C2536;
+            --bs-table-hover-bg: #2a3547;
+            border-color: #576376;
+        }
+        .dataTables_wrapper .dataTables_length select,
+        .dataTables_wrapper .dataTables_filter input {
+            background-color: #242E3E;
+            color: white;
+            border: 1px solid #576376;
+            border-radius: 5px;
+            padding: 4px 8px;
+        }
+        .dataTables_wrapper .dataTables_info,
+        .dataTables_wrapper .dataTables_length,
+        .dataTables_wrapper .dataTables_filter {
+            color: white !important;
+            margin-bottom: 10px;
+        }
+        .page-item.disabled .page-link {
+            background-color: #242E3E;
+            border-color: #576376;
+            color: #576376;
+        }
+        .page-item .page-link {
+            background-color: #242E3E;
+            border-color: #576376;
+            color: white;
+        }
+        .page-item.active .page-link {
+            background-color: #4C8CF2;
+            border-color: #4C8CF2;
+        }
     </style>
 
 </head>
 <body class="m-4">
 
 <div class="container-fluid">
-    <!-- Header -->
     <div class="d-flex justify-content-between align-items-center">
         <div class="d-flex align-items-center gap-3">
             <div class="">
@@ -189,7 +228,6 @@
         </div>
     </div>
 
-    <!-- Filter -->
     <div class="row mt-4 border-custom rounded p-3 text-white">
         <div class="col-md-3 border-end-custom d-flex gap-4">
             <div class="">
@@ -266,7 +304,6 @@
         </div>
     </div>
 
-    <!-- Card -->
     <div class="row mt-1 g-3 min-h-custom">
         <div class="col-md-2">
             <div class="color-box-yellow h-100 d-flex flex-column justify-content-center align-items-center text-white">
@@ -383,21 +420,31 @@
         </div>
     </div>
 
-    <!-- Datatables -->
-    <div class="row mt-3 border-custom-datatable rounded p-3 text-white" style="height:370px" >
-        <div class=" border-end-custom d-flex gap-4">
-           <div class="d-flex  gap-4">
-                <img src="{{ _asset('svg/inlinePerformance/line.svg') }}"
-                    style="width: 30px; height: 30px;">
-
-                <h4 class="mb-0 fw-normal">
-                    DETAIL PER LINE INLINE PERFORMANCE
-                </h4>
-            </div>
+    <div class="row mt-3 border-custom-datatable rounded p-3 text-white" style="min-height:370px" >
+        <div class="col-12 mb-3 d-flex align-items-center gap-4">
+            <img src="{{ _asset('svg/inlinePerformance/line.svg') }}" style="width: 30px; height: 30px;">
+            <h4 class="mb-0 fw-normal">DETAIL PER LINE INLINE PERFORMANCE</h4>
+        </div>
+        <div class="col-12 table-responsive">
+            <table id="performanceTable" class="table table-dark table-hover table-striped w-100">
+                <thead>
+                    <tr>
+                        <th>No</th>
+                        <th>Line Name</th>
+                        <th>Group Buyer</th>
+                        <th>Qty Inspect</th>
+                        <th>Qty Defect</th>
+                        <th>RFT (%)</th>
+                        <th>WFT (%)</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    </tbody>
+            </table>
         </div>
     </div>
 
-    <!-- Footer -->
     <div class="mt-4 text-white d-flex justify-content-between align-items-center">
         <div class="d-flex align-items-center gap-2">
             <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" style="width: 20px; height: 20px;">
@@ -416,6 +463,8 @@
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://unpkg.com/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/js/select2.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
 
 <script>
 $(function(){
@@ -423,39 +472,25 @@ $(function(){
 
         // Time Tracking
         function updateClock(){
-        let now = new Date();
-        let day = String(now.getDate()).padStart(2,'0');
-        let month = [
-            "January",
-            "February",
-            "March",
-            "April",
-            "May",
-            "June",
-            "July",
-            "August",
-            "September",
-            "October",
-            "November",
-            "December"
-        ];
+            let now = new Date();
+            let day = String(now.getDate()).padStart(2,'0');
+            let month = [
+                "January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November", "December"
+            ];
+            let year = now.getFullYear();
+            let hour = String(now.getHours()).padStart(2,'0');
+            let minute = String(now.getMinutes()).padStart(2,'0');
+            let second = String(now.getSeconds()).padStart(2,'0');
 
-        let year = now.getFullYear();
-
-        let hour = String(now.getHours()).padStart(2,'0');
-        let minute = String(now.getMinutes()).padStart(2,'0');
-        let second = String(now.getSeconds()).padStart(2,'0');
-
-
-        document.getElementById('liveClock').innerHTML =
-            `${day} ${month[now.getMonth()]} ${year} - ${hour} : ${minute} : ${second}`;
+            document.getElementById('liveClock').innerHTML =
+                `${day} ${month[now.getMonth()]} ${year} - ${hour} : ${minute} : ${second}`;
         }
         updateClock();
         setInterval(updateClock,1000);
 
 
         let today = new Date().toISOString().split('T')[0];
-
         $('#datea').val(today);
         $('#dateb').val(today);
 
@@ -473,30 +508,21 @@ $(function(){
                         page: params.page || 1
                     }
                 },
-
                 processResults:function(data){
                     if(data.current_page == 1){
-                        data.data.unshift({
-                            kodegroup:'all'
-                        });
+                        data.data.unshift({ kodegroup:'all' });
                     }
-
                     return{
                         results: $.map(data.data,function(item){
                             if(item.kodegroup == 'all'){
-                                return{
-                                    id:'all',
-                                    text:'All Lines'
-                                }
+                                return{ id:'all', text:'All Lines' }
                             }
                             return{
                                 id:item.kodegroup,
                                 text:item.namabagian + ' - ' + item.namagroup
                             }
                         }),
-                        pagination:{
-                            more:data.to < data.total
-                        }
+                        pagination:{ more:data.to < data.total }
                     }
                 },
                 cache:true
@@ -518,16 +544,79 @@ $(function(){
                     };
                 },
                 processResults: function(data){
-                    return {
-                        results: data.results
-                    };
+                    return { results: data.results };
                 },
                 cache: true
             }
         });
 
+        // ==========================================
+        // INISIALISASI DATATABLES DENGAN DUMMY AJAX
+        // ==========================================
+        let dataTable = $('#performanceTable').DataTable({
+            processing: true,
+            serverSide: false, // Set false dulu karena pakai dummy client-side
+            ajax: function (data, callback, settings) {
+                // Simulasi loading dari server menggunakan setTimeout
+                setTimeout(function() {
+                    callback({
+                        data: [
+                            { no: 1, line_name: "Line A - Sewing", group_buyer: "Nike", qty_inspect: 312, qty_defect: 12, rft: 96, wft: 4, status: "Good" },
+                            { no: 2, line_name: "Line B - Assembling", group_buyer: "Adidas", qty_inspect: 250, qty_defect: 25, rft: 90, wft: 10, status: "Warning" },
+                            { no: 3, line_name: "Line C - Packing", group_buyer: "Puma", qty_inspect: 400, qty_defect: 4, rft: 99, wft: 1, status: "Excellent" },
+                            { no: 4, line_name: "Line D - Sewing", group_buyer: "Nike", qty_inspect: 150, qty_defect: 30, rft: 80, wft: 20, status: "Critical" },
+                            { no: 5, line_name: "Line E - Cutting", group_buyer: "Reebok", qty_inspect: 500, qty_defect: 10, rft: 98, wft: 2, status: "Excellent" }
+                        ]
+                    });
+                }, 800); // delay 800ms
+            },
+            columns: [
+                { data: 'no', className: 'text-center' },
+                { data: 'line_name' },
+                { data: 'group_buyer' },
+                { data: 'qty_inspect', className: 'text-end' },
+                { data: 'qty_defect', className: 'text-end' },
+                { 
+                    data: 'rft', 
+                    className: 'text-end',
+                    render: function(data, type, row) {
+                        return `<span class="${data >= 95 ? 'text-success' : 'text-warning'}">${data}%</span>`;
+                    }
+                },
+                { 
+                    data: 'wft', 
+                    className: 'text-end',
+                    render: function(data, type, row) {
+                        return `<span class="${data <= 5 ? 'text-info' : 'text-danger'}">${data}%</span>`;
+                    }
+                },
+                {
+                    data: 'status',
+                    className: 'text-center',
+                    render: function(data, type, row) {
+                        let badgeClass = "bg-secondary";
+                        if(data === "Excellent" || data === "Good") badgeClass = "bg-success";
+                        if(data === "Warning") badgeClass = "bg-warning text-dark";
+                        if(data === "Critical") badgeClass = "bg-danger";
+                        return `<span class="badge ${badgeClass}">${data}</span>`;
+                    }
+                }
+            ],
+            language: {
+                search: "Search Data:",
+                lengthMenu: "Show _MENU_ entries"
+            }
+        });
+
+        // Filter Action Reload Datatable
         $('#findbtn').on('click', function(e){
             e.preventDefault();
+            
+            // Di sini kamu bisa menambahkan parameter filter ke URL AJAX real nanti, 
+            // sementara untuk dummy kita trigger reload saja.
+            dataTable.ajax.reload(); 
+
+            /* Kode Asli AJAX Filter-mu (Bisa di-uncomment nanti saat integrasi backend asli):
             $.ajax({
                 url: "{{ route('monitoring_inlineperformancefilterdata') }}",
                 type: "GET",
@@ -539,12 +628,13 @@ $(function(){
                 },
                 success:function(response){
                     console.log(response);
+                    // dataTable.clear().rows.add(response.data).draw();
                 },
                 error:function(xhr){
                     console.log(xhr.responseText);
                 }
             });
-
+            */
         });
     })
 });
@@ -552,3 +642,5 @@ $(function(){
 
 </body>
 </html>
+
+```
