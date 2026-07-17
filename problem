@@ -1,62 +1,35 @@
-(function (global, factory) {
-  typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
-  typeof define === 'function' && define.amd ? define(['exports'], factory) :
-  (global = typeof globalThis !== 'undefined' ? globalThis : global || self, factory(global.id = {}));
-}(this, (function (exports) { 'use strict';
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Flatpickr Local di Laravel</title>
+    
+    <!-- 1. Panggil CSS Flatpickr dari folder public lokal -->
+    <link rel="stylesheet" href="{{ asset('assets/flatpickr/flatpickr.min.css') }}">
+</head>
+<body>
 
-  var fp = typeof window !== "undefined" && window.flatpickr !== undefined
-      ? window.flatpickr
-      : {
-          l10ns: {},
-      };
-  var Indonesian = {
-      weekdays: {
-          shorthand: ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"],
-          longhand: ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"],
-      },
-      months: {
-          shorthand: [
-              "Jan",
-              "Feb",
-              "Mar",
-              "Apr",
-              "Mei",
-              "Jun",
-              "Jul",
-              "Agu",
-              "Sep",
-              "Okt",
-              "Nov",
-              "Des",
-          ],
-          longhand: [
-              "Januari",
-              "Februari",
-              "Maret",
-              "April",
-              "Mei",
-              "Juni",
-              "Juli",
-              "Agustus",
-              "September",
-              "Oktober",
-              "November",
-              "Desember",
-          ],
-      },
-      firstDayOfWeek: 1,
-      ordinal: function () {
-          return "";
-      },
-      time_24hr: true,
-      rangeSeparator: " - ",
-  };
-  fp.l10ns.id = Indonesian;
-  var id = fp.l10ns;
+    <div style="margin: 50px;">
+        <label for="tanggal">Pilih Tanggal:</label>
+        <input type="text" id="tanggal" class="datepicker" placeholder="Pilih tanggal...">
+    </div>
 
-  exports.Indonesian = Indonesian;
-  exports.default = id;
+    <!-- 2. Panggil JS Flatpickr dari folder public lokal -->
+    <script src="{{ asset('assets/flatpickr/flatpickr.min.js') }}"></script>
+    
+    <!-- (Opsional) Panggil file Bahasa Indonesia -->
+    <script src="{{ asset('assets/flatpickr/id.js') }}"></script>
 
-  Object.defineProperty(exports, '__esModule', { value: true });
+    <!-- 3. Inisialisasi Flatpickr -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            flatpickr(".datepicker", {
+                locale: "id", // Gunakan Bahasa Indonesia (hapus baris ini jika tidak butuh)
+                dateFormat: "Y-m-d", // Format: Tahun-Bulan-Tanggal
+                allowInput: true
+            });
+        });
+    </script>
 
-})));
+</body>
+</html>
