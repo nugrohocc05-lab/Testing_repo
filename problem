@@ -1,19 +1,976 @@
-// Hitung qty inspect per PO (jumlah baris x 5), lalu total keseluruhan
-$qtyPerPo = $tgldata->groupBy('idpo')->map(function ($group) use ($groupbuyerMap, $buyerMap, $poMap) {
-    return [
-        'idpo'        => $group->first()->idpo,
-        'jumlah_data' => $group->count(),
-        'qty_inspect' => $group->count() * 5,
-        'groupbuyer'  => $group->first()->groupbuyer,
-    ];
-})->values();
+coba cek kode ini 
 
-$totalQtyInspect = $qtyPerPo->sum('qty_inspect');
+ function filterData(Request $request)
 
-return response()->json([
-    'status'            => true,
-    'count'              => $tgldata->count(),
-    'data'               => $tgldata,
-    'qty_inspect_per_po' => $qtyPerPo,
-    'total_qty_inspect'  => $totalQtyInspect,
-]);
+    {
+
+        preconnect(session('db'));
+
+
+
+        try {
+
+
+
+            $m_da = $request->datea > $request->dateb
+
+                ? $request->dateb
+
+                : $request->datea;
+
+
+
+            $m_db = $request->datea > $request->dateb
+
+                ? $request->datea
+
+                : $request->dateb;
+
+
+
+            $dta = Carbon::parse($m_da);
+
+            $dtb = Carbon::parse($m_db)->endOfDay();
+
+
+
+            $diff = $dta->diffInDays($dtb);
+
+
+
+            if ($diff > 30) {
+
+                return '<center><h3>Date Has More Than 30 Days in Range, Cannot View Data.</h3></center>';
+
+            }
+
+
+
+            $tgldata = InlineHeader::select(
+
+                    'idpo',
+
+                    'idcolor',
+
+                    'idsize',
+
+                    'group_id as line',
+
+                    'round'
+
+                )
+
+                ->addSelect(DB::raw("SUBSTR(date,1,10) as tanggal"))
+
+                ->whereBetween("date", [$dta, $dtb]);
+
+
+
+
+
+            if ($request->line != 'all') {
+
+                $tgldata = $tgldata->where('group_id', $request->line);
+
+            }
+
+
+
+            $tgldata = $tgldata
+
+                ->groupBy(
+
+                    "tanggal","line","idpo","idcolor","idsize","round"
+
+                )
+
+                ->get();
+
+
+
+            // Join Group data
+
+            $poIds = $tgldata
+
+                ->pluck('idpo')
+
+                ->unique()
+
+                ->filter()
+
+                ->values();
+
+
+
+            $poMap = PurchaseOrder::select(
+
+                    'idpo',
+
+                    'idbuyer'
+
+                )
+
+                ->whereIn('idpo', $poIds)
+
+                ->get()
+
+                ->keyBy('idpo');
+
+
+
+            $buyerIds = $poMap
+
+                ->pluck('idbuyer')
+
+                ->unique()
+
+                ->filter()
+
+                ->values();
+
+
+
+            $buyerMap = Buyer::select(
+
+                    'idbuyer',
+
+                    'groupbuyer'
+
+                )
+
+                ->whereIn('idbuyer', $buyerIds)
+
+                ->get()
+
+                ->keyBy('idbuyer');
+
+
+
+            $groupbuyerIds = $buyerMap
+
+                ->pluck('groupbuyer')
+
+                ->unique()
+
+                ->filter()
+
+                ->values();
+
+
+
+            $groupbuyerMap = MasterGroupBuyer::select(
+
+                    'id',
+
+                    'group_name'
+
+                )
+
+                ->whereIn('id', $groupbuyerIds)
+
+                ->get()
+
+                ->keyBy('id');
+
+
+
+            $tgldata = $tgldata->map(function ($item) use (
+
+                $poMap,
+
+                $buyerMap,
+
+                $groupbuyerMap
+
+            ) {
+
+
+
+                $po = $poMap->get($item->idpo);
+
+
+
+                $buyer = $po
+
+                    ? $buyerMap->get($po->idbuyer)
+
+                    : null;
+
+
+
+                $groupbuyer = $buyer
+
+                    ? $groupbuyerMap->get($buyer->groupbuyer)
+
+                    : null;
+
+
+
+                $item->groupbuyer = $groupbuyer->group_name ?? '-';
+
+                return $item;
+
+
+
+            });
+
+
+
+            // $qtyPerPo = $tgldata->groupBy('idpo')->map(function ($group) use ($groupbuyerMap, $buyerMap, $poMap) {
+
+            //     return [
+
+            //         'idpo'        => $group->first()->idpo,
+
+            //         'jumlah_data' => $group->count(),
+
+            //         'qty_inspect' => $group->count() * 5,
+
+            //         'groupbuyer'  => $group->first()->groupbuyer,
+
+            //     ];
+
+            // })->values();
+
+
+
+            // $totalQtyInspect = $qtyPerPo->sum('qty_inspect');
+
+
+
+            // return response()->json([
+
+            //     'status'            => true,
+
+            //     'count'              => $tgldata->count(),
+
+            //     'data'               => $tgldata,
+
+            //     'qty_inspect_per_po' => $qtyPerPo,
+
+            //     'total_qty_inspect'  => $totalQtyInspect,
+
+            // ]);
+
+
+
+            return response()->json($tgldata);
+
+
+
+        } catch (\Throwable $e) {
+
+            return $e->getMessage();
+
+        }
+
+    }
+
+
+
+apakah hasil dari groupbuyer ini sudah mengambil groupbuyer pilihan user ? 
+
+<script>
+
+$(function(){
+
+    $(document).ready(function() {
+
+
+
+        // Time Tracking
+
+        function updateClock(){
+
+        let now = new Date();
+
+        let day = String(now.getDate()).padStart(2,'0');
+
+        let month = [
+
+            "January",
+
+            "February",
+
+            "March",
+
+            "April",
+
+            "May",
+
+            "June",
+
+            "July",
+
+            "August",
+
+            "September",
+
+            "October",
+
+            "November",
+
+            "December"
+
+        ];
+
+
+
+        let year = now.getFullYear();
+
+
+
+        let hour = String(now.getHours()).padStart(2,'0');
+
+        let minute = String(now.getMinutes()).padStart(2,'0');
+
+        let second = String(now.getSeconds()).padStart(2,'0');
+
+
+
+
+
+        document.getElementById('liveClock').innerHTML =
+
+            `${day} ${month[now.getMonth()]} ${year} - ${hour} : ${minute} : ${second}`;
+
+        }
+
+        updateClock();
+
+        setInterval(updateClock,1000);
+
+
+
+
+
+        let today = new Date().toISOString().split('T')[0];
+
+
+
+        $('#datea').val(today);
+
+        $('#dateb').val(today);
+
+        $('#datedatatables').val(today);
+
+
+
+        $('#line').select2({
+
+            placeholder: 'Select Line',
+
+            width: '100%',
+
+            ajax: {
+
+                url: "{{ route('monitoring_inlineperformanceselectline') }}",
+
+                type: "GET",
+
+                dataType: "json",
+
+                delay: 500,
+
+                data: function(params){
+
+                    return{
+
+                        q: params.term,
+
+                        page: params.page || 1
+
+                    }
+
+                },
+
+
+
+                processResults:function(data){
+
+                    if(data.current_page == 1){
+
+                        data.data.unshift({
+
+                            kodegroup:'all'
+
+                        });
+
+                    }
+
+
+
+                    return{
+
+                        results: $.map(data.data,function(item){
+
+                            if(item.kodegroup == 'all'){
+
+                                return{
+
+                                    id:'all',
+
+                                    text:'All Lines'
+
+                                }
+
+                            }
+
+                            return{
+
+                                id:item.kodegroup,
+
+                                text:item.namabagian + ' - ' + item.namagroup
+
+                            }
+
+                        }),
+
+                        pagination:{
+
+                            more:data.to < data.total
+
+                        }
+
+                    }
+
+                },
+
+                cache:true
+
+            }
+
+        });
+
+
+
+        $('#groupbuyer').select2({
+
+            placeholder: 'Select Buyer',
+
+            width: '60%',
+
+            ajax: {
+
+                url: "{{ route('monitoring_inlineperformancegroupbuyer') }}",
+
+                type: "GET",
+
+                dataType: "json",
+
+                delay: 500,
+
+                data: function(params){
+
+                    return {
+
+                        q: params.term,
+
+                        page: params.page || 1
+
+                    };
+
+                },
+
+                processResults: function(data){
+
+                    return {
+
+                        results: data.results
+
+                    };
+
+                },
+
+                cache: true
+
+            }
+
+        });
+
+
+
+        $('#findbtn').on('click', function(e){
+
+            e.preventDefault();
+
+            $.ajax({
+
+                url: "{{ route('monitoring_inlineperformancefilterdata') }}",
+
+                type: "GET",
+
+                data: {
+
+                    line: $('#line').val(),
+
+                    datea: $('#datea').val(),
+
+                    dateb: $('#dateb').val(),
+
+                    groupbuyer: $('#groupbuyer').val()
+
+                },
+
+                success:function(response){
+
+                    console.log(response);
+
+                },
+
+                error:function(xhr){
+
+                    console.log(xhr.responseText);
+
+                }
+
+            });
+
+        });
+
+
+
+        // Datatables
+
+        var table = $('#tableInlinePerformance').DataTable({
+
+            processing: true,
+
+            serverSide: false,
+
+            paging: false,
+
+            ajax: {
+
+                url: "{{ route('monitoring_inlineperformancedatatables') }}",
+
+                type: "GET",
+
+                data: function(d){
+
+                    d.data = $('#datedatatables').val();
+
+                },
+
+                dataSrc: function(json){
+
+                    return json.data;
+
+                }
+
+            },
+
+            columns: [
+
+                {
+
+                    data: 'namagroup',
+
+                    className: 'text-center fw-normal',
+
+                    orderable: false
+
+                },
+
+                {
+
+                    data: 'namabagian',
+
+                    className: 'text-center fw-normal',
+
+                    orderable: false
+
+                },
+
+                {
+
+                    data: 'kodegroup',
+
+                    className: 'text-center fw-normal',
+
+                    orderable: false
+
+                },
+
+                {
+
+                    data: 'namagroup',
+
+                    className: 'text-center fw-normal',
+
+                    orderable: false
+
+                },
+
+                {
+
+                    data: 'namagroup',
+
+                    className: 'text-center fw-normal',
+
+                    orderable: false
+
+                },
+
+                {
+
+                    data: 'namabagian',
+
+                    className: 'text-center fw-normal',
+
+                    orderable: false
+
+                },
+
+                {
+
+                    data: 'kodegroup',
+
+                    className: 'text-center fw-normal',
+
+                    orderable: false
+
+                },
+
+                {
+
+                    data: 'namagroup',
+
+                    className: 'text-center fw-normal',
+
+                    orderable: false
+
+                }
+
+            ],
+
+            dom:'',
+
+            order:[]
+
+        });
+
+
+
+            // custom search box
+
+            $('#findbtn').on('click', function () {
+
+                table.ajax.reload();
+
+            });
+
+
+
+            $('input[placeholder="Search Line"]').on('keypress', function (e) {
+
+                if (e.which === 13) {
+
+                    table.ajax.reload();
+
+                    e.preventDefault();
+
+                }
+
+            });
+
+
+
+            $('#datedatatables').on('change', function () {
+
+                table.ajax.reload();
+
+            });
+
+
+
+            // FlatPickr
+
+            flatpickr("#datea", {
+
+                dateFormat: "d-m-Y",
+
+                altInput: true,
+
+                altFormat: "d F Y",
+
+                allowInput: true,
+
+                monthSelectorType: "static"
+
+            });
+
+
+
+            flatpickr("#dateb", {
+
+                dateFormat: "d-m-Y",
+
+                altInput: true,
+
+                altFormat: "d F Y",
+
+                allowInput: true,
+
+                monthSelectorType: "static"
+
+
+
+            });
+
+
+
+            flatpickr("#datedatatables", {
+
+                dateFormat: "d-m-Y",
+
+                altInput: true,
+
+                altFormat: "d F Y",
+
+                allowInput: true,
+
+                monthSelectorType: "static"
+
+
+
+            });
+
+
+
+    })
+
+
+
+});
+
+<div class="row mt-4 border-custom rounded px-3 py-2 text-white">
+
+            <!-- Line -->
+
+            <div class="col-12 col-md-3 border-end-custom d-flex gap-4   mb-md-0 ">
+
+                <div class="">
+
+                    <div class="box-custom bg-transparent"></div>
+
+                    <div class="">
+
+                        <img src="{{ _asset('svg/inlinePerformance/line.svg') }}"
+
+                            style="width:30px; height:30px;">
+
+                    </div>
+
+                </div>
+
+
+
+                <div class="w-100">
+
+                    <label class="mb-1 text-title">
+
+                        Line
+
+                    </label>
+
+
+
+                    <select id="line" class="form-select select2 w-100">
+
+                        <option></option>
+
+                    </select>
+
+                </div>
+
+            </div>
+
+
+
+            <!-- Periode Date -->
+
+            <div class="col-12 col-md-5 border-end-custom d-flex gap-4 mb-3 mb-md-0">
+
+
+
+                <div>
+
+                    <div class="box-custom bg-transparent"></div>
+
+                    <div>
+
+                        <img src="{{ _asset('svg/inlinePerformance/calendar.svg') }}"
+
+                            style="width:30px; height:30px;">
+
+                    </div>
+
+                </div>
+
+
+
+                <div class="w-100">
+
+
+
+                    <label class="mb-1 text-title">
+
+                        Periode Date
+
+                    </label>
+
+
+
+                    <div class="d-flex align-items-center gap-2 w-100">
+
+                        <div class="position-relative flex-grow-1">
+
+                            <input
+
+                                type="text"
+
+                                id="datea"
+
+                                class="form-control pe-5"
+
+                                placeholder="Pilih tanggal">
+
+
+
+                            <img
+
+                                src="{{ _asset('svg/inlinePerformance/calendar-flat.svg') }}"
+
+                                class="position-absolute top-50 end-0 translate-middle-y me-3"
+
+                                style="width:18px; height:18px; pointer-events:none;">
+
+                        </div>
+
+
+
+                        <span class="px-2">to</span>
+
+
+
+                        <div class="position-relative flex-grow-1">
+
+                            <input
+
+                                type="text"
+
+                                id="dateb"
+
+                                class="form-control pe-5"
+
+                                placeholder="Pilih tanggal">
+
+
+
+                            <img
+
+                                src="{{ _asset('svg/inlinePerformance/calendar-flat.svg') }}"
+
+                                class="position-absolute top-50 end-0 translate-middle-y me-3"
+
+                                style="width:18px; height:18px; pointer-events:none;">
+
+                        </div>
+
+                    </div>
+
+
+
+                </div>
+
+            </div>
+
+
+
+            <!-- Group Buyer -->
+
+            <div class="col-12 col-md-3 d-flex gap-4 mb-3 mb-md-0">
+
+
+
+                <div>
+
+                    <div class="box-custom bg-transparent"></div>
+
+                    <div>
+
+                        <img src="{{ _asset('svg/inlinePerformance/user.svg') }}"
+
+                            style="width:30px; height:30px;">
+
+                    </div>
+
+                </div>
+
+
+
+                <div class="w-100">
+
+                    <label class="mb-1 text-title">
+
+                        Group Buyer
+
+                    </label>
+
+                    <div class="d-flex flex-column flex-lg-row align-items-stretch align-items-lg-end gap-3 ">
+
+                        <div class="flex-grow-1">
+
+                            <select id="groupbuyer" class="form-select select2 w-100">
+
+                                <option></option>
+
+                            </select>
+
+                        </div>
+
+
+
+                        <button class="btn btn-custom" id="findbtn">
+
+                            <img src="{{ _asset('svg/inlinePerformance/search.svg') }}"
+
+                                style="width:20px; height:15px; margin-right:2px;">
+
+                            Find
+
+                        </button>
+
+
+
+                    </div>
+
+
+
+                </div>
+
+            </div>
+
+
+
+            <!-- Export -->
+
+            <div class="col-12 col-md-1 d-flex justify-content-end align-items-end mb-2">
+
+                <button class="export-btn bg-transparent border-0 p-0">
+
+                    <img src="{{ _asset('svg/inlinePerformance/export.svg') }}"
+
+                        style="width:27px; height:27px;">
+
+
+
+                    <span class="custom-tooltip">Export</span>
+
+                </button>
+
+            </div>
+
+        </div>
+
