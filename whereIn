@@ -1,214 +1,261 @@
-function dataTable(Request $request)
-{
-    preconnect(session('db'));
+@extends('layouts.master')
 
-    // ============================================================
-    // DETAIL PER CARTONCODE
-    // ============================================================
-    if ($request->has('detail_id') && $request->detail_id != '') {
-        $cartoncode = $request->detail_id;
+@section('content')
+    <div class="container-fluid">
+        <div class="row" style="margin-top: 7rem">
+            <div class="col-sm-12">
+                <center>
+                    <h3 style="margin-top: .2rem"><b>Report Inline Inspection Defect</b></h3>
+                </center>
+                <div class="box box-danger">
+                    <div class="box-header with-border">
+                        <div class="col-md-3">
+                            <b>Line :</b>
+                            <select class="select2 form-control" id="line" style="width: 100%"></select>
+                        </div>
+                        <div class="col-md-4 col-sm-5" id="dategroup">
+                            <b style="display: block;">Date: </b>
+                            <input type="text" id="datea" class="form-control" readonly placeholder="date"
+                                style="width: 47%; display: inline-block;">
+                            -
+                            <input type="text" id="dateb" class="form-control" readonly placeholder="date"
+                                style="width: 47%; display: inline-block;">
+                        </div>
+                        <div class="col-md-2 col-sm-3" style="padding-top: 2rem">
+                            <button type="button" class="btn btn-sm btn-primary" id="findbtn">Find</button>
+                        </div>
+                    </div>
+                    <div class="box-body" id="b-bod">
+                        <center>
+                            <h4>Select Filter</h4>
+                        </center>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    @include('layouts.loading')
+@endsection
 
-        $doRows = DOStock::select('delivery_order', 'cartoncode', 'masterbuyer_id', 'masterstyle_id', 'season', 'remark')
-            ->where('cartoncode', $cartoncode)
-            ->get()
-            ->unique(fn($item) => $item->delivery_order . '-' . $item->cartoncode);
-
-        if ($doRows->isEmpty()) {
-            return DataTables::of(collect([]))->toJson();
-        }
-
-        // --- Kumpulkan semua id yang dibutuhkan lebih dulu ---
-        $deliveryOrders = $doRows->pluck('delivery_order')->unique()->values();
-        $buyerIds       = $doRows->pluck('masterbuyer_id')->unique()->filter()->values();
-        $styleIds       = $doRows->pluck('masterstyle_id')->unique()->filter()->values();
-
-        // --- Ambil FG rows sekaligus untuk semua delivery_order ---
-        $frRows = FGReceiveGarmentStock::whereIn('delivery_order', $deliveryOrders)->get();
-        $barcodes = $frRows->pluck('barcode')->unique()->values();
-
-        // --- Ambil OutputDetail sekaligus untuk semua barcode ---
-        $odRows = OutputDetail::select('barcode', 'idpo', 'idcolor', 'idsize')
-            ->whereIn('barcode', $barcodes)
-            ->get()
-            ->keyBy('barcode');
-
-        $poIds    = $odRows->pluck('idpo')->unique()->filter()->values();
-        $colorIds = $odRows->pluck('idcolor')->unique()->filter()->values();
-        $sizeIds  = $odRows->pluck('idsize')->unique()->filter()->values();
-
-        // --- Ambil semua tabel master sekaligus, jadikan map (key => model) ---
-        $buyerMap = Buyer::select('idbuyer', 'nmbuyer')->whereIn('idbuyer', $buyerIds)->get()->keyBy('idbuyer');
-        $styleMap = Style::select('idstyle', 'nmstyle', 'sub_style_id')->whereIn('idstyle', $styleIds)->get()->keyBy('idstyle');
-        $subStyleIds = $styleMap->pluck('sub_style_id')->unique()->filter()->values();
-        $subStyleMap = SubStyle::select('id', 'name')->whereIn('id', $subStyleIds)->get()->keyBy('id');
-        $poMap    = PurchaseOrder::select('idpo', 'po')->whereIn('idpo', $poIds)->get()->keyBy('idpo');
-        $colorMap = Color::select('idcolor', 'nmcolor')->whereIn('idcolor', $colorIds)->get()->keyBy('idcolor');
-        $sizeMap  = Size::select('idsize', 'nmsize')->whereIn('idsize', $sizeIds)->get()->keyBy('idsize');
-
-        // --- Group FG rows per delivery_order biar gampang di-loop ---
-        $frGrouped = $frRows->groupBy('delivery_order');
-
-        $result = collect();
-
-        foreach ($doRows as $do) {
-            $buyer    = $buyerMap->get($do->masterbuyer_id);
-            $style    = $styleMap->get($do->masterstyle_id);
-            $subStyle = $style ? $subStyleMap->get($style->sub_style_id) : null;
-
-            $relatedFr = $frGrouped->get($do->delivery_order, collect());
-
-            foreach ($relatedFr as $fr) {
-                $od = $odRows->get($fr->barcode);
-                if (!$od) {
-                    continue;
+@section('extrascript')
+    <script type="text/javascript">
+        $(document).ready(function() {
+            $('#datea').datetimepicker({
+                timepicker: false,
+                format: 'Y-m-d',
+            });
+            $('#dateb').datetimepicker({
+                timepicker: false,
+                format: 'Y-m-d',
+            });
+            $('#findbtn').on('click', function(event) {
+                var con = ($('#line').val() != null && $('#line').val() != '') && (($('#datea').val() !=
+                    '' && $('#datea').val() != null) && ($('#dateb').val() != '' && $('#dateb')
+                    .val() != null));
+                if (!con) {
+                    return;
                 }
+                $('#loading').show();
+                $.ajax({
+                        url: '{!! route('qc_dailyinlinereportdatatable') !!}',
+                        type: 'POST',
+                        dataType: 'html',
+                        data: {
+                            _token: $('meta[name=csrf-token]').attr('content'),
+                            datea: $('#datea').val(),
+                            dateb: $('#dateb').val(),
+                            line: $('#line').val()
+                        },
+                    })
+                    .done(function(data) {
+                        $('#b-bod').html(data);
+                    })
+                    .fail(function() {
+                        $('#b-bod').html('Cannot View Data');
+                    })
+                    .always(function() {
+                        $('#loading').hide();
+                    });
+            });
+            $('#line').select2({
+                placeholder: '-- Select Line --',
+                ajax: {
+                    url: '{!! route('sewing_summarymappinglineselectline') !!}',
+                    dataType: 'json',
+                    delay: 500,
+                    type: 'get',
+                    data: function(params) {
+                        var query = {
+                            q: params.term,
+                            page: params.page || 1,
+                        }
+                        return query;
+                    },
+                    processResults: function(data, params) {
+                        if (data.current_page == 1) {
+                            const newArray = [{
+                                'kodegroup': 'all',
+                            }];
+                            newArray.forEach(e => {
+                                data.data.unshift(e);
+                            });
+                        }
+                        return {
+                            results: $.map(data.data, function(item) {
+                                if (item.kodegroup == 'all') {
+                                    return {
+                                        text: 'All',
+                                        id: 'all'
+                                    }
+                                }
+                                return {
+                                    text: item.namabagian + ' - ' + item.namagroup,
+                                    id: item.kodegroup
+                                }
+                            }),
+                            pagination: {
+                                more: data.to < data.total
+                            }
+                        };
+                    },
+                    cache: true
+                }
+            });
+        });
+    </script>
+@endsection
 
-                $po    = $poMap->get($od->idpo);
-                $color = $colorMap->get($od->idcolor);
-                $size  = $sizeMap->get($od->idsize);
 
-                $result->push([
-                    'barcode'    => $fr->barcode,
-                    'cartoncode' => $do->cartoncode,
-                    'buyer'      => $buyer->nmbuyer ?? '-',
-                    'style'      => $style->nmstyle ?? '-',
-                    'color'      => $color->nmcolor ?? '-',
-                    'size'       => $size->nmsize ?? '-',
-                    'season'     => $do->season,
-                    'remark'     => $do->remark,
-                    'sub_style'  => $subStyle->name ?? '-',
-                    'po'         => $po->po ?? '-',
+<?php
+
+namespace Modules\QC\Http\Controllers;
+
+use DB;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+use App\Http\Controllers\Controller;
+use App\Http\Models\Main\MasterInlineDefect;
+use App\Http\Models\Color;
+use App\Http\Models\Size;
+use App\Http\Controllers\WatchController;
+use App\Http\Models\HistoryPO;
+use App\Http\Models\InlineDetail;
+use App\Http\Models\InlineHeader;
+use App\Http\Models\Main\MasterEmployeeGroup;
+
+class DailyInlineReportController extends Controller
+{
+    protected $m_modul = 'qc';
+
+    function __construct()
+    {
+        $this->middleware('auth');
+    }
+
+    function index()
+    {
+        if ($this->myaccess() == '0') {
+            return redirect()
+                ->back()
+                ->with('alert', [
+                    'title' => 'Unauthorized!',
+                    'message' => 'You Dont Have Any Access Here!',
+                    'status' => 'warning',
                 ]);
+        }
+
+        WatchController::watch($this->get_class_name());
+        return view('qc::dailyinlinereport.index');
+    }
+
+    function datatable(Request $request)
+    {
+        preconnect(session('db'));
+
+        try {
+            $m_da =
+                $request->datea > $request->dateb
+                    ? $request->dateb
+                    : $request->datea;
+            $m_db =
+                $request->datea > $request->dateb
+                    ? $request->datea
+                    : $request->dateb;
+            $dta = Carbon::parse($m_da);
+            $dtb = Carbon::parse($m_db)->endOfDay();
+    
+            $diff = $dta->diffInDays($dtb);
+    
+            if ($diff > 30) {
+                return '<center><h3>Date Has More Than 30 Days in Range, Cannot View Data.</h3></center>';
             }
-        }
 
-        return DataTables::of($result)
-            ->addIndexColumn()
-            ->toJson();
-    }
+            $tgldata = InlineHeader::select(
+                'idpo', 'idcolor', 'idsize',
+                'group_id as  line', 'round'
+            )
+            ->addSelect(DB::raw("SUBSTR(date, 1, 10) as tanggal"))
+            ->whereBetween("date", [$dta, $dtb]);
 
-    // ============================================================
-    // LISTING UTAMA
-    // ============================================================
-    $filterType = $request->filter_type;
-    $groupBuyer = $request->group_buyer;
-    $season     = $request->season;
-    $po         = $request->po;
-
-    if (!$filterType) {
-        return DataTables::of(collect([]))->toJson();
-    }
-
-    if ($filterType == 'groupbuyer_filter' && (!$groupBuyer || !$season)) {
-        return DataTables::of(collect([]))->toJson();
-    }
-
-    if ($filterType == 'po_filter' && !$po) {
-        return DataTables::of(collect([]))->toJson();
-    }
-
-    // --- Filter awal di sisi mainmes / mesprima1_restore sendiri-sendiri ---
-    $buyerIdsFilter = null;
-    if ($filterType == 'groupbuyer_filter') {
-        $buyerIdsFilter = Buyer::where('groupbuyer', $groupBuyer)->pluck('idbuyer');
-        if ($buyerIdsFilter->isEmpty()) {
-            return DataTables::of(collect([]))->toJson();
-        }
-    }
-
-    $doQuery = DOStock::select('delivery_order', 'cartoncode', 'masterbuyer_id', 'masterstyle_id', 'season')
-        ->selectRaw('SUM(qty) as total_qty')
-        ->groupBy('delivery_order', 'cartoncode', 'masterbuyer_id', 'masterstyle_id', 'season');
-
-    if ($filterType == 'groupbuyer_filter') {
-        $doQuery->whereIn('masterbuyer_id', $buyerIdsFilter)
-                ->where('season', $season);
-    }
-
-    $doRows = $doQuery->get();
-
-    if ($doRows->isEmpty()) {
-        return DataTables::of(collect([]))->toJson();
-    }
-
-    // --- Kumpulkan id-id yang dibutuhkan ---
-    $deliveryOrders = $doRows->pluck('delivery_order')->unique()->values();
-    $buyerIds       = $doRows->pluck('masterbuyer_id')->unique()->filter()->values();
-    $styleIds       = $doRows->pluck('masterstyle_id')->unique()->filter()->values();
-
-    // --- Ambil semua FG rows sekaligus, lalu group per delivery_order ---
-    $frRows = FGReceiveGarmentStock::withTrashed()
-        ->select('delivery_order', 'barcode', 'date_out', 'user_id')
-        ->whereIn('delivery_order', $deliveryOrders)
-        ->whereNotNull('date_gi')
-        ->orderByDesc('date_out')
-        ->get();
-
-    $frGrouped = $frRows->groupBy('delivery_order');
-    $barcodes  = $frRows->pluck('barcode')->unique()->values();
-
-    // --- Ambil OutputDetail + PO sekaligus untuk semua barcode ---
-    $odRows = OutputDetail::select('barcode', 'idpo')
-        ->whereIn('barcode', $barcodes)
-        ->get()
-        ->keyBy('barcode');
-
-    $poIds = $odRows->pluck('idpo')->unique()->filter()->values();
-    $poMap = PurchaseOrder::select('idpo', 'po')->whereIn('idpo', $poIds)->get()->keyBy('idpo');
-
-    // --- Master buyer/style/substyle sekaligus ---
-    $buyerMap    = Buyer::select('idbuyer', 'nmbuyer')->whereIn('idbuyer', $buyerIds)->get()->keyBy('idbuyer');
-    $styleMap    = Style::select('idstyle', 'nmstyle', 'sub_style_id')->whereIn('idstyle', $styleIds)->get()->keyBy('idstyle');
-    $subStyleIds = $styleMap->pluck('sub_style_id')->unique()->filter()->values();
-    $subStyleMap = SubStyle::select('id', 'name')->whereIn('id', $subStyleIds)->get()->keyBy('id');
-
-    $result = collect();
-
-    foreach ($doRows as $do) {
-        $relatedFr = $frGrouped->get($do->delivery_order, collect());
-
-        if ($relatedFr->isEmpty()) {
-            continue;
-        }
-
-        // Cari daftar PO untuk delivery_order ini via barcode -> od -> po
-        $poForRow = collect();
-        foreach ($relatedFr as $fr) {
-            $od = $odRows->get($fr->barcode);
-            if ($od && $poMap->has($od->idpo)) {
-                $poForRow->push($poMap->get($od->idpo)->po);
+            if ($request->line != 'all') {
+                $tgldata = $tgldata->where('group_id', $request->line);
             }
+    
+            $tgldata = $tgldata->groupBy("tanggal", "line", "idpo", "idcolor", "idsize")->get();
+
+            $he = (new InlineHeader())->getTable();
+            $de = (new InlineDetail())->getTable();
+            foreach ($tgldata as $d) {
+                $namaline = MasterEmployeeGroup::find($d->line);
+                $d->namaline = $namaline ? $namaline->name : null;
+                $po = HistoryPO::select('po')->where('idpo', $d->idpo)->first();
+                $d->po = $po ? $po->po : null;
+                $color = Color::find($d->idcolor);
+                $d->color = $color ? $color->nmcolor : null;
+                $size = Size::find($d->idsize);
+                $d->size = $size ? $size->nmsize : null;
+                $hi = InlineHeader::select('id')
+                    ->whereDate('date', $d->tanggal)
+                    ->where('group_id', $d->line)
+                    ->where('idpo', $d->idpo)
+                    ->where('idcolor', $d->idcolor)
+                    ->where('idsize', $d->idsize)
+                    ->get();
+
+                $qi = InlineDetail::select("$he.round", "$de.defect_id as kode")
+                    ->join($he, "$he.id", '=', "$de.inline_header_id")
+                    ->whereIn('inline_header_id', $hi->pluck('id'))
+                    ->get();
+
+                $d->tot_inspect = $hi->count() * 5;
+                $d->tot_defect = $qi->count();
+                $rft = (($d->tot_inspect - $d->tot_defect) / ($d->tot_inspect ?: 1)) * 100;
+                $d->rft = number_format($rft, 2);
+                $d->isdefect = $qi;
+            }
+
+            $inlinedata = MasterInlineDefect::select('kddefect', 'nmdefect', 'pivot_code')
+                ->where('kddefect', '!=', '0')
+                ->orderBy('pivot_code')
+                ->get();
+    
+            return view('qc::dailyinlinereport.datatable', [
+                'tgldata' => $tgldata,
+                'inlinedata' => $inlinedata,
+                'ctrl' => $this,
+            ]);
+        } catch (\Throwable $e) {
+            return $e->getMessage();
         }
-        $poForRow = $poForRow->unique()->values();
-
-        if ($filterType == 'po_filter' && !$poForRow->contains($po)) {
-            continue;
-        }
-
-        $buyer    = $buyerMap->get($do->masterbuyer_id);
-        $style    = $styleMap->get($do->masterstyle_id);
-        $subStyle = $style ? $subStyleMap->get($style->sub_style_id) : null;
-
-        $latestFr = $relatedFr->first(); // sudah diurutkan date_out desc
-
-        $result->push([
-            'no'                   => $do->cartoncode,
-            'cartoncode'           => $do->cartoncode,
-            'season'               => $do->season,
-            'qty'                  => $do->total_qty,
-            'user'                 => $latestFr->user_id,
-            'date'                 => $latestFr->date_out,
-            'buyer'                => $buyer->nmbuyer ?? '-',
-            'style'                => $style->nmstyle ?? '-',
-            'sub_style'            => $subStyle->name ?? '-',
-            'po'                   => $poForRow->implode(', '),
-            'encrypted_cartoncode' => encrypt($do->cartoncode),
-        ]);
     }
 
-    $result = $result->unique('cartoncode')->values();
-
-    return DataTables::of($result)
-        ->addIndexColumn()
-        ->toJson();
+    function get_operator_count($round, $date, $line)
+    {
+        preconnect(session('db'));
+        return InlineHeader::selectRaw("COUNT(DISTINCT userid_operator) as total")
+            ->where('round', $round)
+            ->whereDate('date', $date)
+            ->where('group_id', $line)
+            ->first()->total ?? 0;
+    }
 }
