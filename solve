@@ -1,116 +1,131 @@
-    function dataTable(Request $request)
-    {
-        preconnect(session('db'));
+function filterData(Request $request)
+{
+    preconnect(session('db'));
 
-        // Data Detail
-        if ($request->has('detail_id') && $request->detail_id != '') {
+    try {
 
-            $data = DB::table('mesprima1_restore.delivery_order_stocks as do')
-                ->join('mesprima1_restore.fgreceivegarment_stocks as fr', 'fr.delivery_order', '=', 'do.delivery_order')
-                ->join('mesprima1_restore.outputdetail as od', 'od.barcode', '=', 'fr.barcode')
-                ->join('mesprima1_restore.purchase_order as po', 'po.idpo', '=', 'od.idpo')
-                ->join('mesprima1_restore.mastercolor as mc', 'do.mastercolor_id', '=', 'mc.idcolor')
-                ->join('mesprima1_restore.mastersize as mz', 'do.mastersize_id', '=', 'mz.idsize')
-                ->join('mainmes.masterbuyer as mb', 'do.masterbuyer_id', '=', 'mb.idbuyer')
-                ->join('mainmes.masterstyle as ms', 'do.masterstyle_id', '=', 'ms.idstyle')
-                ->join('mainmes.sub_styles as ss', 'ms.sub_style_id', '=', 'ss.id')
+        $m_da = $request->datea > $request->dateb
+            ? $request->dateb
+            : $request->datea;
 
-                ->select(
-                    DB::raw('ROW_NUMBER() OVER (ORDER BY do.cartoncode) as no'),
-                    'fr.barcode',
-                    'mb.nmbuyer as buyer',
-                    'ms.nmstyle as style',
-                    'mc.nmcolor as color',
-                    'mz.nmsize as size',
-                    'do.season',
-                    'do.remark',
-                    'ss.name as sub_style',
-                    'po.po',
-                )
-                ->where('do.id', $request->detail_id);
+        $m_db = $request->datea > $request->dateb
+            ? $request->datea
+            : $request->dateb;
 
-            return DataTables::of($data)->toJson();
+        $dta = Carbon::parse($m_da);
+        $dtb = Carbon::parse($m_db)->endOfDay();
+
+        $diff = $dta->diffInDays($dtb);
+
+        if ($diff > 30) {
+            return '<center><h3>Date Has More Than 30 Days in Range, Cannot View Data.</h3></center>';
         }
 
-        // ==== Validasi filter sebelum query jalan ====
-        $filterType   = $request->filter_type;
-        $groupBuyer   = $request->group_buyer;
-        $season       = $request->season;
-        $po           = $request->po;
+        // Jika user memilih groupbuyer tertentu (bukan 'all'/kosong),
+        // cari dulu idpo mana saja yang termasuk groupbuyer tersebut
+        $filteredPoIds = null;
 
-        // Wajib pilih salah satu filter dulu (Group Buyer / PO), kalau belum -> tabel kosong
-        if (!$filterType) {
-            return DataTables::of(collect([]))->toJson();
+        if ($request->groupbuyer && $request->groupbuyer != 'all') {
+
+            $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)
+                ->pluck('idbuyer');
+
+            $filteredPoIds = PurchaseOrder::whereIn('idbuyer', $buyerIds)
+                ->pluck('idpo');
         }
 
-        // Filter Group Buyer dipilih, tapi Group Buyer / Season belum lengkap -> tabel kosong
-        if ($filterType == 'groupbuyer_filter' && (!$groupBuyer || !$season)) {
-            return DataTables::of(collect([]))->toJson();
-        }
-
-        // Filter PO dipilih, tapi PO belum dipilih -> tabel kosong
-        if ($filterType == 'po_filter' && !$po) {
-            return DataTables::of(collect([]))->toJson();
-        }
-
-        $fg = DB::table('mesprima1_restore.fgreceivegarment_stocks')
-            ->select('delivery_order', 'barcode', 'date_out', 'user_id')
-            ->whereNotNull('date_gi');
-
-        $od = DB::table('mesprima1_restore.outputdetail as od')
-            ->join('mesprima1_restore.purchase_order as po', 'po.idpo', '=', 'od.idpo')
-            ->select(
-                'od.barcode',
-                'po.po'
-            );
-        // Catatan: 1 barcode = 1 po (lewat outputdetail -> purchase_order).
-        // Karena 1 cartoncode bisa punya banyak barcode dengan po berbeda-beda,
-        // semua po unik digabung jadi satu string di select utama (GROUP_CONCAT DISTINCT).
-
-        $data = DB::table('mesprima1_restore.delivery_order_stocks as do')
-
-            // join fg (barcode)
-            ->joinSub($fg, 'fr', function ($join) {
-                $join->on('fr.delivery_order', '=', 'do.delivery_order');
-            })
-
-            // join outputdetail + po
-            ->joinSub($od, 'od', function ($join) {
-                $join->on('od.barcode', '=', 'fr.barcode');
-            })
-
-            ->join('mainmes.masterbuyer as mb', 'do.masterbuyer_id', '=', 'mb.idbuyer')
-            ->join('mainmes.masterstyle as ms', 'do.masterstyle_id', '=', 'ms.idstyle')
-            ->join('mainmes.sub_styles as ss', 'ms.sub_style_id', '=', 'ss.id')
-
-            ->select(
-                DB::raw('ROW_NUMBER() OVER (ORDER BY do.cartoncode) as no'),
-                // id representatif untuk link Detail: diambil dari baris (do.id) dengan fr.date_out TERBARU
-                DB::raw("SUBSTRING_INDEX(GROUP_CONCAT(do.id ORDER BY fr.date_out DESC, do.id DESC SEPARATOR ','), ',', 1) as id"),
-                'do.cartoncode',
-                DB::raw('MAX(do.season) as season'),
-                DB::raw('SUM(do.qty) as qty'),
-                // user & date: berpasangan, keduanya dari baris dengan date_out TERBARU
-                DB::raw("SUBSTRING_INDEX(GROUP_CONCAT(fr.user_id ORDER BY fr.date_out DESC, do.id DESC SEPARATOR ','), ',', 1) as user"),
-                DB::raw('MAX(fr.date_out) as date'),
-                DB::raw('MAX(mb.nmbuyer) as buyer'),
-                DB::raw('MAX(ms.nmstyle) as style'),
-                DB::raw('MAX(ss.name) as sub_style'),
-                DB::raw("GROUP_CONCAT(DISTINCT od.po SEPARATOR ', ') as po")
+        $tgldata = InlineHeader::select(
+                'idpo',
+                'idcolor',
+                'idsize',
+                'group_id as line',
+                'round'
             )
+            ->addSelect(DB::raw("SUBSTR(date,1,10) as tanggal"))
+            ->whereBetween("date", [$dta, $dtb]);
 
-            ->groupBy('do.cartoncode');
-
-        if ($filterType == 'groupbuyer_filter') {
-            // di titik ini group_buyer & season dipastikan sudah ada (lolos validasi di atas)
-            $data->where('mb.groupbuyer', $groupBuyer);
-            $data->where('do.season', $season);
+        if ($request->line != 'all') {
+            $tgldata = $tgldata->where('group_id', $request->line);
         }
 
-        if ($filterType == 'po_filter') {
-            // di titik ini $po dipastikan sudah ada (lolos validasi di atas)
-            $data->where('od.po', $po);
+        // Filter berdasarkan groupbuyer pilihan user
+        if ($filteredPoIds !== null) {
+            $tgldata = $tgldata->whereIn('idpo', $filteredPoIds);
         }
 
-        return DataTables::of($data)->toJson();
+        $tgldata = $tgldata
+            ->groupBy(
+                "tanggal","line","idpo","idcolor","idsize","round"
+            )
+            ->get();
+
+        // Join Group data
+        $poIds = $tgldata
+            ->pluck('idpo')
+            ->unique()
+            ->filter()
+            ->values();
+
+        $poMap = PurchaseOrder::select(
+                'idpo',
+                'idbuyer'
+            )
+            ->whereIn('idpo', $poIds)
+            ->get()
+            ->keyBy('idpo');
+
+        $buyerIds = $poMap
+            ->pluck('idbuyer')
+            ->unique()
+            ->filter()
+            ->values();
+
+        $buyerMap = Buyer::select(
+                'idbuyer',
+                'groupbuyer'
+            )
+            ->whereIn('idbuyer', $buyerIds)
+            ->get()
+            ->keyBy('idbuyer');
+
+        $groupbuyerIds = $buyerMap
+            ->pluck('groupbuyer')
+            ->unique()
+            ->filter()
+            ->values();
+
+        $groupbuyerMap = MasterGroupBuyer::select(
+                'id',
+                'group_name'
+            )
+            ->whereIn('id', $groupbuyerIds)
+            ->get()
+            ->keyBy('id');
+
+        $tgldata = $tgldata->map(function ($item) use (
+            $poMap,
+            $buyerMap,
+            $groupbuyerMap
+        ) {
+
+            $po = $poMap->get($item->idpo);
+
+            $buyer = $po
+                ? $buyerMap->get($po->idbuyer)
+                : null;
+
+            $groupbuyer = $buyer
+                ? $groupbuyerMap->get($buyer->groupbuyer)
+                : null;
+
+            $item->groupbuyer = $groupbuyer->group_name ?? '-';
+            return $item;
+
+        });
+
+        return response()->json($tgldata);
+
+    } catch (\Throwable $e) {
+        return $e->getMessage();
     }
+}
