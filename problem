@@ -1,118 +1,19 @@
-function filterData(Request $request)
-    {
-        preconnect(session('db'));
+// Hitung qty inspect per PO (jumlah baris x 5), lalu total keseluruhan
+$qtyPerPo = $tgldata->groupBy('idpo')->map(function ($group) use ($groupbuyerMap, $buyerMap, $poMap) {
+    return [
+        'idpo'        => $group->first()->idpo,
+        'jumlah_data' => $group->count(),
+        'qty_inspect' => $group->count() * 5,
+        'groupbuyer'  => $group->first()->groupbuyer,
+    ];
+})->values();
 
-        try {
+$totalQtyInspect = $qtyPerPo->sum('qty_inspect');
 
-            $m_da = $request->datea > $request->dateb
-                ? $request->dateb
-                : $request->datea;
-
-            $m_db = $request->datea > $request->dateb
-                ? $request->datea
-                : $request->dateb;
-
-            $dta = Carbon::parse($m_da);
-            $dtb = Carbon::parse($m_db)->endOfDay();
-
-            $diff = $dta->diffInDays($dtb);
-
-            if ($diff > 30) {
-                return '<center><h3>Date Has More Than 30 Days in Range, Cannot View Data.</h3></center>';
-            }
-
-            $tgldata = InlineHeader::select(
-                    'idpo',
-                    'idcolor',
-                    'idsize',
-                    'group_id as line',
-                    'round'
-                )
-                ->addSelect(DB::raw("SUBSTR(date,1,10) as tanggal"))
-                ->whereBetween("date", [$dta, $dtb]);
-
-
-            if ($request->line != 'all') {
-                $tgldata = $tgldata->where('group_id', $request->line);
-            }
-
-            $tgldata = $tgldata
-                ->groupBy(
-                    "tanggal","line","idpo","idcolor","idsize","round"
-                )
-                ->get();
-
-            // Join Group data
-            $poIds = $tgldata
-                ->pluck('idpo')
-                ->unique()
-                ->filter()
-                ->values();
-
-            $poMap = PurchaseOrder::select(
-                    'idpo',
-                    'idbuyer'
-                )
-                ->whereIn('idpo', $poIds)
-                ->get()
-                ->keyBy('idpo');
-
-            $buyerIds = $poMap
-                ->pluck('idbuyer')
-                ->unique()
-                ->filter()
-                ->values();
-
-            $buyerMap = Buyer::select(
-                    'idbuyer',
-                    'groupbuyer'
-                )
-                ->whereIn('idbuyer', $buyerIds)
-                ->get()
-                ->keyBy('idbuyer');
-
-            $groupbuyerIds = $buyerMap
-                ->pluck('groupbuyer')
-                ->unique()
-                ->filter()
-                ->values();
-
-            $groupbuyerMap = MasterGroupBuyer::select(
-                    'id',
-                    'group_name'
-                )
-                ->whereIn('id', $groupbuyerIds)
-                ->get()
-                ->keyBy('id');
-
-            $tgldata = $tgldata->map(function ($item) use (
-                $poMap,
-                $buyerMap,
-                $groupbuyerMap
-            ) {
-
-                $po = $poMap->get($item->idpo);
-
-                $buyer = $po
-                    ? $buyerMap->get($po->idbuyer)
-                    : null;
-
-                $groupbuyer = $buyer
-                    ? $groupbuyerMap->get($buyer->groupbuyer)
-                    : null;
-
-                $item->groupbuyer = $groupbuyer->group_name ?? '-';
-                return $item;
-
-            });
-
-            return response()->json([
-                'status' => true,
-                'count' => $tgldata->count(),
-                'data' => $tgldata
-            ]);
-
-        } catch (\Throwable $e) {
-            return $e->getMessage();
-        }
-    }
+return response()->json([
+    'status'            => true,
+    'count'              => $tgldata->count(),
+    'data'               => $tgldata,
+    'qty_inspect_per_po' => $qtyPerPo,
+    'total_qty_inspect'  => $totalQtyInspect,
+]);
