@@ -1,97 +1,21 @@
+// Top Defect (exclude id 1 = no defect)
+$topDefect = InlineDetail::whereIn('inline_header_id', $headerIds)
+    ->where('defect_id', '!=', 1)
+    ->select('defect_id', DB::raw('count(*) as total'))
+    ->groupBy('defect_id')
+    ->orderByDesc('total')
+    ->limit(3)
+    ->get();
 
-Kalau semisal rft 73.75% dan wft 26.25%, nah defect atau wft nya tidak boleh lebih dari 3%, kalau lebih dari 3% maka akan false, gimana
-   function filterData(Request $request)
-    {
-        preconnect(session('db'));
+$defectIds = $topDefect->pluck('defect_id');
 
-        try {
-            $m_da = $request->datea > $request->dateb ? $request->dateb : $request->datea;
-            $m_db = $request->datea > $request->dateb ? $request->datea : $request->dateb;
+$masterDefects = MasterInlineDefect::whereIn('id', $defectIds)
+    ->pluck('nmdefect', 'id');
 
-            $dta = Carbon::parse($m_da);
-            $dtb = Carbon::parse($m_db)->endOfDay();
-
-            $diff = $dta->diffInDays($dtb);
-
-            if ($diff > 30) {
-                return response()->json([
-                    'error' => 'Date Has More Than 30 Days in Range, Cannot View Data.'
-                ], 422);
-            }
-
-            $headerQuery = InlineHeader::whereBetween('date', [$dta, $dtb]);
-
-            if ($request->line && $request->line != 'all') {
-                $headerQuery = $headerQuery->where('group_id', $request->line);
-            }
-
-            // Filter Group Buyer -> idpo
-            if ($request->groupbuyer && $request->groupbuyer != 'all') {
-                $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
-                $poIds = PurchaseOrder::whereIn('idbuyer', $buyerIds)->pluck('idpo');
-                $headerQuery = $headerQuery->whereIn('idpo', $poIds);
-            }
-
-            $headerIds = (clone $headerQuery)->pluck('id');
-            $headerCount = $headerIds->count();
-
-            // Qty Inspect
-            $totInspect = $headerCount * 5;
-
-            // Qty Defect
-            $totDefect = InlineDetail::whereIn('inline_header_id', $headerIds)->count();
-
-            // RFT
-            $rft = $totInspect > 0
-                ? (($totInspect - $totDefect) / $totInspect) * 100
-                : 0;
-
-            // WFT
-            $wft = $totInspect > 0
-                ? ($totDefect / $totInspect) * 100
-                : 0;
-
-            // Target
-            $wftTarget = 3;
-            $wftStatus = ($wft / 100) * 100;
-            $target = $wftStatus <= 3 ? true : false;
-            // dd($target);
-
-            // $wftStatus = $wft <= $wftTarget ? true : false ;
-
-            // Top Defect
-            $topDefect = InlineDetail::whereIn('inline_header_id', $headerIds)
-                ->select('defect_id', DB::raw('count(*) as total'))
-                ->groupBy('defect_id')
-                ->orderByDesc('total')
-                ->limit(3)
-                ->get();
-
-            $defectIds = $topDefect
-                ->where('defect_id', '!=', 1)
-                ->pluck('defect_id');
-
-            $masterDefects = MasterInlineDefect::whereIn('id', $defectIds)
-                ->pluck('nmdefect', 'id');
-
-            $topDefect = $topDefect->map(function ($item) use ($masterDefects) {
-                return [
-                    'defect_id' => $item->defect_id,
-                    'nmdefect'  => $masterDefects[$item->defect_id] ?? '-',
-                    'total'     => $item->total,
-                ];
-            });
-
-            return response()->json([
-                'tot_inspect' => $totInspect > 0 ? $totInspect : '-',
-                'tot_defect'  => $totDefect,
-                'rft'         => $totInspect > 0 ? number_format($rft, 2) : '-',
-                'wft'         => $totInspect > 0 ? number_format($wft, 2) : '-',
-                'target'      => $wftStatus,
-                'top_defect'  => $topDefect,
-            ]);
-
-        } catch (\Throwable $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
-        }
-    }
+$topDefect = $topDefect->map(function ($item) use ($masterDefects) {
+    return [
+        'defect_id' => $item->defect_id,
+        'nmdefect'  => $masterDefects[$item->defect_id] ?? '-',
+        'total'     => $item->total,
+    ];
+});
