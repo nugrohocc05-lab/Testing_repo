@@ -1,3 +1,291 @@
+<?php
+
+namespace Modules\Monitoring\Http\Controllers;
+
+use DB;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+use App\Http\Controllers\Controller;
+use App\Http\Models\Main\MasterEmployeeGroup;
+use App\Http\Models\Main\MasterEmployeeSection;
+use App\Http\Models\Main\MasterGroupBuyer;
+use App\Http\Models\PurchaseOrder;
+use App\Http\Models\Main\Buyer;
+use App\Http\Models\InlineDetail;
+use App\Http\Models\InlineHeader;
+use App\Http\Models\Main\MasterInlineDefect;
+use App\Http\Models\Main\Style;
+
+class InlinePerformanceController extends Controller
+{
+    protected $m_modul = 'report';
+
+    function __construct()
+    {
+        $this->middleware('auth');
+    }
+
+    function index()
+    {
+        if ($this->myaccess() == '0') {
+            return redirect()
+                ->back()
+                ->with('alert', [
+                    'title' => 'Unauthorized!',
+                    'message' => 'You Dont Have Any Access Here!',
+                    'status' => 'warning',
+                ]);
+        }
+
+        preconnect(session('db'));
+
+        return view('monitoring::inlineperformance.index');
+    }
+
+    function selectline(Request $request)
+    {
+        $g = (new MasterEmployeeGroup())->getTable();
+        $s = (new MasterEmployeeSection())->getTable();
+
+        $data = MasterEmployeeGroup::select(
+                "$g.id as kodegroup", "$g.section_id as kodebagian",
+                "$g.name as namagroup", "$s.name as namabagian"
+            )
+            ->join($s, "$s.id", '=', "$g.section_id")
+            ->distinct()
+            ->whereHas('groupline', function($q){
+                $q->where('factory_id', session('db')->iddb)
+                    ->where('is_show', 1)
+                    ->where('is_line', 1);
+            });
+
+        if ($request->q) {
+            $data = $data->where(function ($q) use ($request, $g) {
+                $q->where("$g.name", 'like', "%$request->q%");
+            });
+        }
+        $data = $data->orderBy('kodegroup')->paginate(15, $request->page);
+
+        return response()->json($data);
+    }
+
+    function groupbuyer(Request $request)
+    {
+        $data = MasterGroupBuyer::select('id', 'group_name')
+            ->get()
+            ->map(function($item){
+                return [
+                    'id' => $item->id,
+                    'text' => $item->group_name
+                ];
+            });
+
+        return response()->json([
+            'results' => $data
+        ]);
+    }
+
+    function inlinetls(Request $request){
+        return view('monitoring::inlineperformance.inline');
+    }
+
+    function filterData(Request $request)
+    {
+        preconnect(session('db'));
+
+        try {
+            $m_da = $request->datea > $request->dateb ? $request->dateb : $request->datea;
+            $m_db = $request->datea > $request->dateb ? $request->datea : $request->dateb;
+
+            $dta = Carbon::parse($m_da);
+            $dtb = Carbon::parse($m_db)->endOfDay();
+
+            $diff = $dta->diffInDays($dtb);
+
+            if ($diff > 30) {
+                return response()->json([
+                    'error' => 'Date Has More Than 30 Days in Range, Cannot View Data.'
+                ], 422);
+            }
+
+            $headerQuery = InlineHeader::whereBetween('date', [$dta, $dtb]);
+
+            if ($request->line && $request->line != 'all') {
+                $headerQuery = $headerQuery->where('group_id', $request->line);
+            }
+
+            // Filter Group Buyer -> idpo
+            if ($request->groupbuyer && $request->groupbuyer != 'all') {
+                $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
+                $poIds = PurchaseOrder::whereIn('idbuyer', $buyerIds)->pluck('idpo');
+                $headerQuery = $headerQuery->whereIn('idpo', $poIds);
+            }
+
+            $headerIds = (clone $headerQuery)->pluck('id');
+            $headerCount = $headerIds->count();
+
+            // Qty Inspect
+            $totInspect = $headerCount * 5;
+
+            // Qty Defect
+            $totDefect = InlineDetail::whereIn('inline_header_id', $headerIds)->count();
+
+            // RFT
+            $rft = $totInspect > 0
+                ? (($totInspect - $totDefect) / $totInspect) * 100
+                : 0;
+
+            // WFT
+            $wft = $totInspect > 0
+                ? ($totDefect / $totInspect) * 100
+                : 0;
+
+            // Target
+            $wftTarget = 3;
+            $target = $wft <= $wftTarget ? true : false;
+
+            // Top Defect
+            $topDefect = InlineDetail::whereIn('inline_header_id', $headerIds)
+                ->where('defect_id', '!=', 1)
+                ->select('defect_id', DB::raw('count(*) as total'))
+                ->groupBy('defect_id')
+                ->orderByDesc('total')
+                ->limit(3)
+                ->get();
+
+            $defectIds = $topDefect->pluck('defect_id');
+
+            $masterDefects = MasterInlineDefect::whereIn('id', $defectIds)
+                ->pluck('nmdefect', 'id');
+
+            $topDefect = $topDefect->map(function ($item, $index) use ($masterDefects) {
+                $colors = [
+                    '#2F80ED',
+                    '#219653',
+                    '#F2C94C'
+                ];
+
+                return [
+                    'defect_id' => $item->defect_id,
+                    'nmdefect'  => $masterDefects[$item->defect_id] ?? '-',
+                    'total'     => $item->total,
+                    'color'     => $colors[$index],
+                ];
+            });
+
+            return response()->json([
+                'tot_inspect' => $totInspect > 0 ? $totInspect : null,
+                'tot_defect'  => $totInspect > 0 ? $totDefect : null,
+                'rft'         => $totInspect > 0 ? number_format($rft, 2) : null,
+                'wft'         => $totInspect > 0 ? number_format($wft, 2) : null,
+                'target'      => $target,
+                'top_defect'  => $topDefect,
+            ]);
+
+        } catch (\Throwable $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    function datatables(Request $request)
+    {
+        preconnect(session('db'));
+
+        try {
+            $date = $request->date
+                ? Carbon::parse($request->date)
+                : Carbon::parse(InlineHeader::max('date'));
+
+            $dta = $date->copy()->startOfDay();
+            $dtb = $date->copy()->endOfDay();
+
+            $g = (new MasterEmployeeGroup())->getTable();
+            $s = (new MasterEmployeeSection())->getTable();
+
+            $lines = MasterEmployeeGroup::select(
+                    "$g.id as kodegroup", "$g.name as namagroup", "$s.name as namabagian"
+                )
+                ->join($s, "$s.id", '=', "$g.section_id")
+                ->distinct()
+                ->whereHas('groupline', function ($q) {
+                    $q->where('factory_id', session('db')->iddb)
+                        ->where('is_show', 1)
+                        ->where('is_line', 1);
+                })
+                ->orderBy("$g.id", "asc")
+                ->get();
+
+            $headers = InlineHeader::whereBetween('date', [$dta, $dtb])
+                ->get(['id', 'group_id', 'idpo', 'round']);
+
+            $idpos = $headers->pluck('idpo')->unique();
+
+            $headersByLine = $headers->groupBy('group_id');
+
+            $allHeaderIds = $headers->pluck('id');
+            $defectsByHeader = InlineDetail::whereIn('inline_header_id', $allHeaderIds)
+                ->get(['inline_header_id'])
+                ->groupBy('inline_header_id');
+
+            $result = $lines->map(function ($line) use ($headersByLine, $defectsByHeader) {
+
+                $headers = $headersByLine->get($line->kodegroup, collect());
+                $hIds = $headers->pluck('id');
+
+                $idpos = $headers->pluck('idpo')->unique();
+
+                $styles = PurchaseOrder::whereIn('idpo', $idpos)
+                    ->pluck('idstyle')
+                    ->unique()
+                    ->values();
+
+                $nmstyles = Style::whereIn('idstyle', $styles)
+                    ->pluck('nmstyle')
+                    ->values();
+
+                // Round
+                $round = $headers->max('round');
+
+                // QTY Inspect
+                $totInspect = $hIds->count() * 5;
+
+                // QTY Defect
+                $totDefect = $hIds->sum(function ($id) use ($defectsByHeader) {
+                    return $defectsByHeader->get($id, collect())->count();
+                });
+
+                // RFT
+                $rft = $totInspect > 0 ? (($totInspect - $totDefect) / $totInspect) * 100 : 0;
+
+                // WFT
+                $wft = $totInspect > 0 ? ($totDefect / $totInspect) * 100 : 0;
+
+                return [
+                    'line'         => $line->namagroup,
+                    'style'        => $nmstyles,
+                    'qty_rft'      => $totInspect - $totDefect,
+                    'qty_inspect'  => $totInspect,
+                    'qty_defect'   => $totDefect,
+                    'rft'          => number_format($rft, 2),
+                    'wft'          => number_format($wft, 2),
+                    'last_status'  => $round,
+                ];
+            });
+
+
+            return response()->json([
+                'date' => $date->format('Y-m-d'),
+                'data' => $result->values(),
+            ]);
+
+        } catch (\Throwable $e) {
+            return $e->getMessage();
+        }
+    }
+
+}
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -212,7 +500,6 @@
             border-radius:5px;
         }
 
-        /* Fixed-height stat cards so dynamic values never push the card (and its row neighbours) taller */
         .stat-card {
             height: 190px;
             overflow: hidden;
@@ -230,15 +517,8 @@
             max-width: 100%;
         }
 
-        /* TOP DEFECT: fixed card height, internal scroll instead of growing */
         #topDefectList {
             max-height: 105px;
-            overflow-y: auto;
-            padding-right: 4px;
-        }
-
-        #topDefectList::-webkit-scrollbar {
-            width: 5px;
         }
 
         #topDefectList::-webkit-scrollbar-thumb {
@@ -251,12 +531,10 @@
             overflow: hidden;
             text-overflow: ellipsis;
             display: inline-block;
-            max-width: 140px;
+            max-width: 190px;
             vertical-align: middle;
         }
 
-        /* Fixed height stat cards so a growing Top Defect list never pushes the row taller */
-        /* !important needed because Bootstrap's .h-100 utility is itself !important */
         .stat-card {
             height: 190px !important;
             overflow: hidden;
@@ -269,7 +547,7 @@
         }
 
         #topDefectList::-webkit-scrollbar {
-            width: 4px;
+            width: 1px;
         }
 
         #topDefectList::-webkit-scrollbar-thumb {
@@ -369,7 +647,6 @@
             }
         }
 
-        /* Laptop breakpoint (e.g. 1366x768) - keep desktop layout but tighten spacing */
         @media (min-width: 992px) and (max-width: 1400px) {
             .dashboard-title {
                 font-size: 1.5rem;
@@ -1061,14 +1338,6 @@ $(function(){
         updateClock();
         setInterval(updateClock,1000);
 
-        // let today = new Date().toISOString().split('T')[0];
-
-        // console.log(today);
-
-        // $('#datea').val(today);
-        // $('#dateb').val(today);
-        // $('#datedatatables').val(today);
-
         flatpickr("#datea", {
             dateFormat: "d-m-Y",
             altInput: true,
@@ -1171,6 +1440,9 @@ $(function(){
                 url: "{{ route('monitoring_inlineperformancefilterdata') }}",
                 type: "GET",
                 data: filter,
+                beforeSend: function(){
+                    $('#loading').show();
+                },
                 success: function (response) {
                     $('#cardQtyInspect').text(response.tot_inspect ?? '-');
                     $('#cardQtyDefect').text(response.tot_defect ?? '-');
@@ -1184,7 +1456,7 @@ $(function(){
 
                         response.top_defect.forEach(function(item) {
                             html += `
-                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div class="d-flex justify-content-between align-items-center mb-2 w-100">
                                     <div class="d-flex align-items-center">
                                         <div style="
                                             width:15px;
@@ -1233,6 +1505,9 @@ $(function(){
                 },
                 error: function (xhr) {
                     console.log(xhr.responseText);
+                },
+                complete: function(){
+                    $('#loading').hide();
                 }
             });
         }
@@ -1247,11 +1522,16 @@ $(function(){
                 groupbuyer: $('#groupbuyer').val() || 'all'
             };
 
+            $('#loading').show();
             loadCards(currentFilter);
         });
 
         loadCards(currentFilter);
 
+
+        function showDash(data) {
+            return (data === null || data === undefined || data === '') ? '-' : data;
+        }
         // Datatables
         var table = $('#tableInlinePerformance').DataTable({
             processing: true,
@@ -1278,7 +1558,7 @@ $(function(){
                 }
             },
             columns: [
-                { data: 'line', className: 'text-center fw-normal', orderable: false },
+                { data: 'line', className: 'text-center fw-normal', orderable: false, defaultContent: '-' },
                 {
                     data: 'style',
                     className: 'text-center fw-normal',
@@ -1287,14 +1567,17 @@ $(function(){
 
                         return Object.values(data).join(', ');
                     },
-                    orderable: false
+                    orderable: false,
+                    render: showDash
                 },
-                { data: 'qty_rft', className: 'text-center fw-normal', orderable: false },
+                { data: 'qty_rft', className: 'text-center fw-normal', orderable: false,  render: function(data) {
+                    return (data === null || data === undefined || data === '') ? '-' : data;
+                } },
                 { data: 'qty_inspect', className: 'text-center fw-normal', orderable: false },
                 { data: 'qty_defect', className: 'text-center fw-normal', orderable: false },
                 { data: 'rft', className: 'text-center fw-normal', orderable: false },
                 { data: 'wft', className: 'text-center fw-normal', orderable: false },
-                { data: 'last_status', className: 'text-center fw-normal', orderable: false }
+                { data: 'last_status', className: 'text-center fw-normal', orderable: false,  render: showDash }
             ],
             dom:'',
             order:[]
@@ -1317,3 +1600,5 @@ $(function(){
 
 </body>
 </html>
+
+
