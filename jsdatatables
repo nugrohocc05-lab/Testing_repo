@@ -1,0 +1,105 @@
+$(function () {
+    $(document).ready(function () {
+
+        flatpickr("#datedatatables", {
+            dateFormat: "d-m-Y",
+            altInput: true,
+            altFormat: "d F Y",
+            allowInput: true,
+            monthSelectorType: "static",
+            disableMobile: true,
+            defaultDate: "today"
+        });
+
+        function showDash(data) {
+            return (data === null || data === undefined || data === '') ? '-' : data;
+        }
+
+        var table = $('#tableInlinePerformance').DataTable({
+            processing: true,
+            serverSide: false,
+            paging: false,
+            ajax: {
+                url: window.routes.datatables,
+                type: "GET",
+                data: function (d) {
+                    d.date = $('#datedatatables').val();
+                },
+                dataSrc: function (json) {
+                    let totalRft = 0, totalInspect = 0, totalDefect = 0;
+                    json.data.forEach(function (row) {
+                        totalRft += Number(row.qty_rft) || 0;
+                        totalInspect += Number(row.qty_inspect) || 0;
+                        totalDefect += Number(row.qty_defect) || 0;
+                    });
+                    $('#footQtyRft').text(totalRft);
+                    $('#footQtyInspect').text(totalInspect);
+                    $('#footQtyDefect').text(totalDefect);
+
+                    return json.data;
+                }
+            },
+            columns: [
+                { data: 'line', className: 'text-center fw-normal', orderable: false, render: showDash },
+                {
+                    data: 'style',
+                    className: 'text-center fw-normal',
+                    render: function (data) {
+                        if (!data || data.length === 0) {
+                            return '-';
+                        }
+                        return data.join(', ');
+                    },
+                    orderable: false
+                },
+                {
+                    data: 'qty_rft', className: 'text-center fw-normal', orderable: false,
+                    render: function (data) {
+                        return (data === null || data === undefined || data === '') ? '-' : data;
+                    }
+                },
+                { data: 'qty_inspect', className: 'text-center fw-normal', orderable: false },
+                { data: 'qty_defect', className: 'text-center fw-normal', orderable: false },
+                { data: 'rft', className: 'text-center fw-normal', orderable: false },
+                { data: 'wft', className: 'text-center fw-normal', orderable: false },
+                {
+                    data: 'last_round',
+                    className: 'text-center fw-normal',
+                    orderable: false,
+                    render: function (data, type, row) {
+                        if (!data) return '-';
+
+                        let hasDefect = row.last_round_has_defect;
+
+                        if (hasDefect) {
+                            return `
+                                <div class="badge px-4 py-2 rounded-5" style="background-color: #F24C4C; border: 1px solid #D63737;font-size:15px; font-weight:400">
+                                    Round ${data}
+                                </div>
+                            `;
+                        } else {
+                            return `
+                                <div class="badge px-4 py-2 rounded-5" style="background-color: #219653; border: 1px solid #4CF299;font-size:15px; font-weight:400">
+                                   Round ${data}
+                                </div>
+                            `;
+                        }
+                    }
+                }
+            ],
+            dom: '',
+            order: []
+        });
+
+        // Search
+        $('#searchLine, #find').on('keyup click', function (e) {
+            if (e.type === 'click' || e.key === 'Enter' || e.type === 'keyup') {
+                table.column(0).search($('#searchLine').val()).draw();
+            }
+        });
+
+        $('#datedatatables').on('change', function () {
+            table.ajax.reload();
+        });
+    });
+});
