@@ -258,3 +258,757 @@
 </script>
 @endif
 @endsection
+
+bawah 
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MES</title>
+    <link href="https://unpkg.com/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/css/select2.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+    <link rel="stylesheet" href="{{ asset('/css/flatpickr.min.css') }}">
+
+    <style>
+        html, body {
+            margin: 0;
+            background-color: #242E3E;
+        }
+
+        body {
+            padding: 1rem;
+        }
+
+        /* Mode Desktop  */
+        @media (min-width: 992px) {
+            html, body {
+                height: 100%;
+            }
+            body {
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+            }
+        }
+
+        .dashboard-wrap {
+            width: 100%;
+        }
+
+        @media (min-width: 992px) {
+            .dashboard-wrap {
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+            }
+        }
+
+        .bg-custom{
+            background:#1C2536;
+        }
+
+        .bg-custom-select{
+            background:#242E3E;
+            color:#fff;
+            border:0;
+        }
+
+        .btn-custom{
+            background:#222F4A;
+            color:#fff;
+            border:none;
+            border-radius:10px;
+        }
+
+        .border-custom{
+            border:1px solid #576376 !important;
+        }
+        .border-custom-datatable{
+            border:1px solid #4C8CF2 !important;
+            background-color:#212B3E;
+        }
+
+        .border-end-custom{
+            border-right:1px solid #242E3E !important;
+        }
+
+        .min-h-custom{
+            min-height:250px;
+        }
+
+        .border-color-yellow{
+            border:1px solid #F2C94C;
+            border-radius:5px;
+        }
+
+        /* Text dan Border */
+        .text-title {
+            color: #5A587E;
+        }
+        .text-yellow {
+            color: #F2C94C;
+        }
+        .text-red {
+            color: #F24C4C;
+        }
+        .text-blue {
+            color: #4C8CF2;
+        }
+        .text-green {
+            color: #4CF299;
+        }
+        .color-box-yellow {
+            background-color: #363633;
+            border:1px solid #F2C94C;
+            border-radius:5px;
+            color: #F2C94C;
+        }
+        .color-box-red {
+            background-color: #352837;
+            border:1px solid #F24C4C;
+            border-radius:5px;
+        }
+        .color-box-blue {
+            background-color: #23304E;
+            border:1px solid #3F5588;
+            border-radius:5px;
+        }
+        .color-box-green {
+            background-color: #1A3B45;
+            border:1px solid #4CF299;
+            border-radius:5px;
+        }
+
+        .dashboard-title {
+            font-size: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-title {
+                font-size: 1.4rem;
+            }
+
+            .dashboard-subtitle {
+                font-size: 1rem !important;
+            }
+        }
+
+        @media (max-width: 576px) {
+
+            .dashboard-title {
+                font-size: 1.1rem;
+            }
+
+            .dashboard-subtitle {
+                display: none;
+            }
+
+            .btn-custom {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .d-flex.flex-wrap > .d-flex {
+                width: 100%;
+            }
+
+            .color-box-yellow img,
+            .color-box-red img,
+            .color-box-blue img,
+            .color-box-green img {
+                width: 40px !important;
+                height: 40px !important;
+            }
+
+            .color-box-yellow h2,
+            .color-box-red h2,
+            .color-box-blue h2,
+            .color-box-green h2 {
+                font-size: 1.4rem;
+            }
+        }
+
+        .select2-container {
+            width: 100% !important;
+        }
+
+        @media (max-width: 767.98px) {
+
+            .border-end-custom {
+                border-right: none !important;
+                border-bottom: 1px solid rgba(255,255,255,.2);
+                padding-bottom: 1rem;
+                margin-bottom: 1rem;
+            }
+
+            #findbtn {
+                width: 100%;
+            }
+
+            input[type="date"] {
+                max-width: 100% !important;
+            }
+        }
+
+        #searchLine::placeholder {
+            color: white;
+            opacity: 1;
+            font-weight: 300;
+        }
+
+        .datatable-wrap {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .table-scroll-area {
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            height: calc(100vh - 560px);
+        }
+
+        @media (min-width: 992px) {
+            .datatable-wrap {
+                flex-grow: 1;
+                min-height: 0;
+                overflow: hidden;
+            }
+            .table-scroll-area {
+                flex-grow: 1;
+                min-height: 0;
+                max-height: none;
+            }
+        }
+
+        /* Header datatable & search box fluid */
+        #datedatatables,
+        #searchLine {
+            max-width: 100%;
+        }
+
+        @media (max-width: 575.98px) {
+            #datedatatables,
+            #searchLine {
+                width: 100% !important;
+            }
+            .search-export-row {
+                width: 100%;
+            }
+            .search-export-row .d-flex:first-child {
+                width: 100%;
+            }
+            .search-export-row .btn-custom {
+                width: auto;
+            }
+        }
+
+        /* Container kalender */
+        .flatpickr-calendar {
+            background: #242E3E;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+            border: none;
+            width: 307px;
+
+        }
+        .flatpickr-calendar.arrowTop:before,
+        .flatpickr-calendar.arrowTop:after {
+            display: none;
+        }
+
+        /* Header (bulan & tahun) */
+        .flatpickr-months {
+            border-radius: 12px 12px 0 0;
+            padding: 10px 0;
+        }
+        .flatpickr-current-month {
+            color: #fff;
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+        .flatpickr-current-month .flatpickr-monthDropdown-months,
+        .flatpickr-current-month input.cur-year {
+            color: #fff;
+            background: transparent;
+        }
+        .flatpickr-months .flatpickr-prev-month,
+        .flatpickr-months .flatpickr-next-month {
+            color: #fff;
+            fill: #fff;
+            top: 12px;
+        }
+        .flatpickr-months .flatpickr-prev-month svg,
+        .flatpickr-months .flatpickr-next-month svg {
+            fill: #fff;
+        }
+
+        /* Nama hari (Sun, Mon, dst) */
+        .flatpickr-weekdays {
+            background: #1e2a44;
+        }
+        span.flatpickr-weekday {
+            background: #1e2a44;
+            color: #cfd8ec;
+            font-weight: 600;
+        }
+
+        /* Body kalender */
+        .flatpickr-days {
+            background: #1e2a44;
+            border: none;
+        }
+
+        .dayContainer {
+            background: #1e2a44;
+        }
+
+        /* Tanggal */
+        .flatpickr-day {
+            color: #fff;
+            border-radius: 10px;
+        }
+        .flatpickr-day:hover {
+            background: #33456b;
+        }
+        .flatpickr-day.today {
+            border-color: #6c8cd5;
+        }
+
+        /* Tanggal di luar bulan (abu-abu redup) */
+        .flatpickr-day.prevMonthDay,
+        .flatpickr-day.nextMonthDay {
+            color: #5a6785;
+        }
+
+        /* Tanggal terpilih */
+        .flatpickr-day.selected,
+        .flatpickr-day.selected:hover {
+            background: #32549A;
+            border-color: #32549A;
+            color: #fff;
+        }
+
+        .flatpickr-current-month {
+            color: #fff;
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        /* Detail perline */
+        .date-filter {
+            width: 150px;
+            min-width: 150px;
+            background-color: #1C2536;
+            color: white;
+        }
+
+        .search-input {
+            width: 250px;
+            background-color: #1C2536;
+            color: white;
+        }
+
+        h5.text-nowrap {
+            white-space: nowrap;
+        }
+
+        /* Tooltip */
+        .export-btn {
+            position: relative;
+        }
+
+        .custom-tooltip {
+            position: absolute;
+            right: 120%;
+            top: 50%;
+            transform: translateY(-50%);
+            background-color: #000000;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.2s ease;
+            z-index: 10;
+        }
+
+        .custom-tooltip::after {
+            content: "";
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+
+            border-width: 5px;
+            border-style: solid;
+            border-color: transparent transparent transparent #000000;
+        }
+
+        .export-btn:hover .custom-tooltip {
+            opacity: 1;
+            visibility: visible;
+            right: 130%;
+        }
+
+          .select2-container {
+            width: 100% !important;
+        }
+
+        .select2-container--default .select2-selection--single {
+            background: #372E39;
+            border: none;
+            display: flex;
+            align-items: center;
+        }
+
+        .select2-container--default .select2-selection--single .select2-selection__rendered {
+            color: white;
+            line-height: 38px;
+            padding-left: 0.75rem;
+        }
+
+        .select2-container--default .select2-selection--single .select2-selection__arrow {
+            height: 38px;
+        }
+
+        .select2-container--default .select2-selection--single .select2-selection__placeholder {
+            color: #ffffff !important;
+        }
+
+        .select2-container--default .select2-results__option--highlighted[aria-selected] {
+            background-color: transparent !important;
+            color: white !important;
+        }
+
+        .select2-container--default .select2-results__option[aria-selected="true"] {
+            background-color: transparent !important;
+            color: white !important;
+        }
+
+        .select2-dropdown {
+            background: #372E39;
+            color: white;
+        }
+
+        .select2-results__option {
+            color: white;
+        }
+
+        .select2-search__field {
+            background: #372E39;
+            color: white;
+            border: none;
+        }
+    </style>
+
+</head>
+<body>
+    <div class="container-fluid dashboard-wrap">
+        <!-- Header -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+            <div class="d-flex text-white">
+                <button
+                    type="button"
+                    onclick="history.back()"
+                    class="d-flex align-items-center gap-4 border-0 bg-transparent text-white p-0">
+                    <img src="{{ _asset('svg/inlinePerformance/back.svg') }}"
+                        width="15"
+                        height="15">
+                    <span>Back</span>
+                </button>
+            </div>
+            <div class="d-flex gap-5 d-flex justify-content-center align-items-center flex-wrap text-white fs-4 fw-bold ">
+                <div class="d-flex align-items-center gap-2">
+                    <span id="liveClock"></span>
+                </div>
+                <div class="d-flex align-items-center gap-2 ms-auto">
+                    <div class="col-12 col-md-1 d-flex justify-content-end align-items-end mb-2">
+                        <button class="export-btn bg-transparent border-0 p-0">
+                            <img src="{{ _asset('svg/inlinePerformance/export.svg') }}" style="width:27px; height:27px;">
+                                <span class="custom-tooltip">Export</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card -->
+        <div class="row g-3 mt-1">
+            <!-- TARGET -->
+             <div class="col-6 col-md-4 col-lg">
+                <div class="color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                    <h6 class="fw-bold text-start text-red mb-2 fs-4">
+                        LOCATION
+                    </h6>
+
+                    <select id="line" class="form-select select2 w-100">
+                        <option></option>
+                    </select>
+
+                </div>
+            </div>
+            <!-- QTY INSPECT -->
+            <div class="col-6 col-md-4 col-lg">
+                <div class="color-box-yellow h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
+                    <img src="{{ _asset('svg/inlinePerformance/qty-inspect.svg') }}"
+                        class="img-fluid mb-4" style="width:60px;height:60px;">
+                    <div>
+                        <h6 class="fw-bold text-start text-yellow mb-0">
+                            QTY INSPECT
+                        </h6>
+                        <div class="d-flex align-items-end text-white">
+                            <h2 class="fw-bold mb-0 lh-2">312</h2>
+                            <small class="ms-1">pcs</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- QTY DEFECT -->
+             <div class="col-6 col-md-4 col-lg">
+                <div class="color-box-red h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
+                    <img src="{{ _asset('svg/inlinePerformance/qty-defect.svg') }}"
+                        class="img-fluid mb-4" style="width:60px;height:60px;">
+
+                    <div>
+                        <h6 class="fw-bold text-start text-red mb-0">
+                            QTY DEFECT
+                        </h6>
+
+                        <div class="d-flex align-items-end text-white">
+                            <h2 class="fw-bold mb-0 lh-2">312</h2>
+                            <small class="ms-1">pcs</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RFT -->
+             <div class="col-6 col-md-4 col-lg">
+                <div class="color-box-green h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
+                    <img src="{{ _asset('svg/inlinePerformance/rft.svg') }}"
+                        class="img-fluid mb-4" style="width:60px;height:60px;">
+                    <div>
+                        <h6 class="fw-bold text-start text-green mb-0">
+                            RFT
+                        </h6>
+                        <div class="d-flex align-items-end text-white">
+                            <h2 class="fw-bold mb-0 lh-2">94.12<span>%</span></h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- WFT -->
+             <div class="col-6 col-md-4 col-lg">
+                <div class="color-box-blue h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
+                    <img src="{{ _asset('svg/inlinePerformance/wft.svg') }}"
+                        class="img-fluid mb-4" style="width:60px;height:60px;">
+
+                    <div>
+                        <h6 class="fw-bold text-start text-blue mb-0">
+                            WFT
+                        </h6>
+
+                        <div class="d-flex align-items-end text-white">
+                            <h2 class="fw-bold mb-0 lh-2">94.12<span>%</span></h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Datatables -->
+        <div class="mt-3 border-custom-datatable rounded p-3 text-white datatable-wrap">
+            <div class="col-md-12">
+				<table id="datalist" class="table table-bordered hover no-wrap" width="100%">
+					<thead >
+						<tr >
+							<td style="padding-top: 10px;"><center><b>OPERATORS</b></center></td>
+							@if(isset($usertoday))
+								@foreach($usertoday as $u)
+								@php
+									$nm = explode(' ', $u->nama);
+								@endphp
+								<td><center><b>{{ $u->sequence_process }}<br>{{ $u->userid_operator }}<br>{{ count($nm) > 1 ? $nm[0] . ' ' . substr($nm[1], 0, 1) : ($nm[0] ?: 'No Data') }}</b></center></td>
+								@endforeach
+							@endif
+						</tr>
+					</thead>
+					<tbody>
+						@for($i=1; $i < 6; $i++)
+						<tr>
+							<td><b style="font-size: 100%; padding: 1px"><center>ROUND {{$i}}</center></b></td>
+							@if(isset($userinline))
+								@foreach($userinline as $u)
+								@php
+									$uk = $u->where('round', $i);
+									if($uk->count() > 0){
+										if($uk->first()->detail->count() > 0){
+										$x = 5 - $uk->first()->detail->count();
+										}else {
+											$x = 5;
+										}
+									}else{
+										$x = 6;
+									}
+								@endphp
+								<td>
+									@if($x != 6)
+									<a href="{{ route('monitoring_dashboard_convcapdata', ['nik' => $u->first()->userid_operator, 'round' => $i]) }}" class="btn-detail" title="Click For Detail" data-tooltip="tooltip">
+										<center>
+											@if($x == 5)
+											<div style="padding: 22px;" class="bg-green"><i class="fa fa-check"></i></div>
+											@elseif($x == 4 && $uk->first()->detail->where('problem', '!=', null)->count() <= 0)
+											<div style="padding: 22px;" class="bg-red"><i class="fa fa-exclamation-circle text-red"></i></div>
+											@else
+												@if(isset($uk->first()->detail) && $uk->first()->detail->where('problem', '!=', null)->count() > 0)
+												<div style="padding: 22px" class="bg-yellow"><i class="fa fa-pencil-alt text-red"></i></div>
+												@else
+												<div style="padding: 22px" class="bg-red"><i class="fa fa-exclamation-circle fa-lg"></i></div>
+												@endif
+											@endif
+										</center>
+									</a>
+									@endif
+								</td>
+								@endforeach
+							@endif
+						</tr>
+						@endfor
+					</tbody>
+				</table>
+			</div>
+        </div>
+
+        <div class="d-flex justify-content-center mt-2">
+            <div class="d-flex text-white px-3 py-1 gap-3 align-items-center justify-content-center fs-6">
+
+                <div class="d-flex gap-3 align-items-center">
+                    <div class="legend-box" style="background-color: #219653;"></div>
+                    <p class="mb-0">No Defect Data</p>
+                </div>
+
+                <div class="d-flex gap-3 align-items-center">
+                    <div class="legend-box" style="background-color: #F24C4C;"></div>
+                    <p class="mb-0">Found One Defect Data</p>
+                </div>
+
+                <div class="d-flex gap-3 align-items-center">
+                    <div class="legend-box" style="background-color: #F24C4C;">
+                        <img src="{{ _asset('svg/inlinePerformance/defect2.svg') }}">
+                    </div>
+                    <p class="mb-0">Found Two or More Defect Data</p>
+                </div>
+
+                <div class="d-flex gap-3 align-items-center">
+                    <div class="legend-box" style="background-color: #F9E21D;">
+                        <img src="{{ _asset('svg/inlinePerformance/pencil.svg') }}">
+                    </div>
+                    <p class="mb-0">CAP Already Filled In</p>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="mt-2 text-white d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0 fs-6">
+            <div class="d-flex align-items-center gap-2">
+                <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" style="width: 15px; height: 15px;">
+                Data Update
+                <span id="liveClock2"></span>
+            </div>
+            <div class="d-flex align-items-center">
+                <div class="mb-0 d-flex align-items-center gap-2">
+                    System Connected
+                    <div class="rounded-pill" style="background-color:#4CF299; width:20px;height:20px"></div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://unpkg.com/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/js/select2.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<script src="{{ asset('/js/flatpickr.min.js') }}"></script>
+<script src="{{ asset('js/flatpickr_language_id.js') }}"></script>
+
+<script>
+    $(document).ready(function() {
+        function updateClock(){
+        let now = new Date();
+        let day = String(now.getDate()).padStart(2,'0');
+        let month = [
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December"
+        ];
+
+        let year = now.getFullYear();
+
+        let hour = String(now.getHours()).padStart(2,'0');
+        let minute = String(now.getMinutes()).padStart(2,'0');
+        let second = String(now.getSeconds()).padStart(2,'0');
+
+
+        document.getElementById('liveClock').innerHTML =
+            `${day} ${month[now.getMonth()]} ${year} - ${hour} : ${minute} : ${second}`;
+        document.getElementById('liveClock2').innerHTML =
+            `${day} ${month[now.getMonth()]} ${year} - ${hour} : ${minute} : ${second}`;
+        }
+        updateClock();
+        setInterval(updateClock,1000);
+
+        $('#line').select2({
+            placeholder: 'Select Line',
+            width: '100%',
+            ajax: {
+                url: "{{ route('monitoring_inlineperformance_filterInlineLts') }}",
+                type: "GET",
+                dataType: "json",
+                delay: 500,
+                data: function(params){
+                    return{
+                        q: params.term,
+                        page: params.page || 1
+                    }
+                },
+                processResults:function(data){
+                    return{
+                        results: $.map(data.line.data,function(item){
+                            return{
+                                id:item.kodegroup,
+                                text:item.namabagian + ' - ' + item.namagroup
+                            }
+                        }),
+                        pagination:{
+                            more:data.to < data.total
+                        }
+                    }
+                },
+                cache:true
+            }
+        });
+    })
+</script>
+
+</body>
+</html>
