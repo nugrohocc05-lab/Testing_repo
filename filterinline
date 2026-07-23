@@ -1,0 +1,30 @@
+function filterInlineLts(Request $request)
+{
+    if (!$request->line) {
+        return response()->json(['message' => 'Line belum dipilih'], 422);
+    }
+
+    $date = Carbon::now();
+    $dta = $date->copy()->startOfDay();
+    $dtb = $date->copy()->endOfDay();
+
+    $headerQuery = InlineHeader::whereBetween('date', [$dta, $dtb])
+        ->where('group_id', $request->line);
+
+    $headerIds = (clone $headerQuery)->pluck('id');
+    $headerCount = $headerIds->count();
+
+    $totInspect = $headerCount * 5;
+    $totDefect = InlineDetail::whereIn('inline_header_id', $headerIds)->count();
+
+    $rft = $totInspect > 0 ? (($totInspect - $totDefect) / $totInspect) * 100 : 0;
+    $wft = $totInspect > 0 ? ($totDefect / $totInspect) * 100 : 0;
+
+    return response()->json([
+        'date'        => $date->format('Y-m-d'),
+        'tot_inspect' => $totInspect,
+        'tot_defect'  => $totDefect,
+        'rft'         => number_format($rft, 2),
+        'wft'         => number_format($wft, 2),
+    ]);
+}
