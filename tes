@@ -1,49 +1,260 @@
-public function exportExcel(Request $request)
-{
-    $data = $this->getFilterData($request);
+@extends('monitoring::layouts.master')
 
-    $html = view('monitoring::exports.inline_report', [
-        'data' => $data
-    ])->render();
+@section('extracss')
+<style type="text/css">
+	.b-title {
+        font-size: 14pt;
+    }
+    .b-content {
+        font-size: 24pt;
+        height: 40pt;
+        padding-top: 10px;
+    }
+    tr {
+        line-height: 10px;
+        min-height: 20px;
+        height: 10px;
+        background-color: black;
+    }
+    td, select, textarea, input {
+        background-color: black;
+    }
+</style>
+@endsection
 
-    header('Content-Type: application/vnd.ms-excel');
-    header('Content-Disposition: attachment; filename="Report_Inline.xls"');
-    header('Pragma: no-cache');
-    header('Expires: 0');
+@section('content')
+<div>
+	<section class="content" style="background-color: black; color: white;">
+		<div class="color-palette-box">
+            <div class="box-body">
+                <div class="row">
+                    <div class="col-sm-4 col-md-2">
+                        <div class="color-palette-set">
+                            <div class="bg-navy-active color-palette"><center><span class="b-title">LINE</span></center></div>
+                            <div class="bg-navy color-palette"><center><span class="b-content"><b>{{ isset($line) ? $line->namagroup : '-' }}</b></span></center></div>
+                        </div>
+                    </div>
+                    <div class="col-sm-4 col-md-2">
+                        <div class="color-palette-set">
+                            <div class="bg-aqua-active color-palette"><center><span class="b-title">Total Output</span></center></div>
+                            <div class="bg-aqua color-palette"><center><span class="b-content"><b>{{ isset($totaloutput) ? $totaloutput : '0' }}</b></span></center></div>
+                        </div>
+                    </div>
+                    <div class="col-sm-4 col-md-2">
+                        <div class="color-palette-set">
+                            <div class="bg-orange-active color-palette"><center><span class="b-title">Efficiency</span></center></div>
+                            <div class="bg-orange color-palette"><center><span class="b-content"><b>{{ isset($totalefficiency) ? $totalefficiency . '%' : '0' }}</b></span></center></div>
+                        </div>
+                    </div>
+                    <div class="col-sm-4 col-md-2">
+                        <div class="color-palette-set">
+                            <div class="bg-green-active color-palette"><center><span class="b-title">RFT</span></center></div>
+                            <div class="bg-green color-palette"><center><span class="b-content"><b>{{ isset($percentrft) ? $percentrft . '%' : '0' }}</b></span></center></div>
+                        </div>
+                    </div>
+                    <div class="col-sm-4 col-md-2">
+                        <div class="color-palette-set">
+                            <div class="bg-maroon-active color-palette"><center><span class="b-title">WFT</span></center></div>
+                            <div class="bg-maroon color-palette"><center><span class="b-content"><b>{{ isset($percentwft) ? $percentwft . '%' : '0' }}</b></span></center></div>
+                        </div>
+                    </div>
+                    <div class="col-sm-2 col-md-2">
+                        <a href="{{ route('monitoring_dashboard_conv') }}" class="btn btn-primary btn-lg" style="width: 100%">ENDLINE</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+		<div class="row">
+			<div class="col-md-6">
+				<b style="font-size: 14pt; height: 20pt; padding-top: 10px">&nbsp; &nbsp; Date: {{ Carbon\Carbon::now()->format('D, d M y') }}  - <b id="hours">{{ Carbon\Carbon::now()->format('H:i:s') }}</b></b>
+			</div>
+			<div class="col-md-12">
+				<table id="datalist" class="table table-bordered hover no-wrap" width="100%">
+					<thead>
+						<tr>
+							<td style="padding-top: 10px;"><center><b>OPERATORS</b></center></td>
+							@if(isset($usertoday))
+								@foreach($usertoday as $u)
+								@php
+									$nm = explode(' ', $u->nama);
+								@endphp
+								<td><center><b>{{ $u->sequence_process }}<br>{{ $u->userid_operator }}<br>{{ count($nm) > 1 ? $nm[0] . ' ' . substr($nm[1], 0, 1) : ($nm[0] ?: 'No Data') }}</b></center></td>
+								@endforeach
+							@endif
+						</tr>
+					</thead>
+					<tbody>
+						@for($i=1; $i < 6; $i++)
+						<tr>
+							<td><b style="font-size: 100%; padding: 1px"><center>ROUND {{$i}}</center></b></td>
+							@if(isset($userinline))
+								@foreach($userinline as $u)
+								@php
+								
+									$uk = $u->where('round', $i); 
+									if($uk->count() > 0){
+										if($uk->first()->detail->count() > 0){
+										$x = 5 - $uk->first()->detail->count();
+										}else {
+											$x = 5;
+										}
+									}else{
+										$x = 6;
+									}
+								@endphp
+								<td>
+									@if($x != 6)
+									<a href="{{ route('monitoring_dashboard_convcapdata', ['nik' => $u->first()->userid_operator, 'round' => $i]) }}" class="btn-detail" title="Click For Detail" data-tooltip="tooltip">
+										<center>
+											@if($x == 5)
+											<div style="padding: 22px;" class="bg-green"><i class="fa fa-check"></i></div>
+											@elseif($x == 4 && $uk->first()->detail->where('problem', '!=', null)->count() <= 0)
+											<div style="padding: 22px;" class="bg-red"><i class="fa fa-exclamation-circle text-red"></i></div>
+											@else
+												@if(isset($uk->first()->detail) && $uk->first()->detail->where('problem', '!=', null)->count() > 0)
+												<div style="padding: 22px" class="bg-yellow"><i class="fa fa-pencil-alt text-red"></i></div>
+												@else
+												<div style="padding: 22px" class="bg-red"><i class="fa fa-exclamation-circle fa-lg"></i></div>
+												@endif
+											@endif
+										</center>
+									</a>
+									@endif
+								</td>
+								@endforeach
+							@endif
+						</tr>
+						@endfor
+					</tbody>
+				</table>
+			</div>
+		</div>
+		<div class="row" style="margin-top: 2rem; margin-bottom: 2rem">
+			<div class="col-sm-12">
+				<div class="col-sm-4">
+					<b>NOTE :</b>
+					<br>
+					<table border="0" width="100%">
+						<tr>
+							<td width="4%">
+								<div style="padding: 10px" class="bg-green"><i class="fa fa-check"></i></div>
+							</td>
+							<td width="96%" style="font-size: 10pt"> &nbsp; &nbsp; = No Defect Data</td>
+						</tr>
+						<tr></tr>
+						<tr>
+							<td width="4%">
+								<div style="padding: 10px" class="bg-red"><i class="fa fa-exclamation-circle text-red"></i></div>
+							</td>
+							<td width="96%" style="font-size: 10pt"> &nbsp; &nbsp; = Found One Defect Data</td>
+						</tr>
+						<tr></tr>
+						<tr>
+							<td width="4%">
+								<div style="padding: 10px" class="bg-red"><i class="fa fa-exclamation-circle fa-lg"></i></div>
+							</td>
+							<td width="96%" style="font-size: 10pt"> &nbsp; &nbsp; = Found Two or More Defect Data</td>
+						</tr>
+						<tr></tr>
+						<tr>
+							<td width="4%">
+								<div style="padding: 10px" class="bg-yellow"><i class="fa fa-pencil-alt text-red"></i></div>
+							</td>
+							<td width="96%" style="font-size: 10pt"> &nbsp; &nbsp; = CAP Already Filled In</td>
+						</tr>
+					</table>
+				</div>
+			</div>
+		</div>
+	</section>
+</div>
+<div class="modal fade" id="cap-modal">
+	<div class="modal-dialog modal-lg" style="width: 90%">
+		<div class="modal-content" style="background-color: black; color: white;">
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal" aria-hiddne="true">&times;</button>
+				<h4 class="modal-title">Detail Data Inline Inspection</h4>
+			</div>
+			<div class="modal-body">
+				Data Loading....
+			</div>
+		</div>
+	</div>
+</div>
+@include('layouts.loading')
+@endsection
 
-    echo $html;
-    exit;
-}
-
-<table border="1" cellpadding="5" cellspacing="0">
-    <thead>
-        <tr style="font-weight:bold; background-color:#1C2536; color:#ffffff;">
-            <td>Total Inspect</td>
-            <td>Total Defect</td>
-            <td>RFT</td>
-            <td>WFT</td>
-            <td>Target</td>
-            @foreach($data['top_defect'] as $i => $defect)
-                <td>Defect {{ $i + 1 }}</td>
-                <td>Qty</td>
-                <td>%</td>
-            @endforeach
-        </tr>
-    </thead>
-    <tbody>
-        <tr>
-            <td>{{ $data['tot_inspect'] }}</td>
-            <td>{{ $data['tot_defect'] }}</td>
-            <td>{{ $data['rft'] }}%</td>
-            <td>{{ $data['wft'] }}%</td>
-            <td style="background-color: {{ $data['target'] ? '#F24C4C' : '#4CF299' }}; color:#ffffff; font-weight:bold; text-align:center;">
-                {{ $data['target'] ? 'NO' : 'YES' }}
-            </td>
-            @foreach($data['top_defect'] as $defect)
-                <td>{{ $defect['nmdefect'] }}</td>
-                <td style="text-align:center;">{{ $defect['total'] }}</td>
-                <td style="text-align:center;">{{ $defect['percent'] }}%</td>
-            @endforeach
-        </tr>
-    </tbody>
-</table>
+@section('extrascript')
+<script type="text/javascript">
+    $(document).ready(function() {
+        setInterval(function() {
+            d = new Date();
+            h = set(d.getHours());
+            m = set(d.getMinutes());
+            s = set(d.getSeconds());
+            $('#hours').text(h + ':' + m + ':' + s);
+        }, 1000);
+        function set(e)
+        {
+            e = e < 10 ? '0' + e : e;
+            return e;
+        }
+        $('#datalist').DataTable({
+            scrollX: true,
+            paging: false,
+            lengthChange: false,
+            searching: false,
+            ordering: false,
+            info: false,
+        	fixedColumns: {
+        		leftColumns: 1
+        	}
+        });
+        $('body').on('click', '.btn-detail', function(event) {
+        	event.preventDefault();
+        	var link = $(this).attr('href');
+        	if(link == '#') return;
+        	$('#loading').show();
+        	$.ajax({
+        		url: link,
+        		type: 'GET',
+        		dataType: 'html',
+        	})
+        	.done(function(data) {
+        		$('#cap-modal').modal('show').find('.modal-body').html(data);
+        	})
+        	.always(function() {
+        		$('#loading').hide();
+        	});
+        });
+    });
+</script>
+@if(isset($status) and $status != null and $status == 'dbwrong')
+<script type="text/javascript">
+    $(document).ready(function() {
+        swal('Wrong ID', 'Please Provide Correct Factory ID!', 'warning');
+    });
+</script>
+@endif
+@if(isset($status) and $status != null and $status == 'connectionfail')
+<script type="text/javascript">
+    $(document).ready(function() {
+        swal('Database Connection Failed!', 'Please Contact IT Support!', 'warning');
+    });
+</script>
+@endif
+@if((isset($status) and $status != null and $status == 'validationfail'))
+<script type="text/javascript">
+    $(document).ready(function() {
+        swal('Data Stored Invalid!', 'Please Provide A Valid Data To Store!', 'warning');
+    });
+</script>
+@endif
+@if((isset($status) and $status != null and $status == 'savefailed'))
+<script type="text/javascript">
+    $(document).ready(function() {
+        swal('Data Stored Invalid!', 'Please Provide A Valid Data To Store!', 'warning');
+    });
+</script>
+@endif
+@endsection
