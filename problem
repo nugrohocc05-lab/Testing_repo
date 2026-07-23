@@ -8,6 +8,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/css/select2.min.css">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
     <link rel="stylesheet" href="{{ asset('/css/flatpickr.min.css') }}">
+    <link rel="stylesheet" href="{{ _asset('css/loading.css') }}">
+
 
     <style>
         html, body {
@@ -171,8 +173,7 @@
         .select2-search__field {
             background: #222F4A;
             color: white;
-                        border: none;
-
+            border: none;
         }
 
         /* Color */
@@ -359,6 +360,54 @@
             }
             #find {
                 flex-shrink: 0;
+            }
+
+            .datatable-header-left {
+                flex-wrap: wrap;
+                row-gap: 0.5rem;
+            }
+            .datatable-header-left h5.text-nowrap {
+                white-space: normal;
+                font-size: 0.95rem;
+                flex: 1 1 auto;
+                min-width: 0;
+                word-break: break-word;
+            }
+            .datatable-header-left .position-relative {
+                width: 100% !important;
+                flex-grow: 0 !important;
+                min-width: 0 !important;
+            }
+            .datatable-header-right {
+                justify-content: space-between;
+            }
+            .datatable-header-right .search-input {
+                flex: 1 1 100%;
+            }
+        }
+
+        @media (min-width: 768px) and (max-width: 991.98px) {
+            .datatable-header-left,
+            .datatable-header-right {
+                width: 100%;
+                flex-wrap: wrap;
+            }
+            .datatable-header-left h5.text-nowrap {
+                white-space: normal;
+                font-size: 1rem;
+                flex: 1 1 auto;
+                min-width: 0;
+            }
+            .datatable-header-left .position-relative {
+                flex: 1 1 220px !important;
+                min-width: 200px !important;
+            }
+            .datatable-header-right {
+                justify-content: flex-start;
+            }
+            .datatable-header-right .search-input {
+                width: 240px;
+                flex: 1 1 240px;
             }
         }
 
@@ -645,7 +694,7 @@
                     INLINE TLS
                 </a>
 
-                <button class="btn-custom px-3 export-btn" onclick="location.reload()">
+                <button class="btn-custom px-3" onclick="location.reload()">
                     <img src="{{ _asset('svg/inlinePerformance/reload.svg') }}">
                     <span class="custom-tooltip">Refresh</span>
                 </button>
@@ -753,7 +802,7 @@
 
             <!-- Export -->
             <div class="col-12 col-md-1 d-flex justify-content-end align-items-end mb-2">
-                <button class="export-btn bg-transparent border-0 p-0">
+                <button class="export-btn bg-transparent border-0 p-0" id="export-btn">
                     <img src="{{ _asset('svg/inlinePerformance/export.svg') }}"
                         style="width:27px; height:27px;">
 
@@ -771,7 +820,7 @@
                         class="img-fluid mb-3" style="width:60px;height:60px;">
 
                     <h6 class="fw-bold text-yellow mb-2">
-                        QTY INSPECT
+                        INSPECT QTY
                     </h6>
 
                     <div class="d-flex align-items-end text-white">
@@ -788,7 +837,7 @@
                         class="img-fluid mb-3" style="width:60px;height:60px;">
 
                     <h6 class="fw-bold text-red mb-2">
-                        QTY DEFECT
+                        DEFECT QTY
                     </h6>
 
                     <div class="d-flex align-items-end text-white">
@@ -831,12 +880,10 @@
                 <div id="targetColor" class="stat-card color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
                     <img src="{{ _asset('svg/inlinePerformance/target.svg') }}"
                         class="img-fluid mb-3" style="width:60px;height:60px;">
-
                     <h6 class="fw-bold text-red mb-2">
-                        TARGET
+                        TARGET RFT
                     </h6>
-
-                    <h2 class="fw-bold mb-0 text-white">3 %</h2>
+                    <h2 class="fw-bold mb-0 text-white">97 %</h2>
                 </div>
             </div>
 
@@ -948,6 +995,7 @@
             </div>
         </div>
     </div>
+@include('layouts.loading')
 
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://unpkg.com/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
@@ -1084,7 +1132,7 @@ $(function(){
                 type: "GET",
                 data: filter,
                 beforeSend: function(){
-                    $('#loading').show();
+                    $('#loadingCard').show();
                 },
                 success: function (response) {
                     $('#cardQtyInspect').text(response.tot_inspect ?? '-');
@@ -1146,9 +1194,10 @@ $(function(){
                     const target = $('#targetColor');
 
                     if(response.target === true) {
-                        target.removeClass('color-box-red').addClass('color-box-green')
-                    } else {
                         target.removeClass('color-box-green').addClass('color-box-red')
+                    } else {
+                        target.removeClass('color-box-red').addClass('color-box-green')
+
                     }
                 },
                 error: function (xhr) {
@@ -1160,22 +1209,40 @@ $(function(){
             });
         }
 
+        $('#export-btn').click(function () {
+
+            let url = "{{ route('monitoring_inlineperformance_exportexcel') }}" +
+                "?datea=" + currentFilter.datea +
+                "&dateb=" + currentFilter.dateb +
+                "&line=" + currentFilter.line +
+                "&groupbuyer=" + currentFilter.groupbuyer;
+
+            window.location.href = url;
+
+        });
+
         $('#findbtn').on('click', function(e){
             e.preventDefault();
 
             currentFilter = {
-                line: $('#line').val() || 'all',
+                line: $('#line').val(),
                 datea: $('#datea').val(),
                 dateb: $('#dateb').val(),
-                groupbuyer: $('#groupbuyer').val() || 'all'
+                groupbuyer: $('#groupbuyer').val()
             };
 
-            $('#loading').show();
+        if (currentFilter.line == null || currentFilter.line == '') {
+            swal('Warning!', 'Please select Line first!', 'warning');
+            return;
+        }
+
+        if (currentFilter.groupbuyer == null || currentFilter.groupbuyer == '') {
+            swal('Warning!', 'Please select Group Buyer!', 'warning');
+            return;
+        }
+
             loadCards(currentFilter);
         });
-
-        loadCards(currentFilter);
-
 
         function showDash(data) {
             return (data === null || data === undefined || data === '') ? '-' : data;
@@ -1192,6 +1259,7 @@ $(function(){
                     d.date = $('#datedatatables').val();
                 },
                 dataSrc: function(json){
+                    $('#loading').hide();
                     let totalRft = 0, totalInspect = 0, totalDefect = 0;
                     json.data.forEach(function (row) {
                         totalRft += Number(row.qty_rft) || 0;
@@ -1252,6 +1320,12 @@ $(function(){
                 }
             ],
             dom:'',
+            buttons: [{
+                    extend: 'excelHtml5',
+                    title: 'Report Final Inspection {{ date('d-m-Y ') . date('h_i_s a') }}',
+                    footer: true
+                },
+            ],
             order:[]
         });
 
@@ -1272,3 +1346,374 @@ $(function(){
 
 </body>
 </html>
+
+
+<?php
+
+namespace Modules\Monitoring\Http\Controllers;
+
+use DB;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+use App\Http\Controllers\Controller;
+use App\Http\Models\Main\MasterEmployeeGroup;
+use App\Http\Models\Main\MasterEmployeeSection;
+use App\Http\Models\Main\MasterGroupBuyer;
+use App\Http\Models\PurchaseOrder;
+use App\Http\Models\Main\Buyer;
+use App\Http\Models\InlineDetail;
+use App\Http\Models\InlineHeader;
+use App\Http\Models\Main\MasterInlineDefect;
+use App\Http\Models\Main\Style;
+use App\Http\Models\Main\Param;
+use App\Http\Models\Main\QCDefect;
+use Nexmo\Client\Exception\Validation;
+
+class InlinePerformanceController extends Controller
+{
+    protected $m_modul = 'report';
+
+    function __construct()
+    {
+        $this->middleware('auth');
+    }
+
+    function index()
+    {
+        if ($this->myaccess() == '0') {
+            return redirect()
+                ->back()
+                ->with('alert', [
+                    'title' => 'Unauthorized!',
+                    'message' => 'You Dont Have Any Access Here!',
+                    'status' => 'warning',
+                ]);
+        }
+
+        preconnect(session('db'));
+
+        return view('monitoring::inlineperformance.index');
+    }
+
+    function selectline(Request $request)
+    {
+        $g = (new MasterEmployeeGroup())->getTable();
+        $s = (new MasterEmployeeSection())->getTable();
+
+        $data = MasterEmployeeGroup::select(
+                "$g.id as kodegroup", "$g.section_id as kodebagian",
+                "$g.name as namagroup", "$s.name as namabagian"
+            )
+            ->join($s, "$s.id", '=', "$g.section_id")
+            ->distinct()
+            ->whereHas('groupline', function($q){
+                $q->where('factory_id', session('db')->iddb)
+                    ->where('is_show', 1)
+                    ->where('is_line', 1);
+            });
+
+        if ($request->q) {
+            $data = $data->where(function ($q) use ($request, $g) {
+                $q->where("$g.name", 'like', "%$request->q%");
+            });
+        }
+        $data = $data->orderBy('kodegroup')->paginate(15, $request->page);
+
+        return response()->json($data);
+    }
+
+    function groupbuyer(Request $request)
+    {
+        $data = MasterGroupBuyer::select('id', 'group_name')
+            ->get()
+            ->map(function($item){
+                return [
+                    'id' => $item->id,
+                    'text' => $item->group_name
+                ];
+            });
+
+        return response()->json([
+            'results' => $data
+        ]);
+    }
+
+    function getFilterData($request)
+    {
+        $m_da = $request->datea > $request->dateb ? $request->dateb : $request->datea;
+        $m_db = $request->datea > $request->dateb ? $request->datea : $request->dateb;
+
+        $dta = Carbon::parse($m_da);
+        $dtb = Carbon::parse($m_db)->endOfDay();
+
+        $headerQuery = InlineHeader::whereBetween('date', [$dta, $dtb]);
+
+            if ($request->line && $request->line != 'all') {
+                $headerQuery = $headerQuery->where('group_id', $request->line);
+            }
+
+            // Filter Group Buyer -> idpo
+            if ($request->groupbuyer && $request->groupbuyer != 'all') {
+                $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
+                $poIds = PurchaseOrder::whereIn('idbuyer', $buyerIds)->pluck('idpo');
+                $headerQuery = $headerQuery->whereIn('idpo', $poIds);
+            }
+
+            $headerIds = (clone $headerQuery)->pluck('id');
+            $headerCount = $headerIds->count();
+
+            // Qty Inspect
+            $totInspect = $headerCount * 5;
+
+            // Qty Defect
+            $totDefect = InlineDetail::whereIn('inline_header_id', $headerIds)->count();
+
+            // RFT
+            $rft = $totInspect > 0
+                ? (($totInspect - $totDefect) / $totInspect) * 100
+                : 0;
+
+            // WFT
+            $wft = $totInspect > 0
+                ? ($totDefect / $totInspect) * 100
+                : 0;
+
+            // Target
+            $qc = 'rft_inline_target';
+            $params = Param::where('key', $qc)->pluck('value');
+            $param = $params[0];
+
+            $target = $rft <= $param ? true : false;
+
+
+           // Top Defect
+            $topDefect = InlineDetail::whereIn('inline_header_id', $headerIds)
+                ->select('defect_id', DB::raw('count(*) as total'))
+                ->groupBy('defect_id')
+                ->orderByDesc('total')
+                ->limit(3)
+                ->get();
+
+            $defectIds = $topDefect->pluck('defect_id');
+
+            $masterQcDefects = QCDefect::whereIn('kddefect', $defectIds)
+                ->pluck('deskripsi', 'kddefect');
+
+            $topDefect = $topDefect->map(function ($item, $index) use ($masterQcDefects, $totDefect) {
+                $colors = [
+                    '#2F80ED',
+                    '#219653',
+                    '#F2C94C'
+                ];
+
+                $percent = $totDefect > 0
+                    ? ($item->total / $totDefect) * 100
+                    : 0;
+
+                return [
+                    'defect_id' => $item->defect_id,
+                    'nmdefect'  => $masterQcDefects[$item->defect_id] ?? '-',
+                    'total'     => $item->total,
+                    'percent'   => number_format($percent, 2),
+                    'color'     => $colors[$index],
+                ];
+            });
+
+        return [
+            'tot_inspect' => $totInspect,
+            'tot_defect'  => $totDefect,
+            'rft'         => number_format($rft,2),
+            'wft'         => number_format($wft,2),
+            'target'      => $target,
+            'top_defect'  => $topDefect
+        ];
+    }
+
+    public function filterData(Request $request)
+    {
+        $data = $this->getFilterData($request);
+
+        return response()->json($data);
+    }
+
+    public function exportExcel(Request $request)
+    {
+        $data = $this->getFilterData($request);
+
+        header('Content-Type: text/csv');
+        header('Content-Disposition: attachment; filename="Report_Inline.csv"');
+
+        $file = fopen('php://output', 'w');
+
+        fputcsv($file, ['Total Inspect', 'Total Defect', 'RFT', 'WFT', 'Target']);
+        fputcsv($file, [
+            number_format($data['tot_inspect']),
+            number_format($data['tot_defect']),
+            $data['rft'].'%',
+            $data['wft'].'%',
+            $data['target'] ? 'NO' : 'YES',
+        ]);
+
+        fputcsv($file, []);
+
+        fputcsv($file, ['Defect', 'Qty', '%']);
+
+        foreach ($data['top_defect'] as $defect) {
+            fputcsv($file, [
+                $defect['nmdefect'],
+                number_format($defect['total']),
+                $defect['percent'].'%'
+            ]);
+        }
+
+        fclose($file);
+        exit;
+    }
+
+    function datatables(Request $request)
+    {
+        preconnect(session('db'));
+
+        try {
+            $date = $request->date
+                ? Carbon::parse($request->date)
+                : Carbon::parse(InlineHeader::max('date'));
+
+            $dta = $date->copy()->startOfDay();
+            $dtb = $date->copy()->endOfDay();
+
+            $g = (new MasterEmployeeGroup())->getTable();
+            $s = (new MasterEmployeeSection())->getTable();
+
+            $lines = MasterEmployeeGroup::select(
+                    "$g.id as kodegroup", "$g.name as namagroup", "$s.name as namabagian"
+                )
+                ->join($s, "$s.id", '=', "$g.section_id")
+                ->distinct()
+                ->whereHas('groupline', function ($q) {
+                    $q->where('factory_id', session('db')->iddb)
+                        ->where('is_show', 1)
+                        ->where('is_line', 1);
+                })
+                ->orderBy("$g.id", "asc")
+                ->get();
+
+            $headers = InlineHeader::whereBetween('date', [$dta, $dtb])
+                ->get(['id', 'group_id', 'idpo', 'round']);
+
+            $idpos = $headers->pluck('idpo')->unique();
+
+            $headersByLine = $headers->groupBy('group_id');
+
+            $allHeaderIds = $headers->pluck('id');
+            $defectsByHeader = InlineDetail::whereIn('inline_header_id', $allHeaderIds)
+                ->get(['inline_header_id'])
+                ->groupBy('inline_header_id');
+
+            $result = $lines->map(function ($line) use ($headersByLine, $defectsByHeader) {
+
+                $headers = $headersByLine->get($line->kodegroup, collect());
+                $hIds = $headers->pluck('id');
+
+                $lastRound = $headers->max('round');
+
+                $lastRoundHeaderIds = $headers
+                    ->where('round', $lastRound)
+                    ->pluck('id');
+
+                $lastRoundDefectCount = InlineDetail::whereIn('inline_header_id', $lastRoundHeaderIds)->count();
+
+                $lastRoundHasDefect = $lastRoundDefectCount > 0;
+
+                $idpos = $headers->pluck('idpo')->unique();
+
+                $styles = PurchaseOrder::whereIn('idpo', $idpos)
+                    ->pluck('idstyle')
+                    ->unique()
+                    ->values();
+
+                $nmstyles = Style::whereIn('idstyle', $styles)
+                    ->pluck('nmstyle')
+                    ->values();
+
+
+                // Round
+                $round = $headers->max('round');
+
+                    // QTY Inspect
+                $totInspect = $hIds->count() * 5;
+
+                // QTY Defect
+                $totDefect = $hIds->sum(function ($id) use ($defectsByHeader) {
+                    return $defectsByHeader->get($id, collect())->count();
+                });
+
+                // RFT
+                $rft = $totInspect > 0 ? (($totInspect - $totDefect) / $totInspect) * 100 : 0;
+
+                // WFT
+                $wft = $totInspect > 0 ? ($totDefect / $totInspect) * 100 : 0;
+
+                return [
+                    'line'                  => $line->namagroup,
+                    'style'                 => $nmstyles->toArray(),
+                    'qty_rft'               => $totInspect - $totDefect,
+                    'qty_inspect'           => $totInspect,
+                    'qty_defect'            => $totDefect,
+                    'rft'                   => number_format($rft, 2),
+                    'wft'                   => number_format($wft, 2),
+                    'last_round'            => $lastRound,
+                    'last_round_has_defect' => $lastRoundHasDefect
+                ];
+            });
+
+
+            return response()->json([
+                'date' => $date->format('Y-m-d'),
+                'data' => $result->values(),
+            ]);
+
+        } catch (\Throwable $e) {
+            return $e->getMessage();
+        }
+    }
+
+    function filterInlineLts(Request $request){
+
+        // Filtering  Line
+        $g = (new MasterEmployeeGroup())->getTable();
+        $s = (new MasterEmployeeSection())->getTable();
+
+        $data = MasterEmployeeGroup::select(
+                "$g.id as kodegroup", "$g.section_id as kodebagian",
+                "$g.name as namagroup", "$s.name as namabagian"
+            )
+            ->join($s, "$s.id", '=', "$g.section_id")
+            ->distinct()
+            ->whereHas('groupline', function($q){
+                $q->where('factory_id', session('db')->iddb)
+                    ->where('is_show', 1)
+                    ->where('is_line', 1);
+            });
+
+        if ($request->q) {
+            $data = $data->where(function ($q) use ($request, $g) {
+                $q->where("$g.name", 'like', "%$request->q%");
+            });
+        }
+        $data = $data->orderBy('kodegroup')->paginate(15, $request->page);
+
+        // Data Inspect, Defect, RFT, WFT
+        $datetime = Carbon::now()->format('Y-m-d');
+
+        return response()->json([
+            'line' => $data,
+            'date' => $datetime,
+        ]);
+    }
+
+    function inlinetls(Request $request)
+    {
+        return view('monitoring::inlineperformance.inline');
+    }
+}
