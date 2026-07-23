@@ -1,170 +1,387 @@
-@extends('layouts.app')
-
-@section('title', 'MES - Inline Performance')
-
-@push('styles')
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MES</title>
     <link href="https://unpkg.com/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/css/select2.min.css">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
     <link rel="stylesheet" href="{{ asset('/css/flatpickr.min.css') }}">
+    <link rel="stylesheet" href="{{ _asset('css/loading.css') }}">
 
-    {{-- Section-owned stylesheets --}}
-    <link rel="stylesheet" href="{{ _asset('css/inlinePerformance/common.css') }}">
-    <link rel="stylesheet" href="{{ _asset('css/inlinePerformance/filter.css') }}">
-    <link rel="stylesheet" href="{{ _asset('css/inlinePerformance/datatables.css') }}">
-@endpush
+    {{-- Style UMUM: dipakai lintas section (layout dashboard, stat-card, warna teks, tooltip).
+         Style yang spesifik punya filter/datatable ada di masing-masing partial. --}}
+    <style>
+        html, body {
+            margin: 0;
+            background-color: #242E3E;
+        }
 
-@section('content')
-<div class="container-fluid dashboard-wrap">
-    <!-- Header -->
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 ">
-        <div class="d-flex align-items-center gap-3">
-            <img
-                src="{{ _asset('svg/inlinePerformance/machine.svg') }}"
-                class="flex-shrink-0"
-                style="width: 60px; height: 60px;">
+        body {
+            padding: 1rem;
+        }
 
-            <div class="d-flex flex-column justify-content-center">
-                <h2 class="text-white mb-1 dashboard-title">
-                    INLINE PERFORMANCE DASHBOARD
-                </h2>
-                <p class="text-white fs-6 mb-0 dashboard-subtitle">
-                    Real-time monitoring of inline production performance
-                </p>
+        .dashboard-wrap {
+            width: 100%;
+        }
+
+        @media (min-width: 992px) {
+            html, body {
+                height: 100%;
+            }
+            body {
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+            }
+            .dashboard-wrap {
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+            }
+        }
+
+        @media (min-width: 1600px) {
+            .dashboard-wrap {
+                max-width: 1900px;
+                margin: 0 auto;
+            }
+        }
+
+        .bg-custom {
+            background: #1C2536;
+        }
+
+        .btn-custom {
+            background: #222F4A;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+        }
+
+        .btn-custom:hover {
+            background-color: #242E3E;
+        }
+
+        .border-custom {
+            border: 1px solid #576376 !important;
+        }
+
+        .min-h-custom {
+            min-height: 250px;
+        }
+
+        .border-color-yellow {
+            border: 1px solid #F2C94C;
+            border-radius: 5px;
+        }
+
+        /* Color */
+        .text-title { color: #5A587E; }
+        .text-yellow { color: #F2C94C; }
+        .text-red { color: #F24C4C; }
+        .text-blue { color: #4C8CF2; }
+        .text-green { color: #4CF299; }
+
+        .color-box-yellow {
+            background-color: #363633;
+            border: 1px solid #F2C94C;
+            border-radius: 5px;
+            color: #F2C94C;
+        }
+        .color-box-red {
+            background-color: #352837;
+            border: 1px solid #F24C4C;
+            border-radius: 5px;
+        }
+        .color-box-blue {
+            background-color: #23304E;
+            border: 1px solid #3F5588;
+            border-radius: 5px;
+        }
+        .color-box-green {
+            background-color: #1A3B45;
+            border: 1px solid #4CF299;
+            border-radius: 5px;
+        }
+
+        /* Stats Card */
+        .stat-card {
+            height: 190px;
+            overflow: hidden;
+        }
+
+        .stat-card h2,
+        .stat-card h6 {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+        }
+
+        .stat-card .d-flex.align-items-end {
+            max-width: 100%;
+        }
+
+        #topDefectList {
+            max-height: 90px;
+            width: 100%;
+        }
+
+        #topDefectList::-webkit-scrollbar {
+            width: 1px;
+        }
+
+        #topDefectList::-webkit-scrollbar-thumb {
+            background-color: #576376;
+            border-radius: 4px;
+        }
+
+        #topDefectList .text-white.small {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: inline-block;
+            max-width: 190px;
+            vertical-align: middle;
+        }
+
+        .dashboard-title {
+            font-size: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-title { font-size: 1.4rem; }
+            .dashboard-subtitle { font-size: 1rem !important; }
+        }
+
+        @media (max-width: 576px) {
+            .dashboard-title { font-size: 1.1rem; }
+            .dashboard-subtitle { display: none; }
+            .btn-custom { width: 100%; justify-content: center; }
+            .d-flex.flex-wrap > .d-flex { width: 100%; }
+            .color-box-yellow img, .color-box-red img,
+            .color-box-blue img, .color-box-green img {
+                width: 40px !important; height: 40px !important;
+            }
+            .color-box-yellow h2, .color-box-red h2,
+            .color-box-blue h2, .color-box-green h2 {
+                font-size: 1.4rem;
+            }
+        }
+
+        @media (max-width: 1366px) {
+            .stat-card { padding: 0.75rem !important; height: 165px; }
+            .stat-card img { width: 45px !important; height: 45px !important; }
+            .stat-card h2 { font-size: 1.4rem; }
+            .stat-card h6 { font-size: 0.8rem; }
+            #topDefectList { max-height: 80px; }
+        }
+
+        @media (max-width: 767.98px) {
+            .stat-card { padding: 0.75rem !important; height: 150px; font-size: 12px; }
+            .stat-card img { width: 45px !important; height: 45px !important; }
+            #topDefectList { max-height: 70px; }
+            .border-end-custom {
+                border-right: none !important;
+                border-bottom: 1px solid rgba(255,255,255,.2);
+                padding-bottom: 1rem;
+                margin-bottom: 1rem;
+            }
+        }
+
+        @media (min-width: 992px) and (max-width: 1400px) {
+            .dashboard-title { font-size: 1.5rem; }
+            .dashboard-subtitle { font-size: 0.85rem !important; }
+            .btn-custom {
+                padding-left: 0.85rem !important;
+                padding-right: 0.85rem !important;
+                padding-top: 0.6rem !important;
+                padding-bottom: 0.6rem !important;
+                font-size: 0.9rem;
+                white-space: nowrap;
+            }
+            .row.mt-4 .box-custom { width: 26px; height: 26px; }
+            .row.mt-4 img[style*="30px"] { width: 22px !important; height: 22px !important; }
+            .row.mt-4.border-custom > [class*="col-"] {
+                gap: 0.75rem !important;
+                padding-left: 0.5rem;
+                padding-right: 0.5rem;
+            }
+            .row.mt-4 label { font-size: 0.8rem; }
+            .stat-card { font-size: 14px; }
+        }
+
+        /* Tooltip export/refresh (dipakai di header & filter & datatable) */
+        .export-btn {
+            position: relative;
+        }
+
+        .custom-tooltip {
+            position: absolute;
+            right: 120%;
+            top: 50%;
+            transform: translateY(-50%);
+            background-color: #000000;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.2s ease;
+            z-index: 10;
+        }
+
+        .custom-tooltip::after {
+            content: "";
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            border-width: 5px;
+            border-style: solid;
+            border-color: transparent transparent transparent #000000;
+        }
+
+        .export-btn:hover .custom-tooltip {
+            opacity: 1;
+            visibility: visible;
+            right: 130%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid dashboard-wrap">
+        <!-- Header -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 ">
+            <div class="d-flex align-items-center gap-3">
+                <img
+                    src="{{ _asset('svg/inlinePerformance/machine.svg') }}"
+                    class="flex-shrink-0"
+                    style="width: 60px; height: 60px;">
+
+                <div class="d-flex flex-column justify-content-center">
+                    <h2 class="text-white mb-1 dashboard-title">
+                        INLINE PERFORMANCE DASHBOARD
+                    </h2>
+                    <p class="text-white fs-6 mb-0 dashboard-subtitle">
+                        Real-time monitoring of inline production performance
+                    </p>
+                </div>
+            </div>
+            <div class="d-flex gap-3 flex-wrap">
+                <a href="{{ route('monitoring_inlineperformanceinlinetls') }}"
+                   class="btn-custom px-4 py-3 text-decoration-none d-flex align-items-center">
+                    <img src="{{ _asset('svg/inlinePerformance/inline.svg') }}" class="me-2">
+                    INLINE TLS
+                </a>
+
+                <button class="btn-custom px-3" onclick="location.reload()">
+                    <img src="{{ _asset('svg/inlinePerformance/reload.svg') }}">
+                    <span class="custom-tooltip">Refresh</span>
+                </button>
             </div>
         </div>
-        <div class="d-flex gap-3 flex-wrap">
-            <a href="{{ route('monitoring_inlineperformanceinlinetls') }}"
-            class="btn-custom px-4 py-3 text-decoration-none d-flex align-items-center">
-                <img src="{{ _asset('svg/inlinePerformance/inline.svg') }}" class="me-2">
-                INLINE TLS
-            </a>
 
-            <button class="btn-custom px-3 export-btn" onclick="location.reload()">
-                <img src="{{ _asset('svg/inlinePerformance/reload.svg') }}">
-                <span class="custom-tooltip">Refresh</span>
-            </button>
-        </div>
-    </div>
+        {{-- Filter (Line, Periode Date, Group Buyer, Export summary) --}}
+        @include('monitoring::inlineperformance.index.filter')
 
-    {{-- FILTER SECTION --}}
-    @include('monitoring::inlinePerformance.filter.filter')
+        <!-- Card -->
+        <div class="row g-3 mt-1">
+            <!-- QTY INSPECT -->
+            <div class="col-6 col-sm-4 col-lg-2">
+                <div class="stat-card color-box-yellow h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                    <img src="{{ _asset('svg/inlinePerformance/qty-inspect.svg') }}"
+                        class="img-fluid mb-3" style="width:60px;height:60px;">
+                    <h6 class="fw-bold text-yellow mb-2">INSPECT QTY</h6>
+                    <div class="d-flex align-items-end text-white">
+                        <h2 class="fw-bold mb-0" id="cardQtyInspect">-</h2>
+                        <small class="ms-1">pcs</small>
+                    </div>
+                </div>
+            </div>
 
-    <!-- Card -->
-    <div class="row g-3 mt-1">
-        <!-- QTY INSPECT -->
-        <div class="col-6 col-sm-4 col-lg-2">
-            <div class="stat-card color-box-yellow h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                <img src="{{ _asset('svg/inlinePerformance/qty-inspect.svg') }}"
-                    class="img-fluid mb-3" style="width:60px;height:60px;">
+            <!-- QTY DEFECT -->
+            <div class="col-6 col-sm-4 col-lg-2">
+                <div class="stat-card color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                    <img src="{{ _asset('svg/inlinePerformance/qty-defect.svg') }}"
+                        class="img-fluid mb-3" style="width:60px;height:60px;">
+                    <h6 class="fw-bold text-red mb-2">DEFECT QTY</h6>
+                    <div class="d-flex align-items-end text-white">
+                        <h2 class="fw-bold mb-0" id="cardQtyDefect">-</h2>
+                        <small class="ms-1">pcs</small>
+                    </div>
+                </div>
+            </div>
 
-                <h6 class="fw-bold text-yellow mb-2">
-                    QTY INSPECT
-                </h6>
+            <!-- RFT -->
+            <div class="col-6 col-sm-4 col-lg-2">
+                <div class="stat-card color-box-green h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                    <img src="{{ _asset('svg/inlinePerformance/rft.svg') }}"
+                        class="img-fluid mb-3" style="width:60px;height:60px;">
+                    <h6 class="fw-bold text-green mb-2">RFT</h6>
+                    <h2 class="fw-bold mb-0 text-white"><span id="cardRft">-</span> %</h2>
+                </div>
+            </div>
 
-                <div class="d-flex align-items-end text-white">
-                    <h2 class="fw-bold mb-0" id="cardQtyInspect">-</h2>
-                    <small class="ms-1">pcs</small>
+            <!-- WFT -->
+            <div class="col-6 col-sm-4 col-lg-2">
+                <div class="stat-card color-box-blue h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                    <img src="{{ _asset('svg/inlinePerformance/wft.svg') }}"
+                        class="img-fluid mb-3" style="width:60px;height:60px;">
+                    <h6 class="fw-bold text-blue mb-2">WFT</h6>
+                    <h2 class="fw-bold mb-0 text-white"><span id="cardWft">-</span> %</h2>
+                </div>
+            </div>
+
+            <!-- TARGET -->
+            <div class="col-6 col-sm-4 col-lg-2">
+                <div id="targetColor" class="stat-card color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                    <img src="{{ _asset('svg/inlinePerformance/target.svg') }}"
+                        class="img-fluid mb-3" style="width:60px;height:60px;">
+                    <h6 class="fw-bold text-red mb-2">TARGET RFT</h6>
+                    <h2 class="fw-bold mb-0 text-white">97 %</h2>
+                </div>
+            </div>
+
+            <!-- TOP DEFECT -->
+            <div class="col-6 col-sm-4 col-lg-2">
+                <div class="stat-card color-box-red h-100 p-4">
+                    <div class="d-flex align-items-center justify-content-center mb-3">
+                        <img src="{{ _asset('svg/inlinePerformance/top-defect.svg') }}"
+                            style="width:50px;height:50px;">
+                        <h6 class="fw-bold text-white ms-2 mb-0">TOP DEFECT</h6>
+                    </div>
+                    <div id="topDefectList"> </div>
                 </div>
             </div>
         </div>
 
-        <!-- QTY DEFECT -->
-        <div class="col-6 col-sm-4 col-lg-2">
-            <div class="stat-card color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                <img src="{{ _asset('svg/inlinePerformance/qty-defect.svg') }}"
-                    class="img-fluid mb-3" style="width:60px;height:60px;">
+        {{-- Datatables (tabel detail per line) --}}
+        @include('monitoring::inlineperformance.index.datatables')
 
-                <h6 class="fw-bold text-red mb-2">
-                    QTY DEFECT
-                </h6>
-
-                <div class="d-flex align-items-end text-white">
-                    <h2 class="fw-bold mb-0" id="cardQtyDefect">-</h2>
-                    <small class="ms-1">pcs</small>
+        <!-- Footer -->
+        <div class="mt-2 text-white d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0">
+            <div class="d-flex align-items-center gap-2">
+                <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" style="width: 18px; height: 18px;">
+                Data Update
+                <span id="liveClock"></span>
+            </div>
+            <div class="d-flex align-items-center">
+                <div class="mb-0 d-flex align-items-center gap-2">
+                    System Connected
+                    <div class="rounded-pill" style="background-color:#4CF299; width:20px;height:20px"></div>
                 </div>
-            </div>
-        </div>
-
-        <!-- RFT -->
-        <div class="col-6 col-sm-4 col-lg-2">
-            <div class="stat-card color-box-green h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                <img src="{{ _asset('svg/inlinePerformance/rft.svg') }}"
-                    class="img-fluid mb-3" style="width:60px;height:60px;">
-
-                <h6 class="fw-bold text-green mb-2">
-                    RFT
-                </h6>
-
-                <h2 class="fw-bold mb-0 text-white"><span id="cardRft">-</span> %</h2>
-            </div>
-        </div>
-
-        <!-- WFT -->
-        <div class="col-6 col-sm-4 col-lg-2">
-            <div class="stat-card color-box-blue h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                <img src="{{ _asset('svg/inlinePerformance/wft.svg') }}"
-                    class="img-fluid mb-3" style="width:60px;height:60px;">
-
-                <h6 class="fw-bold text-blue mb-2">
-                    WFT
-                </h6>
-
-                <h2 class="fw-bold mb-0 text-white"><span id="cardWft">-</span> %</h2>
-            </div>
-        </div>
-
-        <!-- TARGET -->
-        <div class="col-6 col-sm-4 col-lg-2">
-            <div id="targetColor" class="stat-card color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                <img src="{{ _asset('svg/inlinePerformance/target.svg') }}"
-                    class="img-fluid mb-3" style="width:60px;height:60px;">
-
-                <h6 class="fw-bold text-red mb-2">
-                    TARGET
-                </h6>
-
-                <h2 class="fw-bold mb-0 text-white">3 %</h2>
-            </div>
-        </div>
-
-        <!-- TOP DEFECT -->
-        <div class="col-6 col-sm-4 col-lg-2">
-            <div class="stat-card color-box-red h-100 p-4">
-                <div class="d-flex align-items-center justify-content-center mb-3">
-                    <img src="{{ _asset('svg/inlinePerformance/top-defect.svg') }}"
-                        style="width:50px;height:50px;">
-                    <h6 class="fw-bold text-white ms-2 mb-0">
-                        TOP DEFECT
-                    </h6>
-                </div>
-
-                <div id="topDefectList"> </div>
             </div>
         </div>
     </div>
 
-    {{-- DATATABLES SECTION --}}
-    @include('monitoring::inlinePerformance.datatables.datatables')
+    @include('layouts.loading')
 
-    <!-- Footer -->
-    <div class="mt-2 text-white d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0">
-        <div class="d-flex align-items-center gap-2">
-            <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" style="width: 18px; height: 18px;">
-            Data Update
-            <span id="liveClock"></span>
-        </div>
-        <div class="d-flex align-items-center">
-            <div class="mb-0 d-flex align-items-center gap-2">
-                System Connected
-                <div class="rounded-pill" style="background-color:#4CF299; width:20px;height:20px"></div>
-            </div>
-        </div>
-    </div>
-</div>
-@endsection
-
-@push('scripts')
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://unpkg.com/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/js/select2.min.js"></script>
@@ -175,35 +392,31 @@
     <script src="{{ _asset('js/sweetalert.min.js') }}"></script>
 
     <script>
-        window.routes = {
-            selectLine: "{{ route('monitoring_inlineperformanceselectline') }}",
-            groupBuyer: "{{ route('monitoring_inlineperformancegroupbuyer') }}",
-            filterData: "{{ route('monitoring_inlineperformancefilterdata') }}",
-            datatables: "{{ route('monitoring_inlineperformancedatatables') }}"
-        };
+        // Script UMUM: tidak spesifik ke filter/datatable
+        $(function () {
+            function updateClock() {
+                let now = new Date();
+                let day = String(now.getDate()).padStart(2, '0');
+                let month = [
+                    "January", "February", "March", "April", "May", "June",
+                    "July", "August", "September", "October", "November", "December"
+                ];
+                let year = now.getFullYear();
+                let hour = String(now.getHours()).padStart(2, '0');
+                let minute = String(now.getMinutes()).padStart(2, '0');
+                let second = String(now.getSeconds()).padStart(2, '0');
+
+                document.getElementById('liveClock').innerHTML =
+                    `${day} ${month[now.getMonth()]} ${year} - ${hour} : ${minute} : ${second}`;
+            }
+            updateClock();
+            setInterval(updateClock, 1000);
+        });
     </script>
 
-    <script>
-        function updateClock() {
-            let now = new Date();
-            let day = String(now.getDate()).padStart(2, '0');
-            let month = [
-                "January", "February", "March", "April", "May", "June",
-                "July", "August", "September", "October", "November", "December"
-            ];
-            let year = now.getFullYear();
-            let hour = String(now.getHours()).padStart(2, '0');
-            let minute = String(now.getMinutes()).padStart(2, '0');
-            let second = String(now.getSeconds()).padStart(2, '0');
-
-            document.getElementById('liveClock').innerHTML =
-                `${day} ${month[now.getMonth()]} ${year} - ${hour} : ${minute} : ${second}`;
-        }
-        updateClock();
-        setInterval(updateClock, 1000);
-    </script>
-
-    {{-- Section-owned scripts --}}
-    <script src="{{ _asset('js/inlinePerformance/filter.js') }}"></script>
-    <script src="{{ _asset('js/inlinePerformance/datatables.js') }}"></script>
-@endpush
+    {{-- Semua script dari partial (filter.blade.php, datatables.blade.php)
+         dikeluarkan di sini, SETELAH semua library JS ter-load,
+         supaya jQuery/select2/DataTable/flatpickr sudah tersedia. --}}
+    @stack('scripts')
+</body>
+</html>
