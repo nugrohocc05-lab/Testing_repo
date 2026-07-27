@@ -1,17 +1,7 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MES</title>
-    <link href="https://unpkg.com/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/css/select2.min.css">
-    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
-    <link rel="stylesheet" href="{{ asset('/css/flatpickr.min.css') }}">
-    <link rel="stylesheet" href="{{ _asset('css/loading.css') }}">
+view inline
+@extends('layouts.masternonavbar')
 
-    {{-- Style UMUM: dipakai lintas section (layout dashboard, stat-card, warna teks, tooltip).
-         Style yang spesifik punya filter/datatable ada di masing-masing partial. --}}
+@section('extracss')
     <style>
         html, body {
             margin: 0;
@@ -20,10 +10,6 @@
 
         body {
             padding: 1rem;
-        }
-
-        .dashboard-wrap {
-            width: 100%;
         }
 
         @media (min-width: 992px) {
@@ -35,6 +21,13 @@
                 display: flex;
                 flex-direction: column;
             }
+        }
+
+        .dashboard-wrap {
+            width: 100%;
+        }
+
+        @media (min-width: 992px) {
             .dashboard-wrap {
                 height: 100%;
                 display: flex;
@@ -42,48 +35,18 @@
             }
         }
 
-        @media (min-width: 1600px) {
-            .dashboard-wrap {
-                max-width: 1900px;
-                margin: 0 auto;
-            }
+        .border-custom-datatable {
+            border: 1px solid #4C8CF2 !important;
+            background-color: #212B3E;
         }
 
-        .bg-custom {
-            background: #1C2536;
-        }
-
-        .btn-custom {
-            background: #222F4A;
-            color: #fff;
-            border: none;
-            border-radius: 10px;
-        }
-
-        .btn-custom:hover {
-            background-color: #242E3E;
-        }
-
-        .border-custom {
-            border: 1px solid #576376 !important;
-        }
-
-        .min-h-custom {
-            min-height: 250px;
-        }
-
-        .border-color-yellow {
-            border: 1px solid #F2C94C;
-            border-radius: 5px;
-        }
-
-        /* Color */
-        .text-title { color: #5A587E; }
+        /* Text Color */
         .text-yellow { color: #F2C94C; }
-        .text-red { color: #F24C4C; }
-        .text-blue { color: #4C8CF2; }
-        .text-green { color: #4CF299; }
+        .text-red    { color: #F24C4C; }
+        .text-blue   { color: #4C8CF2; }
+        .text-green  { color: #4CF299; }
 
+        /* Card Box */
         .color-box-yellow {
             background-color: #363633;
             border: 1px solid #F2C94C;
@@ -106,114 +69,41 @@
             border-radius: 5px;
         }
 
-        /* Stats Card */
-        .stat-card {
-            height: 190px;
-            overflow: hidden;
-        }
-
-        .stat-card h2,
-        .stat-card h6 {
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 100%;
-        }
-
-        .stat-card .d-flex.align-items-end {
-            max-width: 100%;
-        }
-
-        #topDefectList {
-            max-height: 90px;
-            width: 100%;
-        }
-
-        #topDefectList::-webkit-scrollbar {
-            width: 1px;
-        }
-
-        #topDefectList::-webkit-scrollbar-thumb {
-            background-color: #576376;
-            border-radius: 4px;
-        }
-
-        #topDefectList .text-white.small {
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            display: inline-block;
-            max-width: 190px;
-            vertical-align: middle;
-        }
-
-        .dashboard-title {
-            font-size: 2rem;
-        }
-
-        @media (max-width: 768px) {
-            .dashboard-title { font-size: 1.4rem; }
-            .dashboard-subtitle { font-size: 1rem !important; }
-        }
-
         @media (max-width: 576px) {
-            .dashboard-title { font-size: 1.1rem; }
-            .dashboard-subtitle { display: none; }
-            .btn-custom { width: 100%; justify-content: center; }
-            .d-flex.flex-wrap > .d-flex { width: 100%; }
-            .color-box-yellow img, .color-box-red img,
-            .color-box-blue img, .color-box-green img {
-                width: 40px !important; height: 40px !important;
+            .d-flex.flex-wrap > .d-flex {
+                width: 100%;
             }
-            .color-box-yellow h2, .color-box-red h2,
-            .color-box-blue h2, .color-box-green h2 {
+
+            .color-box-yellow img,
+            .color-box-red img,
+            .color-box-blue img,
+            .color-box-green img {
+                width: 40px !important;
+                height: 40px !important;
+            }
+
+            .color-box-yellow h2,
+            .color-box-red h2,
+            .color-box-blue h2,
+            .color-box-green h2 {
                 font-size: 1.4rem;
             }
         }
 
-        @media (max-width: 1366px) {
-            .stat-card { padding: 0.75rem !important; height: 165px; }
-            .stat-card img { width: 45px !important; height: 45px !important; }
-            .stat-card h2 { font-size: 1.4rem; }
-            .stat-card h6 { font-size: 0.8rem; }
-            #topDefectList { max-height: 80px; }
+        .datatable-wrap {
+            display: flex;
+            flex-direction: column;
         }
 
-        @media (max-width: 767.98px) {
-            .stat-card { padding: 0.75rem !important; height: 150px; font-size: 12px; }
-            .stat-card img { width: 45px !important; height: 45px !important; }
-            #topDefectList { max-height: 70px; }
-            .border-end-custom {
-                border-right: none !important;
-                border-bottom: 1px solid rgba(255,255,255,.2);
-                padding-bottom: 1rem;
-                margin-bottom: 1rem;
+        @media (min-width: 992px) {
+            .datatable-wrap {
+                flex-grow: 1;
+                min-height: 0;
+                overflow: hidden;
             }
         }
 
-        @media (min-width: 992px) and (max-width: 1400px) {
-            .dashboard-title { font-size: 1.5rem; }
-            .dashboard-subtitle { font-size: 0.85rem !important; }
-            .btn-custom {
-                padding-left: 0.85rem !important;
-                padding-right: 0.85rem !important;
-                padding-top: 0.6rem !important;
-                padding-bottom: 0.6rem !important;
-                font-size: 0.9rem;
-                white-space: nowrap;
-            }
-            .row.mt-4 .box-custom { width: 26px; height: 26px; }
-            .row.mt-4 img[style*="30px"] { width: 22px !important; height: 22px !important; }
-            .row.mt-4.border-custom > [class*="col-"] {
-                gap: 0.75rem !important;
-                padding-left: 0.5rem;
-                padding-right: 0.5rem;
-            }
-            .row.mt-4 label { font-size: 0.8rem; }
-            .stat-card { font-size: 14px; }
-        }
-
-        /* Tooltip export/refresh (dipakai di header & filter & datatable) */
+        /* Tooltip Export */
         .export-btn {
             position: relative;
         }
@@ -252,124 +142,362 @@
             visibility: visible;
             right: 130%;
         }
+
+        /* Select2 (Location Filter) */
+        .select2-container {
+            width: 100% !important;
+        }
+
+        .select2-container--default .select2-selection--single {
+            background: #372E39;
+            border: none;
+            display: flex;
+            align-items: center;
+        }
+
+        .select2-container--default .select2-selection--single .select2-selection__rendered {
+            color: white;
+            line-height: 38px;
+            padding-left: 0.75rem;
+        }
+
+        .select2-container--default .select2-selection--single .select2-selection__arrow {
+            height: 38px;
+        }
+
+        .select2-container--default .select2-selection--single .select2-selection__placeholder {
+            color: #ffffff !important;
+        }
+
+        .select2-container--default .select2-results__option--highlighted[aria-selected] {
+            background-color: transparent !important;
+            color: white !important;
+        }
+
+        .select2-container--default .select2-results__option[aria-selected="true"] {
+            background-color: transparent !important;
+            color: white !important;
+        }
+
+        .select2-dropdown {
+            background: #372E39;
+            color: white;
+        }
+
+        .select2-results__option {
+            color: white;
+        }
+
+        .select2-search__field {
+            background: #372E39;
+            color: white;
+            border: none;
+        }
+
+        .round-status-table {
+            --bs-table-bg: transparent;
+            --bs-table-color: #ffffff;
+            --bs-table-striped-bg: transparent;
+            --bs-table-border-color: #576376;
+            color: #ffffff;
+        }
+
+        .round-status-table th,
+        .round-status-table td {
+            vertical-align: middle;
+            background-color: transparent;
+            border-color: #576376;
+            padding: 6px;
+        }
+
+        .round-status-table .round-label {
+            font-weight: bold;
+            padding: 1px;
+        }
+
+        .round-status-table .btn-detail {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            min-width: 64px;
+            height: 56px;
+            margin: 0 auto;
+            text-decoration: none;
+            transition: transform .15s ease, filter .15s ease;
+        }
+
+        .round-status-table .btn-detail img {
+            width: 22px;
+            height: 22px;
+        }
+
+        .status-none   { background-color: #219653; }
+        .status-one    { background-color: #F24C4C; }
+        .status-multi  { background-color: #F24C4C; }
+        .status-cap    { background-color: #F9E21D; }
+
+        .round-status-table td.status-empty {
+        }
+
+        /* Legend */
+        .legend-box {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .datatable-wrap {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .datatable-wrap .col-md-12 {
+            flex: 1;
+            display: flex;
+        }
+
+        #datalist {
+            height: 100%;
+            table-layout: fixed;
+        }
+
+        #datalist tbody {
+            height: 100%;
+        }
+
+        #datalist tbody tr {
+            height: 20%;
+        }
     </style>
-</head>
-<body>
+@endsection
+
+@section('content')
     <div class="container-fluid dashboard-wrap">
         <!-- Header -->
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 ">
-            <div class="d-flex align-items-center gap-3">
-                <img
-                    src="{{ _asset('svg/inlinePerformance/machine.svg') }}"
-                    class="flex-shrink-0"
-                    style="width: 60px; height: 60px;">
-
-                <div class="d-flex flex-column justify-content-center">
-                    <h2 class="text-white mb-1 dashboard-title">
-                        INLINE PERFORMANCE DASHBOARD
-                    </h2>
-                    <p class="text-white fs-6 mb-0 dashboard-subtitle">
-                        Real-time monitoring of inline production performance
-                    </p>
-                </div>
-            </div>
-            <div class="d-flex gap-3 flex-wrap">
-                <a href="{{ route('monitoring_inlineperformanceinlinetls') }}"
-                   class="btn-custom px-4 py-3 text-decoration-none d-flex align-items-center">
-                    <img src="{{ _asset('svg/inlinePerformance/inline.svg') }}" class="me-2">
-                    INLINE TLS
-                </a>
-
-                <button class="btn-custom px-3" onclick="location.reload()">
-                    <img src="{{ _asset('svg/inlinePerformance/reload.svg') }}">
-                    <span class="custom-tooltip">Refresh</span>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+            <div class="d-flex text-white">
+                <button
+                    type="button"
+                    onclick="history.back()"
+                    class="d-flex align-items-center gap-4 border-0 bg-transparent text-white p-0">
+                    <img src="{{ _asset('svg/inlinePerformance/back.svg') }}" width="15" height="15">
+                    <span>Back</span>
                 </button>
+            </div>
+            <div class="d-flex gap-5 justify-content-center align-items-center flex-wrap text-white fs-4 fw-bold">
+                <div class="d-flex align-items-center gap-2">
+                    <span id="liveClock"></span>
+                </div>
+                <div class="d-flex align-items-center gap-2 ms-auto">
+                    <div class="col-12 col-md-1 d-flex justify-content-end align-items-end mb-2">
+                        <button class="export-btn bg-transparent border-0 p-0">
+                            <img src="{{ _asset('svg/inlinePerformance/export.svg') }}" style="width:27px; height:27px;">
+                            <span class="custom-tooltip">Export</span>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 
-        {{-- Filter (Line, Periode Date, Group Buyer, Export summary) --}}
-        @include('monitoring::inlineperformance.index.filter')
-
         <!-- Card -->
         <div class="row g-3 mt-1">
+            <!-- LOCATION -->
+            <div class="col-6 col-md-4 col-lg">
+                <div class="color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                    <h6 class="fw-bold text-start text-red mb-2 fs-4">LOCATION</h6>
+                    <select id="line" class="form-select select2 w-100">
+                        <option></option>
+                    </select>
+                </div>
+            </div>
+
             <!-- QTY INSPECT -->
-            <div class="col-6 col-sm-4 col-lg-2">
-                <div class="stat-card color-box-yellow h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <img src="{{ _asset('svg/inlinePerformance/qty-inspect.svg') }}"
-                        class="img-fluid mb-3" style="width:60px;height:60px;">
-                    <h6 class="fw-bold text-yellow mb-2">INSPECT QTY</h6>
-                    <div class="d-flex align-items-end text-white">
-                        <h2 class="fw-bold mb-0" id="cardQtyInspect">-</h2>
-                        <small class="ms-1">pcs</small>
+            <div class="col-6 col-md-4 col-lg">
+                <div class="color-box-yellow h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
+                    <img src="{{ _asset('svg/inlinePerformance/qty-inspect.svg') }}" class="img-fluid mb-4" style="width:60px;height:60px;">
+                    <div>
+                        <h6 class="fw-bold text-start text-yellow mb-0">QTY INSPECT</h6>
+                        <div class="d-flex align-items-end text-white">
+                            <h2 class="fw-bold mb-0 lh-2" id="tot_inspect">0</h2>
+                            <small class="ms-1">pcs</small>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- QTY DEFECT -->
-            <div class="col-6 col-sm-4 col-lg-2">
-                <div class="stat-card color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <img src="{{ _asset('svg/inlinePerformance/qty-defect.svg') }}"
-                        class="img-fluid mb-3" style="width:60px;height:60px;">
-                    <h6 class="fw-bold text-red mb-2">DEFECT QTY</h6>
-                    <div class="d-flex align-items-end text-white">
-                        <h2 class="fw-bold mb-0" id="cardQtyDefect">-</h2>
-                        <small class="ms-1">pcs</small>
+            <div class="col-6 col-md-4 col-lg">
+                <div class="color-box-red h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
+                    <img src="{{ _asset('svg/inlinePerformance/qty-defect.svg') }}" class="img-fluid mb-4" style="width:60px;height:60px;">
+                    <div>
+                        <h6 class="fw-bold text-start text-red mb-0">QTY DEFECT</h6>
+                        <div class="d-flex align-items-end text-white">
+                            <h2 class="fw-bold mb-0 lh-2" id="tot_defect">0</h2>
+                            <small class="ms-1">pcs</small>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- RFT -->
-            <div class="col-6 col-sm-4 col-lg-2">
-                <div class="stat-card color-box-green h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <img src="{{ _asset('svg/inlinePerformance/rft.svg') }}"
-                        class="img-fluid mb-3" style="width:60px;height:60px;">
-                    <h6 class="fw-bold text-green mb-2">RFT</h6>
-                    <h2 class="fw-bold mb-0 text-white"><span id="cardRft">-</span> %</h2>
+            <div class="col-6 col-md-4 col-lg">
+                <div class="color-box-green h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
+                    <img src="{{ _asset('svg/inlinePerformance/rft.svg') }}" class="img-fluid mb-4" style="width:60px;height:60px;">
+                    <div>
+                        <h6 class="fw-bold text-start text-green mb-0">RFT</h6>
+                        <div class="d-flex align-items-end text-white">
+                            <h2 class="fw-bold mb-0 lh-2"><span id="rft">0.00</span>%</h2>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <!-- WFT -->
-            <div class="col-6 col-sm-4 col-lg-2">
-                <div class="stat-card color-box-blue h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <img src="{{ _asset('svg/inlinePerformance/wft.svg') }}"
-                        class="img-fluid mb-3" style="width:60px;height:60px;">
-                    <h6 class="fw-bold text-blue mb-2">WFT</h6>
-                    <h2 class="fw-bold mb-0 text-white"><span id="cardWft">-</span> %</h2>
-                </div>
-            </div>
-
-            <!-- TARGET -->
-            <div class="col-6 col-sm-4 col-lg-2">
-                <div id="targetColor" class="stat-card color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <img src="{{ _asset('svg/inlinePerformance/target.svg') }}"
-                        class="img-fluid mb-3" style="width:60px;height:60px;">
-                    <h6 class="fw-bold text-red mb-2">TARGET RFT</h6>
-                    <h2 class="fw-bold mb-0 text-white">97 %</h2>
-                </div>
-            </div>
-
-            <!-- TOP DEFECT -->
-            <div class="col-6 col-sm-4 col-lg-2">
-                <div class="stat-card color-box-red h-100 p-4">
-                    <div class="d-flex align-items-center justify-content-center mb-3">
-                        <img src="{{ _asset('svg/inlinePerformance/top-defect.svg') }}"
-                            style="width:50px;height:50px;">
-                        <h6 class="fw-bold text-white ms-2 mb-0">TOP DEFECT</h6>
+            <div class="col-6 col-md-4 col-lg">
+                <div class="color-box-blue h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
+                    <img src="{{ _asset('svg/inlinePerformance/wft.svg') }}" class="img-fluid mb-4" style="width:60px;height:60px;">
+                    <div>
+                        <h6 class="fw-bold text-start text-blue mb-0">WFT</h6>
+                        <div class="d-flex align-items-end text-white">
+                            <h2 class="fw-bold mb-0 lh-2"><span id="wft">0.00</span>%</h2>
+                        </div>
                     </div>
-                    <div id="topDefectList"> </div>
                 </div>
             </div>
         </div>
 
-        {{-- Datatables (tabel detail per line) --}}
-        @include('monitoring::inlineperformance.index.datatables')
+        <!-- Round Status Table -->
+        <div class="mt-3 rounded text-white datatable-wrap">
+            <div class="col-md-12">
+                <table id="datalist" class="table table-bordered table-hover round-status-table" width="100%">
+                    <thead class="" style="background-color: #242E3E;">
+                        <tr id="operators">
+                            <th class="text-center">OPERATORS</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="text-center round-label">
+                                <span class="badge px-4 py-2 rounded-5" style="background-color: #8C8C8C; border: 2px solid #6E6E6E; font-size:15px; font-weight:400">
+                                    Round 1
+                                </span>
+                            </td>
+                            <td class="text-center">
+                                <a href="#" class="btn-detail status-none" data-tooltip="tooltip">
+                                    <img src="{{ _asset('svg/inlinePerformance/checklist.svg') }}" alt="Success">
+                                </a>
+                            </td>
+                            <td class="text-center">
+                                <a href="#" class="btn-detail status-one" data-tooltip="tooltip"></a>
+                            </td>
+                            <td class="text-center">
+                                <a href="#" class="btn-detail status-cap" data-tooltip="tooltip">
+                                    <img src="{{ _asset('svg/inlinePerformance/pencil.svg') }}" alt="CAP filled">
+                                </a>
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td class="text-center round-label">
+                                 <span class="badge px-4 py-2 rounded-5" style="background-color: #F24C4C; border: 2px solid #D63737; font-size:15px; font-weight:400">
+                                    Round 2
+                                </span>
+                            </td>
+                            <td class="text-center">
+                                <a href="#" class="btn-detail status-none" data-tooltip="tooltip"></a>
+                            </td>
+                            <td class="text-center status-empty"></td>
+                            <td class="text-center">
+                                <a href="#" class="btn-detail status-multi" data-tooltip="tooltip">
+                                    <img src="{{ _asset('svg/inlinePerformance/defect2.svg') }}" alt="Two or more defects">
+                                </a>
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td class="text-center round-label">
+                                <div class="badge px-4 py-2 rounded-5" style="background-color: #219653; border: 2px solid #4CF299; font-size:15px; font-weight:400">
+                                    Round 3
+                                </div>
+                            </td>
+                            <td class="text-center">
+                                <a href="#" class="btn-detail status-one" data-tooltip="tooltip"></a>
+                            </td>
+                            <td class="text-center">
+                                <a href="#" class="btn-detail status-none" data-tooltip="tooltip"></a>
+                            </td>
+                            <td class="text-center status-empty"></td>
+                        </tr>
+
+                        <tr>
+                            <td class="text-center round-label">
+                                <div class="badge px-4 py-2 rounded-5" style="background-color: #219653; border: 2px solid #4CF299; font-size:15px; font-weight:400">
+                                    Round 4
+                                </div>
+                            </td>
+                            <td class="text-center status-empty"></td>
+                            <td class="text-center">
+                                <a href="#" class="btn-detail status-cap" data-tooltip="tooltip">
+                                    <img src="{{ _asset('svg/inlinePerformance/pencil.svg') }}" alt="CAP filled">
+                                </a>
+                            </td>
+                            <td class="text-center status-empty"></td>
+                        </tr>
+
+                        <tr>
+                            <td class="text-center round-label">
+                                <div class="badge px-4 py-2 rounded-5" style="background-color: #219653; border: 2px solid #4CF299; font-size:15px; font-weight:400">
+                                    Round 5
+                                </div>
+                            </td>
+                            <td class="text-center status-empty"></td>
+                            <td class="text-center status-empty"></td>
+                            <td class="text-center status-empty"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="d-flex justify-content-center mt-2">
+            <div class="d-flex text-white px-3 py-1 gap-3 align-items-center justify-content-center fs-6">
+                <div class="d-flex gap-3 align-items-center">
+                    <div class="legend-box" style="background-color: #219653;"></div>
+                    <p class="mb-0">No Defect Data</p>
+                </div>
+
+                <div class="d-flex gap-3 align-items-center">
+                    <div class="legend-box" style="background-color: #F24C4C;"></div>
+                    <p class="mb-0">Found One Defect Data</p>
+                </div>
+
+                <div class="d-flex gap-3 align-items-center">
+                    <div class="legend-box" style="background-color: #F24C4C;">
+                        <img src="{{ _asset('svg/inlinePerformance/defect2.svg') }}">
+                    </div>
+                    <p class="mb-0">Found Two or More Defect Data</p>
+                </div>
+
+                <div class="d-flex gap-3 align-items-center">
+                    <div class="legend-box" style="background-color: #F9E21D;">
+                        <img src="{{ _asset('svg/inlinePerformance/pencil.svg') }}">
+                    </div>
+                    <p class="mb-0">CAP Already Filled In</p>
+                </div>
+            </div>
+        </div>
 
         <!-- Footer -->
-        <div class="mt-2 text-white d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0">
+        <div class="mt-2 text-white d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0 fs-6">
             <div class="d-flex align-items-center gap-2">
-                <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" style="width: 18px; height: 18px;">
+                <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" style="width: 15px; height: 15px;">
                 Data Update
-                <span id="liveClock"></span>
+                <span id="liveClock2"></span>
             </div>
             <div class="d-flex align-items-center">
                 <div class="mb-0 d-flex align-items-center gap-2">
@@ -379,44 +507,97 @@
             </div>
         </div>
     </div>
+@endsection
 
-    @include('layouts.loading')
-
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="https://unpkg.com/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/js/select2.min.js"></script>
-    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
-    <script src="{{ asset('/js/flatpickr.min.js') }}"></script>
-    <script src="{{ asset('js/flatpickr_language_id.js') }}"></script>
-    <script src="{{ _asset('js/sweetalert.min.js') }}"></script>
-
+@section('extrascript')
     <script>
-        // Script UMUM: tidak spesifik ke filter/datatable
-        $(function () {
+        $(document).ready(function () {
             function updateClock() {
-                let now = new Date();
-                let day = String(now.getDate()).padStart(2, '0');
-                let month = [
+                const now = new Date();
+                const day = String(now.getDate()).padStart(2, '0');
+                const month = [
                     "January", "February", "March", "April", "May", "June",
                     "July", "August", "September", "October", "November", "December"
                 ];
-                let year = now.getFullYear();
-                let hour = String(now.getHours()).padStart(2, '0');
-                let minute = String(now.getMinutes()).padStart(2, '0');
-                let second = String(now.getSeconds()).padStart(2, '0');
+                const year = now.getFullYear();
+                const hour = String(now.getHours()).padStart(2, '0');
+                const minute = String(now.getMinutes()).padStart(2, '0');
+                const second = String(now.getSeconds()).padStart(2, '0');
 
-                document.getElementById('liveClock').innerHTML =
-                    `${day} ${month[now.getMonth()]} ${year} - ${hour} : ${minute} : ${second}`;
+                const formatted = `${day} ${month[now.getMonth()]} ${year} - ${hour} : ${minute} : ${second}`;
+
+                document.getElementById('liveClock').innerHTML = formatted;
+                document.getElementById('liveClock2').innerHTML = formatted;
             }
             updateClock();
             setInterval(updateClock, 1000);
+
+            $('#line').select2({
+                placeholder: 'Select Line',
+                width: '100%',
+                ajax: {
+                    url: "{{ route('monitoring_inlineperformanceselectline') }}",
+                    type: "GET",
+                    dataType: "json",
+                    delay: 500,
+                    data: function (params) {
+                        return {
+                            q: params.term,
+                            page: params.page || 1
+                        };
+                    },
+                    processResults: function (data) {
+                        return {
+                            results: $.map(data.data, function (item) {
+                                return {
+                                    id: item.kodegroup,
+                                    text: item.namabagian + ' - ' + item.namagroup
+                                };
+                            }),
+                            pagination: {
+                                more: data.to < data.total
+                            }
+                        };
+                    },
+                    cache: true
+                }
+            });
+
+            $('#line').on('change', function () {
+                const line = $(this).val();
+
+                $.ajax({
+                    url: "{{ route('monitoring_inlineperformance_filterInlineLts') }}",
+                    type: "GET",
+                    data: { line: line },
+                    success: function (res) {
+                        $('#tot_inspect').text(res.tot_inspect);
+                        $('#tot_defect').text(res.tot_defect);
+                        $('#rft').text(res.rft);
+                        $('#wft').text(res.wft);
+
+                        let $operatorRow = $('#operators');
+                        $operatorRow.find('td').remove();
+
+                        if (res.usertoday && res.usertoday.length > 0) {
+                            $.each(res.usertoday, function (i, u) {
+                                let nm = (u.nama || '').split(' ');
+                                let displayName = nm.length > 1
+                                    ? nm[0] + ' ' + nm[1].charAt(0)
+                                    : (nm[0] || 'No Data');
+
+                                let td = `<td><center><b>${u.sequence_process}<br>${u.userid_operator}<br>${displayName}</b></center></td>`;
+                                $operatorRow.append(td);
+                            });
+                        }
+                    },
+                    error: function (xhr) {
+                        console.log(xhr.responseJSON.message);
+                    }
+                });
+            });
+
+
         });
     </script>
-
-    {{-- Semua script dari partial (filter.blade.php, datatables.blade.php)
-         dikeluarkan di sini, SETELAH semua library JS ter-load,
-         supaya jQuery/select2/DataTable/flatpickr sudah tersedia. --}}
-    @stack('scripts')
-</body>
-</html>
+@endsection
