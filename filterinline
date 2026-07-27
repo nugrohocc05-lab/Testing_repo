@@ -114,3 +114,128 @@ function filterInlineLts(Request $request)
         'rounds'      => $rounds,
     ]);
 }
+
+// new 
+<?php
+// Ganti function filterInlineLts yang lama di InlinePerformanceController
+// dengan versi ini. Function buildInlineOptData() TIDAK dipanggil lagi
+// dari sini (boleh dihapus kalau memang tidak dipakai fungsi lain).
+
+function filterInlineLts(Request $request)
+{
+    if (!$request->line) {
+        return response()->json(['message' => 'Line belum dipilih'], 422);
+    }
+
+    preconnect(session('db'));
+
+    $date = Carbon::now();
+    $dta = $date->copy()->startOfDay();
+    $dtb = $date->copy()->endOfDay();
+
+    // Semua InlineHeader untuk line ini, hari ini
+    $headers = InlineHeader::whereBetween('date', [$dta, $dtb])
+        ->where('group_id', $request->line)
+        ->get(['id', 'round', 'sequence_process', 'userid_operator']);
+
+    $headerIds = $headers->pluck('id');
+    $headerCount = $headerIds->count();
+
+    // --- Ringkasan agregat (bagian yang sudah ada dari awal) ---
+    $totInspect = $headerCount * 5;
+    $totDefect = InlineDetail::whereIn('inline_header_id', $headerIds)->count();
+
+    $rft = $totInspect > 0 ? (($totInspect - $totDefect) / $totInspect) * 100 : 0;
+    $wft = $totInspect > 0 ? ($totDefect / $totInspect) * 100 : 0;
+
+    // --- Bagian baru: matrix operator x round untuk tabel ---
+
+    // Ambil semua detail (defect + kolom CAP) sekaligus, dikelompokkan per header
+    $detailsByHeader = InlineDetail::whereIn('inline_header_id', $headerIds)
+        ->get(['inline_header_id', 'problem', 'action', 'rootcause'])
+        ->groupBy('inline_header_id');
+
+    // Daftar operator unik untuk jadi kolom, diurutkan berdasarkan sequence_process
+    $operatorsMeta = $headers
+        ->groupBy('userid_operator')
+        ->map(function ($rows) {
+            return $rows->sortBy('round')->first();
+        })
+        ->sortBy('sequence_process')
+        ->values();
+
+    $niks = $operatorsMeta->pluck('userid_operator')->unique()->values();
+    $employeeNames = Employee::whereIn('nik', $niks)->pluck('name', 'nik');
+
+    $operators = $operatorsMeta->map(function ($h) use ($employeeNames) {
+        return [
+            'nik'              => $h->userid_operator,
+            'nama'             => $employeeNames[$h->userid_operator] ?? null,
+            'sequence_process' => $h->sequence_process,
+        ];
+    })->values();
+
+    // Index header per kombinasi operator+round supaya lookup cepat
+    $headersByOperatorRound = $headers->groupBy(function ($h) {
+        return $h->userid_operator . '-' . $h->round;
+    });
+
+    $maxRound = 5; // aturan bisnis: maksimal 5 round
+
+    $rounds = [];
+    for ($r = 1; $r <= $maxRound; $r++) {
+        $cells = [];
+
+        foreach ($operators as $op) {
+            $key = $op['nik'] . '-' . $r;
+            $headerGroup = $headersByOperatorRound->get($key);
+
+            if (!$headerGroup || $headerGroup->isEmpty()) {
+                // Operator belum dicek di round ini
+                $cells[] = [
+                    'status' => 'empty',
+                ];
+                continue;
+            }
+
+            $hIdsThisCell = $headerGroup->pluck('id');
+
+            $details = collect();
+            foreach ($hIdsThisCell as $hid) {
+                $details = $details->merge($detailsByHeader->get($hid, collect()));
+            }
+
+            $defectCount = $details->count();
+
+            $hasCap = $details->contains(function ($d) {
+                return !empty($d->problem) || !empty($d->action) || !empty($d->rootcause);
+            });
+
+            // Prioritas: CAP terisi -> kuning, meski defect >= 1
+            $status = $hasCap
+                ? 'cap'
+                : ($defectCount == 0 ? 'none' : ($defectCount == 1 ? 'one' : 'multi'));
+
+            $cells[] = [
+                'status' => $status,
+            ];
+        }
+
+        $rounds[] = [
+            'round' => $r,
+            'cells' => $cells,
+        ];
+    }
+
+    return response()->json([
+        'date'        => $date->format('Y-m-d'),
+        'tot_inspect' => $totInspect,
+        'tot_defect'  => $totDefect,
+        'rft'         => number_format($rft, 2),
+        'wft'         => number_format($wft, 2),
+        'operators'   => $operators,
+        'rounds'      => $rounds,
+    ]);
+}
+
+
