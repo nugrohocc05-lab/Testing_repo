@@ -1,1014 +1,1551 @@
-@extends('monitoring::layouts.master')
+<?php
 
-@section('extracss')
-<style type="text/css">
-	.b-title {
-        font-size: 14pt;
-    }
-    .b-content {
-        font-size: 24pt;
-        height: 40pt;
-        padding-top: 10px;
-    }
-    tr {
-        line-height: 10px;
-        min-height: 20px;
-        height: 10px;
-        background-color: black;
-    }
-    td, select, textarea, input {
-        background-color: black;
-    }
-</style>
-@endsection
+namespace Modules\Monitoring\Http\Controllers\Conventional;
 
-@section('content')
-<div>
-	<section class="content" style="background-color: black; color: white;">
-		<div class="color-palette-box">
-            <div class="box-body">
-                <div class="row">
-                    <div class="col-sm-4 col-md-2">
-                        <div class="color-palette-set">
-                            <div class="bg-navy-active color-palette"><center><span class="b-title">LINE</span></center></div>
-                            <div class="bg-navy color-palette"><center><span class="b-content"><b>{{ isset($line) ? $line->namagroup : '-' }}</b></span></center></div>
-                        </div>
-                    </div>
-                    <div class="col-sm-4 col-md-2">
-                        <div class="color-palette-set">
-                            <div class="bg-aqua-active color-palette"><center><span class="b-title">Total Output</span></center></div>
-                            <div class="bg-aqua color-palette"><center><span class="b-content"><b>{{ isset($totaloutput) ? $totaloutput : '0' }}</b></span></center></div>
-                        </div>
-                    </div>
-                    <div class="col-sm-4 col-md-2">
-                        <div class="color-palette-set">
-                            <div class="bg-orange-active color-palette"><center><span class="b-title">Efficiency</span></center></div>
-                            <div class="bg-orange color-palette"><center><span class="b-content"><b>{{ isset($totalefficiency) ? $totalefficiency . '%' : '0' }}</b></span></center></div>
-                        </div>
-                    </div>
-                    <div class="col-sm-4 col-md-2">
-                        <div class="color-palette-set">
-                            <div class="bg-green-active color-palette"><center><span class="b-title">RFT</span></center></div>
-                            <div class="bg-green color-palette"><center><span class="b-content"><b>{{ isset($percentrft) ? $percentrft . '%' : '0' }}</b></span></center></div>
-                        </div>
-                    </div>
-                    <div class="col-sm-4 col-md-2">
-                        <div class="color-palette-set">
-                            <div class="bg-maroon-active color-palette"><center><span class="b-title">WFT</span></center></div>
-                            <div class="bg-maroon color-palette"><center><span class="b-content"><b>{{ isset($percentwft) ? $percentwft . '%' : '0' }}</b></span></center></div>
-                        </div>
-                    </div>
-                    <div class="col-sm-2 col-md-2">
-                        <a href="{{ route('monitoring_dashboard_conv') }}" class="btn btn-primary btn-lg" style="width: 100%">ENDLINE</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-		<div class="row">
-			<div class="col-md-6">
-				<b style="font-size: 14pt; height: 20pt; padding-top: 10px">&nbsp; &nbsp; Date: {{ Carbon\Carbon::now()->format('D, d M y') }}  - <b id="hours">{{ Carbon\Carbon::now()->format('H:i:s') }}</b></b>
-			</div>
-			<div class="col-md-12">
-				<table id="datalist" class="table table-bordered hover no-wrap" width="100%">
-					<thead>
-						<tr>
-							<td style="padding-top: 10px;"><center><b>OPERATORS</b></center></td>
-							@if(isset($usertoday))
-								@foreach($usertoday as $u)
-								@php
-									$nm = explode(' ', $u->nama);
-								@endphp
-								<td><center><b>{{ $u->sequence_process }}<br>{{ $u->userid_operator }}<br>{{ count($nm) > 1 ? $nm[0] . ' ' . substr($nm[1], 0, 1) : ($nm[0] ?: 'No Data') }}</b></center></td>
-								@endforeach
-							@endif
-						</tr>
-					</thead>
-					<tbody>
-						@for($i=1; $i < 6; $i++)
-						<tr>
-							<td><b style="font-size: 100%; padding: 1px"><center>ROUND {{$i}}</center></b></td>
-							@if(isset($userinline))
-								@foreach($userinline as $u)
-								@php
-								
-									$uk = $u->where('round', $i); 
-									if($uk->count() > 0){
-										if($uk->first()->detail->count() > 0){
-										$x = 5 - $uk->first()->detail->count();
-										}else {
-											$x = 5;
-										}
-									}else{
-										$x = 6;
-									}
-								@endphp
-								<td>
-									@if($x != 6)
-									<a href="{{ route('monitoring_dashboard_convcapdata', ['nik' => $u->first()->userid_operator, 'round' => $i]) }}" class="btn-detail" title="Click For Detail" data-tooltip="tooltip">
-										<center>
-											@if($x == 5)
-											<div style="padding: 22px;" class="bg-green"><i class="fa fa-check"></i></div>
-											@elseif($x == 4 && $uk->first()->detail->where('problem', '!=', null)->count() <= 0)
-											<div style="padding: 22px;" class="bg-red"><i class="fa fa-exclamation-circle text-red"></i></div>
-											@else
-												@if(isset($uk->first()->detail) && $uk->first()->detail->where('problem', '!=', null)->count() > 0)
-												<div style="padding: 22px" class="bg-yellow"><i class="fa fa-pencil-alt text-red"></i></div>
-												@else
-												<div style="padding: 22px" class="bg-red"><i class="fa fa-exclamation-circle fa-lg"></i></div>
-												@endif
-											@endif
-										</center>
-									</a>
-									@endif
-								</td>
-								@endforeach
-							@endif
-						</tr>
-						@endfor
-					</tbody>
-				</table>
-			</div>
-		</div>
-		<div class="row" style="margin-top: 2rem; margin-bottom: 2rem">
-			<div class="col-sm-12">
-				<div class="col-sm-4">
-					<b>NOTE :</b>
-					<br>
-					<table border="0" width="100%">
-						<tr>
-							<td width="4%">
-								<div style="padding: 10px" class="bg-green"><i class="fa fa-check"></i></div>
-							</td>
-							<td width="96%" style="font-size: 10pt"> &nbsp; &nbsp; = No Defect Data</td>
-						</tr>
-						<tr></tr>
-						<tr>
-							<td width="4%">
-								<div style="padding: 10px" class="bg-red"><i class="fa fa-exclamation-circle text-red"></i></div>
-							</td>
-							<td width="96%" style="font-size: 10pt"> &nbsp; &nbsp; = Found One Defect Data</td>
-						</tr>
-						<tr></tr>
-						<tr>
-							<td width="4%">
-								<div style="padding: 10px" class="bg-red"><i class="fa fa-exclamation-circle fa-lg"></i></div>
-							</td>
-							<td width="96%" style="font-size: 10pt"> &nbsp; &nbsp; = Found Two or More Defect Data</td>
-						</tr>
-						<tr></tr>
-						<tr>
-							<td width="4%">
-								<div style="padding: 10px" class="bg-yellow"><i class="fa fa-pencil-alt text-red"></i></div>
-							</td>
-							<td width="96%" style="font-size: 10pt"> &nbsp; &nbsp; = CAP Already Filled In</td>
-						</tr>
-					</table>
-				</div>
-			</div>
-		</div>
-	</section>
-</div>
-<div class="modal fade" id="cap-modal">
-	<div class="modal-dialog modal-lg" style="width: 90%">
-		<div class="modal-content" style="background-color: black; color: white;">
-			<div class="modal-header">
-				<button type="button" class="close" data-dismiss="modal" aria-hiddne="true">&times;</button>
-				<h4 class="modal-title">Detail Data Inline Inspection</h4>
-			</div>
-			<div class="modal-body">
-				Data Loading....
-			</div>
-		</div>
-	</div>
-</div>
-@include('layouts.loading')
-@endsection
+use DB;
+use Carbon\Carbon;
+use App\Http\Models\Main\Style;
+use App\Http\Models\Main\DbList;
+use App\Http\Models\InlineDetail;
+use App\Http\Models\InlineHeader;
+use Illuminate\Http\Request;
+use App\Http\Models\MpsDetail;
+use App\Http\Models\MpsHeader;
+use App\Http\Models\OutputDetail;
+use App\Http\Models\SewingOutput;
+use App\Http\Models\FactoryParameter;
+use App\Http\Models\PurchaseOrder;
+use App\Http\Controllers\Controller;
+use App\Http\Controllers\SmvController;
+use App\Http\Models\Main\Employee;
+use App\Http\Models\Main\EmployeeAttendance;
+use App\Http\Models\Main\MasterEmployeeGroup;
+use App\Http\Models\Main\MatrixAssessment;
+use App\Http\Models\Main\QCDefect;
+use App\Http\Models\PanicParameter;
+use Illuminate\Support\Facades\Validator;
+use Modules\Sewing\Http\Controllers\WorktimeSettingController;
 
-@section('extrascript')
-<script type="text/javascript">
-    $(document).ready(function() {
-        setInterval(function() {
-            d = new Date();
-            h = set(d.getHours());
-            m = set(d.getMinutes());
-            s = set(d.getSeconds());
-            $('#hours').text(h + ':' + m + ':' + s);
-        }, 1000);
-        function set(e)
-        {
-            e = e < 10 ? '0' + e : e;
-            return e;
-        }
-        $('#datalist').DataTable({
-            scrollX: true,
-            paging: false,
-            lengthChange: false,
-            searching: false,
-            ordering: false,
-            info: false,
-        	fixedColumns: {
-        		leftColumns: 1
-        	}
-        });
-        $('body').on('click', '.btn-detail', function(event) {
-        	event.preventDefault();
-        	var link = $(this).attr('href');
-        	if(link == '#') return;
-        	$('#loading').show();
-        	$.ajax({
-        		url: link,
-        		type: 'GET',
-        		dataType: 'html',
-        	})
-        	.done(function(data) {
-        		$('#cap-modal').modal('show').find('.modal-body').html(data);
-        	})
-        	.always(function() {
-        		$('#loading').hide();
-        	});
-        });
-    });
-</script>
-@if(isset($status) and $status != null and $status == 'dbwrong')
-<script type="text/javascript">
-    $(document).ready(function() {
-        swal('Wrong ID', 'Please Provide Correct Factory ID!', 'warning');
-    });
-</script>
-@endif
-@if(isset($status) and $status != null and $status == 'connectionfail')
-<script type="text/javascript">
-    $(document).ready(function() {
-        swal('Database Connection Failed!', 'Please Contact IT Support!', 'warning');
-    });
-</script>
-@endif
-@if((isset($status) and $status != null and $status == 'validationfail'))
-<script type="text/javascript">
-    $(document).ready(function() {
-        swal('Data Stored Invalid!', 'Please Provide A Valid Data To Store!', 'warning');
-    });
-</script>
-@endif
-@if((isset($status) and $status != null and $status == 'savefailed'))
-<script type="text/javascript">
-    $(document).ready(function() {
-        swal('Data Stored Invalid!', 'Please Provide A Valid Data To Store!', 'warning');
-    });
-</script>
-@endif
-@endsection
-
-bawah 
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MES</title>
-    <link href="https://unpkg.com/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/css/select2.min.css">
-    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
-    <link rel="stylesheet" href="{{ asset('/css/flatpickr.min.css') }}">
-
-    <style>
-        html, body {
-            margin: 0;
-            background-color: #242E3E;
+class GmsController extends Controller
+{
+    function index()
+    {
+        if (!session('idfactory')) {
+            return response()->json('Unauthorized', 403);
         }
 
-        body {
-            padding: 1rem;
-        }
+        try {
+            preconnect(session('db'));
 
-        /* Mode Desktop  */
-        @media (min-width: 992px) {
-            html, body {
-                height: 100%;
-            }
-            body {
-                overflow: hidden;
-                display: flex;
-                flex-direction: column;
-            }
-        }
-
-        .dashboard-wrap {
-            width: 100%;
-        }
-
-        @media (min-width: 992px) {
-            .dashboard-wrap {
-                height: 100%;
-                display: flex;
-                flex-direction: column;
-            }
-        }
-
-        .bg-custom{
-            background:#1C2536;
-        }
-
-        .bg-custom-select{
-            background:#242E3E;
-            color:#fff;
-            border:0;
-        }
-
-        .btn-custom{
-            background:#222F4A;
-            color:#fff;
-            border:none;
-            border-radius:10px;
-        }
-
-        .border-custom{
-            border:1px solid #576376 !important;
-        }
-        .border-custom-datatable{
-            border:1px solid #4C8CF2 !important;
-            background-color:#212B3E;
-        }
-
-        .border-end-custom{
-            border-right:1px solid #242E3E !important;
-        }
-
-        .min-h-custom{
-            min-height:250px;
-        }
-
-        .border-color-yellow{
-            border:1px solid #F2C94C;
-            border-radius:5px;
-        }
-
-        /* Text dan Border */
-        .text-title {
-            color: #5A587E;
-        }
-        .text-yellow {
-            color: #F2C94C;
-        }
-        .text-red {
-            color: #F24C4C;
-        }
-        .text-blue {
-            color: #4C8CF2;
-        }
-        .text-green {
-            color: #4CF299;
-        }
-        .color-box-yellow {
-            background-color: #363633;
-            border:1px solid #F2C94C;
-            border-radius:5px;
-            color: #F2C94C;
-        }
-        .color-box-red {
-            background-color: #352837;
-            border:1px solid #F24C4C;
-            border-radius:5px;
-        }
-        .color-box-blue {
-            background-color: #23304E;
-            border:1px solid #3F5588;
-            border-radius:5px;
-        }
-        .color-box-green {
-            background-color: #1A3B45;
-            border:1px solid #4CF299;
-            border-radius:5px;
-        }
-
-        .dashboard-title {
-            font-size: 2rem;
-        }
-
-        @media (max-width: 768px) {
-            .dashboard-title {
-                font-size: 1.4rem;
+            try {
+                $is_panic = FactoryParameter::where('key', 'line_panic')->first()
+                    ->value;
+            } catch (\Exception $e) {
+                $is_panic = false;
             }
 
-            .dashboard-subtitle {
-                font-size: 1rem !important;
-            }
-        }
+            $mp_line_param = ($lp = FactoryParameter::find('line_mapping_tolerance'))
+                ? $lp->value * 1
+                : 30;
 
-        @media (max-width: 576px) {
+            $date = Carbon::now();
 
-            .dashboard-title {
-                font-size: 1.1rem;
-            }
+            $isToday =
+                Carbon::parse(session('endline.date'))->format('Y-m-d') == Carbon::now()->format('Y-m-d') && !session('endline.shift');
+            $line = MasterEmployeeGroup::select('id as kodegroup', 'name as namagroup')
+                ->find(session('line'));
 
-            .dashboard-subtitle {
-                display: none;
-            }
+            $worktimeline = WorktimeSettingController::getLineWorkingTime(
+                $line,
+                $date,
+            );
 
-            .btn-custom {
-                width: 100%;
-                justify-content: center;
-            }
+            $worktime = $worktimeline->workingtime;
 
-            .d-flex.flex-wrap > .d-flex {
-                width: 100%;
-            }
+            $get_worktimeline = WorktimeSettingController::get_worktime_range($worktimeline, $worktime);
+            $swt = $get_worktimeline->startworktime;
+            $fwt = $get_worktimeline->finishworktime;
 
-            .color-box-yellow img,
-            .color-box-red img,
-            .color-box-blue img,
-            .color-box-green img {
-                width: 40px !important;
-                height: 40px !important;
+            if ($swt->greaterThan($fwt)) {
+                $fwt->addDay();
             }
 
-            .color-box-yellow h2,
-            .color-box-red h2,
-            .color-box-blue h2,
-            .color-box-green h2 {
-                font-size: 1.4rem;
-            }
-        }
-
-        .select2-container {
-            width: 100% !important;
-        }
-
-        @media (max-width: 767.98px) {
-
-            .border-end-custom {
-                border-right: none !important;
-                border-bottom: 1px solid rgba(255,255,255,.2);
-                padding-bottom: 1rem;
-                margin-bottom: 1rem;
+            if ($isToday){
+                if(!$date->between($swt, $fwt)){
+                    $isToday = false;
+                }
             }
 
-            #findbtn {
-                width: 100%;
+            $diff = $swt->diffInHours($fwt) / 2;
+
+            $sto = Carbon::parse(
+                $worktimeline->date . ' ' . $worktime->starttimeoff,
+            );
+            $fto = Carbon::parse(
+                $worktimeline->date . ' ' . $worktime->endtimeoff,
+            );
+            if ($sto->greaterThan($fto)) {
+                $fto->addDay();
             }
 
-            input[type="date"] {
-                max-width: 100% !important;
+            $sto2 = null;
+            $fto2 = null;
+
+            if ($worktime->startsecondtimeoff) {
+                $sto2 = Carbon::parse(
+                    $worktimeline->date . ' ' . $worktime->startsecondtimeoff,
+                );
+                $fto2 = Carbon::parse(
+                    $worktimeline->date . ' ' . $worktime->endsecondtimeoff,
+                );
+                if ($sto2->greaterThan($fto2)) {
+                    $fto2->addDay();
+                }
             }
-        }
 
-        #searchLine::placeholder {
-            color: white;
-            opacity: 1;
-            font-weight: 300;
-        }
+            $totalworktime = $date->diffInMinutes($swt);
 
-        .datatable-wrap {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .table-scroll-area {
-            overflow-y: auto;
-            overscroll-behavior: contain;
-            height: calc(100vh - 560px);
-        }
-
-        @media (min-width: 992px) {
-            .datatable-wrap {
-                flex-grow: 1;
-                min-height: 0;
-                overflow: hidden;
+            if ($date->greaterThan($sto)) {
+                if ($date->greaterThan($fto)) {
+                    $timeoff = $sto->diffInMinutes($fto);
+                    $totalworktime -= $timeoff;
+                } else {
+                    $timeoff_diff = $sto->diffInMinutes($date);
+                    $totalworktime -= $timeoff_diff;
+                }
             }
-            .table-scroll-area {
-                flex-grow: 1;
-                min-height: 0;
-                max-height: none;
-            }
-        }
 
-        /* Header datatable & search box fluid */
-        #datedatatables,
-        #searchLine {
-            max-width: 100%;
-        }
-
-        @media (max-width: 575.98px) {
-            #datedatatables,
-            #searchLine {
-                width: 100% !important;
-            }
-            .search-export-row {
-                width: 100%;
-            }
-            .search-export-row .d-flex:first-child {
-                width: 100%;
-            }
-            .search-export-row .btn-custom {
-                width: auto;
-            }
-        }
-
-        /* Container kalender */
-        .flatpickr-calendar {
-            background: #242E3E;
-            border-radius: 12px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.35);
-            border: none;
-            width: 307px;
-
-        }
-        .flatpickr-calendar.arrowTop:before,
-        .flatpickr-calendar.arrowTop:after {
-            display: none;
-        }
-
-        /* Header (bulan & tahun) */
-        .flatpickr-months {
-            border-radius: 12px 12px 0 0;
-            padding: 10px 0;
-        }
-        .flatpickr-current-month {
-            color: #fff;
-            font-weight: 700;
-            font-size: 1.1rem;
-        }
-        .flatpickr-current-month .flatpickr-monthDropdown-months,
-        .flatpickr-current-month input.cur-year {
-            color: #fff;
-            background: transparent;
-        }
-        .flatpickr-months .flatpickr-prev-month,
-        .flatpickr-months .flatpickr-next-month {
-            color: #fff;
-            fill: #fff;
-            top: 12px;
-        }
-        .flatpickr-months .flatpickr-prev-month svg,
-        .flatpickr-months .flatpickr-next-month svg {
-            fill: #fff;
-        }
-
-        /* Nama hari (Sun, Mon, dst) */
-        .flatpickr-weekdays {
-            background: #1e2a44;
-        }
-        span.flatpickr-weekday {
-            background: #1e2a44;
-            color: #cfd8ec;
-            font-weight: 600;
-        }
-
-        /* Body kalender */
-        .flatpickr-days {
-            background: #1e2a44;
-            border: none;
-        }
-
-        .dayContainer {
-            background: #1e2a44;
-        }
-
-        /* Tanggal */
-        .flatpickr-day {
-            color: #fff;
-            border-radius: 10px;
-        }
-        .flatpickr-day:hover {
-            background: #33456b;
-        }
-        .flatpickr-day.today {
-            border-color: #6c8cd5;
-        }
-
-        /* Tanggal di luar bulan (abu-abu redup) */
-        .flatpickr-day.prevMonthDay,
-        .flatpickr-day.nextMonthDay {
-            color: #5a6785;
-        }
-
-        /* Tanggal terpilih */
-        .flatpickr-day.selected,
-        .flatpickr-day.selected:hover {
-            background: #32549A;
-            border-color: #32549A;
-            color: #fff;
-        }
-
-        .flatpickr-current-month {
-            color: #fff;
-            font-weight: 700;
-            font-size: 1.1rem;
-        }
-
-        /* Detail perline */
-        .date-filter {
-            width: 150px;
-            min-width: 150px;
-            background-color: #1C2536;
-            color: white;
-        }
-
-        .search-input {
-            width: 250px;
-            background-color: #1C2536;
-            color: white;
-        }
-
-        h5.text-nowrap {
-            white-space: nowrap;
-        }
-
-        /* Tooltip */
-        .export-btn {
-            position: relative;
-        }
-
-        .custom-tooltip {
-            position: absolute;
-            right: 120%;
-            top: 50%;
-            transform: translateY(-50%);
-            background-color: #000000;
-            color: white;
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 500;
-            white-space: nowrap;
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.2s ease;
-            z-index: 10;
-        }
-
-        .custom-tooltip::after {
-            content: "";
-            position: absolute;
-            left: 100%;
-            top: 50%;
-            transform: translateY(-50%);
-
-            border-width: 5px;
-            border-style: solid;
-            border-color: transparent transparent transparent #000000;
-        }
-
-        .export-btn:hover .custom-tooltip {
-            opacity: 1;
-            visibility: visible;
-            right: 130%;
-        }
-
-          .select2-container {
-            width: 100% !important;
-        }
-
-        .select2-container--default .select2-selection--single {
-            background: #372E39;
-            border: none;
-            display: flex;
-            align-items: center;
-        }
-
-        .select2-container--default .select2-selection--single .select2-selection__rendered {
-            color: white;
-            line-height: 38px;
-            padding-left: 0.75rem;
-        }
-
-        .select2-container--default .select2-selection--single .select2-selection__arrow {
-            height: 38px;
-        }
-
-        .select2-container--default .select2-selection--single .select2-selection__placeholder {
-            color: #ffffff !important;
-        }
-
-        .select2-container--default .select2-results__option--highlighted[aria-selected] {
-            background-color: transparent !important;
-            color: white !important;
-        }
-
-        .select2-container--default .select2-results__option[aria-selected="true"] {
-            background-color: transparent !important;
-            color: white !important;
-        }
-
-        .select2-dropdown {
-            background: #372E39;
-            color: white;
-        }
-
-        .select2-results__option {
-            color: white;
-        }
-
-        .select2-search__field {
-            background: #372E39;
-            color: white;
-            border: none;
-        }
-    </style>
-
-</head>
-<body>
-    <div class="container-fluid dashboard-wrap">
-        <!-- Header -->
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
-            <div class="d-flex text-white">
-                <button
-                    type="button"
-                    onclick="history.back()"
-                    class="d-flex align-items-center gap-4 border-0 bg-transparent text-white p-0">
-                    <img src="{{ _asset('svg/inlinePerformance/back.svg') }}"
-                        width="15"
-                        height="15">
-                    <span>Back</span>
-                </button>
-            </div>
-            <div class="d-flex gap-5 d-flex justify-content-center align-items-center flex-wrap text-white fs-4 fw-bold ">
-                <div class="d-flex align-items-center gap-2">
-                    <span id="liveClock"></span>
-                </div>
-                <div class="d-flex align-items-center gap-2 ms-auto">
-                    <div class="col-12 col-md-1 d-flex justify-content-end align-items-end mb-2">
-                        <button class="export-btn bg-transparent border-0 p-0">
-                            <img src="{{ _asset('svg/inlinePerformance/export.svg') }}" style="width:27px; height:27px;">
-                                <span class="custom-tooltip">Export</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Card -->
-        <div class="row g-3 mt-1">
-            <!-- TARGET -->
-             <div class="col-6 col-md-4 col-lg">
-                <div class="color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <h6 class="fw-bold text-start text-red mb-2 fs-4">
-                        LOCATION
-                    </h6>
-
-                    <select id="line" class="form-select select2 w-100">
-                        <option></option>
-                    </select>
-
-                </div>
-            </div>
-            <!-- QTY INSPECT -->
-            <div class="col-6 col-md-4 col-lg">
-                <div class="color-box-yellow h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
-                    <img src="{{ _asset('svg/inlinePerformance/qty-inspect.svg') }}"
-                        class="img-fluid mb-4" style="width:60px;height:60px;">
-                    <div>
-                        <h6 class="fw-bold text-start text-yellow mb-0">
-                            QTY INSPECT
-                        </h6>
-                        <div class="d-flex align-items-end text-white">
-                            <h2 class="fw-bold mb-0 lh-2">312</h2>
-                            <small class="ms-1">pcs</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- QTY DEFECT -->
-             <div class="col-6 col-md-4 col-lg">
-                <div class="color-box-red h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
-                    <img src="{{ _asset('svg/inlinePerformance/qty-defect.svg') }}"
-                        class="img-fluid mb-4" style="width:60px;height:60px;">
-
-                    <div>
-                        <h6 class="fw-bold text-start text-red mb-0">
-                            QTY DEFECT
-                        </h6>
-
-                        <div class="d-flex align-items-end text-white">
-                            <h2 class="fw-bold mb-0 lh-2">312</h2>
-                            <small class="ms-1">pcs</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- RFT -->
-             <div class="col-6 col-md-4 col-lg">
-                <div class="color-box-green h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
-                    <img src="{{ _asset('svg/inlinePerformance/rft.svg') }}"
-                        class="img-fluid mb-4" style="width:60px;height:60px;">
-                    <div>
-                        <h6 class="fw-bold text-start text-green mb-0">
-                            RFT
-                        </h6>
-                        <div class="d-flex align-items-end text-white">
-                            <h2 class="fw-bold mb-0 lh-2">94.12<span>%</span></h2>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- WFT -->
-             <div class="col-6 col-md-4 col-lg">
-                <div class="color-box-blue h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
-                    <img src="{{ _asset('svg/inlinePerformance/wft.svg') }}"
-                        class="img-fluid mb-4" style="width:60px;height:60px;">
-
-                    <div>
-                        <h6 class="fw-bold text-start text-blue mb-0">
-                            WFT
-                        </h6>
-
-                        <div class="d-flex align-items-end text-white">
-                            <h2 class="fw-bold mb-0 lh-2">94.12<span>%</span></h2>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Datatables -->
-        <div class="mt-3 border-custom-datatable rounded p-3 text-white datatable-wrap">
-            <div class="col-md-12">
-				<table id="datalist" class="table table-bordered hover no-wrap" width="100%">
-					<thead >
-						<tr >
-							<td style="padding-top: 10px;"><center><b>OPERATORS</b></center></td>
-							@if(isset($usertoday))
-								@foreach($usertoday as $u)
-								@php
-									$nm = explode(' ', $u->nama);
-								@endphp
-								<td><center><b>{{ $u->sequence_process }}<br>{{ $u->userid_operator }}<br>{{ count($nm) > 1 ? $nm[0] . ' ' . substr($nm[1], 0, 1) : ($nm[0] ?: 'No Data') }}</b></center></td>
-								@endforeach
-							@endif
-						</tr>
-					</thead>
-					<tbody>
-						@for($i=1; $i < 6; $i++)
-						<tr>
-							<td><b style="font-size: 100%; padding: 1px"><center>ROUND {{$i}}</center></b></td>
-							@if(isset($userinline))
-								@foreach($userinline as $u)
-								@php
-									$uk = $u->where('round', $i);
-									if($uk->count() > 0){
-										if($uk->first()->detail->count() > 0){
-										$x = 5 - $uk->first()->detail->count();
-										}else {
-											$x = 5;
-										}
-									}else{
-										$x = 6;
-									}
-								@endphp
-								<td>
-									@if($x != 6)
-									<a href="{{ route('monitoring_dashboard_convcapdata', ['nik' => $u->first()->userid_operator, 'round' => $i]) }}" class="btn-detail" title="Click For Detail" data-tooltip="tooltip">
-										<center>
-											@if($x == 5)
-											<div style="padding: 22px;" class="bg-green"><i class="fa fa-check"></i></div>
-											@elseif($x == 4 && $uk->first()->detail->where('problem', '!=', null)->count() <= 0)
-											<div style="padding: 22px;" class="bg-red"><i class="fa fa-exclamation-circle text-red"></i></div>
-											@else
-												@if(isset($uk->first()->detail) && $uk->first()->detail->where('problem', '!=', null)->count() > 0)
-												<div style="padding: 22px" class="bg-yellow"><i class="fa fa-pencil-alt text-red"></i></div>
-												@else
-												<div style="padding: 22px" class="bg-red"><i class="fa fa-exclamation-circle fa-lg"></i></div>
-												@endif
-											@endif
-										</center>
-									</a>
-									@endif
-								</td>
-								@endforeach
-							@endif
-						</tr>
-						@endfor
-					</tbody>
-				</table>
-			</div>
-        </div>
-
-        <div class="d-flex justify-content-center mt-2">
-            <div class="d-flex text-white px-3 py-1 gap-3 align-items-center justify-content-center fs-6">
-
-                <div class="d-flex gap-3 align-items-center">
-                    <div class="legend-box" style="background-color: #219653;"></div>
-                    <p class="mb-0">No Defect Data</p>
-                </div>
-
-                <div class="d-flex gap-3 align-items-center">
-                    <div class="legend-box" style="background-color: #F24C4C;"></div>
-                    <p class="mb-0">Found One Defect Data</p>
-                </div>
-
-                <div class="d-flex gap-3 align-items-center">
-                    <div class="legend-box" style="background-color: #F24C4C;">
-                        <img src="{{ _asset('svg/inlinePerformance/defect2.svg') }}">
-                    </div>
-                    <p class="mb-0">Found Two or More Defect Data</p>
-                </div>
-
-                <div class="d-flex gap-3 align-items-center">
-                    <div class="legend-box" style="background-color: #F9E21D;">
-                        <img src="{{ _asset('svg/inlinePerformance/pencil.svg') }}">
-                    </div>
-                    <p class="mb-0">CAP Already Filled In</p>
-                </div>
-
-            </div>
-        </div>
-
-        <!-- Footer -->
-        <div class="mt-2 text-white d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0 fs-6">
-            <div class="d-flex align-items-center gap-2">
-                <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" style="width: 15px; height: 15px;">
-                Data Update
-                <span id="liveClock2"></span>
-            </div>
-            <div class="d-flex align-items-center">
-                <div class="mb-0 d-flex align-items-center gap-2">
-                    System Connected
-                    <div class="rounded-pill" style="background-color:#4CF299; width:20px;height:20px"></div>
-                </div>
-            </div>
-        </div>
-
-    </div>
-
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://unpkg.com/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/js/select2.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
-<script src="{{ asset('/js/flatpickr.min.js') }}"></script>
-<script src="{{ asset('js/flatpickr_language_id.js') }}"></script>
-
-<script>
-    $(document).ready(function() {
-        function updateClock(){
-        let now = new Date();
-        let day = String(now.getDate()).padStart(2,'0');
-        let month = [
-            "January",
-            "February",
-            "March",
-            "April",
-            "May",
-            "June",
-            "July",
-            "August",
-            "September",
-            "October",
-            "November",
-            "December"
-        ];
-
-        let year = now.getFullYear();
-
-        let hour = String(now.getHours()).padStart(2,'0');
-        let minute = String(now.getMinutes()).padStart(2,'0');
-        let second = String(now.getSeconds()).padStart(2,'0');
-
-
-        document.getElementById('liveClock').innerHTML =
-            `${day} ${month[now.getMonth()]} ${year} - ${hour} : ${minute} : ${second}`;
-        document.getElementById('liveClock2').innerHTML =
-            `${day} ${month[now.getMonth()]} ${year} - ${hour} : ${minute} : ${second}`;
-        }
-        updateClock();
-        setInterval(updateClock,1000);
-
-        $('#line').select2({
-            placeholder: 'Select Line',
-            width: '100%',
-            ajax: {
-                url: "{{ route('monitoring_inlineperformance_filterInlineLts') }}",
-                type: "GET",
-                dataType: "json",
-                delay: 500,
-                data: function(params){
-                    return{
-                        q: params.term,
-                        page: params.page || 1
+            if ($sto2) {
+                if ($date->greaterThan($sto2)) {
+                    if ($date->greaterThan($fto2)) {
+                        $timeoff = $sto2->diffInMinutes($fto2);
+                        $totalworktime -= $timeoff;
+                    } else {
+                        $timeoff_diff = $sto2->diffInMinutes($date);
+                        $totalworktime -= $timeoff_diff;
                     }
-                },
-                processResults:function(data){
-                    return{
-                        results: $.map(data.line.data,function(item){
-                            return{
-                                id:item.kodegroup,
-                                text:item.namabagian + ' - ' + item.namagroup
-                            }
-                        }),
-                        pagination:{
-                            more:data.to < data.total
+                }
+            }
+
+            $start_time = Carbon::parse($swt);
+            $end_time = Carbon::parse($fwt);
+
+            if($isToday){
+                $end_time = Carbon::now();
+            }
+
+            try {
+                $panic_param = PanicParameter::where(
+                    'line',
+                    session('line'),
+                )->first();
+
+                $additional_output = $panic_param->output;
+                $additional_target = $panic_param->target;
+            } catch (\Exception $e) {
+                $additional_output = 0;
+                $additional_target = 0;
+            }
+
+            $totaloutput = 0;
+            $totalefficiency = 0;
+            $totalrft = 0;
+            $totalrar = 0;
+            $totalwft = 0;
+            $totalbgrade = 0;
+            $totalcgrade = 0;
+            $percentoutput = 0;
+            $percentrft = 0;
+            $percentrar = 0;
+            $percentwft = 0;
+            $percentbgrade = 0;
+            $percentcgrade = 0;
+
+            try {
+                $idmps = MpsDetail::select('idmps')
+                    ->distinct()
+                    ->where('date', $swt->format('Y-m-d'))
+                    ->whereHas('header', function ($q) {
+                        $q->where('line', session('line'));
+                    })
+                    ->get();
+
+                $mps_header = MpsHeader::whereIn('id', $idmps->pluck('idmps'))
+                    ->orderBy('lastoutput', 'desc')
+                    ->first();
+
+                $mps_detail = MpsDetail::where('idmps', $mps_header->id)
+                    ->where('date', $swt->format('Y-m-d'))
+                    ->first();
+
+                $m_target = ceil(
+                    ($mps_detail->target / $mps_header->workingtime) *
+                        ($totalworktime / 60),
+                );
+
+                if($is_panic){
+                    $m_target = $additional_target;
+                }else{
+                    $m_target = ceil(
+                        $m_target + $additional_target,
+                    );
+                }
+
+                $m_kpno = $mps_header->kpno;
+            } catch (\Exception $e) {
+                $m_target = 0;
+                $m_kpno = null;
+            }
+
+            $out = SewingOutput::whereBetween('date', [$start_time, $end_time])
+                ->where('line', session('line'))
+                ->where('is_output', 1)
+                ->groupBy('barcode')
+                ->get();
+
+            $totaloutput = $out->count() + $additional_output;
+
+            $firstScanneds = SewingOutput::select('barcode', 'defect_code')
+                ->whereBetween('date', [$start_time, $end_time])
+                ->where('line', session('line'))
+                ->where('qc_seq', 0)
+                ->groupBy('barcode')
+                ->get();
+
+            $totalrft = $firstScanneds->count() +
+                $additional_output -
+                $firstScanneds->where('defect_code', '!=', null)->count();
+            $totalwft = $firstScanneds->count() - $totalrft;
+            $totalrar = $out
+                ->where('qc_seq', '!=', 0)
+                ->where('defect_code', null)
+                ->count();
+            $totalbgrade = $out
+                ->where('defect_code', '800')
+                ->count();
+            $totalcgrade = $out
+                ->where('defect_code', '900')
+                ->count();
+
+            $percentoutput = number_format(
+                ($totaloutput / $m_target) * 100,
+                2,
+                '.',
+                '',
+            );
+
+            if($firstScanneds->count() > 0){
+                $percentrft = min(
+                    number_format(
+                        (($firstScanneds->count() +
+                            $additional_output -
+                            $firstScanneds
+                                ->where('defect_code', '!=', null)
+                                ->count()) /
+                            ($firstScanneds->count() + $additional_output)) *
+                            100,
+                        2,
+                    ),
+                    100,
+                );
+            }else{
+                $percentrft = 0;
+            }
+
+            $percentrar = number_format(
+                ($totalrar / $totaloutput) * 100,
+                2,
+                '.',
+                '',
+            );
+            $percentwft = number_format(
+                100 - $percentrft,
+                2
+            );
+            $percentbgrade = number_format(
+                ($totalbgrade / $totaloutput) * 100,
+                2,
+                '.',
+                '',
+            );
+            $percentcgrade = number_format(
+                ($totalcgrade / $totaloutput) * 100,
+                2,
+                '.',
+                '',
+            );
+
+            $po = PurchaseOrder::select('idstyle')
+                ->where('kpno', $m_kpno)
+                ->first();
+
+            $style = Style::find($po->idstyle);
+
+            try {
+                $idmps = MpsDetail::select('idmps')
+                    ->distinct()
+                    ->where('date', $swt->format('Y-m-d'))
+                    ->whereHas('header', function ($q) {
+                        $q->where('line', session('line'));
+                    })
+                    ->get();
+
+                $mps_header = MpsHeader::whereIn('id', $idmps->pluck('idmps'))
+                    ->orderBy('lastoutput', 'desc')
+                    ->first();
+
+                $mps_detail = MpsDetail::where('idmps', $mps_header->id)
+                    ->where('date', $swt->format('Y-m-d'))
+                    ->first();
+            } catch (\Exception $e) {
+                //
+            }
+
+            try {
+                $m_smv = SmvController::getSmv(
+                    $style->idstyle,
+                    $mps_header->order_step_id,
+                    $mps_detail->order_part_id,
+                    $mps_detail->sub_style_id,
+                );
+                $smv = $m_smv->smv;
+            } catch (\Exception $e) {
+                $smv = 0;
+            }
+
+            $start_time->subMinute($mp_line_param);
+            $end_time->addMinute($mp_line_param);
+
+            $m_mp = EmployeeAttendance::select('nik', 'status')
+                ->where('factory_id', session('db')->iddb)
+                ->where('group_id', session('line'))
+                ->where('is_efficiency', 1)
+                ->where('shift', $worktime->shift)
+                ->whereBetween('time', [$start_time, $end_time])
+                ->orderBy('time', 'desc')
+                ->get();
+
+            try {
+                $mpminus = FactoryParameter::where('key', 'line_mpminus')->first();
+                $mpminus = $mpminus ? $mpminus->value : -3;
+                $m_mp = max(
+                    0,
+                    $m_mp->where('status', 'IN')->count() - $m_mp->where('status', 'OUT')->count() + $mpminus,
+                );
+            } catch (\Exception $e) {
+                $m_mp = 0;
+            }
+
+            $totalefficiency = number_format(
+                (($totaloutput * $smv) / ($m_mp * $totalworktime)) * 100,
+                2,
+                '.',
+                '',
+            );
+            $diff = floor($diff);
+            $data_a = $this->getdata(session('line'), 1, $diff);
+            $data_b = $this->getdata(session('line'), 2, $diff);
+
+            if($diff >= 4.0){
+                $data_c = $this->getdata(session('line'), 3, $diff);
+            }else{
+                $data_c = null;
+            }
+
+            return view('monitoring::conventional.index', [
+                'data_a' => $data_a,
+                'data_b' => $data_b,
+                'data_c' => $data_c,
+                'ln' => $line->namagroup,
+                'totaloutput' => $totaloutput,
+                'totalefficiency' => $totalefficiency,
+                'totalrft' => $totalrft,
+                'totalwft' => $totalwft,
+                'totalrar' => $totalrar,
+                'totalbgrade' => $totalbgrade,
+                'totalcgrade' => $totalcgrade,
+                'percentoutput' => $percentoutput,
+                'percentrft' => $percentrft,
+                'percentrar' => $percentrar,
+                'percentwft' => $percentwft,
+                'percentbgrade' => $percentbgrade,
+                'percentcgrade' => $percentcgrade,
+                'prevlink' => (session('monitoring')) ? 
+                    route('monitoring_dashboard_fourth', ['line' => session('line')]) :
+                    route('monitoring_dashboardfourth', ['line' => session('line')]),
+            ]);
+        } catch (\Exception $e) {
+            return view('monitoring::conventional.index');
+        }
+    }
+
+    function getdata($ln, $num = 1, $pg = 5)
+    {
+        preconnect(session('db'));
+
+        $date = Carbon::now();
+        $line = MasterEmployeeGroup::select('id as kodegroup', 'name as namagroup')
+                ->find($ln);
+
+        try {
+            $worktimeline = WorktimeSettingController::getLineWorkingTime(
+                $line,
+                $date,
+            );
+
+            $worktime = $worktimeline->workingtime;
+
+            $get_worktimeline = WorktimeSettingController::get_worktime_range($worktimeline, $worktime);
+            $swt = $get_worktimeline->startworktime;
+            $fwt = $get_worktimeline->finishworktime;
+
+            if ($swt->greaterThan($fwt)) {
+                $fwt->addDay();
+            }
+
+            $sto = Carbon::parse(
+                $worktimeline->date . ' ' . $worktime->starttimeoff,
+            );
+            $fto = Carbon::parse(
+                $worktimeline->date . ' ' . $worktime->endtimeoff,
+            );
+            if ($sto->greaterThan($fto)) {
+                $fto->addDay();
+            }
+
+            $sto2 = null;
+            $fto2 = null;
+
+            if ($worktime->startsecondtimeoff) {
+                $sto2 = Carbon::parse(
+                    $worktimeline->date . ' ' . $worktime->startsecondtimeoff,
+                );
+                $fto2 = Carbon::parse(
+                    $worktimeline->date . ' ' . $worktime->endsecondtimeoff,
+                );
+                if ($sto2->greaterThan($fto2)) {
+                    $fto2->addDay();
+                }
+            }
+
+            $totalworktime = $date->diffInMinutes($swt);
+            if ($date->greaterThan($sto)) {
+                if ($date->greaterThan($fto)) {
+                    $timeoff = $sto->diffInMinutes($fto);
+                    $totalworktime -= $timeoff;
+                } else {
+                    $timeoff_diff = $sto->diffInMinutes($date);
+                    $totalworktime -= $timeoff_diff;
+                }
+            }
+
+            if ($sto2) {
+                if ($date->greaterThan($sto2)) {
+                    if ($date->greaterThan($fto2)) {
+                        $timeoff = $sto2->diffInMinutes($fto2);
+                        $totalworktime -= $timeoff;
+                    } else {
+                        $timeoff_diff = $sto2->diffInMinutes($date);
+                        $totalworktime -= $timeoff_diff;
+                    }
+                }
+            }
+
+            $dataoutput = [];
+
+            $hasTimeOff = false;
+            $hasSecondTimeOff = false;
+
+            $mpminus = FactoryParameter::where('key', 'line_mpminus')->first();
+            $mpminus = $mpminus ? $mpminus->value : -3;
+
+            $paginate = $pg;
+            $diff = $swt->diffInHours($fwt) + 1;
+            $page = min($diff, $paginate * $num);
+            $start = min($diff, $paginate * ($num - 1)) + 1;
+
+            $time_off_output = 0;
+            $shift = $worktime->shift;
+
+            for ($i = $start; $i <= $page; $i++) {
+                $_ta = Carbon::parse($swt->format('Y-m-d H:i:s'))->addHour(
+                    $i - 1,
+                );
+                $_tb = Carbon::parse($swt->format('Y-m-d H:i:s'))->addHour($i);
+
+                // Step Hour get clamped by start time off
+                if ($_ta->lessThan($sto) and $_tb->greaterThan($sto)) {
+                    $std = new \stdClass();
+                    $std->timeoff = false;
+                    $std->starttime = $_ta->format('H:i');
+                    $std->endtime = $sto->format('H:i');
+                    $perhourData = $this->getPerHourData(
+                        $ln,
+                        $_ta,
+                        $sto,
+                        $swt,
+                        $mpminus,
+                        $time_off_output,
+                        $i == $start,
+                        $i == $page,
+                        $shift
+                    );
+                    $time_off_output -= $time_off_output;
+                    $std->data = $perhourData;
+                    $dataoutput[] = $std;
+                    continue;
+                }
+
+                //First Time off
+                if (
+                    $_ta->greaterThanOrEqualTo($sto) and
+                    $_tb->lessThanOrEqualTo($fto)
+                ) {
+                    if (!$hasTimeOff) {
+                        $std = new \stdClass();
+                        $std->starttime = $sto->format('H:i');
+                        $std->endtime = $fto->format('H:i');
+                        $std->timeoff = true;
+                        $dataoutput[] = $std;
+                        $hasTimeOff = true;
+
+                        $perhourData = $this->getPerHourData(
+                            $ln,
+                            $sto,
+                            $fto,
+                            $swt,
+                            $mpminus,
+                            0,
+                            false,
+                            false,
+                            $shift
+                        );
+
+                        $time_off_output += $perhourData->output;
+                    }
+                    continue;
+                }
+
+                //time off equal
+                if ($_ta->equalTo($sto) and !$hasTimeOff) {
+                    $std = new \stdClass();
+                    $std->starttime = $sto->format('H:i');
+                    $std->endtime = $fto->format('H:i');
+                    $std->timeoff = true;
+                    $hasTimeOff = true;
+                    $dataoutput[] = $std;
+
+                    $perhourData = $this->getPerHourData(
+                        $ln,
+                        $sto,
+                        $fto,
+                        $swt,
+                        $mpminus,
+                        0,
+                        false,
+                        false,
+                        $shift
+                    );
+
+                    $time_off_output += $perhourData->output;
+
+                    if ($_tb->greaterThan($fto) and $_ta->lessThan($fto)) {
+                        $std = new \stdClass();
+                        $std->starttime = $fto->format('H:i');
+                        $std->endtime = $_tb->format('H:i');
+                        $std->timeoff = false;
+                        $perhourData = $this->getPerHourData(
+                            $ln,
+                            $fto,
+                            $_tb,
+                            $swt,
+                            $mpminus,
+                            $time_off_output,
+                            $i == $start,
+                            $i == $page,
+                            $shift
+                        );
+                        $time_off_output -= $time_off_output;
+                        $std->data = $perhourData;
+                        $dataoutput[] = $std;
+                        continue;
+                    }
+                }
+
+                //Greater than timeoff
+                if ($_ta->greaterThan($sto) and !$hasTimeOff) {
+                    $std = new \stdClass();
+                    $std->starttime = $sto->format('H:i');
+                    $std->endtime = $fto->format('H:i');
+                    $std->timeoff = true;
+                    $hasTimeOff = true;
+                    $dataoutput[] = $std;
+
+                    $perhourData = $this->getPerHourData(
+                        $ln,
+                        $sto,
+                        $fto,
+                        $swt,
+                        $mpminus,
+                        0,
+                        false,
+                        false,
+                        $shift
+                    );
+
+                    $time_off_output += $perhourData->output;
+
+                    if ($_ta->lessThan($fto) and $_tb->greaterThan($fto)) {
+                        $std = new \stdClass();
+                        $std->starttime = $fto->format('H:i');
+                        $std->endtime = $_tb->format('H:i');
+                        $std->timeoff = false;
+                        $perhourData = $this->getPerHourData(
+                            $ln,
+                            $fto,
+                            $_tb,
+                            $swt,
+                            $mpminus,
+                            $time_off_output,
+                            $i == $start,
+                            $i == $page,
+                            $shift
+                        );
+                        $time_off_output -= $time_off_output;
+                        $std->data = $perhourData;
+                        $dataoutput[] = $std;
+                        continue;
+                    }
+                }
+
+                //Second Time Off
+                if ($sto2) {
+                    // Step Hour get clamped by start time off
+                    if ($_ta->lessThan($sto2) and $_tb->greaterThan($sto2)) {
+                        $std = new \stdClass();
+                        $std->timeoff = false;
+                        $std->starttime = $_ta->format('H:i');
+                        $std->endtime = $sto2->format('H:i');
+                        $perhourData = $this->getPerHourData(
+                            $ln,
+                            $_ta,
+                            $sto2,
+                            $swt,
+                            $mpminus,
+                            $time_off_output,
+                            $i == $start,
+                            $i == $page,
+                            $shift
+                        );
+                        $time_off_output -= $time_off_output;
+                        $std->data = $perhourData;
+                        $dataoutput[] = $std;
+                        continue;
+                    }
+
+                    //First Time off
+                    if (
+                        $_ta->greaterThanOrEqualTo($sto2) and
+                        $_tb->lessThanOrEqualTo($fto2)
+                    ) {
+                        if (!$hasSecondTimeOff) {
+                            $std = new \stdClass();
+                            $std->starttime = $sto2->format('H:i');
+                            $std->endtime = $fto2->format('H:i');
+                            $std->timeoff = true;
+                            $dataoutput[] = $std;
+                            $hasSecondTimeOff = true;
+
+                            $perhourData = $this->getPerHourData(
+                                $ln,
+                                $sto2,
+                                $fto2,
+                                $swt,
+                                $mpminus,
+                                0,
+                                false,
+                                false,
+                                $shift
+                            );
+
+                            $time_off_output += $perhourData->output;
+                        }
+                        continue;
+                    }
+
+                    //time off equal
+                    if ($_ta->equalTo($sto2) and !$hasSecondTimeOff) {
+                        $std = new \stdClass();
+                        $std->starttime = $sto2->format('H:i');
+                        $std->endtime = $fto2->format('H:i');
+                        $std->timeoff = true;
+                        $hasSecondTimeOff = true;
+                        $dataoutput[] = $std;
+
+                        $perhourData = $this->getPerHourData(
+                            $ln,
+                            $sto2,
+                            $fto2,
+                            $swt,
+                            $mpminus,
+                            0,
+                            false,
+                            false,
+                            $shift
+                        );
+
+                        $time_off_output += $perhourData->output;
+
+                        if (
+                            $_tb->greaterThan($fto2) and $_ta->lessThan($fto2)
+                        ) {
+                            $std = new \stdClass();
+                            $std->starttime = $fto2->format('H:i');
+                            $std->endtime = $_tb->format('H:i');
+                            $std->timeoff = false;
+                            $perhourData = $this->getPerHourData(
+                                $ln,
+                                $fto2,
+                                $_tb,
+                                $swt,
+                                $mpminus,
+                                $time_off_output,
+                                $i == $start,
+                                $i == $page,
+                                $shift
+                            );
+                            $time_off_output -= $time_off_output;
+                            $std->data = $perhourData;
+                            $dataoutput[] = $std;
+                            continue;
                         }
                     }
-                },
-                cache:true
-            }
-        });
-    })
-</script>
 
-</body>
-</html>
+                    //Greater than timeoff
+                    if ($_ta->greaterThan($sto2) and !$hasSecondTimeOff) {
+                        $std = new \stdClass();
+                        $std->starttime = $sto2->format('H:i');
+                        $std->endtime = $fto2->format('H:i');
+                        $std->timeoff = true;
+                        $hasSecondTimeOff = true;
+                        $dataoutput[] = $std;
+
+                        $perhourData = $this->getPerHourData(
+                            $ln,
+                            $sto2,
+                            $fto2,
+                            $swt,
+                            $mpminus,
+                            0,
+                            false,
+                            false,
+                            $shift
+                        );
+
+                        $time_off_output += $perhourData->output;
+
+                        if (
+                            $_ta->lessThan($fto2) and $_tb->greaterThan($fto2)
+                        ) {
+                            $std = new \stdClass();
+                            $std->starttime = $fto2->format('H:i');
+                            $std->endtime = $_tb->format('H:i');
+                            $std->timeoff = false;
+                            $perhourData = $this->getPerHourData(
+                                $ln,
+                                $fto2,
+                                $_tb,
+                                $swt,
+                                $mpminus,
+                                $time_off_output,
+                                $i == $start,
+                                $i == $page,
+                                $shift
+                            );
+                            $time_off_output -= $time_off_output;
+                            $std->data = $perhourData;
+                            $dataoutput[] = $std;
+                            continue;
+                        }
+                    }
+                }
+
+                $std = new \stdClass();
+                $std->starttime = $_ta->format('H:i');
+                $std->endtime = $_tb->format('H:i');
+                $std->timeoff = false;
+                $perhourData = $this->getPerHourData(
+                    $ln,
+                    $_ta,
+                    $_tb,
+                    $swt,
+                    $mpminus,
+                    $time_off_output,
+                    $i == $start,
+                    $i == $page,
+                    $shift
+                );
+                $time_off_output -= $time_off_output;
+                $std->data = $perhourData;
+                $dataoutput[] = $std;
+            }
+
+            return view('monitoring::conventional.indexdata', [
+                'dataoutput' => $dataoutput,
+            ]);
+        } catch (\Exception $e) {
+            return '';
+        }
+    }
+
+    function getPerHourData(
+        $line,
+        Carbon $time_start,
+        Carbon $time_end,
+        $startWorkTime,
+        $mpminus,
+        $additional_output,
+        $is_first,
+        $is_last,
+        $shift = null
+    ) {
+        preconnect(session('db'));
+        $perhour_data = new \stdClass();
+
+        $mp_line_param = ($lp = FactoryParameter::find('line_mapping_tolerance'))
+            ? $lp->value * 1
+            : 30;
+
+        try {
+
+            $out = SewingOutput::select('barcode', 'qc_seq', 'defect_code')
+                ->where('date', '>', $time_start)
+                ->where('date', '<=', $time_end)
+                ->where('line', $line)
+                ->where('is_output', 1)
+                ->groupBy('barcode')
+                ->get();
+                    
+            $_o = $out->count() + $additional_output;
+            $perhour_data->output = $_o;
+
+            $scanneds = SewingOutput::select('barcode', 'defect_code')
+                ->where('date', '>', $time_start)
+                ->where('date', '<=', $time_end)
+                ->where('line', $line)
+                ->where('qc_seq', 0)
+                ->groupBy('barcode')
+                ->get();
+
+            $perhour_data->rft = number_format(
+                ($scanneds->where('defect_code', null)->count() /
+                    $scanneds->count()) *
+                    100,
+                2,
+            );
+            $perhour_data->rar = number_format(
+                ($out
+                    ->where('qc_seq', '!=', 0)
+                    ->where('defect_code', null)
+                    ->count() /
+                    $_o) *
+                    100,
+                2,
+            );
+
+            $perhour_data->wft = number_format(100 - $perhour_data->rft, 2);
+
+            $perhour_data->bgrade = number_format(
+                $out->where('defect_code', '800')->count() / $_o,
+                2,
+            );
+            $perhour_data->cgrade = number_format(
+                $out->where('defect_code', '900')->count() / $_o,
+                2,
+            );
+
+            try {
+                $m_out_d = OutputDetail::where(
+                    'barcode',
+                    $out->last()->barcode,
+                )->first();
+
+                $m_kpno = $m_out_d->kpno;
+            } catch (\Exception $e) {
+                $m_kpno = '-';
+            }
+
+            $perhour_data->kpno = $m_kpno;
+
+            try {
+                $po = PurchaseOrder::select('idstyle')
+                    ->where('kpno', $m_kpno)
+                    ->first();
+
+                $m_style = Style::find($po->idstyle);
+                $style = $m_style->nmstyle;
+            } catch (\Exception $e) {
+                $style = '-';
+                $m_style = null;
+            }
+
+            $perhour_data->style = $style;
+
+            try {
+                $idmps = MpsDetail::select('idmps')
+                    ->distinct()
+                    ->where('date', $startWorkTime->format('Y-m-d'))
+                    ->whereHas('header', function ($q) use ($line) {
+                        $q->where('line', $line);
+                    })
+                    ->get();
+
+                $mps_header = MpsHeader::whereIn('id', $idmps->pluck('idmps'))
+                    ->orderBy('lastoutput', 'desc')
+                    ->first();
+
+                $mps_detail = MpsDetail::where('idmps', $mps_header->id)
+                    ->where('date', $startWorkTime->format('Y-m-d'))
+                    ->first();
+            } catch (\Exception $e) {
+                //
+            }
+
+            try {
+                $smv = SmvController::getSmv(
+                    $m_style->idstyle,
+                    $mps_header->order_step_id,
+                    $mps_detail->order_part_id,
+                    $mps_detail->sub_style_id,
+                );
+                $smv = $smv->smv;
+            } catch (\Exception $e) {
+                $smv = '-';
+            }
+
+            $perhour_data->smv = $smv;
+
+            $start_mp_time = Carbon::parse(
+                $startWorkTime->format('Y-m-d H:i:s'),
+            );
+
+            $mp_line_param = ($lp = FactoryParameter::find('line_mapping_tolerance'))
+                ? $lp->value * 1
+                : 30;
+
+            $start_mp_time->subMinute($mp_line_param);
+            
+            if ($is_last) {
+                $time_end->addMinute($mp_line_param);
+            }
+
+            if($shift != null){
+                $mpi = EmployeeAttendance::select('nik', 'status')
+                    ->where('factory_id', session('db')->iddb)
+                    ->whereBetween('time', [$start_mp_time, $time_end])
+                    ->where('group_id', $line)
+                    ->where('is_efficiency', 1)
+                    ->where('shift', $shift)
+                    ->orderBy('status')
+                    ->get();
+            }else{
+                $mpi = EmployeeAttendance::select('nik', 'status')
+                    ->where('factory_id', session('db')->iddb)
+                    ->whereBetween('time', [$start_mp_time, $time_end])
+                    ->where('group_id', $line)
+                    ->where('is_efficiency', 1)
+                    ->orderBy('status')
+                    ->get();
+            }
+
+            $mp = $mpi->where('status', 'IN')->count() - $mpi->where('status', 'OUT')->count();
+            $mp = max($mp + $mpminus, 0);
+
+            $perhour_data->mp = $mp;
+            $perhour_data->link_opt = route('monitoring_dashboard_convgetoperator', ['line'=>$line, 'st'=>$start_mp_time, 'et'=>$time_end, 'shift'=>$shift]);
+
+            $stepTime = $time_start->diffInMinutes($time_end);
+            try {
+            $perhour_data->eff =
+                $_o > 0
+                    ? number_format((($_o * $smv) / ($mp * $stepTime)) * 100, 2)
+                    : 0;
+            } catch (\Exception $e) {
+                $perhour_data->eff = '-';
+            }
+            
+        } catch (\Exception $e) {
+            $perhour_data->kpno = '-';
+            $perhour_data->style = '-';
+            $perhour_data->smv = '-';
+            $perhour_data->mp = '-';
+            $perhour_data->link_opt = '-';
+            $perhour_data->output = 0;
+            $perhour_data->rft = '-';
+            $perhour_data->rar = '-';
+            $perhour_data->wft = '-';
+            $perhour_data->bgrade = '-';
+            $perhour_data->cgrade = '-';
+            $perhour_data->eff = '-';
+            $perhour_data->err = $e->getMessage();
+        }
+
+        $perhour_data->enst = encrypt($time_start);
+        $perhour_data->enet = encrypt($time_end);
+
+        return $perhour_data;
+    }
+
+    function dbset($token)
+    {
+        try {
+            $parsed = decrypt($token);
+
+            if (!$parsed->internal) {
+                if ($parsed->ip != request()->ip()) {
+                    throw new \Exception('Unauthorized');
+                }
+            }
+
+            $id = $parsed->factory;
+            $line = $parsed->line;
+
+            $dblist = DbList::find($id);
+
+            if (!$dblist) {
+                throw new \Exception('Unknown Database');
+            }
+
+            session(['db' => $dblist]);
+            session(['line' => $line]);
+            session(['idfactory' => $id]);
+
+            return redirect(route('monitoring_dashboard_conv'));
+        } catch (\Exception $e) {
+            return response()->json($e->getMessage(), 403);
+        }
+    }
+
+    function inline()
+    {
+        try {
+            preconnect(session('db'));
+
+            $date = Carbon::now();
+            $line = MasterEmployeeGroup::select('id as kodegroup', 'name as namagroup')
+                ->find(session('line'));
+
+            $worktimeline = WorktimeSettingController::getLineWorkingTime(
+                $line,
+                $date,
+            );
+
+            $worktime = $worktimeline->workingtime;
+
+            $get_worktimeline = WorktimeSettingController::get_worktime_range($worktimeline, $worktime);
+            $swt = $get_worktimeline->startworktime;
+            $fwt = $get_worktimeline->finishworktime;
+
+            if ($swt->greaterThan($fwt)) {
+                $fwt->addDay();
+            }
+
+            $sto = Carbon::parse(
+                $worktimeline->date . ' ' . $worktime->starttimeoff,
+            );
+            $fto = Carbon::parse(
+                $worktimeline->date . ' ' . $worktime->endtimeoff,
+            );
+            if ($sto->greaterThan($fto)) {
+                $fto->addDay();
+            }
+
+            $sto2 = null;
+            $fto2 = null;
+
+            if ($worktime->startsecondtimeoff) {
+                $sto2 = Carbon::parse(
+                    $worktimeline->date . ' ' . $worktime->startsecondtimeoff,
+                );
+                $fto2 = Carbon::parse(
+                    $worktimeline->date . ' ' . $worktime->endsecondtimeoff,
+                );
+                if ($sto2->greaterThan($fto2)) {
+                    $fto2->addDay();
+                }
+            }
+
+            $totalworktime = $date->diffInMinutes($swt);
+
+            if ($date->greaterThan($sto)) {
+                if ($date->greaterThan($fto)) {
+                    $timeoff = $sto->diffInMinutes($fto);
+                    $totalworktime -= $timeoff;
+                } else {
+                    $timeoff_diff = $sto->diffInMinutes($date);
+                    $totalworktime -= $timeoff_diff;
+                }
+            }
+
+            if ($sto2) {
+                if ($date->greaterThan($sto2)) {
+                    if ($date->greaterThan($fto2)) {
+                        $timeoff = $sto2->diffInMinutes($fto2);
+                        $totalworktime -= $timeoff;
+                    } else {
+                        $timeoff_diff = $sto2->diffInMinutes($date);
+                        $totalworktime -= $timeoff_diff;
+                    }
+                }
+            }
+
+            $totaloutput = 0;
+            $totalefficiency = 0;
+            $totalrft = 0;
+            $totalwft = 0;
+            $percentrft = 0;
+            $percentwft = 0;
+
+            try {
+                $idmps = MpsDetail::select('idmps')
+                    ->distinct()
+                    ->where('date', $swt->format('Y-m-d'))
+                    ->whereHas('header', function ($q) {
+                        $q->where('line', session('line'));
+                    })
+                    ->get();
+
+                $mps_header = MpsHeader::whereIn('id', $idmps->pluck('idmps'))
+                    ->orderBy('lastoutput', 'desc')
+                    ->first();
+
+                $mps_detail = MpsDetail::where('idmps', $mps_header->id)
+                    ->where('date', $swt->format('Y-m-d'))
+                    ->first();
+
+                $m_kpno = $mps_header->kpno;
+            } catch (\Exception $e) {
+                $m_kpno = null;
+            }
+
+            $out = SewingOutput::whereBetween('date', [$swt, $fwt])
+                ->where('line', session('line'))
+                ->where('is_output', 1)
+                ->groupBy('barcode')
+                ->get();
+            
+            $totaloutput = $out->count();
+
+            $firstScanneds = SewingOutput::select('barcode', 'defect_code')
+                ->whereBetween('date', [$swt, $fwt])
+                ->where('line', session('line'))
+                ->where('qc_seq', 0)
+                ->groupBy('barcode')
+                ->get();
+
+            $totalrft = $firstScanneds->where('defect_code', null)->count();
+            $totalwft = $firstScanneds->count() - $totalrft;
+            $percentrft = number_format(
+                ($totalrft / $firstScanneds->count()) * 100,
+                2,
+                '.',
+                '',
+            );
+            $percentwft = number_format(
+                ($totalwft / $firstScanneds->count()) * 100,
+                2,
+                '.',
+                '',
+            );
+
+            $po = PurchaseOrder::select('idstyle')
+                ->where('kpno', $m_kpno)
+                ->first();
+
+            $style = Style::find($po->idstyle);
+
+            try {
+                $m_smv = SmvController::getSmv(
+                    $style->idstyle,
+                    $mps_header->order_step_id,
+                    $mps_detail->order_part_id,
+                    $mps_detail->sub_style_id,
+                );
+                $smv = $m_smv->smv;
+            } catch (\Exception $e) {
+                $smv = 0;
+            }
+
+            $start_mp_time = Carbon::parse($swt->format('Y-m-d H:i:s'));
+
+            $mp_line_param = ($lp = FactoryParameter::find('line_mapping_tolerance'))
+                ? $lp->value * 1
+                : 30;
+    
+            $fwt = Carbon::parse($fwt->format('Y-m-d H:i:s'));
+            $start_mp_time->subMinute($mp_line_param);
+            $fwt->addMinute($mp_line_param);
+
+            $m_mp = EmployeeAttendance::select('nik', 'status')
+                ->where('factory_id', session('db')->iddb)
+                ->where('group_id', session('line'))
+                ->where('is_efficiency', 1)
+                ->where('shift', $worktime->shift)
+                ->whereBetween('time', [$start_mp_time, $fwt])
+                ->orderBy('time', 'desc')
+                ->get();
+
+            try {
+                $mpminus = FactoryParameter::where('key', 'line_mpminus')->first();
+                $mpminus = $mpminus ? $mpminus->value : -3;
+                $m_mp = max(
+                    0,
+                    $m_mp->where('status', 'IN')->count() -  $m_mp->where('status', 'OUT')->count() + $mpminus,
+                );
+            } catch (\Exception $e) {
+                $m_mp = 0;
+            }
+
+            $totalefficiency = $totaloutput > 0 && $smv > 0 ? number_format(
+                (($totaloutput * $smv) / ($m_mp * $totalworktime)) * 100,
+                2,
+                '.',
+                '',
+            ) : 0;
+ 
+            $groupedinline = InlineHeader::with('detail')
+                ->whereBetween('date', [$swt->format('Y-m-d H:i:s'),$fwt->format('Y-m-d H:i:s')])
+                ->where('group_id', session('line'))
+                ->orderBy('sequence_process')
+                ->get();
+
+            $groupedinline = $groupedinline->groupBy('userid_operator');
+
+            $today_inline = InlineHeader::with('detail')
+                ->whereBetween('date', [$swt->format('Y-m-d H:i:s'),$fwt->format('Y-m-d H:i:s')])
+                ->where('group_id', session('line'))
+                ->groupBy('userid_operator')
+                ->orderBy('sequence_process')
+                ->get();
+
+            foreach ($today_inline as $d) {
+                try {
+                    $m_hr_dk = Employee::where('nik', $d->userid_operator)->first();
+                    $d->nama = $m_hr_dk->name;
+                } catch (\Exception $e) {
+                    $d->nama = null;
+                }
+            }
+
+            return view('monitoring::conventional.inline')
+                ->with('line', $line)
+                ->with('totaloutput', $totaloutput)
+                ->with('userinline', $groupedinline)
+                ->with('usertoday', $today_inline)
+                ->with('percentrft', $percentrft)
+                ->with('percentwft', $percentwft)
+                ->with('totalefficiency', $totalefficiency);
+        } catch (\Exception $e) {
+            return view('monitoring::conventional.inline');
+        }
+    }
+
+    function defectdata(Request $request, $st, $et, $defect)
+    {
+        if (!$request->ajax()) {
+            return;
+        }
+
+        if (session('db') == null) {
+            return;
+        }
+
+        if (!in_array($defect, ['WFT', 'B', 'C'])) {
+            return;
+        }
+
+        $date = Carbon::now();
+
+        try {
+            $st = decrypt($st);
+        } catch (\Exception $e) {
+            $st = null;
+        }
+
+        try {
+            $et = decrypt($et);
+        } catch (\Exception $e) {
+            $et = null;
+        }
+
+        preconnect(session('db'));
+
+        $qc = SewingOutput::whereBetween('date', [$st, $et])
+            ->where('line', session('line'));
+
+        if ($defect == 'WFT') {
+            $qc = $qc->whereNotNull('defect_code');
+        } else {
+            $dcode = $defect == 'B' ? '800' : '900';
+            $qc = $qc->where('defect_code', $dcode);
+        }
+
+        $qc = $qc->get();
+        foreach ($qc as $d) {
+            $d->description = QCDefect::find($d->defect_code)->deskripsi ?? '';
+        }
+
+        $form = view('monitoring::conventional.modaldefect')->with([
+            'qc' => $qc,
+            'defect' => $defect,
+        ]);
+        return $form->render();
+    }
+
+    function storedefect(Request $request)
+    {
+        if (session('db') == null) {
+            return redirect()
+                ->back()
+                ->with('status', 'dbwrong');
+        }
+
+        preconnect(session('db'));
+
+        $validation = Validator::make($request->all(), [
+            'rootcause.*' => 'required|string|max:20',
+            'problem.*' => 'required|string',
+            'action.*' => 'required|string',
+            'pic.*' => 'required|string|max:10',
+            'nikuser.*' => 'required|string|max:10',
+        ]);
+
+        if ($validation->fails()) {
+            return redirect()
+                ->back()
+                ->with('status', 'validationfail');
+        }
+
+        DB::beginTransaction();
+
+        foreach ($request->rootcause as $k => $v) {
+            $q = SewingOutput::find($k);
+
+            if (!$q) {
+                DB::rollBack();
+                return redirect()
+                    ->back()
+                    ->with('status', 'savefailed');
+            }
+
+            $pic = Employee::where('nik', $request->pic[$k])->first();
+            if (!$pic) {
+                DB::rollBack();
+                return redirect()
+                    ->back()
+                    ->with('status', 'userfailed');
+            }
+
+            $nikuser = Employee::where('nik', $request->nikuser[$k])->first();
+            if (!$nikuser) {
+                DB::rollBack();
+                return redirect()
+                    ->back()
+                    ->with('status', 'userfailed');
+            }
+
+            try {
+                $q->problem = $request->problem[$k];
+                $q->action = $request->action[$k];
+                $q->nik_pic = $request->pic[$k];
+                $q->nik_user = $request->nikuser[$k];
+                $q->root_cause = $v;
+                $q->save();
+            } catch (\Exception $e) {
+                DB::rollBack();
+                return redirect()
+                    ->back()
+                    ->with('status', 'savefailed');
+            }
+        }
+
+        DB::commit();
+        return redirect()
+            ->back()
+            ->with('status', 'savesuccess');
+    }
+
+    function capdata(Request $request, $nik, $round)
+    {
+        if (!$request->ajax()) {
+            return;
+        }
+
+        if (session('db') == null) {
+            return;
+        }
+
+        preconnect(session('db'));
+
+        $date = Carbon::now();
+        $line = MasterEmployeeGroup::select('id as kodegroup', 'name as namagroup')
+            ->find(session('line'));
+
+        if (!$line) {
+            throw 'Line not found';
+        }
+
+        $worktimeline = WorktimeSettingController::getLineWorkingTime(
+            $line,
+            $date,
+        );
+
+        $worktime = $worktimeline->workingtime;
+
+        $get_worktimeline = WorktimeSettingController::get_worktime_range($worktimeline, $worktime);
+        $swt = $get_worktimeline->startworktime;
+        $fwt = $get_worktimeline->finishworktime;
+
+        if ($swt->greaterThan($fwt)) {
+            $fwt->addDay();
+        }
+        $in = InlineDetail::with('header','inlinedefect')
+            ->whereHas('header', function($q) use($swt,$fwt,$round,$nik){
+                $q->whereBetween('date', [$swt->format('Y-m-d H:i:s'),$fwt->format('Y-m-d H:i:s')])
+                ->where('round', $round)
+                ->where('group_id', session('line'))
+                ->where('userid_operator', $nik);
+            })
+            ->get();
+
+        $form = view('monitoring::conventional.modalcap')->with('in', $in);
+        return $form->render();
+    }
+
+    function storecap(Request $request)
+    {
+        if (session('db') == null) {
+            return redirect()
+                ->back()
+                ->with('status', 'dbwrong');
+        }
+
+        preconnect(session('db'));
+
+        $validation = Validator::make($request->all(), [
+            'rootcause.*' => 'required|string|max:20',
+            'problem.*' => 'required|string',
+            'action.*' => 'required|string',
+            'pic.*' => 'required|string|max:10',
+        ]);
+
+        if ($validation->fails()) {
+            return redirect()
+                ->back()
+                ->with('status', 'validationfail');
+        }
+
+        DB::beginTransaction();
+    
+        foreach ($request->rootcause as $k => $v) {
+            $q = InlineDetail::find($k);
+
+            if (!$q) {
+                DB::rollBack();
+                return redirect()
+                    ->back()
+                    ->with('status', 'savefailed');
+            }
+
+            $pic = Employee::where('nik', $request->pic[$k])->first();
+
+            if (!$pic) {
+                DB::rollBack();
+                return redirect()
+                    ->back()
+                    ->with('status', 'userfailed');
+            }
+            $inlh = InlineHeader::find($q->inline_header_id);
+            $nikuser = Employee::where('nik', $inlh->userid_operator)->first();
+
+            if (!$nikuser) {
+                DB::rollBack();
+                return redirect()
+                    ->back()
+                    ->with('status', 'userfailed');
+            }
+
+            try {
+                $q->problem = $request->problem[$k];
+                $q->action = $request->action[$k];
+                $q->userid_spv = $request->pic[$k];
+                $q->rootcause = $v;
+                $q->save();
+            } catch (\Exception $e) {
+                DB::rollBack();
+                return redirect()
+                    ->back()
+                    ->with('status', 'savefailed');
+            }
+        }
+
+        DB::commit();
+        return redirect()
+            ->back()
+            ->with('status', 'savesuccess');
+    }
+
+    function getoperator($line, $starttime, $endtime, $shift = null)
+    {
+        preconnect(session('db'));
+        try {
+            $isToday = !session('endline.shift');
+            if($shift != null){
+                $data = EmployeeAttendance::select('nik', 'status', 'time')
+                    ->where('factory_id', session('db')->iddb)
+                    ->whereBetween('time', [$starttime, $endtime])
+                    ->where('group_id', $line)
+                    ->where('is_efficiency', 1)
+                    ->where('shift', $shift)
+                    ->get();
+            }else{
+                $data = EmployeeAttendance::select('nik', 'status', 'time')
+                    ->where('factory_id', session('db')->iddb)
+                    ->whereBetween('time', [$starttime, $endtime])
+                    ->where('group_id', $line)
+                    ->where('is_efficiency', 1)
+                    ->get();
+            }
+            
+            $datas = collect();
+            foreach ($data->unique('nik')->pluck('nik') as $nik) {
+                if($isToday){
+                    $m_mp = max(0,
+                        $data->where('nik', $nik)->where('status', 'IN')->count() - $data->where('nik', $nik)->where('status', '!=', 'IN')->count(),
+                    );
+                }else{
+                    $m_mp = max(0, ($data->where('status', 'IN')->groupBy('nik')->count()));
+                }
+                if($m_mp > 0){
+                    $u = Employee::select('name')->where('nik', $nik)->first();
+                    $name = $u ? $u->name : '-';
+                    $mass = MatrixAssessment::where('nik', $nik)->first();
+                    $grade = $mass ? $mass->grade : "PTS";
+                    $obj = new \stdClass();
+                    $obj->nik = $nik;
+                    $obj->name = $name;
+                    $obj->grade = $grade;
+                    $datas->push($obj);
+                }
+            }
+
+            $view = view('monitoring::conventional.detailoperator', ['data'=>$datas]);
+
+            return response()->json($view->render());
+        } catch (\Throwable $e) {
+            return response()->json($e->getMessage(), 400);
+        }
+    }
+}
+Pelajari bagaimana proses pengambilan data operator dan juga status di inline detail
+
