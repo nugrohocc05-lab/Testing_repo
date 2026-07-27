@@ -1,0 +1,86 @@
+
+
+$('#line').on('change', function () {
+    const line = $(this).val();
+
+    $.ajax({
+        url: "{{ route('monitoring_inlineperformance_filterInlineLts') }}",
+        type: "GET",
+        data: { line: line },
+        success: function (res) {
+            $('#tot_inspect').text(res.tot_inspect);
+            $('#tot_defect').text(res.tot_defect);
+            $('#rft').text(res.rft);
+            $('#wft').text(res.wft);
+
+            // --- Header row (kolom operator) ---
+            let $operatorRow = $('#operators');
+            $operatorRow.find('td').remove();
+
+            (res.operators || []).forEach(function (op) {
+                let nm = (op.nama || '').split(' ');
+                let displayName = nm.length > 1
+                    ? nm[0] + ' ' + nm[1].charAt(0)
+                    : (nm[0] || 'No Data');
+
+                let td = `<td class="text-center">
+                    <b>${op.sequence_process ?? '-'}<br>${op.nik}<br>${displayName}</b>
+                </td>`;
+                $operatorRow.append(td);
+            });
+
+            // --- Body row per Round ---
+            let $tbody = $('#datalist tbody');
+            $tbody.empty();
+
+            const roundColors = {
+                1: { bg: '#8C8C8C', border: '#6E6E6E' },
+                2: { bg: '#F24C4C', border: '#D63737' },
+                3: { bg: '#219653', border: '#4CF299' },
+                4: { bg: '#219653', border: '#4CF299' },
+                5: { bg: '#219653', border: '#4CF299' },
+            };
+
+            const statusIcon = {
+                none:  `<img src="{{ _asset('svg/inlinePerformance/checklist.svg') }}" alt="No Defect">`,
+                one:   ``,
+                multi: `<img src="{{ _asset('svg/inlinePerformance/defect2.svg') }}" alt="Multi Defect">`,
+                cap:   `<img src="{{ _asset('svg/inlinePerformance/pencil.svg') }}" alt="CAP Filled">`,
+            };
+
+            (res.rounds || []).forEach(function (roundData) {
+                const rc = roundColors[roundData.round] || roundColors[1];
+                let $tr = $('<tr></tr>');
+
+                $tr.append(`
+                    <td class="text-center round-label">
+                        <span class="badge px-4 py-2 rounded-5"
+                              style="background-color:${rc.bg}; border:2px solid ${rc.border}; font-size:15px; font-weight:400">
+                            Round ${roundData.round}
+                        </span>
+                    </td>
+                `);
+
+                roundData.cells.forEach(function (cell) {
+                    if (cell.status === 'empty') {
+                        $tr.append(`<td class="text-center status-empty"></td>`);
+                        return;
+                    }
+
+                    $tr.append(`
+                        <td class="text-center">
+                            <div class="btn-detail status-${cell.status}">
+                                ${statusIcon[cell.status] || ''}
+                            </div>
+                        </td>
+                    `);
+                });
+
+                $tbody.append($tr);
+            });
+        },
+        error: function (xhr) {
+            console.log(xhr.responseJSON.message);
+        }
+    });
+});
