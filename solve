@@ -1,1549 +1,655 @@
+yang bisa diimplement disini 
 <?php
 
-namespace Modules\Monitoring\Http\Controllers\Conventional;
+namespace Modules\Monitoring\Http\Controllers;
 
 use DB;
 use Carbon\Carbon;
-use App\Http\Models\Main\Style;
-use App\Http\Models\Main\DbList;
-use App\Http\Models\InlineDetail;
-use App\Http\Models\InlineHeader;
 use Illuminate\Http\Request;
-use App\Http\Models\MpsDetail;
-use App\Http\Models\MpsHeader;
-use App\Http\Models\OutputDetail;
-use App\Http\Models\SewingOutput;
-use App\Http\Models\FactoryParameter;
-use App\Http\Models\PurchaseOrder;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\SmvController;
+use App\Http\Models\FactoryParameter;
+use App\Http\Models\Main\MasterEmployeeGroup;
+use App\Http\Models\Main\MasterEmployeeSection;
+use App\Http\Models\Main\MasterGroupBuyer;
+use App\Http\Models\PurchaseOrder;
+use App\Http\Models\Main\Buyer;
+use App\Http\Models\InlineDetail;
+use App\Http\Models\InlineHeader;
 use App\Http\Models\Main\Employee;
 use App\Http\Models\Main\EmployeeAttendance;
-use App\Http\Models\Main\MasterEmployeeGroup;
-use App\Http\Models\Main\MatrixAssessment;
+use App\Http\Models\Main\MasterInlineDefect;
+use App\Http\Models\Main\Style;
+use App\Http\Models\Main\Param;
 use App\Http\Models\Main\QCDefect;
-use App\Http\Models\PanicParameter;
-use Illuminate\Support\Facades\Validator;
+use App\Http\Models\MpsDetail;
+use App\Http\Models\MpsHeader;
+use App\Http\Models\SewingOutput;
 use Modules\Sewing\Http\Controllers\WorktimeSettingController;
+use Nexmo\Client\Exception\Validation;
 
-class GmsController extends Controller
+class InlinePerformanceController extends Controller
 {
-    function index()
+    protected $m_modul = 'report';
+
+    function __construct()
     {
-        if (!session('idfactory')) {
-            return response()->json('Unauthorized', 403);
-        }
-
-        try {
-            preconnect(session('db'));
-
-            try {
-                $is_panic = FactoryParameter::where('key', 'line_panic')->first()
-                    ->value;
-            } catch (\Exception $e) {
-                $is_panic = false;
-            }
-
-            $mp_line_param = ($lp = FactoryParameter::find('line_mapping_tolerance'))
-                ? $lp->value * 1
-                : 30;
-
-            $date = Carbon::now();
-
-            $isToday =
-                Carbon::parse(session('endline.date'))->format('Y-m-d') == Carbon::now()->format('Y-m-d') && !session('endline.shift');
-            $line = MasterEmployeeGroup::select('id as kodegroup', 'name as namagroup')
-                ->find(session('line'));
-
-            $worktimeline = WorktimeSettingController::getLineWorkingTime(
-                $line,
-                $date,
-            );
-
-            $worktime = $worktimeline->workingtime;
-
-            $get_worktimeline = WorktimeSettingController::get_worktime_range($worktimeline, $worktime);
-            $swt = $get_worktimeline->startworktime;
-            $fwt = $get_worktimeline->finishworktime;
-
-            if ($swt->greaterThan($fwt)) {
-                $fwt->addDay();
-            }
-
-            if ($isToday){
-                if(!$date->between($swt, $fwt)){
-                    $isToday = false;
-                }
-            }
-
-            $diff = $swt->diffInHours($fwt) / 2;
-
-            $sto = Carbon::parse(
-                $worktimeline->date . ' ' . $worktime->starttimeoff,
-            );
-            $fto = Carbon::parse(
-                $worktimeline->date . ' ' . $worktime->endtimeoff,
-            );
-            if ($sto->greaterThan($fto)) {
-                $fto->addDay();
-            }
-
-            $sto2 = null;
-            $fto2 = null;
-
-            if ($worktime->startsecondtimeoff) {
-                $sto2 = Carbon::parse(
-                    $worktimeline->date . ' ' . $worktime->startsecondtimeoff,
-                );
-                $fto2 = Carbon::parse(
-                    $worktimeline->date . ' ' . $worktime->endsecondtimeoff,
-                );
-                if ($sto2->greaterThan($fto2)) {
-                    $fto2->addDay();
-                }
-            }
-
-            $totalworktime = $date->diffInMinutes($swt);
-
-            if ($date->greaterThan($sto)) {
-                if ($date->greaterThan($fto)) {
-                    $timeoff = $sto->diffInMinutes($fto);
-                    $totalworktime -= $timeoff;
-                } else {
-                    $timeoff_diff = $sto->diffInMinutes($date);
-                    $totalworktime -= $timeoff_diff;
-                }
-            }
-
-            if ($sto2) {
-                if ($date->greaterThan($sto2)) {
-                    if ($date->greaterThan($fto2)) {
-                        $timeoff = $sto2->diffInMinutes($fto2);
-                        $totalworktime -= $timeoff;
-                    } else {
-                        $timeoff_diff = $sto2->diffInMinutes($date);
-                        $totalworktime -= $timeoff_diff;
-                    }
-                }
-            }
-
-            $start_time = Carbon::parse($swt);
-            $end_time = Carbon::parse($fwt);
-
-            if($isToday){
-                $end_time = Carbon::now();
-            }
-
-            try {
-                $panic_param = PanicParameter::where(
-                    'line',
-                    session('line'),
-                )->first();
-
-                $additional_output = $panic_param->output;
-                $additional_target = $panic_param->target;
-            } catch (\Exception $e) {
-                $additional_output = 0;
-                $additional_target = 0;
-            }
-
-            $totaloutput = 0;
-            $totalefficiency = 0;
-            $totalrft = 0;
-            $totalrar = 0;
-            $totalwft = 0;
-            $totalbgrade = 0;
-            $totalcgrade = 0;
-            $percentoutput = 0;
-            $percentrft = 0;
-            $percentrar = 0;
-            $percentwft = 0;
-            $percentbgrade = 0;
-            $percentcgrade = 0;
-
-            try {
-                $idmps = MpsDetail::select('idmps')
-                    ->distinct()
-                    ->where('date', $swt->format('Y-m-d'))
-                    ->whereHas('header', function ($q) {
-                        $q->where('line', session('line'));
-                    })
-                    ->get();
-
-                $mps_header = MpsHeader::whereIn('id', $idmps->pluck('idmps'))
-                    ->orderBy('lastoutput', 'desc')
-                    ->first();
-
-                $mps_detail = MpsDetail::where('idmps', $mps_header->id)
-                    ->where('date', $swt->format('Y-m-d'))
-                    ->first();
-
-                $m_target = ceil(
-                    ($mps_detail->target / $mps_header->workingtime) *
-                        ($totalworktime / 60),
-                );
-
-                if($is_panic){
-                    $m_target = $additional_target;
-                }else{
-                    $m_target = ceil(
-                        $m_target + $additional_target,
-                    );
-                }
-
-                $m_kpno = $mps_header->kpno;
-            } catch (\Exception $e) {
-                $m_target = 0;
-                $m_kpno = null;
-            }
-
-            $out = SewingOutput::whereBetween('date', [$start_time, $end_time])
-                ->where('line', session('line'))
-                ->where('is_output', 1)
-                ->groupBy('barcode')
-                ->get();
-
-            $totaloutput = $out->count() + $additional_output;
-
-            $firstScanneds = SewingOutput::select('barcode', 'defect_code')
-                ->whereBetween('date', [$start_time, $end_time])
-                ->where('line', session('line'))
-                ->where('qc_seq', 0)
-                ->groupBy('barcode')
-                ->get();
-
-            $totalrft = $firstScanneds->count() +
-                $additional_output -
-                $firstScanneds->where('defect_code', '!=', null)->count();
-            $totalwft = $firstScanneds->count() - $totalrft;
-            $totalrar = $out
-                ->where('qc_seq', '!=', 0)
-                ->where('defect_code', null)
-                ->count();
-            $totalbgrade = $out
-                ->where('defect_code', '800')
-                ->count();
-            $totalcgrade = $out
-                ->where('defect_code', '900')
-                ->count();
-
-            $percentoutput = number_format(
-                ($totaloutput / $m_target) * 100,
-                2,
-                '.',
-                '',
-            );
-
-            if($firstScanneds->count() > 0){
-                $percentrft = min(
-                    number_format(
-                        (($firstScanneds->count() +
-                            $additional_output -
-                            $firstScanneds
-                                ->where('defect_code', '!=', null)
-                                ->count()) /
-                            ($firstScanneds->count() + $additional_output)) *
-                            100,
-                        2,
-                    ),
-                    100,
-                );
-            }else{
-                $percentrft = 0;
-            }
-
-            $percentrar = number_format(
-                ($totalrar / $totaloutput) * 100,
-                2,
-                '.',
-                '',
-            );
-            $percentwft = number_format(
-                100 - $percentrft,
-                2
-            );
-            $percentbgrade = number_format(
-                ($totalbgrade / $totaloutput) * 100,
-                2,
-                '.',
-                '',
-            );
-            $percentcgrade = number_format(
-                ($totalcgrade / $totaloutput) * 100,
-                2,
-                '.',
-                '',
-            );
-
-            $po = PurchaseOrder::select('idstyle')
-                ->where('kpno', $m_kpno)
-                ->first();
-
-            $style = Style::find($po->idstyle);
-
-            try {
-                $idmps = MpsDetail::select('idmps')
-                    ->distinct()
-                    ->where('date', $swt->format('Y-m-d'))
-                    ->whereHas('header', function ($q) {
-                        $q->where('line', session('line'));
-                    })
-                    ->get();
-
-                $mps_header = MpsHeader::whereIn('id', $idmps->pluck('idmps'))
-                    ->orderBy('lastoutput', 'desc')
-                    ->first();
-
-                $mps_detail = MpsDetail::where('idmps', $mps_header->id)
-                    ->where('date', $swt->format('Y-m-d'))
-                    ->first();
-            } catch (\Exception $e) {
-                //
-            }
-
-            try {
-                $m_smv = SmvController::getSmv(
-                    $style->idstyle,
-                    $mps_header->order_step_id,
-                    $mps_detail->order_part_id,
-                    $mps_detail->sub_style_id,
-                );
-                $smv = $m_smv->smv;
-            } catch (\Exception $e) {
-                $smv = 0;
-            }
-
-            $start_time->subMinute($mp_line_param);
-            $end_time->addMinute($mp_line_param);
-
-            $m_mp = EmployeeAttendance::select('nik', 'status')
-                ->where('factory_id', session('db')->iddb)
-                ->where('group_id', session('line'))
-                ->where('is_efficiency', 1)
-                ->where('shift', $worktime->shift)
-                ->whereBetween('time', [$start_time, $end_time])
-                ->orderBy('time', 'desc')
-                ->get();
-
-            try {
-                $mpminus = FactoryParameter::where('key', 'line_mpminus')->first();
-                $mpminus = $mpminus ? $mpminus->value : -3;
-                $m_mp = max(
-                    0,
-                    $m_mp->where('status', 'IN')->count() - $m_mp->where('status', 'OUT')->count() + $mpminus,
-                );
-            } catch (\Exception $e) {
-                $m_mp = 0;
-            }
-
-            $totalefficiency = number_format(
-                (($totaloutput * $smv) / ($m_mp * $totalworktime)) * 100,
-                2,
-                '.',
-                '',
-            );
-            $diff = floor($diff);
-            $data_a = $this->getdata(session('line'), 1, $diff);
-            $data_b = $this->getdata(session('line'), 2, $diff);
-
-            if($diff >= 4.0){
-                $data_c = $this->getdata(session('line'), 3, $diff);
-            }else{
-                $data_c = null;
-            }
-
-            return view('monitoring::conventional.index', [
-                'data_a' => $data_a,
-                'data_b' => $data_b,
-                'data_c' => $data_c,
-                'ln' => $line->namagroup,
-                'totaloutput' => $totaloutput,
-                'totalefficiency' => $totalefficiency,
-                'totalrft' => $totalrft,
-                'totalwft' => $totalwft,
-                'totalrar' => $totalrar,
-                'totalbgrade' => $totalbgrade,
-                'totalcgrade' => $totalcgrade,
-                'percentoutput' => $percentoutput,
-                'percentrft' => $percentrft,
-                'percentrar' => $percentrar,
-                'percentwft' => $percentwft,
-                'percentbgrade' => $percentbgrade,
-                'percentcgrade' => $percentcgrade,
-                'prevlink' => (session('monitoring')) ? 
-                    route('monitoring_dashboard_fourth', ['line' => session('line')]) :
-                    route('monitoring_dashboardfourth', ['line' => session('line')]),
-            ]);
-        } catch (\Exception $e) {
-            return view('monitoring::conventional.index');
-        }
+        $this->middleware('auth');
     }
 
-    function getdata($ln, $num = 1, $pg = 5)
+    function index(Request $request)
     {
-        preconnect(session('db'));
-
-        $date = Carbon::now();
-        $line = MasterEmployeeGroup::select('id as kodegroup', 'name as namagroup')
-                ->find($ln);
-
-        try {
-            $worktimeline = WorktimeSettingController::getLineWorkingTime(
-                $line,
-                $date,
-            );
-
-            $worktime = $worktimeline->workingtime;
-
-            $get_worktimeline = WorktimeSettingController::get_worktime_range($worktimeline, $worktime);
-            $swt = $get_worktimeline->startworktime;
-            $fwt = $get_worktimeline->finishworktime;
-
-            if ($swt->greaterThan($fwt)) {
-                $fwt->addDay();
-            }
-
-            $sto = Carbon::parse(
-                $worktimeline->date . ' ' . $worktime->starttimeoff,
-            );
-            $fto = Carbon::parse(
-                $worktimeline->date . ' ' . $worktime->endtimeoff,
-            );
-            if ($sto->greaterThan($fto)) {
-                $fto->addDay();
-            }
-
-            $sto2 = null;
-            $fto2 = null;
-
-            if ($worktime->startsecondtimeoff) {
-                $sto2 = Carbon::parse(
-                    $worktimeline->date . ' ' . $worktime->startsecondtimeoff,
-                );
-                $fto2 = Carbon::parse(
-                    $worktimeline->date . ' ' . $worktime->endsecondtimeoff,
-                );
-                if ($sto2->greaterThan($fto2)) {
-                    $fto2->addDay();
-                }
-            }
-
-            $totalworktime = $date->diffInMinutes($swt);
-            if ($date->greaterThan($sto)) {
-                if ($date->greaterThan($fto)) {
-                    $timeoff = $sto->diffInMinutes($fto);
-                    $totalworktime -= $timeoff;
-                } else {
-                    $timeoff_diff = $sto->diffInMinutes($date);
-                    $totalworktime -= $timeoff_diff;
-                }
-            }
-
-            if ($sto2) {
-                if ($date->greaterThan($sto2)) {
-                    if ($date->greaterThan($fto2)) {
-                        $timeoff = $sto2->diffInMinutes($fto2);
-                        $totalworktime -= $timeoff;
-                    } else {
-                        $timeoff_diff = $sto2->diffInMinutes($date);
-                        $totalworktime -= $timeoff_diff;
-                    }
-                }
-            }
-
-            $dataoutput = [];
-
-            $hasTimeOff = false;
-            $hasSecondTimeOff = false;
-
-            $mpminus = FactoryParameter::where('key', 'line_mpminus')->first();
-            $mpminus = $mpminus ? $mpminus->value : -3;
-
-            $paginate = $pg;
-            $diff = $swt->diffInHours($fwt) + 1;
-            $page = min($diff, $paginate * $num);
-            $start = min($diff, $paginate * ($num - 1)) + 1;
-
-            $time_off_output = 0;
-            $shift = $worktime->shift;
-
-            for ($i = $start; $i <= $page; $i++) {
-                $_ta = Carbon::parse($swt->format('Y-m-d H:i:s'))->addHour(
-                    $i - 1,
-                );
-                $_tb = Carbon::parse($swt->format('Y-m-d H:i:s'))->addHour($i);
-
-                // Step Hour get clamped by start time off
-                if ($_ta->lessThan($sto) and $_tb->greaterThan($sto)) {
-                    $std = new \stdClass();
-                    $std->timeoff = false;
-                    $std->starttime = $_ta->format('H:i');
-                    $std->endtime = $sto->format('H:i');
-                    $perhourData = $this->getPerHourData(
-                        $ln,
-                        $_ta,
-                        $sto,
-                        $swt,
-                        $mpminus,
-                        $time_off_output,
-                        $i == $start,
-                        $i == $page,
-                        $shift
-                    );
-                    $time_off_output -= $time_off_output;
-                    $std->data = $perhourData;
-                    $dataoutput[] = $std;
-                    continue;
-                }
-
-                //First Time off
-                if (
-                    $_ta->greaterThanOrEqualTo($sto) and
-                    $_tb->lessThanOrEqualTo($fto)
-                ) {
-                    if (!$hasTimeOff) {
-                        $std = new \stdClass();
-                        $std->starttime = $sto->format('H:i');
-                        $std->endtime = $fto->format('H:i');
-                        $std->timeoff = true;
-                        $dataoutput[] = $std;
-                        $hasTimeOff = true;
-
-                        $perhourData = $this->getPerHourData(
-                            $ln,
-                            $sto,
-                            $fto,
-                            $swt,
-                            $mpminus,
-                            0,
-                            false,
-                            false,
-                            $shift
-                        );
-
-                        $time_off_output += $perhourData->output;
-                    }
-                    continue;
-                }
-
-                //time off equal
-                if ($_ta->equalTo($sto) and !$hasTimeOff) {
-                    $std = new \stdClass();
-                    $std->starttime = $sto->format('H:i');
-                    $std->endtime = $fto->format('H:i');
-                    $std->timeoff = true;
-                    $hasTimeOff = true;
-                    $dataoutput[] = $std;
-
-                    $perhourData = $this->getPerHourData(
-                        $ln,
-                        $sto,
-                        $fto,
-                        $swt,
-                        $mpminus,
-                        0,
-                        false,
-                        false,
-                        $shift
-                    );
-
-                    $time_off_output += $perhourData->output;
-
-                    if ($_tb->greaterThan($fto) and $_ta->lessThan($fto)) {
-                        $std = new \stdClass();
-                        $std->starttime = $fto->format('H:i');
-                        $std->endtime = $_tb->format('H:i');
-                        $std->timeoff = false;
-                        $perhourData = $this->getPerHourData(
-                            $ln,
-                            $fto,
-                            $_tb,
-                            $swt,
-                            $mpminus,
-                            $time_off_output,
-                            $i == $start,
-                            $i == $page,
-                            $shift
-                        );
-                        $time_off_output -= $time_off_output;
-                        $std->data = $perhourData;
-                        $dataoutput[] = $std;
-                        continue;
-                    }
-                }
-
-                //Greater than timeoff
-                if ($_ta->greaterThan($sto) and !$hasTimeOff) {
-                    $std = new \stdClass();
-                    $std->starttime = $sto->format('H:i');
-                    $std->endtime = $fto->format('H:i');
-                    $std->timeoff = true;
-                    $hasTimeOff = true;
-                    $dataoutput[] = $std;
-
-                    $perhourData = $this->getPerHourData(
-                        $ln,
-                        $sto,
-                        $fto,
-                        $swt,
-                        $mpminus,
-                        0,
-                        false,
-                        false,
-                        $shift
-                    );
-
-                    $time_off_output += $perhourData->output;
-
-                    if ($_ta->lessThan($fto) and $_tb->greaterThan($fto)) {
-                        $std = new \stdClass();
-                        $std->starttime = $fto->format('H:i');
-                        $std->endtime = $_tb->format('H:i');
-                        $std->timeoff = false;
-                        $perhourData = $this->getPerHourData(
-                            $ln,
-                            $fto,
-                            $_tb,
-                            $swt,
-                            $mpminus,
-                            $time_off_output,
-                            $i == $start,
-                            $i == $page,
-                            $shift
-                        );
-                        $time_off_output -= $time_off_output;
-                        $std->data = $perhourData;
-                        $dataoutput[] = $std;
-                        continue;
-                    }
-                }
-
-                //Second Time Off
-                if ($sto2) {
-                    // Step Hour get clamped by start time off
-                    if ($_ta->lessThan($sto2) and $_tb->greaterThan($sto2)) {
-                        $std = new \stdClass();
-                        $std->timeoff = false;
-                        $std->starttime = $_ta->format('H:i');
-                        $std->endtime = $sto2->format('H:i');
-                        $perhourData = $this->getPerHourData(
-                            $ln,
-                            $_ta,
-                            $sto2,
-                            $swt,
-                            $mpminus,
-                            $time_off_output,
-                            $i == $start,
-                            $i == $page,
-                            $shift
-                        );
-                        $time_off_output -= $time_off_output;
-                        $std->data = $perhourData;
-                        $dataoutput[] = $std;
-                        continue;
-                    }
-
-                    //First Time off
-                    if (
-                        $_ta->greaterThanOrEqualTo($sto2) and
-                        $_tb->lessThanOrEqualTo($fto2)
-                    ) {
-                        if (!$hasSecondTimeOff) {
-                            $std = new \stdClass();
-                            $std->starttime = $sto2->format('H:i');
-                            $std->endtime = $fto2->format('H:i');
-                            $std->timeoff = true;
-                            $dataoutput[] = $std;
-                            $hasSecondTimeOff = true;
-
-                            $perhourData = $this->getPerHourData(
-                                $ln,
-                                $sto2,
-                                $fto2,
-                                $swt,
-                                $mpminus,
-                                0,
-                                false,
-                                false,
-                                $shift
-                            );
-
-                            $time_off_output += $perhourData->output;
-                        }
-                        continue;
-                    }
-
-                    //time off equal
-                    if ($_ta->equalTo($sto2) and !$hasSecondTimeOff) {
-                        $std = new \stdClass();
-                        $std->starttime = $sto2->format('H:i');
-                        $std->endtime = $fto2->format('H:i');
-                        $std->timeoff = true;
-                        $hasSecondTimeOff = true;
-                        $dataoutput[] = $std;
-
-                        $perhourData = $this->getPerHourData(
-                            $ln,
-                            $sto2,
-                            $fto2,
-                            $swt,
-                            $mpminus,
-                            0,
-                            false,
-                            false,
-                            $shift
-                        );
-
-                        $time_off_output += $perhourData->output;
-
-                        if (
-                            $_tb->greaterThan($fto2) and $_ta->lessThan($fto2)
-                        ) {
-                            $std = new \stdClass();
-                            $std->starttime = $fto2->format('H:i');
-                            $std->endtime = $_tb->format('H:i');
-                            $std->timeoff = false;
-                            $perhourData = $this->getPerHourData(
-                                $ln,
-                                $fto2,
-                                $_tb,
-                                $swt,
-                                $mpminus,
-                                $time_off_output,
-                                $i == $start,
-                                $i == $page,
-                                $shift
-                            );
-                            $time_off_output -= $time_off_output;
-                            $std->data = $perhourData;
-                            $dataoutput[] = $std;
-                            continue;
-                        }
-                    }
-
-                    //Greater than timeoff
-                    if ($_ta->greaterThan($sto2) and !$hasSecondTimeOff) {
-                        $std = new \stdClass();
-                        $std->starttime = $sto2->format('H:i');
-                        $std->endtime = $fto2->format('H:i');
-                        $std->timeoff = true;
-                        $hasSecondTimeOff = true;
-                        $dataoutput[] = $std;
-
-                        $perhourData = $this->getPerHourData(
-                            $ln,
-                            $sto2,
-                            $fto2,
-                            $swt,
-                            $mpminus,
-                            0,
-                            false,
-                            false,
-                            $shift
-                        );
-
-                        $time_off_output += $perhourData->output;
-
-                        if (
-                            $_ta->lessThan($fto2) and $_tb->greaterThan($fto2)
-                        ) {
-                            $std = new \stdClass();
-                            $std->starttime = $fto2->format('H:i');
-                            $std->endtime = $_tb->format('H:i');
-                            $std->timeoff = false;
-                            $perhourData = $this->getPerHourData(
-                                $ln,
-                                $fto2,
-                                $_tb,
-                                $swt,
-                                $mpminus,
-                                $time_off_output,
-                                $i == $start,
-                                $i == $page,
-                                $shift
-                            );
-                            $time_off_output -= $time_off_output;
-                            $std->data = $perhourData;
-                            $dataoutput[] = $std;
-                            continue;
-                        }
-                    }
-                }
-
-                $std = new \stdClass();
-                $std->starttime = $_ta->format('H:i');
-                $std->endtime = $_tb->format('H:i');
-                $std->timeoff = false;
-                $perhourData = $this->getPerHourData(
-                    $ln,
-                    $_ta,
-                    $_tb,
-                    $swt,
-                    $mpminus,
-                    $time_off_output,
-                    $i == $start,
-                    $i == $page,
-                    $shift
-                );
-                $time_off_output -= $time_off_output;
-                $std->data = $perhourData;
-                $dataoutput[] = $std;
-            }
-
-            return view('monitoring::conventional.indexdata', [
-                'dataoutput' => $dataoutput,
-            ]);
-        } catch (\Exception $e) {
-            return '';
-        }
-    }
-
-    function getPerHourData(
-        $line,
-        Carbon $time_start,
-        Carbon $time_end,
-        $startWorkTime,
-        $mpminus,
-        $additional_output,
-        $is_first,
-        $is_last,
-        $shift = null
-    ) {
-        preconnect(session('db'));
-        $perhour_data = new \stdClass();
-
-        $mp_line_param = ($lp = FactoryParameter::find('line_mapping_tolerance'))
-            ? $lp->value * 1
-            : 30;
-
-        try {
-
-            $out = SewingOutput::select('barcode', 'qc_seq', 'defect_code')
-                ->where('date', '>', $time_start)
-                ->where('date', '<=', $time_end)
-                ->where('line', $line)
-                ->where('is_output', 1)
-                ->groupBy('barcode')
-                ->get();
-                    
-            $_o = $out->count() + $additional_output;
-            $perhour_data->output = $_o;
-
-            $scanneds = SewingOutput::select('barcode', 'defect_code')
-                ->where('date', '>', $time_start)
-                ->where('date', '<=', $time_end)
-                ->where('line', $line)
-                ->where('qc_seq', 0)
-                ->groupBy('barcode')
-                ->get();
-
-            $perhour_data->rft = number_format(
-                ($scanneds->where('defect_code', null)->count() /
-                    $scanneds->count()) *
-                    100,
-                2,
-            );
-            $perhour_data->rar = number_format(
-                ($out
-                    ->where('qc_seq', '!=', 0)
-                    ->where('defect_code', null)
-                    ->count() /
-                    $_o) *
-                    100,
-                2,
-            );
-
-            $perhour_data->wft = number_format(100 - $perhour_data->rft, 2);
-
-            $perhour_data->bgrade = number_format(
-                $out->where('defect_code', '800')->count() / $_o,
-                2,
-            );
-            $perhour_data->cgrade = number_format(
-                $out->where('defect_code', '900')->count() / $_o,
-                2,
-            );
-
-            try {
-                $m_out_d = OutputDetail::where(
-                    'barcode',
-                    $out->last()->barcode,
-                )->first();
-
-                $m_kpno = $m_out_d->kpno;
-            } catch (\Exception $e) {
-                $m_kpno = '-';
-            }
-
-            $perhour_data->kpno = $m_kpno;
-
-            try {
-                $po = PurchaseOrder::select('idstyle')
-                    ->where('kpno', $m_kpno)
-                    ->first();
-
-                $m_style = Style::find($po->idstyle);
-                $style = $m_style->nmstyle;
-            } catch (\Exception $e) {
-                $style = '-';
-                $m_style = null;
-            }
-
-            $perhour_data->style = $style;
-
-            try {
-                $idmps = MpsDetail::select('idmps')
-                    ->distinct()
-                    ->where('date', $startWorkTime->format('Y-m-d'))
-                    ->whereHas('header', function ($q) use ($line) {
-                        $q->where('line', $line);
-                    })
-                    ->get();
-
-                $mps_header = MpsHeader::whereIn('id', $idmps->pluck('idmps'))
-                    ->orderBy('lastoutput', 'desc')
-                    ->first();
-
-                $mps_detail = MpsDetail::where('idmps', $mps_header->id)
-                    ->where('date', $startWorkTime->format('Y-m-d'))
-                    ->first();
-            } catch (\Exception $e) {
-                //
-            }
-
-            try {
-                $smv = SmvController::getSmv(
-                    $m_style->idstyle,
-                    $mps_header->order_step_id,
-                    $mps_detail->order_part_id,
-                    $mps_detail->sub_style_id,
-                );
-                $smv = $smv->smv;
-            } catch (\Exception $e) {
-                $smv = '-';
-            }
-
-            $perhour_data->smv = $smv;
-
-            $start_mp_time = Carbon::parse(
-                $startWorkTime->format('Y-m-d H:i:s'),
-            );
-
-            $mp_line_param = ($lp = FactoryParameter::find('line_mapping_tolerance'))
-                ? $lp->value * 1
-                : 30;
-
-            $start_mp_time->subMinute($mp_line_param);
-            
-            if ($is_last) {
-                $time_end->addMinute($mp_line_param);
-            }
-
-            if($shift != null){
-                $mpi = EmployeeAttendance::select('nik', 'status')
-                    ->where('factory_id', session('db')->iddb)
-                    ->whereBetween('time', [$start_mp_time, $time_end])
-                    ->where('group_id', $line)
-                    ->where('is_efficiency', 1)
-                    ->where('shift', $shift)
-                    ->orderBy('status')
-                    ->get();
-            }else{
-                $mpi = EmployeeAttendance::select('nik', 'status')
-                    ->where('factory_id', session('db')->iddb)
-                    ->whereBetween('time', [$start_mp_time, $time_end])
-                    ->where('group_id', $line)
-                    ->where('is_efficiency', 1)
-                    ->orderBy('status')
-                    ->get();
-            }
-
-            $mp = $mpi->where('status', 'IN')->count() - $mpi->where('status', 'OUT')->count();
-            $mp = max($mp + $mpminus, 0);
-
-            $perhour_data->mp = $mp;
-            $perhour_data->link_opt = route('monitoring_dashboard_convgetoperator', ['line'=>$line, 'st'=>$start_mp_time, 'et'=>$time_end, 'shift'=>$shift]);
-
-            $stepTime = $time_start->diffInMinutes($time_end);
-            try {
-            $perhour_data->eff =
-                $_o > 0
-                    ? number_format((($_o * $smv) / ($mp * $stepTime)) * 100, 2)
-                    : 0;
-            } catch (\Exception $e) {
-                $perhour_data->eff = '-';
-            }
-            
-        } catch (\Exception $e) {
-            $perhour_data->kpno = '-';
-            $perhour_data->style = '-';
-            $perhour_data->smv = '-';
-            $perhour_data->mp = '-';
-            $perhour_data->link_opt = '-';
-            $perhour_data->output = 0;
-            $perhour_data->rft = '-';
-            $perhour_data->rar = '-';
-            $perhour_data->wft = '-';
-            $perhour_data->bgrade = '-';
-            $perhour_data->cgrade = '-';
-            $perhour_data->eff = '-';
-            $perhour_data->err = $e->getMessage();
-        }
-
-        $perhour_data->enst = encrypt($time_start);
-        $perhour_data->enet = encrypt($time_end);
-
-        return $perhour_data;
-    }
-
-    function dbset($token)
-    {
-        try {
-            $parsed = decrypt($token);
-
-            if (!$parsed->internal) {
-                if ($parsed->ip != request()->ip()) {
-                    throw new \Exception('Unauthorized');
-                }
-            }
-
-            $id = $parsed->factory;
-            $line = $parsed->line;
-
-            $dblist = DbList::find($id);
-
-            if (!$dblist) {
-                throw new \Exception('Unknown Database');
-            }
-
-            session(['db' => $dblist]);
-            session(['line' => $line]);
-            session(['idfactory' => $id]);
-
-            return redirect(route('monitoring_dashboard_conv'));
-        } catch (\Exception $e) {
-            return response()->json($e->getMessage(), 403);
-        }
-    }
-
-    function inline()
-    {
-        try {
-            preconnect(session('db'));
-
-            $date = Carbon::now();
-            $line = MasterEmployeeGroup::select('id as kodegroup', 'name as namagroup')
-                ->find(session('line'));
-
-            $worktimeline = WorktimeSettingController::getLineWorkingTime(
-                $line,
-                $date,
-            );
-
-            $worktime = $worktimeline->workingtime;
-
-            $get_worktimeline = WorktimeSettingController::get_worktime_range($worktimeline, $worktime);
-            $swt = $get_worktimeline->startworktime;
-            $fwt = $get_worktimeline->finishworktime;
-
-            if ($swt->greaterThan($fwt)) {
-                $fwt->addDay();
-            }
-
-            $sto = Carbon::parse(
-                $worktimeline->date . ' ' . $worktime->starttimeoff,
-            );
-            $fto = Carbon::parse(
-                $worktimeline->date . ' ' . $worktime->endtimeoff,
-            );
-            if ($sto->greaterThan($fto)) {
-                $fto->addDay();
-            }
-
-            $sto2 = null;
-            $fto2 = null;
-
-            if ($worktime->startsecondtimeoff) {
-                $sto2 = Carbon::parse(
-                    $worktimeline->date . ' ' . $worktime->startsecondtimeoff,
-                );
-                $fto2 = Carbon::parse(
-                    $worktimeline->date . ' ' . $worktime->endsecondtimeoff,
-                );
-                if ($sto2->greaterThan($fto2)) {
-                    $fto2->addDay();
-                }
-            }
-
-            $totalworktime = $date->diffInMinutes($swt);
-
-            if ($date->greaterThan($sto)) {
-                if ($date->greaterThan($fto)) {
-                    $timeoff = $sto->diffInMinutes($fto);
-                    $totalworktime -= $timeoff;
-                } else {
-                    $timeoff_diff = $sto->diffInMinutes($date);
-                    $totalworktime -= $timeoff_diff;
-                }
-            }
-
-            if ($sto2) {
-                if ($date->greaterThan($sto2)) {
-                    if ($date->greaterThan($fto2)) {
-                        $timeoff = $sto2->diffInMinutes($fto2);
-                        $totalworktime -= $timeoff;
-                    } else {
-                        $timeoff_diff = $sto2->diffInMinutes($date);
-                        $totalworktime -= $timeoff_diff;
-                    }
-                }
-            }
-
-            $totaloutput = 0;
-            $totalefficiency = 0;
-            $totalrft = 0;
-            $totalwft = 0;
-            $percentrft = 0;
-            $percentwft = 0;
-
-            try {
-                $idmps = MpsDetail::select('idmps')
-                    ->distinct()
-                    ->where('date', $swt->format('Y-m-d'))
-                    ->whereHas('header', function ($q) {
-                        $q->where('line', session('line'));
-                    })
-                    ->get();
-
-                $mps_header = MpsHeader::whereIn('id', $idmps->pluck('idmps'))
-                    ->orderBy('lastoutput', 'desc')
-                    ->first();
-
-                $mps_detail = MpsDetail::where('idmps', $mps_header->id)
-                    ->where('date', $swt->format('Y-m-d'))
-                    ->first();
-
-                $m_kpno = $mps_header->kpno;
-            } catch (\Exception $e) {
-                $m_kpno = null;
-            }
-
-            $out = SewingOutput::whereBetween('date', [$swt, $fwt])
-                ->where('line', session('line'))
-                ->where('is_output', 1)
-                ->groupBy('barcode')
-                ->get();
-            
-            $totaloutput = $out->count();
-
-            $firstScanneds = SewingOutput::select('barcode', 'defect_code')
-                ->whereBetween('date', [$swt, $fwt])
-                ->where('line', session('line'))
-                ->where('qc_seq', 0)
-                ->groupBy('barcode')
-                ->get();
-
-            $totalrft = $firstScanneds->where('defect_code', null)->count();
-            $totalwft = $firstScanneds->count() - $totalrft;
-            $percentrft = number_format(
-                ($totalrft / $firstScanneds->count()) * 100,
-                2,
-                '.',
-                '',
-            );
-            $percentwft = number_format(
-                ($totalwft / $firstScanneds->count()) * 100,
-                2,
-                '.',
-                '',
-            );
-
-            $po = PurchaseOrder::select('idstyle')
-                ->where('kpno', $m_kpno)
-                ->first();
-
-            $style = Style::find($po->idstyle);
-
-            try {
-                $m_smv = SmvController::getSmv(
-                    $style->idstyle,
-                    $mps_header->order_step_id,
-                    $mps_detail->order_part_id,
-                    $mps_detail->sub_style_id,
-                );
-                $smv = $m_smv->smv;
-            } catch (\Exception $e) {
-                $smv = 0;
-            }
-
-            $start_mp_time = Carbon::parse($swt->format('Y-m-d H:i:s'));
-
-            $mp_line_param = ($lp = FactoryParameter::find('line_mapping_tolerance'))
-                ? $lp->value * 1
-                : 30;
-    
-            $fwt = Carbon::parse($fwt->format('Y-m-d H:i:s'));
-            $start_mp_time->subMinute($mp_line_param);
-            $fwt->addMinute($mp_line_param);
-
-            $m_mp = EmployeeAttendance::select('nik', 'status')
-                ->where('factory_id', session('db')->iddb)
-                ->where('group_id', session('line'))
-                ->where('is_efficiency', 1)
-                ->where('shift', $worktime->shift)
-                ->whereBetween('time', [$start_mp_time, $fwt])
-                ->orderBy('time', 'desc')
-                ->get();
-
-            try {
-                $mpminus = FactoryParameter::where('key', 'line_mpminus')->first();
-                $mpminus = $mpminus ? $mpminus->value : -3;
-                $m_mp = max(
-                    0,
-                    $m_mp->where('status', 'IN')->count() -  $m_mp->where('status', 'OUT')->count() + $mpminus,
-                );
-            } catch (\Exception $e) {
-                $m_mp = 0;
-            }
-
-            $totalefficiency = $totaloutput > 0 && $smv > 0 ? number_format(
-                (($totaloutput * $smv) / ($m_mp * $totalworktime)) * 100,
-                2,
-                '.',
-                '',
-            ) : 0;
- 
-            $groupedinline = InlineHeader::with('detail')
-                ->whereBetween('date', [$swt->format('Y-m-d H:i:s'),$fwt->format('Y-m-d H:i:s')])
-                ->where('group_id', session('line'))
-                ->orderBy('sequence_process')
-                ->get();
-
-            $groupedinline = $groupedinline->groupBy('userid_operator');
-
-            $today_inline = InlineHeader::with('detail')
-                ->whereBetween('date', [$swt->format('Y-m-d H:i:s'),$fwt->format('Y-m-d H:i:s')])
-                ->where('group_id', session('line'))
-                ->groupBy('userid_operator')
-                ->orderBy('sequence_process')
-                ->get();
-
-            foreach ($today_inline as $d) {
-                try {
-                    $m_hr_dk = Employee::where('nik', $d->userid_operator)->first();
-                    $d->nama = $m_hr_dk->name;
-                } catch (\Exception $e) {
-                    $d->nama = null;
-                }
-            }
-
-            return view('monitoring::conventional.inline')
-                ->with('line', $line)
-                ->with('totaloutput', $totaloutput)
-                ->with('userinline', $groupedinline)
-                ->with('usertoday', $today_inline)
-                ->with('percentrft', $percentrft)
-                ->with('percentwft', $percentwft)
-                ->with('totalefficiency', $totalefficiency);
-        } catch (\Exception $e) {
-            return view('monitoring::conventional.inline');
-        }
-    }
-
-    function defectdata(Request $request, $st, $et, $defect)
-    {
-        if (!$request->ajax()) {
-            return;
-        }
-
-        if (session('db') == null) {
-            return;
-        }
-
-        if (!in_array($defect, ['WFT', 'B', 'C'])) {
-            return;
-        }
-
-        $date = Carbon::now();
-
-        try {
-            $st = decrypt($st);
-        } catch (\Exception $e) {
-            $st = null;
-        }
-
-        try {
-            $et = decrypt($et);
-        } catch (\Exception $e) {
-            $et = null;
-        }
-
-        preconnect(session('db'));
-
-        $qc = SewingOutput::whereBetween('date', [$st, $et])
-            ->where('line', session('line'));
-
-        if ($defect == 'WFT') {
-            $qc = $qc->whereNotNull('defect_code');
-        } else {
-            $dcode = $defect == 'B' ? '800' : '900';
-            $qc = $qc->where('defect_code', $dcode);
-        }
-
-        $qc = $qc->get();
-        foreach ($qc as $d) {
-            $d->description = QCDefect::find($d->defect_code)->deskripsi ?? '';
-        }
-
-        $form = view('monitoring::conventional.modaldefect')->with([
-            'qc' => $qc,
-            'defect' => $defect,
-        ]);
-        return $form->render();
-    }
-
-    function storedefect(Request $request)
-    {
-        if (session('db') == null) {
+        if ($this->myaccess() == '0') {
             return redirect()
                 ->back()
-                ->with('status', 'dbwrong');
+                ->with('alert', [
+                    'title' => 'Unauthorized!',
+                    'message' => 'You Dont Have Any Access Here!',
+                    'status' => 'warning',
+                ]);
         }
 
         preconnect(session('db'));
 
-        $validation = Validator::make($request->all(), [
-            'rootcause.*' => 'required|string|max:20',
-            'problem.*' => 'required|string',
-            'action.*' => 'required|string',
-            'pic.*' => 'required|string|max:10',
-            'nikuser.*' => 'required|string|max:10',
+        $table = $this->getInlinePerformanceTable($request->date);
+
+        return view('monitoring::inlineperformance.index.index', [
+            'date' => $table['date'],
+            'data' => $table['data'],
         ]);
-
-        if ($validation->fails()) {
-            return redirect()
-                ->back()
-                ->with('status', 'validationfail');
-        }
-
-        DB::beginTransaction();
-
-        foreach ($request->rootcause as $k => $v) {
-            $q = SewingOutput::find($k);
-
-            if (!$q) {
-                DB::rollBack();
-                return redirect()
-                    ->back()
-                    ->with('status', 'savefailed');
-            }
-
-            $pic = Employee::where('nik', $request->pic[$k])->first();
-            if (!$pic) {
-                DB::rollBack();
-                return redirect()
-                    ->back()
-                    ->with('status', 'userfailed');
-            }
-
-            $nikuser = Employee::where('nik', $request->nikuser[$k])->first();
-            if (!$nikuser) {
-                DB::rollBack();
-                return redirect()
-                    ->back()
-                    ->with('status', 'userfailed');
-            }
-
-            try {
-                $q->problem = $request->problem[$k];
-                $q->action = $request->action[$k];
-                $q->nik_pic = $request->pic[$k];
-                $q->nik_user = $request->nikuser[$k];
-                $q->root_cause = $v;
-                $q->save();
-            } catch (\Exception $e) {
-                DB::rollBack();
-                return redirect()
-                    ->back()
-                    ->with('status', 'savefailed');
-            }
-        }
-
-        DB::commit();
-        return redirect()
-            ->back()
-            ->with('status', 'savesuccess');
     }
 
-    function capdata(Request $request, $nik, $round)
+    function selectline(Request $request)
     {
-        if (!$request->ajax()) {
-            return;
+        $g = (new MasterEmployeeGroup())->getTable();
+        $s = (new MasterEmployeeSection())->getTable();
+
+        $data = MasterEmployeeGroup::select(
+                "$g.id as kodegroup", "$g.section_id as kodebagian",
+                "$g.name as namagroup", "$s.name as namabagian"
+            )
+            ->join($s, "$s.id", '=', "$g.section_id")
+            ->distinct()
+            ->whereHas('groupline', function($q){
+                $q->where('factory_id', session('db')->iddb)
+                    ->where('is_show', 1)
+                    ->where('is_line', 1);
+            });
+
+        if ($request->q) {
+            $data = $data->where(function ($q) use ($request, $g) {
+                $q->where("$g.name", 'like', "%$request->q%");
+            });
         }
+        $data = $data->orderBy('kodegroup')->paginate(15, $request->page);
 
-        if (session('db') == null) {
-            return;
-        }
+        return response()->json($data);
+    }
 
-        preconnect(session('db'));
+    function groupbuyer(Request $request)
+    {
+        $q = $request->get('q');
 
-        $date = Carbon::now();
-        $line = MasterEmployeeGroup::select('id as kodegroup', 'name as namagroup')
-            ->find(session('line'));
-
-        if (!$line) {
-            throw 'Line not found';
-        }
-
-        $worktimeline = WorktimeSettingController::getLineWorkingTime(
-            $line,
-            $date,
-        );
-
-        $worktime = $worktimeline->workingtime;
-
-        $get_worktimeline = WorktimeSettingController::get_worktime_range($worktimeline, $worktime);
-        $swt = $get_worktimeline->startworktime;
-        $fwt = $get_worktimeline->finishworktime;
-
-        if ($swt->greaterThan($fwt)) {
-            $fwt->addDay();
-        }
-        $in = InlineDetail::with('header','inlinedefect')
-            ->whereHas('header', function($q) use($swt,$fwt,$round,$nik){
-                $q->whereBetween('date', [$swt->format('Y-m-d H:i:s'),$fwt->format('Y-m-d H:i:s')])
-                ->where('round', $round)
-                ->where('group_id', session('line'))
-                ->where('userid_operator', $nik);
+        $data = MasterGroupBuyer::select('id', 'group_name')
+            ->when($q, function ($query) use ($q) {
+                $query->where('group_name', 'like', '%' . $q . '%');
             })
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->id,
+                    'text' => $item->group_name
+                ];
+            });
+
+        return response()->json([
+            'results' => $data
+        ]);
+    }
+
+    function getFilterData($request)
+    {
+        $m_da = $request->datea > $request->dateb ? $request->dateb : $request->datea;
+        $m_db = $request->datea > $request->dateb ? $request->datea : $request->dateb;
+
+        $dta = Carbon::parse($m_da);
+        $dtb = Carbon::parse($m_db)->endOfDay();
+
+        $headerQuery = InlineHeader::whereBetween('date', [$dta, $dtb]);
+
+            if ($request->line && $request->line != 'all') {
+                $headerQuery = $headerQuery->where('group_id', $request->line);
+            }
+
+            // Filter Group Buyer -> idpo
+            if ($request->groupbuyer && $request->groupbuyer != 'all') {
+                $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
+                $poIds = PurchaseOrder::whereIn('idbuyer', $buyerIds)->pluck('idpo');
+                $headerQuery = $headerQuery->whereIn('idpo', $poIds);
+            }
+
+            $headerIds = (clone $headerQuery)->pluck('id');
+            $headerCount = $headerIds->count();
+
+            // Qty Inspect
+            $totInspect = $headerCount * 5;
+
+            // Qty Defect
+            $totDefect = InlineDetail::whereIn('inline_header_id', $headerIds)->count();
+
+            // RFT
+            $rft = $totInspect > 0
+                ? (($totInspect - $totDefect) / $totInspect) * 100
+                : 0;
+
+            // WFT
+            $wft = $totInspect > 0
+                ? ($totDefect / $totInspect) * 100
+                : 0;
+
+            // Kondisi warna target
+            $target = Param::where('header', 'qc')
+                ->where('key', 'rft_inline_target')
+                ->value('value');
+
+            $rftTarget = $rft <= $target ? true : false;
+
+           // Top Defect
+            $topDefect = InlineDetail::whereIn('inline_header_id', $headerIds)
+                ->select('defect_id', DB::raw('count(*) as total'))
+                ->groupBy('defect_id')
+                ->orderByDesc('total')
+                ->limit(3)
+                ->get();
+
+            $defectIds = $topDefect->pluck('defect_id');
+
+            $masterQcDefects = QCDefect::whereIn('kddefect', $defectIds)
+                ->pluck('deskripsi', 'kddefect');
+
+            $topDefect = $topDefect->map(function ($item, $index) use ($masterQcDefects, $totDefect) {
+                $colors = [
+                    '#2F80ED',
+                    '#219653',
+                    '#F2C94C'
+                ];
+
+                $percent = $totDefect > 0
+                    ? ($item->total / $totDefect) * 100
+                    : 0;
+
+                return [
+                    'defect_id' => $item->defect_id,
+                    'nmdefect'  => $masterQcDefects[$item->defect_id] ?? '-',
+                    'total'     => $item->total,
+                    'percent'   => number_format($percent, 2),
+                    'color'     => $colors[$index],
+                ];
+            });
+
+        return [
+            'periode'     => [
+                'from' => $dta->format('d-m-Y'),
+                'to'   => $dtb->format('d-m-Y'),
+            ],
+            'tot_inspect' => $totInspect,
+            'tot_defect'  => $totDefect,
+            'rft'         => number_format($rft,2),
+            'wft'         => number_format($wft,2),
+            'target'      => $rftTarget,
+            'top_defect'  => $topDefect
+        ];
+    }
+
+    public function filterData(Request $request)
+    {
+        $data = $this->getFilterData($request);
+
+        return response()->json($data);
+    }
+
+    function getInlinePerformanceTable($dateInput = null)
+    {
+        $date = $dateInput
+            ? Carbon::parse($dateInput)
+            : Carbon::parse(InlineHeader::max('date'));
+
+        $dta = $date->copy()->startOfDay();
+        $dtb = $date->copy()->endOfDay();
+
+        $g = (new MasterEmployeeGroup())->getTable();
+        $s = (new MasterEmployeeSection())->getTable();
+
+        $lines = MasterEmployeeGroup::select(
+                "$g.id as kodegroup", "$g.name as namagroup", "$s.name as namabagian"
+            )
+            ->join($s, "$s.id", '=', "$g.section_id")
+            ->distinct()
+            ->whereHas('groupline', function ($q) {
+                $q->where('factory_id', session('db')->iddb)
+                    ->where('is_show', 1)
+                    ->where('is_line', 1);
+            })
+            ->orderBy("$g.id", "asc")
             ->get();
 
-        $form = view('monitoring::conventional.modalcap')->with('in', $in);
-        return $form->render();
+        $headers = InlineHeader::whereBetween('date', [$dta, $dtb])
+            ->get(['id', 'group_id', 'idpo', 'round']);
+
+        $headersByLine = $headers->groupBy('group_id');
+
+        $allHeaderIds = $headers->pluck('id');
+
+        // Cek kolom problem, action dan rootcause
+        $defectsByHeader = InlineDetail::whereIn('inline_header_id', $allHeaderIds)
+            ->get(['inline_header_id', 'problem', 'action', 'rootcause'])
+            ->groupBy('inline_header_id');
+
+        $result = $lines->map(function ($line) use ($headersByLine, $defectsByHeader) {
+            $headers = $headersByLine->get($line->kodegroup, collect());
+            $hIds = $headers->pluck('id');
+
+            $lastRound = $headers->max('round');
+
+            $lastRoundHeaderIds = $headers->where('round', $lastRound)->pluck('id');
+            $lastRoundDefectCount = InlineDetail::whereIn('inline_header_id', $lastRoundHeaderIds)->count();
+            $lastRoundHasDefect = $lastRoundDefectCount > 0;
+
+            $idpos = $headers->pluck('idpo')->unique();
+
+            $styles = PurchaseOrder::whereIn('idpo', $idpos)->pluck('idstyle')->unique()->values();
+            $nmstyles = Style::whereIn('idstyle', $styles)->pluck('nmstyle')->values();
+
+            $totInspect = $hIds->count() * 5;
+            $totDefect = $hIds->sum(function ($id) use ($defectsByHeader) {
+                return $defectsByHeader->get($id, collect())->count();
+            });
+
+            $hasCap = $lastRoundHeaderIds->contains(function ($id) use ($defectsByHeader) {
+            return $defectsByHeader->get($id, collect())->contains(function ($detail) {
+                return !empty($detail->problem)
+                    || !empty($detail->action)
+                    || !empty($detail->rootcause);
+            });
+        });
+
+            $rft = $totInspect > 0 ? (($totInspect - $totDefect) / $totInspect) * 100 : 0;
+            $wft = $totInspect > 0 ? ($totDefect / $totInspect) * 100 : 0;
+
+            return [
+                'line'                  => $line->namagroup,
+                'style'                 => $nmstyles->toArray(),
+                'qty_rft'               => $totInspect - $totDefect,
+                'qty_inspect'           => $totInspect,
+                'qty_defect'            => $totDefect,
+                'rft'                   => number_format($rft, 2),
+                'wft'                   => number_format($wft, 2),
+                'last_round'            => $lastRound,
+                'last_round_has_defect' => $lastRoundHasDefect,
+                'has_cap'               => $hasCap,
+            ];
+        });
+
+        return [
+            'date' => $date->format('Y-m-d'),
+            'data' => $result->values(),
+        ];
     }
 
-    function storecap(Request $request)
+    function exportExcel(Request $request)
     {
-        if (session('db') == null) {
-            return redirect()
-                ->back()
-                ->with('status', 'dbwrong');
-        }
+        $data = $this->getFilterData($request);
 
-        preconnect(session('db'));
+        header('Content-Type: text/csv');
+        header('Content-Disposition: attachment; filename="Report_Inline_Dashboard.csv"');
 
-        $validation = Validator::make($request->all(), [
-            'rootcause.*' => 'required|string|max:20',
-            'problem.*' => 'required|string',
-            'action.*' => 'required|string',
-            'pic.*' => 'required|string|max:10',
+        $file = fopen('php://output', 'w');
+
+        // Judul
+        fputcsv($file, ['REPORT INLINE DASHBOARD']);
+
+        fputcsv($file, [
+            $data['periode']['from'] . ' s/d ' . $data['periode']['to']
         ]);
 
-        if ($validation->fails()) {
-            return redirect()
-                ->back()
-                ->with('status', 'validationfail');
+        fputcsv($file, []);
+
+        // Header Summary
+        fputcsv($file, ['Total Inspect', 'Total Defect', 'RFT', 'WFT', 'Target']);
+
+        fputcsv($file, [
+            number_format($data['tot_inspect']),
+            number_format($data['tot_defect']),
+            $data['rft'].'%',
+            $data['wft'].'%',
+            $data['target'] ? 'NO' : 'YES',
+        ]);
+
+        fputcsv($file, []);
+
+        fputcsv($file, ['Defect', 'Qty', '%']);
+
+        foreach ($data['top_defect'] as $defect) {
+            fputcsv($file, [
+                $defect['nmdefect'],
+                number_format($defect['total']),
+                $defect['percent'].'%'
+            ]);
         }
 
-        DB::beginTransaction();
-    
-        foreach ($request->rootcause as $k => $v) {
-            $q = InlineDetail::find($k);
-
-            if (!$q) {
-                DB::rollBack();
-                return redirect()
-                    ->back()
-                    ->with('status', 'savefailed');
-            }
-
-            $pic = Employee::where('nik', $request->pic[$k])->first();
-
-            if (!$pic) {
-                DB::rollBack();
-                return redirect()
-                    ->back()
-                    ->with('status', 'userfailed');
-            }
-            $inlh = InlineHeader::find($q->inline_header_id);
-            $nikuser = Employee::where('nik', $inlh->userid_operator)->first();
-
-            if (!$nikuser) {
-                DB::rollBack();
-                return redirect()
-                    ->back()
-                    ->with('status', 'userfailed');
-            }
-
-            try {
-                $q->problem = $request->problem[$k];
-                $q->action = $request->action[$k];
-                $q->userid_spv = $request->pic[$k];
-                $q->rootcause = $v;
-                $q->save();
-            } catch (\Exception $e) {
-                DB::rollBack();
-                return redirect()
-                    ->back()
-                    ->with('status', 'savefailed');
-            }
-        }
-
-        DB::commit();
-        return redirect()
-            ->back()
-            ->with('status', 'savesuccess');
+        fclose($file);
+        exit;
     }
 
-    function getoperator($line, $starttime, $endtime, $shift = null)
+    function datatables(Request $request)
     {
         preconnect(session('db'));
+
         try {
-            $isToday = !session('endline.shift');
-            if($shift != null){
-                $data = EmployeeAttendance::select('nik', 'status', 'time')
-                    ->where('factory_id', session('db')->iddb)
-                    ->whereBetween('time', [$starttime, $endtime])
-                    ->where('group_id', $line)
-                    ->where('is_efficiency', 1)
-                    ->where('shift', $shift)
-                    ->get();
-            }else{
-                $data = EmployeeAttendance::select('nik', 'status', 'time')
-                    ->where('factory_id', session('db')->iddb)
-                    ->whereBetween('time', [$starttime, $endtime])
-                    ->where('group_id', $line)
-                    ->where('is_efficiency', 1)
-                    ->get();
-            }
-            
-            $datas = collect();
-            foreach ($data->unique('nik')->pluck('nik') as $nik) {
-                if($isToday){
-                    $m_mp = max(0,
-                        $data->where('nik', $nik)->where('status', 'IN')->count() - $data->where('nik', $nik)->where('status', '!=', 'IN')->count(),
-                    );
-                }else{
-                    $m_mp = max(0, ($data->where('status', 'IN')->groupBy('nik')->count()));
-                }
-                if($m_mp > 0){
-                    $u = Employee::select('name')->where('nik', $nik)->first();
-                    $name = $u ? $u->name : '-';
-                    $mass = MatrixAssessment::where('nik', $nik)->first();
-                    $grade = $mass ? $mass->grade : "PTS";
-                    $obj = new \stdClass();
-                    $obj->nik = $nik;
-                    $obj->name = $name;
-                    $obj->grade = $grade;
-                    $datas->push($obj);
-                }
-            }
+            $table = $this->getInlinePerformanceTable($request->date);
 
-            $view = view('monitoring::conventional.detailoperator', ['data'=>$datas]);
-
-            return response()->json($view->render());
+            return view('monitoring::inlineperformance.index.datatables-rows', [
+                'data' => $table['data'],
+            ]);
         } catch (\Throwable $e) {
-            return response()->json($e->getMessage(), 400);
+            return $e->getMessage();
         }
     }
+
+    function inlinetls(Request $request)
+    {
+        return view('monitoring::inlineperformance.inlineLts.inline');
+    }
+
+    function filterInlineLts(Request $request)
+    {
+        if (!$request->line) {
+            return response()->json(['message' => 'Line belum dipilih'], 422);
+        }
+
+        $date = Carbon::now();
+        $dta = $date->copy()->startOfDay();
+        $dtb = $date->copy()->endOfDay();
+
+        $headerQuery = InlineHeader::whereBetween('date', [$dta, $dtb])
+            ->where('group_id', $request->line);
+
+        $headerIds = (clone $headerQuery)->pluck('id');
+        $headerCount = $headerIds->count();
+
+        $totInspect = $headerCount * 5;
+        $totDefect = InlineDetail::whereIn('inline_header_id', $headerIds)->count();
+
+        $rft = $totInspect > 0 ? (($totInspect - $totDefect) / $totInspect) * 100 : 0;
+        $wft = $totInspect > 0 ? ($totDefect / $totInspect) * 100 : 0;
+
+        return response()->json([
+            'date'        => $date->format('Y-m-d'),
+            'tot_inspect' => $totInspect,
+            'tot_defect'  => $totDefect,
+            'rft'         => number_format($rft, 2),
+            'wft'         => number_format($wft, 2),
+        ]);
+    }
+
+    // function filterInlineLts(Request $request)
+    // {
+    //     if (!$request->line) {
+    //         return response()->json(['message' => 'Line belum dipilih'], 422);
+    //     }
+
+    //     $date = Carbon::now();
+    //     $dta = $date->copy()->startOfDay();
+    //     $dtb = $date->copy()->endOfDay();
+
+    //     $headerQuery = InlineHeader::whereBetween('date', [$dta, $dtb])
+    //         ->where('group_id', $request->line);
+
+    //     $headerIds = (clone $headerQuery)->pluck('id');
+    //     $headerCount = $headerIds->count();
+
+    //     $totInspect = $headerCount * 5;
+    //     $totDefect = InlineDetail::whereIn('inline_header_id', $headerIds)->count();
+
+    //     $rft = $totInspect > 0 ? (($totInspect - $totDefect) / $totInspect) * 100 : 0;
+    //     $wft = $totInspect > 0 ? ($totDefect / $totInspect) * 100 : 0;
+
+    //     $response = [
+    //         'date'        => $date->format('Y-m-d'),
+    //         'tot_inspect' => $totInspect,
+    //         'tot_defect'  => $totDefect,
+    //         'rft'         => number_format($rft, 2),
+    //         'wft'         => number_format($wft, 2),
+    //     ];
+
+    //     try {
+    //         $optData = $this->buildInlineOptData($request->line);
+
+    //         $response['line_info']       = $optData['line'];
+    //         $response['totaloutput']     = $optData['totaloutput'];
+    //         $response['percentrft']      = $optData['percentrft'];
+    //         $response['percentwft']      = $optData['percentwft'];
+    //         $response['totalefficiency'] = $optData['totalefficiency'];
+    //         $response['userinline']      = $optData['userinline'];
+    //         $response['usertoday']       = $optData['usertoday'];
+    //     } catch (\Exception $e) {
+    //         \Log::error($e);
+    //     }
+
+    //     return response()->json($response);
+    // }
+
+    // function inlineOpt()
+    // {
+    //     try {
+    //         $data = $this->buildInlineOptData(session('line'));
+
+    //         return view('monitoring::inlineperformance.inlineLts.inline')
+    //             ->with('line', $data['line'])
+    //             ->with('totaloutput', $data['totaloutput'])
+    //             ->with('userinline', $data['userinline'])
+    //             ->with('usertoday', $data['usertoday'])
+    //             ->with('percentrft', $data['percentrft'])
+    //             ->with('percentwft', $data['percentwft'])
+    //             ->with('totalefficiency', $data['totalefficiency']);
+    //     } catch (\Exception $e) {
+    //         return view('monitoring::inlineperformance.inlineLts.inline');
+    //     }
+    // }
+
+    // function buildInlineOptData($lineId)
+    // {
+    //     preconnect(session('db'));
+
+    //     $date = Carbon::now();
+    //     $line = MasterEmployeeGroup::select('id as kodegroup', 'name as namagroup')
+    //         ->find($lineId);
+
+    //     $worktimeline = WorktimeSettingController::getLineWorkingTime($line, $date);
+    //     $worktime = $worktimeline->workingtime;
+
+    //     $get_worktimeline = WorktimeSettingController::get_worktime_range($worktimeline, $worktime);
+    //     $swt = $get_worktimeline->startworktime;
+    //     $fwt = $get_worktimeline->finishworktime;
+
+    //     if ($swt->greaterThan($fwt)) {
+    //         $fwt->addDay();
+    //     }
+
+    //     $sto = Carbon::parse($worktimeline->date . ' ' . $worktime->starttimeoff);
+    //     $fto = Carbon::parse($worktimeline->date . ' ' . $worktime->endtimeoff);
+    //     if ($sto->greaterThan($fto)) {
+    //         $fto->addDay();
+    //     }
+
+    //     $sto2 = null;
+    //     $fto2 = null;
+
+    //     if ($worktime->startsecondtimeoff) {
+    //         $sto2 = Carbon::parse($worktimeline->date . ' ' . $worktime->startsecondtimeoff);
+    //         $fto2 = Carbon::parse($worktimeline->date . ' ' . $worktime->endsecondtimeoff);
+    //         if ($sto2->greaterThan($fto2)) {
+    //             $fto2->addDay();
+    //         }
+    //     }
+
+    //     $totalworktime = $date->diffInMinutes($swt);
+
+    //     if ($date->greaterThan($sto)) {
+    //         if ($date->greaterThan($fto)) {
+    //             $timeoff = $sto->diffInMinutes($fto);
+    //             $totalworktime -= $timeoff;
+    //         } else {
+    //             $timeoff_diff = $sto->diffInMinutes($date);
+    //             $totalworktime -= $timeoff_diff;
+    //         }
+    //     }
+
+    //     if ($sto2) {
+    //         if ($date->greaterThan($sto2)) {
+    //             if ($date->greaterThan($fto2)) {
+    //                 $timeoff = $sto2->diffInMinutes($fto2);
+    //                 $totalworktime -= $timeoff;
+    //             } else {
+    //                 $timeoff_diff = $sto2->diffInMinutes($date);
+    //                 $totalworktime -= $timeoff_diff;
+    //             }
+    //         }
+    //     }
+
+    //     $totaloutput = 0;
+    //     $totalefficiency = 0;
+    //     $totalrft = 0;
+    //     $totalwft = 0;
+    //     $percentrft = 0;
+    //     $percentwft = 0;
+
+    //     try {
+    //         $idmps = MpsDetail::select('idmps')
+    //             ->distinct()
+    //             ->where('date', $swt->format('Y-m-d'))
+    //             ->whereHas('header', function ($q) use ($lineId) {
+    //                 $q->where('line', $lineId);
+    //             })
+    //             ->get();
+
+    //         $mps_header = MpsHeader::whereIn('id', $idmps->pluck('idmps'))
+    //             ->orderBy('lastoutput', 'desc')
+    //             ->first();
+
+    //         $mps_detail = MpsDetail::where('idmps', $mps_header->id)
+    //             ->where('date', $swt->format('Y-m-d'))
+    //             ->first();
+
+    //         $m_kpno = $mps_header->kpno;
+    //     } catch (\Exception $e) {
+    //         $m_kpno = null;
+    //     }
+
+    //     $out = SewingOutput::whereBetween('date', [$swt, $fwt])
+    //         ->where('line', $lineId)
+    //         ->where('is_output', 1)
+    //         ->groupBy('barcode')
+    //         ->get();
+
+    //     $totaloutput = $out->count();
+
+    //     $firstScanneds = SewingOutput::select('barcode', 'defect_code')
+    //         ->whereBetween('date', [$swt, $fwt])
+    //         ->where('line', $lineId)
+    //         ->where('qc_seq', 0)
+    //         ->groupBy('barcode')
+    //         ->get();
+
+    //     $totalrft = $firstScanneds->where('defect_code', null)->count();
+    //     $totalwft = $firstScanneds->count() - $totalrft;
+
+    //     if ($firstScanneds->count() > 0) {
+    //         $percentrft = number_format(($totalrft / $firstScanneds->count()) * 100, 2, '.', '');
+    //         $percentwft = number_format(($totalwft / $firstScanneds->count()) * 100, 2, '.', '');
+    //     }
+
+    //     $po = PurchaseOrder::select('idstyle')->where('kpno', $m_kpno)->first();
+    //     $style = $po ? Style::find($po->idstyle) : null;
+
+    //     try {
+    //         $m_smv = SmvController::getSmv(
+    //             $style->idstyle,
+    //             $mps_header->order_step_id,
+    //             $mps_detail->order_part_id,
+    //             $mps_detail->sub_style_id,
+    //         );
+    //         $smv = $m_smv->smv;
+    //     } catch (\Exception $e) {
+    //         $smv = 0;
+    //     }
+
+    //     $start_mp_time = Carbon::parse($swt->format('Y-m-d H:i:s'));
+
+    //     $mp_line_param = ($lp = FactoryParameter::find('line_mapping_tolerance'))
+    //         ? $lp->value * 1
+    //         : 30;
+
+    //     $fwt = Carbon::parse($fwt->format('Y-m-d H:i:s'));
+    //     $start_mp_time->subMinute($mp_line_param);
+    //     $fwt->addMinute($mp_line_param);
+
+    //     $m_mp = EmployeeAttendance::select('nik', 'status')
+    //         ->where('factory_id', session('db')->iddb)
+    //         ->where('group_id', $lineId)
+    //         ->where('is_efficiency', 1)
+    //         ->where('shift', $worktime->shift)
+    //         ->whereBetween('time', [$start_mp_time, $fwt])
+    //         ->orderBy('time', 'desc')
+    //         ->get();
+
+    //     try {
+    //         $mpminus = FactoryParameter::where('key', 'line_mpminus')->first();
+    //         $mpminus = $mpminus ? $mpminus->value : -3;
+    //         $m_mp = max(
+    //             0,
+    //             $m_mp->where('status', 'IN')->count() - $m_mp->where('status', 'OUT')->count() + $mpminus,
+    //         );
+    //     } catch (\Exception $e) {
+    //         $m_mp = 0;
+    //     }
+
+    //     $totalefficiency = ($totaloutput > 0 && $smv > 0 && $m_mp > 0 && $totalworktime > 0)
+    //         ? number_format((($totaloutput * $smv) / ($m_mp * $totalworktime)) * 100, 2, '.', '')
+    //         : 0;
+
+    //     $groupedinline = InlineHeader::with('detail')
+    //         ->whereBetween('date', [$swt->format('Y-m-d H:i:s'), $fwt->format('Y-m-d H:i:s')])
+    //         ->where('group_id', $lineId)
+    //         ->orderBy('sequence_process')
+    //         ->get()
+    //         ->groupBy('userid_operator');
+
+    //     $today_inline = InlineHeader::with('detail')
+    //         ->whereBetween('date', [$swt->format('Y-m-d H:i:s'), $fwt->format('Y-m-d H:i:s')])
+    //         ->where('group_id', $lineId)
+    //         ->groupBy('userid_operator')
+    //         ->orderBy('sequence_process')
+    //         ->get();
+
+    //     foreach ($today_inline as $d) {
+    //         try {
+    //             $m_hr_dk = Employee::where('nik', $d->userid_operator)->first();
+    //             $d->nama = $m_hr_dk->name;
+    //         } catch (\Exception $e) {
+    //             $d->nama = null;
+    //         }
+    //     }
+
+    //     return [
+    //         'line'            => $line,
+    //         'totaloutput'     => $totaloutput,
+    //         'userinline'      => $groupedinline,
+    //         'usertoday'       => $today_inline,
+    //         'percentrft'      => $percentrft,
+    //         'percentwft'      => $percentwft,
+    //         'totalefficiency' => $totalefficiency,
+    //     ];
+    // }
+
 }
