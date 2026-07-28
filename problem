@@ -34,6 +34,74 @@
             }
         }
 
+        /* ---------- Header ---------- */
+        .dashboard-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-left,
+        .header-right {
+            flex: 1 1 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .header-right {
+            justify-content: flex-end;
+            text-align: center;
+            color: #ffffff;
+            font-size: 1.5rem;
+            font-weight: 700;
+            gap: 20px;
+        }
+
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .header-center {
+            flex: 1 1 0;
+            text-align: center;
+            color: #ffffff;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        @media (max-width: 767.98px) {
+            .header-center {
+                font-size: 1.15rem;
+            }
+        }
+
+        @media (max-width: 575.98px) {
+            .dashboard-header {
+                gap: 8px;
+            }
+            .header-left {
+                order: 1;
+                flex: 0 0 auto;
+            }
+            .header-right {
+                order: 2;
+                flex: 0 0 auto;
+                margin-left: auto;
+            }
+            .header-center {
+                order: 3;
+                flex: 1 1 100%;
+                font-size: 1rem;
+                margin-top: 4px;
+            }
+            .back-btn span {
+                font-size: 0.9rem;
+            }
+        }
+
         /* Text Color */
         .text-yellow { color: #F2C94C; }
         .text-red    { color: #F24C4C; }
@@ -63,31 +131,57 @@
             border-radius: 5px;
         }
 
-        @media (max-width: 576px) {
-            .d-flex.flex-wrap > .d-flex {
-                width: 100%;
-            }
+        .metric-card img {
+            flex-shrink: 0;
+        }
 
-            .color-box-yellow img,
-            .color-box-red img,
-            .color-box-blue img,
-            .color-box-green img {
-                width: 40px !important;
-                height: 40px !important;
+        @media (max-width: 400px) {
+            .metric-card {
+                gap: 0.75rem !important;
             }
-
-            .color-box-yellow h2,
-            .color-box-red h2,
-            .color-box-blue h2,
-            .color-box-green h2 {
-                font-size: 1.4rem;
+            .metric-card img {
+                width: 36px !important;
+                height: 36px !important;
+            }
+            .metric-card h2 {
+                font-size: 1.25rem;
+            }
+            .metric-card h6 {
+                font-size: 0.8rem;
             }
         }
 
+        /* ---------- Table area ---------- */
         .datatable-wrap {
-            height: 100%;
             display: flex;
             flex-direction: column;
+            min-height: 0;
+            min-width: 0;
+            margin-top: 1rem;
+        }
+
+        .datatable-wrap .col-md-12 {
+            flex: 1 1 auto;
+            display: flex;
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        #datatable-container {
+            flex: 1 1 auto;
+            min-width: 0;
+            width: 100%;
+            overflow: hidden;
+            transition: opacity 0.15s ease;
+        }
+
+        .table-scroll-wrapper {
+            overflow-x: auto;
+            overflow-y: auto;
+            width: 100%;
+            max-width: 100%;
+            -webkit-overflow-scrolling: touch;
+            height: min(60vh, 480px);
         }
 
         @media (min-width: 992px) {
@@ -96,26 +190,25 @@
                 min-height: 0;
                 overflow: hidden;
             }
+            .table-scroll-wrapper {
+                height: 100%;
+            }
         }
 
-        .datatable-wrap .col-md-12 {
-            flex: 1;
-            display: flex;
-        }
-
-        /* Tooltip Export */
         .export-btn {
             position: relative;
         }
 
         .custom-tooltip {
             position: absolute;
-            right: 120%;
-            top: 50%;
-            transform: translateY(-50%);
+            top: 100%;
+            right: 0;
+            left: auto;
+            transform: translateY(4px);
+            margin-top: 8px;
             background-color: #000000;
             color: white;
-            padding: 6px 12px;
+            padding: 6px 18px;
             border-radius: 6px;
             font-size: 12px;
             font-weight: 500;
@@ -129,18 +222,17 @@
         .custom-tooltip::after {
             content: "";
             position: absolute;
-            left: 100%;
-            top: 50%;
-            transform: translateY(-50%);
+            bottom: 100%;
+            right: 12px;
             border-width: 5px;
             border-style: solid;
-            border-color: transparent transparent transparent #000000;
+            border-color: transparent transparent #000000 transparent;
         }
 
         .export-btn:hover .custom-tooltip {
             opacity: 1;
             visibility: visible;
-            right: 130%;
+            transform: translateY(0);
         }
 
         /* Select2 (Location Filter) */
@@ -243,29 +335,27 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .legend-wrap {
+            row-gap: 10px;
+        }
+
+        @media (max-width: 575.98px) {
+            .legend-wrap {
+                font-size: 0.8rem;
+                gap: 10px !important;
+            }
+            .legend-box {
+                width: 20px;
+                height: 20px;
+            }
         }
 
         #datalist {
-            height: 100%;
             table-layout: fixed;
-        }
-
-        #datalist tbody {
             height: 100%;
-        }
-
-        #datalist tbody tr {
-            height: 20%;
-        }
-
-        .table-scroll-wrapper {
-            overflow-x: auto;
-            width: 100%;
-            height: 100%;
-        }
-
-        #datalist {
-            min-width: 100%;
         }
 
         #datalist th,
@@ -274,13 +364,62 @@
             white-space: nowrap;
         }
 
-        #datalist th:first-child,
-        #datalist td:first-child {
-            position: sticky;
-            left: 0;
-            background-color: #242E3E;
-            z-index: 2;
-            min-width: 110px;
+        @media (max-width: 767.98px) {
+            #datalist th,
+            #datalist td {
+                min-width: 75px;
+                font-size: 0.8rem;
+            }
+            #datalist th:first-child,
+            #datalist td:first-child {
+                min-width: 90px;
+            }
+        }
+
+        /* ---------- Footer ---------- */
+        .dashboard-footer {
+            font-size: 1rem;
+        }
+
+        @media (max-width: 575.98px) {
+            .dashboard-footer {
+                justify-content: center !important;
+                text-align: center;
+                gap: 10px;
+                font-size: 0.85rem;
+            }
+        }
+
+        @media (max-width: 767.98px) {
+            .metric-card img {
+                width: 44px !important;
+                height: 44px !important;
+            }
+            .metric-card h2 {
+                font-size: 1.5rem;
+            }
+
+            .header-right {
+                font-size: 17px;
+            }
+
+            .legend-box {
+                font-size: 10px;
+            }
+
+            .legend-wrap {
+                align-items: start;
+                margin: 0;
+                padding: 0;
+            }
+
+            .title-system {
+                display: none;
+            }
+
+            .footer-title {
+                padding-top: 30px;
+            }
         }
     </style>
 @endsection
@@ -288,35 +427,29 @@
 @section('content')
     <div class="container-fluid dashboard-wrap">
         <!-- Header -->
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
-            <div class="d-flex text-white">
+        <div class="dashboard-header">
+            <div class="header-left">
                 <button
                     type="button"
                     onclick="history.back()"
-                    class="d-flex align-items-center gap-4 border-0 bg-transparent text-white p-0">
+                    class="back-btn border-0 bg-transparent text-white p-0">
                     <img src="{{ _asset('svg/inlinePerformance/back.svg') }}" width="15" height="15">
                     <span>Back</span>
                 </button>
             </div>
-            <div class="d-flex gap-5 justify-content-center align-items-center flex-wrap text-white fs-4 fw-bold">
-                <div class="d-flex align-items-center gap-2">
-                    <span id="liveClock"></span>
-                </div>
-                <div class="d-flex align-items-center gap-2 ms-auto">
-                    <div class="col-12 col-md-1 d-flex justify-content-end align-items-end mb-2">
-                        <button class="export-btn bg-transparent border-0 p-0">
-                            <img src="{{ _asset('svg/inlinePerformance/export.svg') }}" style="width:27px; height:27px;">
-                            <span class="custom-tooltip">Export</span>
-                        </button>
-                    </div>
-                </div>
+
+            <div class="header-right align-items-center ">
+                <span id="liveClock"></span>
+                <button class="export-btn bg-transparent border-0 p-0 d-flex align-items-center">
+                    <img src="{{ _asset('svg/inlinePerformance/export.svg') }}" style="width:27px; height:27px;">
+                    <span class="custom-tooltip">Export</span>
+                </button>
             </div>
         </div>
 
         <!-- Card -->
         <div class="row g-3 mt-1">
-            <!-- LOCATION -->
-            <div class="col-6 col-md-4 col-lg">
+            <div class="col-12 col-sm-6 col-md-4 col-lg">
                 <div class="color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
                     <h6 class="fw-bold text-start text-red mb-2 fs-4">LOCATION</h6>
                     <select id="line" class="form-select select2 w-100">
@@ -327,8 +460,8 @@
 
             <!-- QTY INSPECT -->
             <div class="col-6 col-md-4 col-lg">
-                <div class="color-box-yellow h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
-                    <img src="{{ _asset('svg/inlinePerformance/qty-inspect.svg') }}" class="img-fluid mb-4" style="width:60px;height:60px;">
+                <div class="color-box-yellow metric-card h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
+                    <img src="{{ _asset('svg/inlinePerformance/qty-inspect.svg') }}" class="img-fluid" style="width:60px;height:60px;margin-bottom: 40px">
                     <div>
                         <h6 class="fw-bold text-start text-yellow mb-0">QTY INSPECT</h6>
                         <div class="d-flex align-items-end text-white">
@@ -341,8 +474,8 @@
 
             <!-- QTY DEFECT -->
             <div class="col-6 col-md-4 col-lg">
-                <div class="color-box-red h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
-                    <img src="{{ _asset('svg/inlinePerformance/qty-defect.svg') }}" class="img-fluid mb-4" style="width:60px;height:60px;">
+                <div class="color-box-red metric-card h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
+                    <img src="{{ _asset('svg/inlinePerformance/qty-defect.svg') }}" class="img-fluid" style="width:60px;height:60px;margin-bottom: 40px">
                     <div>
                         <h6 class="fw-bold text-start text-red mb-0">QTY DEFECT</h6>
                         <div class="d-flex align-items-end text-white">
@@ -355,8 +488,8 @@
 
             <!-- RFT -->
             <div class="col-6 col-md-4 col-lg">
-                <div class="color-box-green h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
-                    <img src="{{ _asset('svg/inlinePerformance/rft.svg') }}" class="img-fluid mb-4" style="width:60px;height:60px;">
+                <div class="color-box-green metric-card h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
+                    <img src="{{ _asset('svg/inlinePerformance/rft.svg') }}" class="img-fluid" style="width:60px;height:60px;margin-bottom: 40px">
                     <div>
                         <h6 class="fw-bold text-start text-green mb-0">RFT</h6>
                         <div class="d-flex align-items-end text-white">
@@ -368,8 +501,8 @@
 
             <!-- WFT -->
             <div class="col-6 col-md-4 col-lg">
-                <div class="color-box-blue h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
-                    <img src="{{ _asset('svg/inlinePerformance/wft.svg') }}" class="img-fluid mb-4" style="width:60px;height:60px;">
+                <div class="color-box-blue metric-card h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
+                    <img src="{{ _asset('svg/inlinePerformance/wft.svg') }}" class="img-fluid" style="width:60px;height:60px;margin-bottom: 40px">
                     <div>
                         <h6 class="fw-bold text-start text-blue mb-0">WFT</h6>
                         <div class="d-flex align-items-end text-white">
@@ -381,24 +514,20 @@
         </div>
 
         <!-- Round Status Table -->
-        <div class="mt-3 rounded text-white datatable-wrap">
+        <div class="rounded text-white datatable-wrap">
             <div class="col-md-12">
-                <table id="datalist" class="table table-bordered table-hover round-status-table" width="100%">
-                    <thead style="background-color: #242E3E;">
-                        <tr id="operators">
-                            <th class="text-center">OPERATORS</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <!--  -->
-                    </tbody>
-                </table>
+                <div id="datatable-container" class="w-100">
+                    @include('monitoring::inlineperformance.inlineLts.datatable', [
+                        'operators' => $operators ?? [],
+                        'rounds'    => $rounds ?? [],
+                    ])
+                </div>
             </div>
         </div>
 
         <!-- Legend -->
         <div class="d-flex justify-content-center mt-2">
-            <div class="d-flex text-white px-3 py-1 gap-3 align-items-center justify-content-center fs-6">
+            <div class="legend-wrap d-flex flex-wrap text-white py-1 gap-3 fs-6">
                 <div class="d-flex gap-3 align-items-center">
                     <div class="legend-box" style="background-color: #219653;"></div>
                     <p class="mb-0">No Defect Data</p>
@@ -426,15 +555,17 @@
         </div>
 
         <!-- Footer -->
-        <div class="mt-2 text-white d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0 fs-6">
+        <div class="footer-title mt-2 text-white d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0">
             <div class="d-flex align-items-center gap-2">
-                <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" style="width: 15px; height: 15px;">
+                <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" style="width: 18px; height: 18px;">
                 Data Update
                 <span id="liveClock2"></span>
             </div>
             <div class="d-flex align-items-center">
                 <div class="mb-0 d-flex align-items-center gap-2">
-                    System Connected
+                    <span class="title-system">
+                        System Connected
+                    </span>
                     <div class="rounded-pill" style="background-color:#4CF299; width:20px;height:20px"></div>
                 </div>
             </div>
@@ -497,75 +628,10 @@
                 }
             });
 
-            const roundColors = {
-                1: { bg: '#219653', border: '#4CF299' },
-                2: { bg: '#219653', border: '#4CF299' },
-                3: { bg: '#219653', border: '#4CF299' },
-                4: { bg: '#219653', border: '#4CF299' },
-                5: { bg: '#219653', border: '#4CF299' },
-            };
-
-            const statusIcon = {
-                none:  `<img src="{{ _asset('svg/inlinePerformance/checklist.svg') }}" alt="No Defect">`,
-                one:   ``,
-                multi: `<img src="{{ _asset('svg/inlinePerformance/defect2.svg') }}" alt="Multi Defect">`,
-                cap:   `<img src="{{ _asset('svg/inlinePerformance/pencil.svg') }}" alt="CAP Filled">`,
-            };
-
-            function renderOperators(operators) {
-                let $operatorRow = $('#operators');
-                $operatorRow.find('td').remove();
-
-                (operators || []).forEach(function (op) {
-                    let nm = (op.nama || '').split(' ');
-                    let displayName = nm.length > 1
-                    ? nm[0] + ' ' + nm[1]
-                    : (nm[0] || 'No Data');
-
-                    let td = `<td class="text-center ">
-                        <p>${op.sequence_process ?? '-'}<br>${op.nik}<br>${displayName}</br>
-                    </td>`;
-                    $operatorRow.append(td);
-                });
-            }
-
-            function renderRounds(rounds) {
-                let $tbody = $('#datalist tbody');
-                $tbody.empty();
-
-                (rounds || []).forEach(function (roundData) {
-                    const rc = roundColors[roundData.round] || roundColors[1];
-                    let $tr = $('<tr></tr>');
-                    $tr.append(`
-                        <td class="text-center round-label">
-                            <span class="badge px-4 py-2 rounded-5"
-                                  style="background-color:${rc.bg}; border:2px solid ${rc.border}; font-size:15px; font-weight:400">
-                                Round ${roundData.round}
-                            </span>
-                        </td>
-                    `);
-
-                    (roundData.cells || []).forEach(function (cell) {
-                        if (cell.status === 'empty') {
-                            $tr.append(`<td class="text-center status-empty"></td>`);
-                            return;
-                        }
-
-                        $tr.append(`
-                            <td class="text-center">
-                                <div class="btn-detail status-${cell.status}">
-                                    ${statusIcon[cell.status] || ''}
-                                </div>
-                            </td>
-                        `);
-                    });
-
-                    $tbody.append($tr);
-                });
-            }
-
             $('#line').on('change', function () {
                 const line = $(this).val();
+
+                $('#datatable-container').css('opacity', 0.5);
 
                 $.ajax({
                     url: "{{ route('monitoring_inlineperformance_filterInlineLts') }}",
@@ -577,67 +643,172 @@
                         $('#rft').text(res.rft);
                         $('#wft').text(res.wft);
 
-                        renderOperators(res.operators);
-                        renderRounds(res.rounds);
+                        $('#datatable-container').html(res.html);
                     },
                     error: function (xhr) {
                         console.log(xhr.responseJSON ? xhr.responseJSON.message : 'Request failed');
+                    },
+                    complete: function () {
+                        $('#datatable-container').css('opacity', 1);
                     }
                 });
             });
 
-            function renderDefaultTable() {
-                let $operatorRow = $('#operators');
-                let $tbody = $('#datalist tbody');
-
-                $operatorRow.find('td').remove();
-
-                // Misal tampilkan 5 kolom operator kosong
-                for (let i = 1; i <= 10; i++) {
-                    $operatorRow.append(`
-                        <td class="text-center">
-                            <p><br><br></p>
-                        </td>
-                    `);
-                }
-
-                $tbody.empty();
-
-                // Tetap tampil Round 1-5
-                for (let round = 1; round <= 5; round++) {
-                    const rc = roundColors[round];
-
-                    let tr = `
-                        <tr>
-                            <td class="text-center round-label">
-                                <span class="badge px-4 py-2 rounded-5"
-                                    style="background-color:${rc.bg}; border:2px solid ${rc.border}; font-size:15px; font-weight:400">
-                                    Round ${round}
-                                </span>
-                            </td>
-                    `;
-
-                    for (let i = 1; i <= 10; i++) {
-                        tr += `<td style:-></td>`;
-                    }
-
-                    tr += `</tr>`;
-
-                    $tbody.append(tr);
-                }
-            }
-
-            function resetCard() {
-                $('#tot_inspect').text('');
-                $('#tot_defect').text('');
-                $('#rft').text('');
-                $('#wft').text('');
-            }
-
-            renderDefaultTable();
-            resetCard();
         });
     </script>
 @endsection
 
-untuk datatables ubah jadi response nya return view, dan buat sebuah file datatables untuk menampung kodenya, buat responsif segala ukuran, dan untuk tabel nya misal melebihi 10 data seperti di renderdefaulttable akan ada scroll kekanan
+
+@php
+    $roundColors = [
+        1 => ['bg' => '#219653', 'border' => '#4CF299'],
+        2 => ['bg' => '#219653', 'border' => '#4CF299'],
+        3 => ['bg' => '#219653', 'border' => '#4CF299'],
+        4 => ['bg' => '#219653', 'border' => '#4CF299'],
+        5 => ['bg' => '#219653', 'border' => '#4CF299'],
+    ];
+
+    $statusIcon = [
+        'none'  => '<img src="' . _asset('svg/inlinePerformance/checklist.svg') . '" alt="No Defect">',
+        'one'   => '',
+        'multi' => '<img src="' . _asset('svg/inlinePerformance/defect2.svg') . '" alt="Multi Defect">',
+        'cap'   => '<img src="' . _asset('svg/inlinePerformance/pencil.svg') . '" alt="CAP Filled">',
+    ];
+
+    $operators = $operators ?? [];
+    $rounds    = $rounds ?? [];
+    $colCount  = count($operators) > 0 ? count($operators) : 10;
+@endphp
+
+<style>
+    #datalist th:first-child,
+    #datalist td:first-child {
+        min-width: 130px;
+    }
+
+    .round-badge {
+        display: inline-block;
+        padding: 0.5rem 1.25rem;
+        border-radius: 999px;
+        font-size: 15px;
+        font-weight: 400;
+        white-space: nowrap;
+    }
+
+    .card-operator p {
+        line-height: 1.4;
+    }
+
+    .status-empty {
+        min-height: 1px;
+    }
+
+    @media (max-width: 767.98px) {
+        #datalist th:first-child,
+        #datalist td:first-child {
+            min-width: 110px;
+        }
+
+        .round-badge {
+            padding: 0.35rem 0.85rem;
+            font-size: 12px;
+        }
+
+        .card-operator p {
+            font-size: 0.75rem;
+        }
+
+        .round-status-table .btn-detail img {
+            width: 18px;
+            height: 18px;
+        }
+    }
+
+    @media (max-width: 400px) {
+        #datalist th:first-child,
+        #datalist td:first-child {
+            min-width: 95px;
+        }
+
+        .round-badge {
+            padding: 0.3rem 0.6rem;
+            font-size: 11px;
+        }
+
+        .round-status-table .btn-detail img {
+            width: 16px;
+            height: 16px;
+        }
+    }
+</style>
+
+<div class="table-scroll-wrapper">
+    <table id="datalist"
+           class="table table-bordered table-hover round-status-table"
+           style="min-width: {{ 130 + ($colCount * 90) }}px;">
+        <thead style="background-color:#242E3E;">
+            <tr id="operators">
+                <th class="text-center">OPERATORS</th>
+
+                @forelse($operators as $op)
+                    @php
+                        $nm = explode(' ', $op['nama'] ?? '');
+                        $displayName = count($nm) > 1 ? $nm[0] . ' ' . $nm[1] : ($nm[0] ?: 'No Data');
+                    @endphp
+                    <th class="card-operator text-center">
+                        <p class="mb-0">
+                            {{ $op['sequence_process'] ?? '-' }}<br>
+                            {{ $op['nik'] ?? '-' }}<br>
+                            {{ $displayName }}
+                        </p>
+                    </th>
+                @empty
+                    @for ($i = 1; $i <= 10; $i++)
+                        <th class="text-center"><p class="mb-0"><br><br></p></th>
+                    @endfor
+                @endforelse
+            </tr>
+        </thead>
+
+        <tbody>
+            @forelse($rounds as $roundData)
+                @php $rc = $roundColors[$roundData['round']] ?? $roundColors[1]; @endphp
+                <tr>
+                    <td class="text-center round-label">
+                        <span class="round-badge"
+                              style="background-color:{{ $rc['bg'] }}; border:2px solid {{ $rc['border'] }};">
+                            Round {{ $roundData['round'] }}
+                        </span>
+                    </td>
+
+                    @foreach(($roundData['cells'] ?? []) as $cell)
+                        @if (($cell['status'] ?? 'empty') === 'empty')
+                            <td class="text-center status-empty"></td>
+                        @else
+                            <td class="text-center">
+                                <div class="btn-detail status-{{ $cell['status'] }}">
+                                    {!! $statusIcon[$cell['status']] ?? '' !!}
+                                </div>
+                            </td>
+                        @endif
+                    @endforeach
+                </tr>
+            @empty
+                @for ($round = 1; $round <= 5; $round++)
+                    @php $rc = $roundColors[$round]; @endphp
+                    <tr class="">
+                        <td class="text-center round-label">
+                            <span class="round-badge"
+                                  style="background-color:{{ $rc['bg'] }}; border:2px solid {{ $rc['border'] }};">
+                                Round {{ $round }}
+                            </span>
+                        </td>
+                        @for ($i = 1; $i <= 10; $i++)
+                            <td class="text-center status-empty"></td>
+                        @endfor
+                    </tr>
+                @endfor
+            @endforelse
+        </tbody>
+    </table>
+</div>
