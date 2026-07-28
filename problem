@@ -1,1486 +1,260 @@
-@extends('layouts.masternonavbar')
+@extends('monitoring::layouts.master')
 
 @section('extracss')
-    <style>
-        html, body {
-            margin: 0;
-            background-color: #242E3E;
-        }
-
-        body {
-            padding: 1rem;
-        }
-
-        @media (min-width: 992px) {
-            html, body {
-                height: 100%;
-            }
-            body {
-                overflow: hidden;
-                display: flex;
-                flex-direction: column;
-            }
-        }
-
-        .dashboard-wrap {
-            width: 100%;
-        }
-
-        @media (min-width: 992px) {
-            .dashboard-wrap {
-                height: 100%;
-                display: flex;
-                flex-direction: column;
-            }
-        }
-
-        .border-custom-datatable {
-            border: 1px solid #4C8CF2 !important;
-            background-color: #212B3E;
-        }
-
-        /* Text Color */
-        .text-yellow { color: #F2C94C; }
-        .text-red    { color: #F24C4C; }
-        .text-blue   { color: #4C8CF2; }
-        .text-green  { color: #4CF299; }
-
-        /* Card Box */
-        .color-box-yellow {
-            background-color: #363633;
-            border: 1px solid #F2C94C;
-            border-radius: 5px;
-            color: #F2C94C;
-        }
-        .color-box-red {
-            background-color: #352837;
-            border: 1px solid #F24C4C;
-            border-radius: 5px;
-        }
-        .color-box-blue {
-            background-color: #23304E;
-            border: 1px solid #3F5588;
-            border-radius: 5px;
-        }
-        .color-box-green {
-            background-color: #1A3B45;
-            border: 1px solid #4CF299;
-            border-radius: 5px;
-        }
-
-        @media (max-width: 576px) {
-            .d-flex.flex-wrap > .d-flex {
-                width: 100%;
-            }
-
-            .color-box-yellow img,
-            .color-box-red img,
-            .color-box-blue img,
-            .color-box-green img {
-                width: 40px !important;
-                height: 40px !important;
-            }
-
-            .color-box-yellow h2,
-            .color-box-red h2,
-            .color-box-blue h2,
-            .color-box-green h2 {
-                font-size: 1.4rem;
-            }
-        }
-
-        .datatable-wrap {
-            display: flex;
-            flex-direction: column;
-        }
-
-        @media (min-width: 992px) {
-            .datatable-wrap {
-                flex-grow: 1;
-                min-height: 0;
-                overflow: hidden;
-            }
-        }
-
-        /* Tooltip Export */
-        .export-btn {
-            position: relative;
-        }
-
-        .custom-tooltip {
-            position: absolute;
-            right: 120%;
-            top: 50%;
-            transform: translateY(-50%);
-            background-color: #000000;
-            color: white;
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 500;
-            white-space: nowrap;
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.2s ease;
-            z-index: 10;
-        }
-
-        .custom-tooltip::after {
-            content: "";
-            position: absolute;
-            left: 100%;
-            top: 50%;
-            transform: translateY(-50%);
-            border-width: 5px;
-            border-style: solid;
-            border-color: transparent transparent transparent #000000;
-        }
-
-        .export-btn:hover .custom-tooltip {
-            opacity: 1;
-            visibility: visible;
-            right: 130%;
-        }
-
-        /* Select2 (Location Filter) */
-        .select2-container {
-            width: 100% !important;
-        }
-
-        .select2-container--default .select2-selection--single {
-            background: #372E39;
-            border: none;
-            display: flex;
-            align-items: center;
-        }
-
-        .select2-container--default .select2-selection--single .select2-selection__rendered {
-            color: white;
-            line-height: 38px;
-            padding-left: 0.75rem;
-        }
-
-        .select2-container--default .select2-selection--single .select2-selection__arrow {
-            height: 38px;
-        }
-
-        .select2-container--default .select2-selection--single .select2-selection__placeholder {
-            color: #ffffff !important;
-        }
-
-        .select2-container--default .select2-results__option--highlighted[aria-selected] {
-            background-color: transparent !important;
-            color: white !important;
-        }
-
-        .select2-container--default .select2-results__option[aria-selected="true"] {
-            background-color: transparent !important;
-            color: white !important;
-        }
-
-        .select2-dropdown {
-            background: #372E39;
-            color: white;
-        }
-
-        .select2-results__option {
-            color: white;
-        }
-
-        .select2-search__field {
-            background: #372E39;
-            color: white;
-            border: none;
-        }
-
-        .round-status-table {
-            --bs-table-bg: transparent;
-            --bs-table-color: #ffffff;
-            --bs-table-striped-bg: transparent;
-            --bs-table-border-color: #576376;
-            color: #ffffff;
-        }
-
-        .round-status-table th,
-        .round-status-table td {
-            vertical-align: middle;
-            background-color: transparent;
-            border-color: #576376;
-            padding: 6px;
-        }
-
-        .round-status-table .round-label {
-            font-weight: bold;
-            padding: 1px;
-        }
-
-        .round-status-table .btn-detail {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-            min-width: 64px;
-            height: 56px;
-            margin: 0 auto;
-            text-decoration: none;
-            transition: transform .15s ease, filter .15s ease;
-        }
-
-        .round-status-table .btn-detail img {
-            width: 22px;
-            height: 22px;
-        }
-
-        .status-none   { background-color: #219653; }
-        .status-one    { background-color: #F24C4C; }
-        .status-multi  { background-color: #F24C4C; }
-        .status-cap    { background-color: #F9E21D; }
-
-        .round-status-table td.status-empty {
-        }
-
-        /* Legend */
-        .legend-box {
-            width: 24px;
-            height: 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .datatable-wrap {
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .datatable-wrap .col-md-12 {
-            flex: 1;
-            display: flex;
-        }
-
-        #datalist {
-            height: 100%;
-            table-layout: fixed;
-        }
-
-        #datalist tbody {
-            height: 100%;
-        }
-
-        #datalist tbody tr {
-            height: 20%;
-        }
-    </style>
+<style type="text/css">
+	.b-title {
+        font-size: 14pt;
+    }
+    .b-content {
+        font-size: 24pt;
+        height: 40pt;
+        padding-top: 10px;
+    }
+    tr {
+        line-height: 10px;
+        min-height: 20px;
+        height: 10px;
+        background-color: black;
+    }
+    td, select, textarea, input {
+        background-color: black;
+    }
+</style>
 @endsection
 
 @section('content')
-    <div class="container-fluid dashboard-wrap">
-        <!-- Header -->
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
-            <div class="d-flex text-white">
-                <button
-                    type="button"
-                    onclick="history.back()"
-                    class="d-flex align-items-center gap-4 border-0 bg-transparent text-white p-0">
-                    <img src="{{ _asset('svg/inlinePerformance/back.svg') }}" width="15" height="15">
-                    <span>Back</span>
-                </button>
-            </div>
-            <div class="d-flex gap-5 justify-content-center align-items-center flex-wrap text-white fs-4 fw-bold">
-                <div class="d-flex align-items-center gap-2">
-                    <span id="liveClock"></span>
-                </div>
-                <div class="d-flex align-items-center gap-2 ms-auto">
-                    <div class="col-12 col-md-1 d-flex justify-content-end align-items-end mb-2">
-                        <button class="export-btn bg-transparent border-0 p-0">
-                            <img src="{{ _asset('svg/inlinePerformance/export.svg') }}" style="width:27px; height:27px;">
-                            <span class="custom-tooltip">Export</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Card -->
-        <div class="row g-3 mt-1">
-            <!-- LOCATION -->
-            <div class="col-6 col-md-4 col-lg">
-                <div class="color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <h6 class="fw-bold text-start text-red mb-2 fs-4">LOCATION</h6>
-                    <select id="line" class="form-select select2 w-100">
-                        <option></option>
-                    </select>
-                </div>
-            </div>
-
-            <!-- QTY INSPECT -->
-            <div class="col-6 col-md-4 col-lg">
-                <div class="color-box-yellow h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
-                    <img src="{{ _asset('svg/inlinePerformance/qty-inspect.svg') }}" class="img-fluid mb-4" style="width:60px;height:60px;">
-                    <div>
-                        <h6 class="fw-bold text-start text-yellow mb-0">QTY INSPECT</h6>
-                        <div class="d-flex align-items-end text-white">
-                            <h2 class="fw-bold mb-0 lh-2" id="tot_inspect">0</h2>
-                            <small class="ms-1">pcs</small>
+<div>
+	<section class="content" style="background-color: black; color: white;">
+		<div class="color-palette-box">
+            <div class="box-body">
+                <div class="row">
+                    <div class="col-sm-4 col-md-2">
+                        <div class="color-palette-set">
+                            <div class="bg-navy-active color-palette"><center><span class="b-title">LINE</span></center></div>
+                            <div class="bg-navy color-palette"><center><span class="b-content"><b>{{ isset($line) ? $line->namagroup : '-' }}</b></span></center></div>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <!-- QTY DEFECT -->
-            <div class="col-6 col-md-4 col-lg">
-                <div class="color-box-red h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
-                    <img src="{{ _asset('svg/inlinePerformance/qty-defect.svg') }}" class="img-fluid mb-4" style="width:60px;height:60px;">
-                    <div>
-                        <h6 class="fw-bold text-start text-red mb-0">QTY DEFECT</h6>
-                        <div class="d-flex align-items-end text-white">
-                            <h2 class="fw-bold mb-0 lh-2" id="tot_defect">0</h2>
-                            <small class="ms-1">pcs</small>
+                    <div class="col-sm-4 col-md-2">
+                        <div class="color-palette-set">
+                            <div class="bg-aqua-active color-palette"><center><span class="b-title">Total Output</span></center></div>
+                            <div class="bg-aqua color-palette"><center><span class="b-content"><b>{{ isset($totaloutput) ? $totaloutput : '0' }}</b></span></center></div>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <!-- RFT -->
-            <div class="col-6 col-md-4 col-lg">
-                <div class="color-box-green h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
-                    <img src="{{ _asset('svg/inlinePerformance/rft.svg') }}" class="img-fluid mb-4" style="width:60px;height:60px;">
-                    <div>
-                        <h6 class="fw-bold text-start text-green mb-0">RFT</h6>
-                        <div class="d-flex align-items-end text-white">
-                            <h2 class="fw-bold mb-0 lh-2"><span id="rft">0.00</span>%</h2>
+                    <div class="col-sm-4 col-md-2">
+                        <div class="color-palette-set">
+                            <div class="bg-orange-active color-palette"><center><span class="b-title">Efficiency</span></center></div>
+                            <div class="bg-orange color-palette"><center><span class="b-content"><b>{{ isset($totalefficiency) ? $totalefficiency . '%' : '0' }}</b></span></center></div>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <!-- WFT -->
-            <div class="col-6 col-md-4 col-lg">
-                <div class="color-box-blue h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
-                    <img src="{{ _asset('svg/inlinePerformance/wft.svg') }}" class="img-fluid mb-4" style="width:60px;height:60px;">
-                    <div>
-                        <h6 class="fw-bold text-start text-blue mb-0">WFT</h6>
-                        <div class="d-flex align-items-end text-white">
-                            <h2 class="fw-bold mb-0 lh-2"><span id="wft">0.00</span>%</h2>
+                    <div class="col-sm-4 col-md-2">
+                        <div class="color-palette-set">
+                            <div class="bg-green-active color-palette"><center><span class="b-title">RFT</span></center></div>
+                            <div class="bg-green color-palette"><center><span class="b-content"><b>{{ isset($percentrft) ? $percentrft . '%' : '0' }}</b></span></center></div>
                         </div>
                     </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Round Status Table -->
-        <div class="mt-3 rounded text-white datatable-wrap">
-            <div class="col-md-12">
-                <table id="datalist" class="table table-bordered table-hover round-status-table" width="100%">
-                    <thead class="" style="background-color: #242E3E;">
-                        <tr id="operators">
-                            <th class="text-center">OPERATORS</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td class="text-center round-label">
-                                <span class="badge px-4 py-2 rounded-5" style="background-color: #8C8C8C; border: 2px solid #6E6E6E; font-size:15px; font-weight:400">
-                                    Round 1
-                                </span>
-                            </td>
-                            <td class="text-center">
-                                <a href="#" class="btn-detail status-none" data-tooltip="tooltip">
-                                    <img src="{{ _asset('svg/inlinePerformance/checklist.svg') }}" alt="Success">
-                                </a>
-                            </td>
-                            <td class="text-center">
-                                <a href="#" class="btn-detail status-one" data-tooltip="tooltip"></a>
-                            </td>
-                            <td class="text-center">
-                                <a href="#" class="btn-detail status-cap" data-tooltip="tooltip">
-                                    <img src="{{ _asset('svg/inlinePerformance/pencil.svg') }}" alt="CAP filled">
-                                </a>
-                            </td>
-                        </tr>
-
-                        <tr>
-                            <td class="text-center round-label">
-                                 <span class="badge px-4 py-2 rounded-5" style="background-color: #F24C4C; border: 2px solid #D63737; font-size:15px; font-weight:400">
-                                    Round 2
-                                </span>
-                            </td>
-                            <td class="text-center">
-                                <a href="#" class="btn-detail status-none" data-tooltip="tooltip"></a>
-                            </td>
-                            <td class="text-center status-empty"></td>
-                            <td class="text-center">
-                                <a href="#" class="btn-detail status-multi" data-tooltip="tooltip">
-                                    <img src="{{ _asset('svg/inlinePerformance/defect2.svg') }}" alt="Two or more defects">
-                                </a>
-                            </td>
-                        </tr>
-
-                        <tr>
-                            <td class="text-center round-label">
-                                <div class="badge px-4 py-2 rounded-5" style="background-color: #219653; border: 2px solid #4CF299; font-size:15px; font-weight:400">
-                                    Round 3
-                                </div>
-                            </td>
-                            <td class="text-center">
-                                <a href="#" class="btn-detail status-one" data-tooltip="tooltip"></a>
-                            </td>
-                            <td class="text-center">
-                                <a href="#" class="btn-detail status-none" data-tooltip="tooltip"></a>
-                            </td>
-                            <td class="text-center status-empty"></td>
-                        </tr>
-
-                        <tr>
-                            <td class="text-center round-label">
-                                <div class="badge px-4 py-2 rounded-5" style="background-color: #219653; border: 2px solid #4CF299; font-size:15px; font-weight:400">
-                                    Round 4
-                                </div>
-                            </td>
-                            <td class="text-center status-empty"></td>
-                            <td class="text-center">
-                                <a href="#" class="btn-detail status-cap" data-tooltip="tooltip">
-                                    <img src="{{ _asset('svg/inlinePerformance/pencil.svg') }}" alt="CAP filled">
-                                </a>
-                            </td>
-                            <td class="text-center status-empty"></td>
-                        </tr>
-
-                        <tr>
-                            <td class="text-center round-label">
-                                <div class="badge px-4 py-2 rounded-5" style="background-color: #219653; border: 2px solid #4CF299; font-size:15px; font-weight:400">
-                                    Round 5
-                                </div>
-                            </td>
-                            <td class="text-center status-empty"></td>
-                            <td class="text-center status-empty"></td>
-                            <td class="text-center status-empty"></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Legend -->
-        <div class="d-flex justify-content-center mt-2">
-            <div class="d-flex text-white px-3 py-1 gap-3 align-items-center justify-content-center fs-6">
-                <div class="d-flex gap-3 align-items-center">
-                    <div class="legend-box" style="background-color: #219653;"></div>
-                    <p class="mb-0">No Defect Data</p>
-                </div>
-
-                <div class="d-flex gap-3 align-items-center">
-                    <div class="legend-box" style="background-color: #F24C4C;"></div>
-                    <p class="mb-0">Found One Defect Data</p>
-                </div>
-
-                <div class="d-flex gap-3 align-items-center">
-                    <div class="legend-box" style="background-color: #F24C4C;">
-                        <img src="{{ _asset('svg/inlinePerformance/defect2.svg') }}">
+                    <div class="col-sm-4 col-md-2">
+                        <div class="color-palette-set">
+                            <div class="bg-maroon-active color-palette"><center><span class="b-title">WFT</span></center></div>
+                            <div class="bg-maroon color-palette"><center><span class="b-content"><b>{{ isset($percentwft) ? $percentwft . '%' : '0' }}</b></span></center></div>
+                        </div>
                     </div>
-                    <p class="mb-0">Found Two or More Defect Data</p>
-                </div>
-
-                <div class="d-flex gap-3 align-items-center">
-                    <div class="legend-box" style="background-color: #F9E21D;">
-                        <img src="{{ _asset('svg/inlinePerformance/pencil.svg') }}">
+                    <div class="col-sm-2 col-md-2">
+                        <a href="{{ route('monitoring_dashboard_conv') }}" class="btn btn-primary btn-lg" style="width: 100%">ENDLINE</a>
                     </div>
-                    <p class="mb-0">CAP Already Filled In</p>
                 </div>
             </div>
         </div>
-
-        <!-- Footer -->
-        <div class="mt-2 text-white d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0 fs-6">
-            <div class="d-flex align-items-center gap-2">
-                <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" style="width: 15px; height: 15px;">
-                Data Update
-                <span id="liveClock2"></span>
-            </div>
-            <div class="d-flex align-items-center">
-                <div class="mb-0 d-flex align-items-center gap-2">
-                    System Connected
-                    <div class="rounded-pill" style="background-color:#4CF299; width:20px;height:20px"></div>
-                </div>
-            </div>
-        </div>
-    </div>
+		<div class="row">
+			<div class="col-md-6">
+				<b style="font-size: 14pt; height: 20pt; padding-top: 10px">&nbsp; &nbsp; Date: {{ Carbon\Carbon::now()->format('D, d M y') }}  - <b id="hours">{{ Carbon\Carbon::now()->format('H:i:s') }}</b></b>
+			</div>
+			<div class="col-md-12">
+				<table id="datalist" class="table table-bordered hover no-wrap" width="100%">
+					<thead>
+						<tr>
+							<td style="padding-top: 10px;"><center><b>OPERATORS</b></center></td>
+							@if(isset($usertoday))
+								@foreach($usertoday as $u)
+								@php
+									$nm = explode(' ', $u->nama);
+								@endphp
+								<td><center><b>{{ $u->sequence_process }}<br>{{ $u->userid_operator }}<br>{{ count($nm) > 1 ? $nm[0] . ' ' . substr($nm[1], 0, 1) : ($nm[0] ?: 'No Data') }}</b></center></td>
+								@endforeach
+							@endif
+						</tr>
+					</thead>
+					<tbody>
+						@for($i=1; $i < 6; $i++)
+						<tr>
+							<td><b style="font-size: 100%; padding: 1px"><center>ROUND {{$i}}</center></b></td>
+							@if(isset($userinline))
+								@foreach($userinline as $u)
+								@php
+								
+									$uk = $u->where('round', $i); 
+									if($uk->count() > 0){
+										if($uk->first()->detail->count() > 0){
+										$x = 5 - $uk->first()->detail->count();
+										}else {
+											$x = 5;
+										}
+									}else{
+										$x = 6;
+									}
+								@endphp
+								<td>
+									@if($x != 6)
+									<a href="{{ route('monitoring_dashboard_convcapdata', ['nik' => $u->first()->userid_operator, 'round' => $i]) }}" class="btn-detail" title="Click For Detail" data-tooltip="tooltip">
+										<center>
+											@if($x == 5)
+											<div style="padding: 22px;" class="bg-green"><i class="fa fa-check"></i></div>
+											@elseif($x == 4 && $uk->first()->detail->where('problem', '!=', null)->count() <= 0)
+											<div style="padding: 22px;" class="bg-red"><i class="fa fa-exclamation-circle text-red"></i></div>
+											@else
+												@if(isset($uk->first()->detail) && $uk->first()->detail->where('problem', '!=', null)->count() > 0)
+												<div style="padding: 22px" class="bg-yellow"><i class="fa fa-pencil-alt text-red"></i></div>
+												@else
+												<div style="padding: 22px" class="bg-red"><i class="fa fa-exclamation-circle fa-lg"></i></div>
+												@endif
+											@endif
+										</center>
+									</a>
+									@endif
+								</td>
+								@endforeach
+							@endif
+						</tr>
+						@endfor
+					</tbody>
+				</table>
+			</div>
+		</div>
+		<div class="row" style="margin-top: 2rem; margin-bottom: 2rem">
+			<div class="col-sm-12">
+				<div class="col-sm-4">
+					<b>NOTE :</b>
+					<br>
+					<table border="0" width="100%">
+						<tr>
+							<td width="4%">
+								<div style="padding: 10px" class="bg-green"><i class="fa fa-check"></i></div>
+							</td>
+							<td width="96%" style="font-size: 10pt"> &nbsp; &nbsp; = No Defect Data</td>
+						</tr>
+						<tr></tr>
+						<tr>
+							<td width="4%">
+								<div style="padding: 10px" class="bg-red"><i class="fa fa-exclamation-circle text-red"></i></div>
+							</td>
+							<td width="96%" style="font-size: 10pt"> &nbsp; &nbsp; = Found One Defect Data</td>
+						</tr>
+						<tr></tr>
+						<tr>
+							<td width="4%">
+								<div style="padding: 10px" class="bg-red"><i class="fa fa-exclamation-circle fa-lg"></i></div>
+							</td>
+							<td width="96%" style="font-size: 10pt"> &nbsp; &nbsp; = Found Two or More Defect Data</td>
+						</tr>
+						<tr></tr>
+						<tr>
+							<td width="4%">
+								<div style="padding: 10px" class="bg-yellow"><i class="fa fa-pencil-alt text-red"></i></div>
+							</td>
+							<td width="96%" style="font-size: 10pt"> &nbsp; &nbsp; = CAP Already Filled In</td>
+						</tr>
+					</table>
+				</div>
+			</div>
+		</div>
+	</section>
+</div>
+<div class="modal fade" id="cap-modal">
+	<div class="modal-dialog modal-lg" style="width: 90%">
+		<div class="modal-content" style="background-color: black; color: white;">
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal" aria-hiddne="true">&times;</button>
+				<h4 class="modal-title">Detail Data Inline Inspection</h4>
+			</div>
+			<div class="modal-body">
+				Data Loading....
+			</div>
+		</div>
+	</div>
+</div>
+@include('layouts.loading')
 @endsection
 
 @section('extrascript')
-    <script>
-        $(document).ready(function () {
-            function updateClock() {
-                const now = new Date();
-                const day = String(now.getDate()).padStart(2, '0');
-                const month = [
-                    "January", "February", "March", "April", "May", "June",
-                    "July", "August", "September", "October", "November", "December"
-                ];
-                const year = now.getFullYear();
-                const hour = String(now.getHours()).padStart(2, '0');
-                const minute = String(now.getMinutes()).padStart(2, '0');
-                const second = String(now.getSeconds()).padStart(2, '0');
-
-                const formatted = `${day} ${month[now.getMonth()]} ${year} - ${hour} : ${minute} : ${second}`;
-
-                document.getElementById('liveClock').innerHTML = formatted;
-                document.getElementById('liveClock2').innerHTML = formatted;
-            }
-            updateClock();
-            setInterval(updateClock, 1000);
-
-            $('#line').select2({
-                placeholder: 'Select Line',
-                width: '100%',
-                ajax: {
-                    url: "{{ route('monitoring_inlineperformanceselectline') }}",
-                    type: "GET",
-                    dataType: "json",
-                    delay: 500,
-                    data: function (params) {
-                        return {
-                            q: params.term,
-                            page: params.page || 1
-                        };
-                    },
-                    processResults: function (data) {
-                        return {
-                            results: $.map(data.data, function (item) {
-                                return {
-                                    id: item.kodegroup,
-                                    text: item.namabagian + ' - ' + item.namagroup
-                                };
-                            }),
-                            pagination: {
-                                more: data.to < data.total
-                            }
-                        };
-                    },
-                    cache: true
-                }
-            });
-
-            $('#line').on('change', function () {
-                const line = $(this).val();
-
-                $.ajax({
-                    url: "{{ route('monitoring_inlineperformance_filterInlineLts') }}",
-                    type: "GET",
-                    data: { line: line },
-                    success: function (res) {
-                        $('#tot_inspect').text(res.tot_inspect);
-                        $('#tot_defect').text(res.tot_defect);
-                        $('#rft').text(res.rft);
-                        $('#wft').text(res.wft);
-
-                        let $operatorRow = $('#operators');
-                        $operatorRow.find('td').remove();
-
-                        if (res.usertoday && res.usertoday.length > 0) {
-                            $.each(res.usertoday, function (i, u) {
-                                let nm = (u.nama || '').split(' ');
-                                let displayName = nm.length > 1
-                                    ? nm[0] + ' ' + nm[1].charAt(0)
-                                    : (nm[0] || 'No Data');
-
-                                let td = `<td><center><b>${u.sequence_process}<br>${u.userid_operator}<br>${displayName}</b></center></td>`;
-                                $operatorRow.append(td);
-                            });
-                        }
-                    },
-                    error: function (xhr) {
-                        console.log(xhr.responseJSON.message);
-                    }
-                });
-            });
-
-
+<script type="text/javascript">
+    $(document).ready(function() {
+        setInterval(function() {
+            d = new Date();
+            h = set(d.getHours());
+            m = set(d.getMinutes());
+            s = set(d.getSeconds());
+            $('#hours').text(h + ':' + m + ':' + s);
+        }, 1000);
+        function set(e)
+        {
+            e = e < 10 ? '0' + e : e;
+            return e;
+        }
+        $('#datalist').DataTable({
+            scrollX: true,
+            paging: false,
+            lengthChange: false,
+            searching: false,
+            ordering: false,
+            info: false,
+        	fixedColumns: {
+        		leftColumns: 1
+        	}
         });
-    </script>
+        $('body').on('click', '.btn-detail', function(event) {
+        	event.preventDefault();
+        	var link = $(this).attr('href');
+        	if(link == '#') return;
+        	$('#loading').show();
+        	$.ajax({
+        		url: link,
+        		type: 'GET',
+        		dataType: 'html',
+        	})
+        	.done(function(data) {
+        		$('#cap-modal').modal('show').find('.modal-body').html(data);
+        	})
+        	.always(function() {
+        		$('#loading').hide();
+        	});
+        });
+    });
+</script>
+@if(isset($status) and $status != null and $status == 'dbwrong')
+<script type="text/javascript">
+    $(document).ready(function() {
+        swal('Wrong ID', 'Please Provide Correct Factory ID!', 'warning');
+    });
+</script>
+@endif
+@if(isset($status) and $status != null and $status == 'connectionfail')
+<script type="text/javascript">
+    $(document).ready(function() {
+        swal('Database Connection Failed!', 'Please Contact IT Support!', 'warning');
+    });
+</script>
+@endif
+@if((isset($status) and $status != null and $status == 'validationfail'))
+<script type="text/javascript">
+    $(document).ready(function() {
+        swal('Data Stored Invalid!', 'Please Provide A Valid Data To Store!', 'warning');
+    });
+</script>
+@endif
+@if((isset($status) and $status != null and $status == 'savefailed'))
+<script type="text/javascript">
+    $(document).ready(function() {
+        swal('Data Stored Invalid!', 'Please Provide A Valid Data To Store!', 'warning');
+    });
+</script>
+@endif
 @endsection
-
-
-<?php
-
-namespace Modules\Monitoring\Http\Controllers;
-
-use DB;
-use Carbon\Carbon;
-use Illuminate\Http\Request;
-use App\Http\Controllers\Controller;
-use App\Http\Controllers\SmvController;
-use App\Http\Models\FactoryParameter;
-use App\Http\Models\Main\MasterEmployeeGroup;
-use App\Http\Models\Main\MasterEmployeeSection;
-use App\Http\Models\Main\MasterGroupBuyer;
-use App\Http\Models\PurchaseOrder;
-use App\Http\Models\Main\Buyer;
-use App\Http\Models\InlineDetail;
-use App\Http\Models\InlineHeader;
-use App\Http\Models\Main\Employee;
-use App\Http\Models\Main\EmployeeAttendance;
-use App\Http\Models\Main\MasterInlineDefect;
-use App\Http\Models\Main\Style;
-use App\Http\Models\Main\Param;
-use App\Http\Models\Main\QCDefect;
-use App\Http\Models\MpsDetail;
-use App\Http\Models\MpsHeader;
-use App\Http\Models\SewingOutput;
-use Modules\Sewing\Http\Controllers\WorktimeSettingController;
-use Nexmo\Client\Exception\Validation;
-
-class InlinePerformanceController extends Controller
-{
-    protected $m_modul = 'report';
-
-    function __construct()
-    {
-        $this->middleware('auth');
-    }
-
-    function index(Request $request)
-    {
-        if ($this->myaccess() == '0') {
-            return redirect()
-                ->back()
-                ->with('alert', [
-                    'title' => 'Unauthorized!',
-                    'message' => 'You Dont Have Any Access Here!',
-                    'status' => 'warning',
-                ]);
-        }
-
-        preconnect(session('db'));
-
-        $table = $this->getInlinePerformanceTable($request->date);
-
-        return view('monitoring::inlineperformance.index.index', [
-            'date' => $table['date'],
-            'data' => $table['data'],
-        ]);
-    }
-
-    function selectline(Request $request)
-    {
-        $g = (new MasterEmployeeGroup())->getTable();
-        $s = (new MasterEmployeeSection())->getTable();
-
-        $data = MasterEmployeeGroup::select(
-                "$g.id as kodegroup", "$g.section_id as kodebagian",
-                "$g.name as namagroup", "$s.name as namabagian"
-            )
-            ->join($s, "$s.id", '=', "$g.section_id")
-            ->distinct()
-            ->whereHas('groupline', function($q){
-                $q->where('factory_id', session('db')->iddb)
-                    ->where('is_show', 1)
-                    ->where('is_line', 1);
-            });
-
-        if ($request->q) {
-            $data = $data->where(function ($q) use ($request, $g) {
-                $q->where("$g.name", 'like', "%$request->q%");
-            });
-        }
-        $data = $data->orderBy('kodegroup')->paginate(15, $request->page);
-
-        return response()->json($data);
-    }
-
-    function groupbuyer(Request $request)
-    {
-        $q = $request->get('q');
-
-        $data = MasterGroupBuyer::select('id', 'group_name')
-            ->when($q, function ($query) use ($q) {
-                $query->where('group_name', 'like', '%' . $q . '%');
-            })
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'id' => $item->id,
-                    'text' => $item->group_name
-                ];
-            });
-
-        return response()->json([
-            'results' => $data
-        ]);
-    }
-
-    function getFilterData($request)
-    {
-        $m_da = $request->datea > $request->dateb ? $request->dateb : $request->datea;
-        $m_db = $request->datea > $request->dateb ? $request->datea : $request->dateb;
-
-        $dta = Carbon::parse($m_da);
-        $dtb = Carbon::parse($m_db)->endOfDay();
-
-        $headerQuery = InlineHeader::whereBetween('date', [$dta, $dtb]);
-
-            if ($request->line && $request->line != 'all') {
-                $headerQuery = $headerQuery->where('group_id', $request->line);
-            }
-
-            // Filter Group Buyer -> idpo
-            if ($request->groupbuyer && $request->groupbuyer != 'all') {
-                $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
-                $poIds = PurchaseOrder::whereIn('idbuyer', $buyerIds)->pluck('idpo');
-                $headerQuery = $headerQuery->whereIn('idpo', $poIds);
-            }
-
-            $headerIds = (clone $headerQuery)->pluck('id');
-            $headerCount = $headerIds->count();
-
-            // Qty Inspect
-            $totInspect = $headerCount * 5;
-
-            // Qty Defect
-            $totDefect = InlineDetail::whereIn('inline_header_id', $headerIds)->count();
-
-            // RFT
-            $rft = $totInspect > 0
-                ? (($totInspect - $totDefect) / $totInspect) * 100
-                : 0;
-
-            // WFT
-            $wft = $totInspect > 0
-                ? ($totDefect / $totInspect) * 100
-                : 0;
-
-            // Kondisi warna target
-            $target = Param::where('header', 'qc')
-                ->where('key', 'rft_inline_target')
-                ->value('value');
-
-            $rftTarget = $rft <= $target ? true : false;
-
-           // Top Defect
-            $topDefect = InlineDetail::whereIn('inline_header_id', $headerIds)
-                ->select('defect_id', DB::raw('count(*) as total'))
-                ->groupBy('defect_id')
-                ->orderByDesc('total')
-                ->limit(3)
-                ->get();
-
-            $defectIds = $topDefect->pluck('defect_id');
-
-            $masterQcDefects = QCDefect::whereIn('kddefect', $defectIds)
-                ->pluck('deskripsi', 'kddefect');
-
-            $topDefect = $topDefect->map(function ($item, $index) use ($masterQcDefects, $totDefect) {
-                $colors = [
-                    '#2F80ED',
-                    '#219653',
-                    '#F2C94C'
-                ];
-
-                $percent = $totDefect > 0
-                    ? ($item->total / $totDefect) * 100
-                    : 0;
-
-                return [
-                    'defect_id' => $item->defect_id,
-                    'nmdefect'  => $masterQcDefects[$item->defect_id] ?? '-',
-                    'total'     => $item->total,
-                    'percent'   => number_format($percent, 2),
-                    'color'     => $colors[$index],
-                ];
-            });
-
-        return [
-            'periode'     => [
-                'from' => $dta->format('d-m-Y'),
-                'to'   => $dtb->format('d-m-Y'),
-            ],
-            'tot_inspect' => $totInspect,
-            'tot_defect'  => $totDefect,
-            'rft'         => number_format($rft,2),
-            'wft'         => number_format($wft,2),
-            'target'      => $rftTarget,
-            'top_defect'  => $topDefect
-        ];
-    }
-
-    public function filterData(Request $request)
-    {
-        $data = $this->getFilterData($request);
-
-        return response()->json($data);
-    }
-
-    function getInlinePerformanceTable($dateInput = null)
-    {
-        $date = $dateInput
-            ? Carbon::parse($dateInput)
-            : Carbon::parse(InlineHeader::max('date'));
-
-        $dta = $date->copy()->startOfDay();
-        $dtb = $date->copy()->endOfDay();
-
-        $g = (new MasterEmployeeGroup())->getTable();
-        $s = (new MasterEmployeeSection())->getTable();
-
-        $lines = MasterEmployeeGroup::select(
-                "$g.id as kodegroup", "$g.name as namagroup", "$s.name as namabagian"
-            )
-            ->join($s, "$s.id", '=', "$g.section_id")
-            ->distinct()
-            ->whereHas('groupline', function ($q) {
-                $q->where('factory_id', session('db')->iddb)
-                    ->where('is_show', 1)
-                    ->where('is_line', 1);
-            })
-            ->orderBy("$g.id", "asc")
-            ->get();
-
-        $headers = InlineHeader::whereBetween('date', [$dta, $dtb])
-            ->get(['id', 'group_id', 'idpo', 'round']);
-
-        $headersByLine = $headers->groupBy('group_id');
-
-        $allHeaderIds = $headers->pluck('id');
-
-        // Cek kolom problem, action dan rootcause
-        $defectsByHeader = InlineDetail::whereIn('inline_header_id', $allHeaderIds)
-            ->get(['inline_header_id', 'problem', 'action', 'rootcause'])
-            ->groupBy('inline_header_id');
-
-        $result = $lines->map(function ($line) use ($headersByLine, $defectsByHeader) {
-            $headers = $headersByLine->get($line->kodegroup, collect());
-            $hIds = $headers->pluck('id');
-
-            $lastRound = $headers->max('round');
-
-            $lastRoundHeaderIds = $headers->where('round', $lastRound)->pluck('id');
-            $lastRoundDefectCount = InlineDetail::whereIn('inline_header_id', $lastRoundHeaderIds)->count();
-            $lastRoundHasDefect = $lastRoundDefectCount > 0;
-
-            $idpos = $headers->pluck('idpo')->unique();
-
-            $styles = PurchaseOrder::whereIn('idpo', $idpos)->pluck('idstyle')->unique()->values();
-            $nmstyles = Style::whereIn('idstyle', $styles)->pluck('nmstyle')->values();
-
-            $totInspect = $hIds->count() * 5;
-            $totDefect = $hIds->sum(function ($id) use ($defectsByHeader) {
-                return $defectsByHeader->get($id, collect())->count();
-            });
-
-            $hasCap = $lastRoundHeaderIds->contains(function ($id) use ($defectsByHeader) {
-            return $defectsByHeader->get($id, collect())->contains(function ($detail) {
-                return !empty($detail->problem)
-                    || !empty($detail->action)
-                    || !empty($detail->rootcause);
-            });
-        });
-
-            $rft = $totInspect > 0 ? (($totInspect - $totDefect) / $totInspect) * 100 : 0;
-            $wft = $totInspect > 0 ? ($totDefect / $totInspect) * 100 : 0;
-
-            return [
-                'line'                  => $line->namagroup,
-                'style'                 => $nmstyles->toArray(),
-                'qty_rft'               => $totInspect - $totDefect,
-                'qty_inspect'           => $totInspect,
-                'qty_defect'            => $totDefect,
-                'rft'                   => number_format($rft, 2),
-                'wft'                   => number_format($wft, 2),
-                'last_round'            => $lastRound,
-                'last_round_has_defect' => $lastRoundHasDefect,
-                'has_cap'               => $hasCap,
-            ];
-        });
-
-        return [
-            'date' => $date->format('Y-m-d'),
-            'data' => $result->values(),
-        ];
-    }
-
-    function exportExcel(Request $request)
-    {
-        $data = $this->getFilterData($request);
-
-        header('Content-Type: text/csv');
-        header('Content-Disposition: attachment; filename="Report_Inline_Dashboard.csv"');
-
-        $file = fopen('php://output', 'w');
-
-        // Judul
-        fputcsv($file, ['REPORT INLINE DASHBOARD']);
-
-        fputcsv($file, [
-            $data['periode']['from'] . ' s/d ' . $data['periode']['to']
-        ]);
-
-        fputcsv($file, []);
-
-        // Header Summary
-        fputcsv($file, ['Total Inspect', 'Total Defect', 'RFT', 'WFT', 'Target']);
-
-        fputcsv($file, [
-            number_format($data['tot_inspect']),
-            number_format($data['tot_defect']),
-            $data['rft'].'%',
-            $data['wft'].'%',
-            $data['target'] ? 'NO' : 'YES',
-        ]);
-
-        fputcsv($file, []);
-
-        fputcsv($file, ['Defect', 'Qty', '%']);
-
-        foreach ($data['top_defect'] as $defect) {
-            fputcsv($file, [
-                $defect['nmdefect'],
-                number_format($defect['total']),
-                $defect['percent'].'%'
-            ]);
-        }
-
-        fclose($file);
-        exit;
-    }
-
-    function datatables(Request $request)
-    {
-        preconnect(session('db'));
-
-        try {
-            $table = $this->getInlinePerformanceTable($request->date);
-
-            return view('monitoring::inlineperformance.index.datatables-rows', [
-                'data' => $table['data'],
-            ]);
-        } catch (\Throwable $e) {
-            return $e->getMessage();
-        }
-    }
-
-    function inlinetls(Request $request)
-    {
-        return view('monitoring::inlineperformance.inlineLts.inline');
-    }
-
-    // function filterInlineLts(Request $request)
-    // {
-    //     if (!$request->line) {
-    //         return response()->json(['message' => 'Line belum dipilih'], 422);
-    //     }
-
-    //     $date = Carbon::now();
-    //     $dta = $date->copy()->startOfDay();
-    //     $dtb = $date->copy()->endOfDay();
-
-    //     $headerQuery = InlineHeader::whereBetween('date', [$dta, $dtb])
-    //         ->where('group_id', $request->line);
-
-    //     $headerIds = (clone $headerQuery)->pluck('id');
-    //     $headerCount = $headerIds->count();
-
-    //     $totInspect = $headerCount * 5;
-    //     $totDefect = InlineDetail::whereIn('inline_header_id', $headerIds)->count();
-
-    //     $rft = $totInspect > 0 ? (($totInspect - $totDefect) / $totInspect) * 100 : 0;
-    //     $wft = $totInspect > 0 ? ($totDefect / $totInspect) * 100 : 0;
-
-    //     return response()->json([
-    //         'date'        => $date->format('Y-m-d'),
-    //         'tot_inspect' => $totInspect,
-    //         'tot_defect'  => $totDefect,
-    //         'rft'         => number_format($rft, 2),
-    //         'wft'         => number_format($wft, 2),
-    //     ]);
-    // }
-
-    // function inlineOpt()
-    // {
-    //     try {
-    //         preconnect(session('db'));
-
-    //         $date = Carbon::now();
-    //         $line = MasterEmployeeGroup::select('id as kodegroup', 'name as namagroup')
-    //             ->find(session('line'));
-
-    //         $worktimeline = WorktimeSettingController::getLineWorkingTime(
-    //             $line,
-    //             $date,
-    //         );
-
-    //         dd($worktimeline);
-
-    //         $worktime = $worktimeline->workingtime;
-
-    //         $get_worktimeline = WorktimeSettingController::get_worktime_range($worktimeline, $worktime);
-    //         $swt = $get_worktimeline->startworktime;
-    //         $fwt = $get_worktimeline->finishworktime;
-
-    //         if ($swt->greaterThan($fwt)) {
-    //             $fwt->addDay();
-    //         }
-
-    //         $sto = Carbon::parse(
-    //             $worktimeline->date . ' ' . $worktime->starttimeoff,
-    //         );
-    //         $fto = Carbon::parse(
-    //             $worktimeline->date . ' ' . $worktime->endtimeoff,
-    //         );
-    //         if ($sto->greaterThan($fto)) {
-    //             $fto->addDay();
-    //         }
-
-    //         $sto2 = null;
-    //         $fto2 = null;
-
-    //         if ($worktime->startsecondtimeoff) {
-    //             $sto2 = Carbon::parse(
-    //                 $worktimeline->date . ' ' . $worktime->startsecondtimeoff,
-    //             );
-    //             $fto2 = Carbon::parse(
-    //                 $worktimeline->date . ' ' . $worktime->endsecondtimeoff,
-    //             );
-    //             if ($sto2->greaterThan($fto2)) {
-    //                 $fto2->addDay();
-    //             }
-    //         }
-
-    //         $totalworktime = $date->diffInMinutes($swt);
-
-    //         if ($date->greaterThan($sto)) {
-    //             if ($date->greaterThan($fto)) {
-    //                 $timeoff = $sto->diffInMinutes($fto);
-    //                 $totalworktime -= $timeoff;
-    //             } else {
-    //                 $timeoff_diff = $sto->diffInMinutes($date);
-    //                 $totalworktime -= $timeoff_diff;
-    //             }
-    //         }
-
-    //         if ($sto2) {
-    //             if ($date->greaterThan($sto2)) {
-    //                 if ($date->greaterThan($fto2)) {
-    //                     $timeoff = $sto2->diffInMinutes($fto2);
-    //                     $totalworktime -= $timeoff;
-    //                 } else {
-    //                     $timeoff_diff = $sto2->diffInMinutes($date);
-    //                     $totalworktime -= $timeoff_diff;
-    //                 }
-    //             }
-    //         }
-
-    //         $totaloutput = 0;
-    //         $totalefficiency = 0;
-    //         $totalrft = 0;
-    //         $totalwft = 0;
-    //         $percentrft = 0;
-    //         $percentwft = 0;
-
-    //         try {
-    //             $idmps = MpsDetail::select('idmps')
-    //                 ->distinct()
-    //                 ->where('date', $swt->format('Y-m-d'))
-    //                 ->whereHas('header', function ($q) {
-    //                     $q->where('line', session('line'));
-    //                 })
-    //                 ->get();
-
-    //             $mps_header = MpsHeader::whereIn('id', $idmps->pluck('idmps'))
-    //                 ->orderBy('lastoutput', 'desc')
-    //                 ->first();
-
-    //             $mps_detail = MpsDetail::where('idmps', $mps_header->id)
-    //                 ->where('date', $swt->format('Y-m-d'))
-    //                 ->first();
-
-    //             $m_kpno = $mps_header->kpno;
-    //         } catch (\Exception $e) {
-    //             $m_kpno = null;
-    //         }
-
-    //         $out = SewingOutput::whereBetween('date', [$swt, $fwt])
-    //             ->where('line', session('line'))
-    //             ->where('is_output', 1)
-    //             ->groupBy('barcode')
-    //             ->get();
-
-    //         $totaloutput = $out->count();
-
-    //         $firstScanneds = SewingOutput::select('barcode', 'defect_code')
-    //             ->whereBetween('date', [$swt, $fwt])
-    //             ->where('line', session('line'))
-    //             ->where('qc_seq', 0)
-    //             ->groupBy('barcode')
-    //             ->get();
-
-    //         $totalrft = $firstScanneds->where('defect_code', null)->count();
-    //         $totalwft = $firstScanneds->count() - $totalrft;
-    //         $percentrft = number_format(
-    //             ($totalrft / $firstScanneds->count()) * 100,
-    //             2,
-    //             '.',
-    //             '',
-    //         );
-    //         $percentwft = number_format(
-    //             ($totalwft / $firstScanneds->count()) * 100,
-    //             2,
-    //             '.',
-    //             '',
-    //         );
-
-    //         $po = PurchaseOrder::select('idstyle')
-    //             ->where('kpno', $m_kpno)
-    //             ->first();
-
-    //         $style = Style::find($po->idstyle);
-
-    //         try {
-    //             $m_smv = SmvController::getSmv(
-    //                 $style->idstyle,
-    //                 $mps_header->order_step_id,
-    //                 $mps_detail->order_part_id,
-    //                 $mps_detail->sub_style_id,
-    //             );
-    //             $smv = $m_smv->smv;
-    //         } catch (\Exception $e) {
-    //             $smv = 0;
-    //         }
-
-    //         $start_mp_time = Carbon::parse($swt->format('Y-m-d H:i:s'));
-
-    //         $mp_line_param = ($lp = FactoryParameter::find('line_mapping_tolerance'))
-    //             ? $lp->value * 1
-    //             : 30;
-
-    //         $fwt = Carbon::parse($fwt->format('Y-m-d H:i:s'));
-    //         $start_mp_time->subMinute($mp_line_param);
-    //         $fwt->addMinute($mp_line_param);
-
-    //         $m_mp = EmployeeAttendance::select('nik', 'status')
-    //             ->where('factory_id', session('db')->iddb)
-    //             ->where('group_id', session('line'))
-    //             ->where('is_efficiency', 1)
-    //             ->where('shift', $worktime->shift)
-    //             ->whereBetween('time', [$start_mp_time, $fwt])
-    //             ->orderBy('time', 'desc')
-    //             ->get();
-
-    //         try {
-    //             $mpminus = FactoryParameter::where('key', 'line_mpminus')->first();
-    //             $mpminus = $mpminus ? $mpminus->value : -3;
-    //             $m_mp = max(
-    //                 0,
-    //                 $m_mp->where('status', 'IN')->count() -  $m_mp->where('status', 'OUT')->count() + $mpminus,
-    //             );
-    //         } catch (\Exception $e) {
-    //             $m_mp = 0;
-    //         }
-
-    //         $totalefficiency = $totaloutput > 0 && $smv > 0 ? number_format(
-    //             (($totaloutput * $smv) / ($m_mp * $totalworktime)) * 100,
-    //             2,
-    //             '.',
-    //             '',
-    //         ) : 0;
-
-    //         $groupedinline = InlineHeader::with('detail')
-    //             ->whereBetween('date', [$swt->format('Y-m-d H:i:s'),$fwt->format('Y-m-d H:i:s')])
-    //             ->where('group_id', session('line'))
-    //             ->orderBy('sequence_process')
-    //             ->get();
-
-    //         $groupedinline = $groupedinline->groupBy('userid_operator');
-
-    //         $today_inline = InlineHeader::with('detail')
-    //             ->whereBetween('date', [$swt->format('Y-m-d H:i:s'),$fwt->format('Y-m-d H:i:s')])
-    //             ->where('group_id', session('line'))
-    //             ->groupBy('userid_operator')
-    //             ->orderBy('sequence_process')
-    //             ->get();
-
-    //         foreach ($today_inline as $d) {
-    //             try {
-    //                 $m_hr_dk = Employee::where('nik', $d->userid_operator)->first();
-    //                 $d->nama = $m_hr_dk->name;
-    //             } catch (\Exception $e) {
-    //                 $d->nama = null;
-    //             }
-    //         }
-
-    //         return view('monitoring::inlineperformance.inlineLts.inline')
-    //             ->with('line', $line)
-    //             ->with('totaloutput', $totaloutput)
-    //             ->with('userinline', $groupedinline)
-    //             ->with('usertoday', $today_inline)
-    //             ->with('percentrft', $percentrft)
-    //             ->with('percentwft', $percentwft)
-    //             ->with('totalefficiency', $totalefficiency);
-    //     } catch (\Exception $e) {
-    //         return view('monitoring::inlineperformance.inlineLts.inline');
-    //     }
-    // }
-
-    function filterInlineLts(Request $request)
-    {
-        if (!$request->line) {
-            return response()->json(['message' => 'Line belum dipilih'], 422);
-        }
-
-        $date = Carbon::now();
-        $dta = $date->copy()->startOfDay();
-        $dtb = $date->copy()->endOfDay();
-
-        $headerQuery = InlineHeader::whereBetween('date', [$dta, $dtb])
-            ->where('group_id', $request->line);
-
-        $headerIds = (clone $headerQuery)->pluck('id');
-        $headerCount = $headerIds->count();
-
-        $totInspect = $headerCount * 5;
-        $totDefect = InlineDetail::whereIn('inline_header_id', $headerIds)->count();
-
-        $rft = $totInspect > 0 ? (($totInspect - $totDefect) / $totInspect) * 100 : 0;
-        $wft = $totInspect > 0 ? ($totDefect / $totInspect) * 100 : 0;
-
-        $response = [
-            'date'        => $date->format('Y-m-d'),
-            'tot_inspect' => $totInspect,
-            'tot_defect'  => $totDefect,
-            'rft'         => number_format($rft, 2),
-            'wft'         => number_format($wft, 2),
-        ];
-
-        try {
-            $optData = $this->buildInlineOptData($request->line);
-
-            $response['line_info']       = $optData['line'];
-            $response['totaloutput']     = $optData['totaloutput'];
-            $response['percentrft']      = $optData['percentrft'];
-            $response['percentwft']      = $optData['percentwft'];
-            $response['totalefficiency'] = $optData['totalefficiency'];
-            $response['userinline']      = $optData['userinline'];
-            $response['usertoday']       = $optData['usertoday'];
-        } catch (\Exception $e) {
-            \Log::error($e);
-        }
-
-        return response()->json($response);
-    }
-
-    function inlineOpt()
-    {
-        try {
-            $data = $this->buildInlineOptData(session('line'));
-
-            return view('monitoring::inlineperformance.inlineLts.inline')
-                ->with('line', $data['line'])
-                ->with('totaloutput', $data['totaloutput'])
-                ->with('userinline', $data['userinline'])
-                ->with('usertoday', $data['usertoday'])
-                ->with('percentrft', $data['percentrft'])
-                ->with('percentwft', $data['percentwft'])
-                ->with('totalefficiency', $data['totalefficiency']);
-        } catch (\Exception $e) {
-            return view('monitoring::inlineperformance.inlineLts.inline');
-        }
-    }
-
-    function buildInlineOptData($lineId)
-    {
-        preconnect(session('db'));
-
-        $date = Carbon::now();
-        $line = MasterEmployeeGroup::select('id as kodegroup', 'name as namagroup')
-            ->find($lineId);
-
-        $worktimeline = WorktimeSettingController::getLineWorkingTime($line, $date);
-        $worktime = $worktimeline->workingtime;
-
-        $get_worktimeline = WorktimeSettingController::get_worktime_range($worktimeline, $worktime);
-        $swt = $get_worktimeline->startworktime;
-        $fwt = $get_worktimeline->finishworktime;
-
-        if ($swt->greaterThan($fwt)) {
-            $fwt->addDay();
-        }
-
-        $sto = Carbon::parse($worktimeline->date . ' ' . $worktime->starttimeoff);
-        $fto = Carbon::parse($worktimeline->date . ' ' . $worktime->endtimeoff);
-        if ($sto->greaterThan($fto)) {
-            $fto->addDay();
-        }
-
-        $sto2 = null;
-        $fto2 = null;
-
-        if ($worktime->startsecondtimeoff) {
-            $sto2 = Carbon::parse($worktimeline->date . ' ' . $worktime->startsecondtimeoff);
-            $fto2 = Carbon::parse($worktimeline->date . ' ' . $worktime->endsecondtimeoff);
-            if ($sto2->greaterThan($fto2)) {
-                $fto2->addDay();
-            }
-        }
-
-        $totalworktime = $date->diffInMinutes($swt);
-
-        if ($date->greaterThan($sto)) {
-            if ($date->greaterThan($fto)) {
-                $timeoff = $sto->diffInMinutes($fto);
-                $totalworktime -= $timeoff;
-            } else {
-                $timeoff_diff = $sto->diffInMinutes($date);
-                $totalworktime -= $timeoff_diff;
-            }
-        }
-
-        if ($sto2) {
-            if ($date->greaterThan($sto2)) {
-                if ($date->greaterThan($fto2)) {
-                    $timeoff = $sto2->diffInMinutes($fto2);
-                    $totalworktime -= $timeoff;
-                } else {
-                    $timeoff_diff = $sto2->diffInMinutes($date);
-                    $totalworktime -= $timeoff_diff;
-                }
-            }
-        }
-
-        $totaloutput = 0;
-        $totalefficiency = 0;
-        $totalrft = 0;
-        $totalwft = 0;
-        $percentrft = 0;
-        $percentwft = 0;
-
-        try {
-            $idmps = MpsDetail::select('idmps')
-                ->distinct()
-                ->where('date', $swt->format('Y-m-d'))
-                ->whereHas('header', function ($q) use ($lineId) {
-                    $q->where('line', $lineId);
-                })
-                ->get();
-
-            $mps_header = MpsHeader::whereIn('id', $idmps->pluck('idmps'))
-                ->orderBy('lastoutput', 'desc')
-                ->first();
-
-            $mps_detail = MpsDetail::where('idmps', $mps_header->id)
-                ->where('date', $swt->format('Y-m-d'))
-                ->first();
-
-            $m_kpno = $mps_header->kpno;
-        } catch (\Exception $e) {
-            $m_kpno = null;
-        }
-
-        $out = SewingOutput::whereBetween('date', [$swt, $fwt])
-            ->where('line', $lineId)
-            ->where('is_output', 1)
-            ->groupBy('barcode')
-            ->get();
-
-        $totaloutput = $out->count();
-
-        $firstScanneds = SewingOutput::select('barcode', 'defect_code')
-            ->whereBetween('date', [$swt, $fwt])
-            ->where('line', $lineId)
-            ->where('qc_seq', 0)
-            ->groupBy('barcode')
-            ->get();
-
-        $totalrft = $firstScanneds->where('defect_code', null)->count();
-        $totalwft = $firstScanneds->count() - $totalrft;
-
-        if ($firstScanneds->count() > 0) {
-            $percentrft = number_format(($totalrft / $firstScanneds->count()) * 100, 2, '.', '');
-            $percentwft = number_format(($totalwft / $firstScanneds->count()) * 100, 2, '.', '');
-        }
-
-        $po = PurchaseOrder::select('idstyle')->where('kpno', $m_kpno)->first();
-        $style = $po ? Style::find($po->idstyle) : null;
-
-        try {
-            $m_smv = SmvController::getSmv(
-                $style->idstyle,
-                $mps_header->order_step_id,
-                $mps_detail->order_part_id,
-                $mps_detail->sub_style_id,
-            );
-            $smv = $m_smv->smv;
-        } catch (\Exception $e) {
-            $smv = 0;
-        }
-
-        $start_mp_time = Carbon::parse($swt->format('Y-m-d H:i:s'));
-
-        $mp_line_param = ($lp = FactoryParameter::find('line_mapping_tolerance'))
-            ? $lp->value * 1
-            : 30;
-
-        $fwt = Carbon::parse($fwt->format('Y-m-d H:i:s'));
-        $start_mp_time->subMinute($mp_line_param);
-        $fwt->addMinute($mp_line_param);
-
-        $m_mp = EmployeeAttendance::select('nik', 'status')
-            ->where('factory_id', session('db')->iddb)
-            ->where('group_id', $lineId)
-            ->where('is_efficiency', 1)
-            ->where('shift', $worktime->shift)
-            ->whereBetween('time', [$start_mp_time, $fwt])
-            ->orderBy('time', 'desc')
-            ->get();
-
-        try {
-            $mpminus = FactoryParameter::where('key', 'line_mpminus')->first();
-            $mpminus = $mpminus ? $mpminus->value : -3;
-            $m_mp = max(
-                0,
-                $m_mp->where('status', 'IN')->count() - $m_mp->where('status', 'OUT')->count() + $mpminus,
-            );
-        } catch (\Exception $e) {
-            $m_mp = 0;
-        }
-
-        $totalefficiency = ($totaloutput > 0 && $smv > 0 && $m_mp > 0 && $totalworktime > 0)
-            ? number_format((($totaloutput * $smv) / ($m_mp * $totalworktime)) * 100, 2, '.', '')
-            : 0;
-
-        $groupedinline = InlineHeader::with('detail')
-            ->whereBetween('date', [$swt->format('Y-m-d H:i:s'), $fwt->format('Y-m-d H:i:s')])
-            ->where('group_id', $lineId)
-            ->orderBy('sequence_process')
-            ->get()
-            ->groupBy('userid_operator');
-
-        $today_inline = InlineHeader::with('detail')
-            ->whereBetween('date', [$swt->format('Y-m-d H:i:s'), $fwt->format('Y-m-d H:i:s')])
-            ->where('group_id', $lineId)
-            ->groupBy('userid_operator')
-            ->orderBy('sequence_process')
-            ->get();
-
-        foreach ($today_inline as $d) {
-            try {
-                $m_hr_dk = Employee::where('nik', $d->userid_operator)->first();
-                $d->nama = $m_hr_dk->name;
-            } catch (\Exception $e) {
-                $d->nama = null;
-            }
-        }
-
-        return [
-            'line'            => $line,
-            'totaloutput'     => $totaloutput,
-            'userinline'      => $groupedinline,
-            'usertoday'       => $today_inline,
-            'percentrft'      => $percentrft,
-            'percentwft'      => $percentwft,
-            'totalefficiency' => $totalefficiency,
-        ];
-    }
-
-}
-
-
