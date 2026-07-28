@@ -1,4 +1,3 @@
-view inline
 @extends('layouts.masternonavbar')
 
 @section('extracss')
@@ -33,11 +32,6 @@ view inline
                 display: flex;
                 flex-direction: column;
             }
-        }
-
-        .border-custom-datatable {
-            border: 1px solid #4C8CF2 !important;
-            background-color: #212B3E;
         }
 
         /* Text Color */
@@ -91,8 +85,10 @@ view inline
         }
 
         .datatable-wrap {
+            height: 100%;
             display: flex;
             flex-direction: column;
+            min-height: 0;
         }
 
         @media (min-width: 992px) {
@@ -101,6 +97,12 @@ view inline
                 min-height: 0;
                 overflow: hidden;
             }
+        }
+
+        .datatable-wrap .col-md-12 {
+            flex: 1;
+            display: flex;
+            min-width: 0; /* penting supaya flex child boleh menyusut & memicu overflow-x */
         }
 
         /* Tooltip Export */
@@ -221,10 +223,9 @@ view inline
             justify-content: center;
             width: 100%;
             min-width: 64px;
-            height: 56px;
+            height: 100%;
             margin: 0 auto;
-            text-decoration: none;
-            transition: transform .15s ease, filter .15s ease;
+            cursor: default;
         }
 
         .round-status-table .btn-detail img {
@@ -237,9 +238,6 @@ view inline
         .status-multi  { background-color: #F24C4C; }
         .status-cap    { background-color: #F9E21D; }
 
-        .round-status-table td.status-empty {
-        }
-
         /* Legend */
         .legend-box {
             width: 24px;
@@ -249,28 +247,44 @@ view inline
             justify-content: center;
         }
 
-        .datatable-wrap {
+        /* ===== Responsive scroll table (file terpisah: partials/datatable.blade.php) ===== */
+        .table-scroll-wrapper {
+            overflow-x: auto;
+            overflow-y: auto;
+            width: 100%;
             height: 100%;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .datatable-wrap .col-md-12 {
-            flex: 1;
-            display: flex;
+            -webkit-overflow-scrolling: touch;
         }
 
         #datalist {
-            height: 100%;
             table-layout: fixed;
         }
 
-        #datalist tbody {
-            height: 100%;
+        #datalist th,
+        #datalist td {
+            min-width: 90px;
+            white-space: nowrap;
         }
 
-        #datalist tbody tr {
-            height: 20%;
+        #datalist th:first-child,
+        #datalist td:first-child {
+            position: sticky;
+            left: 0;
+            background-color: #242E3E;
+            z-index: 2;
+            min-width: 110px;
+        }
+
+        @media (max-width: 576px) {
+            #datalist th,
+            #datalist td {
+                min-width: 70px;
+                font-size: 0.8rem;
+            }
+            #datalist th:first-child,
+            #datalist td:first-child {
+                min-width: 90px;
+            }
         }
     </style>
 @endsection
@@ -373,93 +387,15 @@ view inline
         <!-- Round Status Table -->
         <div class="mt-3 rounded text-white datatable-wrap">
             <div class="col-md-12">
-                <table id="datalist" class="table table-bordered table-hover round-status-table" width="100%">
-                    <thead class="" style="background-color: #242E3E;">
-                        <tr id="operators">
-                            <th class="text-center">OPERATORS</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td class="text-center round-label">
-                                <span class="badge px-4 py-2 rounded-5" style="background-color: #8C8C8C; border: 2px solid #6E6E6E; font-size:15px; font-weight:400">
-                                    Round 1
-                                </span>
-                            </td>
-                            <td class="text-center">
-                                <a href="#" class="btn-detail status-none" data-tooltip="tooltip">
-                                    <img src="{{ _asset('svg/inlinePerformance/checklist.svg') }}" alt="Success">
-                                </a>
-                            </td>
-                            <td class="text-center">
-                                <a href="#" class="btn-detail status-one" data-tooltip="tooltip"></a>
-                            </td>
-                            <td class="text-center">
-                                <a href="#" class="btn-detail status-cap" data-tooltip="tooltip">
-                                    <img src="{{ _asset('svg/inlinePerformance/pencil.svg') }}" alt="CAP filled">
-                                </a>
-                            </td>
-                        </tr>
-
-                        <tr>
-                            <td class="text-center round-label">
-                                 <span class="badge px-4 py-2 rounded-5" style="background-color: #F24C4C; border: 2px solid #D63737; font-size:15px; font-weight:400">
-                                    Round 2
-                                </span>
-                            </td>
-                            <td class="text-center">
-                                <a href="#" class="btn-detail status-none" data-tooltip="tooltip"></a>
-                            </td>
-                            <td class="text-center status-empty"></td>
-                            <td class="text-center">
-                                <a href="#" class="btn-detail status-multi" data-tooltip="tooltip">
-                                    <img src="{{ _asset('svg/inlinePerformance/defect2.svg') }}" alt="Two or more defects">
-                                </a>
-                            </td>
-                        </tr>
-
-                        <tr>
-                            <td class="text-center round-label">
-                                <div class="badge px-4 py-2 rounded-5" style="background-color: #219653; border: 2px solid #4CF299; font-size:15px; font-weight:400">
-                                    Round 3
-                                </div>
-                            </td>
-                            <td class="text-center">
-                                <a href="#" class="btn-detail status-one" data-tooltip="tooltip"></a>
-                            </td>
-                            <td class="text-center">
-                                <a href="#" class="btn-detail status-none" data-tooltip="tooltip"></a>
-                            </td>
-                            <td class="text-center status-empty"></td>
-                        </tr>
-
-                        <tr>
-                            <td class="text-center round-label">
-                                <div class="badge px-4 py-2 rounded-5" style="background-color: #219653; border: 2px solid #4CF299; font-size:15px; font-weight:400">
-                                    Round 4
-                                </div>
-                            </td>
-                            <td class="text-center status-empty"></td>
-                            <td class="text-center">
-                                <a href="#" class="btn-detail status-cap" data-tooltip="tooltip">
-                                    <img src="{{ _asset('svg/inlinePerformance/pencil.svg') }}" alt="CAP filled">
-                                </a>
-                            </td>
-                            <td class="text-center status-empty"></td>
-                        </tr>
-
-                        <tr>
-                            <td class="text-center round-label">
-                                <div class="badge px-4 py-2 rounded-5" style="background-color: #219653; border: 2px solid #4CF299; font-size:15px; font-weight:400">
-                                    Round 5
-                                </div>
-                            </td>
-                            <td class="text-center status-empty"></td>
-                            <td class="text-center status-empty"></td>
-                            <td class="text-center status-empty"></td>
-                        </tr>
-                    </tbody>
-                </table>
+                {{-- Tabel dipisah ke file partials/datatable.blade.php.
+                     Saat load awal, di-include langsung (server render).
+                     Saat filter berubah, di-replace lewat AJAX yang me-return HTML hasil render blade yang sama. --}}
+                <div id="datatable-container" class="w-100">
+                    @include('monitoring.inline_performance.partials.datatable', [
+                        'operators' => $operators ?? [],
+                        'rounds'    => $rounds ?? [],
+                    ])
+                </div>
             </div>
         </div>
 
@@ -478,7 +414,7 @@ view inline
 
                 <div class="d-flex gap-3 align-items-center">
                     <div class="legend-box" style="background-color: #F24C4C;">
-                        <img src="{{ _asset('svg/inlinePerformance/defect2.svg') }}">
+                        <img style="width: 20px; height:20px" src="{{ _asset('svg/inlinePerformance/defect2.svg') }}">
                     </div>
                     <p class="mb-0">Found Two or More Defect Data</p>
                 </div>
@@ -512,6 +448,7 @@ view inline
 @section('extrascript')
     <script>
         $(document).ready(function () {
+
             function updateClock() {
                 const now = new Date();
                 const day = String(now.getDate()).padStart(2, '0');
@@ -563,8 +500,12 @@ view inline
                 }
             });
 
+            // Tabel sekarang dirender server-side (Blade partial), jadi handler AJAX
+            // di sini cukup mengganti isi #datatable-container dengan HTML dari server.
             $('#line').on('change', function () {
                 const line = $(this).val();
+
+                $('#datatable-container').css('opacity', 0.5);
 
                 $.ajax({
                     url: "{{ route('monitoring_inlineperformance_filterInlineLts') }}",
@@ -576,27 +517,17 @@ view inline
                         $('#rft').text(res.rft);
                         $('#wft').text(res.wft);
 
-                        let $operatorRow = $('#operators');
-                        $operatorRow.find('td').remove();
-
-                        if (res.usertoday && res.usertoday.length > 0) {
-                            $.each(res.usertoday, function (i, u) {
-                                let nm = (u.nama || '').split(' ');
-                                let displayName = nm.length > 1
-                                    ? nm[0] + ' ' + nm[1].charAt(0)
-                                    : (nm[0] || 'No Data');
-
-                                let td = `<td><center><b>${u.sequence_process}<br>${u.userid_operator}<br>${displayName}</b></center></td>`;
-                                $operatorRow.append(td);
-                            });
-                        }
+                        // res.html berisi hasil render partials/datatable.blade.php dari controller
+                        $('#datatable-container').html(res.html);
                     },
                     error: function (xhr) {
-                        console.log(xhr.responseJSON.message);
+                        console.log(xhr.responseJSON ? xhr.responseJSON.message : 'Request failed');
+                    },
+                    complete: function () {
+                        $('#datatable-container').css('opacity', 1);
                     }
                 });
             });
-
 
         });
     </script>
