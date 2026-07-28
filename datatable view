@@ -1,13 +1,3 @@
-{{-- 
-    Partial ini menampung markup tabel Round Status.
-    Di-render di server (Blade) lalu dikirim sebagai HTML string
-    lewat AJAX (return view), bukan lagi dirakit manual pakai JS.
-
-    Variabel yang dibutuhkan:
-    - $operators : array of ['sequence_process','nik','nama']
-    - $rounds    : array of ['round', 'cells' => [['status' => 'none|one|multi|cap|empty']]]
---}}
-
 @php
     $roundColors = [
         1 => ['bg' => '#219653', 'border' => '#4CF299'],
@@ -29,12 +19,82 @@
     $colCount  = count($operators) > 0 ? count($operators) : 10;
 @endphp
 
+<style>
+    /*
+     * Kolom pertama (label ROUND / OPERATORS) dibuat sticky supaya
+     * tetap terlihat di kiri walau wrapper di-scroll ke kanan.
+     * background-color WAJIB solid (bukan transparent) supaya konten
+     * kolom lain di baliknya tidak terlihat menembus saat scroll.
+     */
+    #datalist th:first-child,
+    #datalist td:first-child {
+        min-width: 130px;
+        position: sticky;
+        left: 0;
+        z-index: 2;
+        background-color: #242E3E;
+    }
+
+    .round-badge {
+        display: inline-block;
+        padding: 0.5rem 1.25rem;
+        border-radius: 999px;
+        font-size: 15px;
+        font-weight: 400;
+        white-space: nowrap;
+    }
+
+    .card-operator p {
+        line-height: 1.4;
+    }
+
+    .status-empty {
+        min-height: 1px;
+    }
+
+    @media (max-width: 767.98px) {
+        #datalist th:first-child,
+        #datalist td:first-child {
+            min-width: 110px;
+        }
+
+        .round-badge {
+            padding: 0.35rem 0.85rem;
+            font-size: 12px;
+        }
+
+        .card-operator p {
+            font-size: 0.75rem;
+        }
+
+        .round-status-table .btn-detail img {
+            width: 18px;
+            height: 18px;
+        }
+    }
+
+    @media (max-width: 400px) {
+        #datalist th:first-child,
+        #datalist td:first-child {
+            min-width: 95px;
+        }
+
+        .round-badge {
+            padding: 0.3rem 0.6rem;
+            font-size: 11px;
+        }
+
+        .round-status-table .btn-detail img {
+            width: 16px;
+            height: 16px;
+        }
+    }
+</style>
+
 <div class="table-scroll-wrapper">
-    {{-- min-width dihitung dari jumlah kolom operator, supaya kalau > 10 data,
-         tabel otomatis melebar dan wrapper ini yang men-scroll ke kanan --}}
     <table id="datalist"
            class="table table-bordered table-hover round-status-table"
-           style="min-width: {{ 110 + ($colCount * 90) }}px;">
+           style="min-width: {{ 130 + ($colCount * 90) }}px;">
         <thead style="background-color:#242E3E;">
             <tr id="operators">
                 <th class="text-center">OPERATORS</th>
@@ -44,7 +104,7 @@
                         $nm = explode(' ', $op['nama'] ?? '');
                         $displayName = count($nm) > 1 ? $nm[0] . ' ' . $nm[1] : ($nm[0] ?: 'No Data');
                     @endphp
-                    <th class="text-center">
+                    <th class="card-operator text-center">
                         <p class="mb-0">
                             {{ $op['sequence_process'] ?? '-' }}<br>
                             {{ $op['nik'] ?? '-' }}<br>
@@ -64,8 +124,8 @@
                 @php $rc = $roundColors[$roundData['round']] ?? $roundColors[1]; @endphp
                 <tr>
                     <td class="text-center round-label">
-                        <span class="badge px-4 py-2 rounded-5"
-                              style="background-color:{{ $rc['bg'] }}; border:2px solid {{ $rc['border'] }}; font-size:15px; font-weight:400">
+                        <span class="round-badge"
+                              style="background-color:{{ $rc['bg'] }}; border:2px solid {{ $rc['border'] }};">
                             Round {{ $roundData['round'] }}
                         </span>
                     </td>
@@ -83,13 +143,12 @@
                     @endforeach
                 </tr>
             @empty
-                {{-- Default: tetap tampil Round 1-5 dengan 10 kolom kosong --}}
                 @for ($round = 1; $round <= 5; $round++)
                     @php $rc = $roundColors[$round]; @endphp
                     <tr>
                         <td class="text-center round-label">
-                            <span class="badge px-4 py-2 rounded-5"
-                                  style="background-color:{{ $rc['bg'] }}; border:2px solid {{ $rc['border'] }}; font-size:15px; font-weight:400">
+                            <span class="round-badge"
+                                  style="background-color:{{ $rc['bg'] }}; border:2px solid {{ $rc['border'] }};">
                                 Round {{ $round }}
                             </span>
                         </td>
