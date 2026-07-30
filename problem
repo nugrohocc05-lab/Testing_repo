@@ -5,51 +5,43 @@
         html, body {
             margin: 0;
             background-color: #242E3E;
-            height: 100%;
         }
 
         body {
             padding: 1rem;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            box-sizing: border-box;
         }
 
         .dashboard-wrap {
             width: 100%;
-            flex: 1 1 auto;
-            min-height: 0;
-            display: flex;
-            flex-direction: column;
         }
 
-        /* ---------- Header ---------- */
         .dashboard-header {
             display: flex;
             flex-wrap: wrap;
             align-items: center;
-            justify-content: space-between;
             gap: 12px;
         }
 
-        .header-left {
+        .header-left,
+        .header-right {
+            flex: 1 1 0;
             display: flex;
             align-items: center;
         }
 
         .header-right {
-            display: flex;
-            align-items: center;
+            justify-content: flex-end;
+            text-align: center;
             color: #ffffff;
-            font-size: 1.25rem;
+            font-size: 1.5rem;
             font-weight: 700;
+            gap: 20px;
         }
 
         .back-btn {
             display: flex;
             align-items: center;
-            gap: 0.75rem;
+            gap: 1rem;
         }
 
         /* Text Color */
@@ -85,7 +77,6 @@
             flex-shrink: 0;
         }
 
-        /* ---------- Table area ---------- */
         .datatable-wrap {
             display: flex;
             flex-direction: column;
@@ -276,156 +267,6 @@
             white-space: nowrap;
         }
 
-        /* ---------- Line selection area ---------- */
-        .line-select-wrap {
-            flex: 1 1 auto;
-            min-height: 0;
-            padding: 0 1rem;
-            box-sizing: border-box;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .line-select-body {
-            flex: 1 1 auto;
-            min-height: 0;
-            overflow-y: auto;
-            overflow-x: hidden;
-            padding: 0 0.25rem 1.5rem;
-        }
-
-        /* Grid controls the card count per row at every breakpoint.
-           Mobile-first: 1 col by default, growing up to 6 on large desktops. */
-        .line-select-grid {
-            display: grid;
-            grid-template-columns: repeat(1, minmax(0, 1fr));
-            gap: 1rem;
-        }
-
-        .card-line,
-        .card-line-noactive {
-            width: 100%;
-            min-height: 90px;
-            border-radius: 25px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            padding: 1rem 1.25rem;
-            box-sizing: border-box;
-            text-decoration: none;
-        }
-
-        .card-line {
-            background: #0069E1;
-            border: 1px solid #7DA6FF;
-            transition: transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        .card-line:hover,
-        .card-line:focus-visible {
-            background-color: #2EBFFD;
-            border-color: #0073A4;
-            box-shadow: 0px 8px 24px 0px rgba(46, 191, 253, 0.4);
-            transform: translateY(-3px);
-        }
-
-        .card-line-noactive {
-            background: #383B41;
-            border: 1px solid #6F6E6D;
-            cursor: not-allowed;
-        }
-
-        .card-line span,
-        .card-line-noactive span {
-            color: #ffffff;
-            font-size: 1.4rem;
-            line-height: 1.2;
-        }
-
-        .footer-title {
-            flex-shrink: 0;
-        }
-
-        /* ---------- Responsive breakpoints (mobile-first, Bootstrap-aligned) ---------- */
-
-        /* >= 400px: small phones tighten up spacing a bit */
-        @media (min-width: 400px) {
-            .card-line span,
-            .card-line-noactive span {
-                font-size: 1.5rem;
-            }
-        }
-
-        /* >= 576px (sm): two cards per row */
-        @media (min-width: 576px) {
-            .line-select-wrap {
-                padding: 0 1.5rem;
-            }
-            .line-select-grid {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-                gap: 1.25rem;
-            }
-            .footer-title {
-                flex-wrap: nowrap;
-            }
-        }
-
-        /* >= 768px (md): three cards per row */
-        @media (min-width: 768px) {
-            .line-select-wrap {
-                margin-top: 20px;
-                padding: 0 2rem;
-            }
-            .line-select-grid {
-                grid-template-columns: repeat(3, minmax(0, 1fr));
-            }
-            .header-right {
-                font-size: 1.1rem;
-            }
-            #datalist th,
-            #datalist td {
-                min-width: 75px;
-                font-size: 0.8rem;
-            }
-        }
-
-        /* >= 992px (lg): lock viewport height (no page scroll), four cards per row */
-        @media (min-width: 992px) {
-            body {
-                overflow: hidden;
-            }
-            .dashboard-wrap {
-                height: 100%;
-                overflow: hidden;
-            }
-            .line-select-wrap {
-                padding: 0 2.5rem;
-            }
-            .line-select-grid {
-                grid-template-columns: repeat(4, minmax(0, 1fr));
-                gap: 1.5rem;
-            }
-        }
-
-        /* >= 1200px (xl): five cards per row */
-        @media (min-width: 1200px) {
-            .line-select-grid {
-                grid-template-columns: repeat(5, minmax(0, 1fr));
-            }
-        }
-
-        /* >= 1400px (xxl): six cards per row, as requested for large desktops */
-        @media (min-width: 1400px) {
-            .line-select-wrap {
-                padding: 0 3rem;
-            }
-            .line-select-grid {
-                grid-template-columns: repeat(6, minmax(0, 1fr));
-            }
-        }
-
-        /* ---------- Small-viewport metric card tweaks (kept from original) ---------- */
         @media (max-width: 400px) {
             .metric-card {
                 gap: 0.75rem !important;
@@ -449,6 +290,7 @@
                 gap: 10px;
                 font-size: 0.85rem;
             }
+
             .legend-wrap {
                 font-size: 0.8rem;
                 gap: 10px !important;
@@ -457,12 +299,25 @@
                 width: 20px;
                 height: 20px;
             }
+
+            .dashboard-header {
+                gap: 8px;
+            }
+            .header-left {
+                order: 1;
+                flex: 0 0 auto;
+            }
+            .header-right {
+                order: 2;
+                flex: 0 0 auto;
+                margin-left: auto;
+            }
             .back-btn span {
                 font-size: 0.9rem;
             }
         }
 
-        @media (max-width: 768px) {
+        @media (max-width: 767.98px) {
             .metric-card img {
                 width: 44px !important;
                 height: 44px !important;
@@ -470,87 +325,231 @@
             .metric-card h2 {
                 font-size: 1.5rem;
             }
+
+            .header-right {
+                font-size: 17px;
+            }
+
             .legend-box {
                 font-size: 10px;
             }
+
             .legend-wrap {
                 align-items: start;
                 margin: 0;
                 padding: 0;
             }
+
             .title-system {
                 display: none;
+            }
+
+            .footer-title {
+                padding-top: 30px;
+            }
+
+            .footer-title {
+                justify-content: space-between !important;
+                text-align: center;
+                gap: 10px;
+                font-size: 0.85rem;
+            }
+
+            .legend-text {
+                font-size: 12px;
+            }
+
+            .legend-box {
+                width: 20px;
+                height: 20px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-shrink: 0;
+            }
+
+            .legend-icon {
+                width: 10px;
+                height: 10px;
+            }
+
+            #datalist th,
+            #datalist td {
+                min-width: 75px;
+                font-size: 0.8rem;
+            }
+
+            .legend-box {
+                width: 24px;
+                height: 24px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-shrink: 0;
+            }
+        }
+
+        @media (min-width: 992px) {
+            html, body {
+                height: 100%;
+            }
+            body {
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+            }
+
+            .dashboard-wrap {
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+            }
+
+            .datatable-wrap {
+                flex: 1 1 auto;
+                min-height: 0;
+                overflow: hidden;
             }
         }
     </style>
 @endsection
 
 @section('content')
-    <div class="container-fluid dashboard-wrap d-flex flex-column justify-content-between gap-5">
-        <!-- Header + Content (grows to fill space) -->
-        <div class="d-flex flex-column flex-grow-1" style="min-height: 0;">
-            <div class="dashboard-header">
-                <div class="header-left">
-                    <button
-                        type="button"
-                        onclick="history.back()"
-                        class="back-btn border-0 bg-transparent text-white p-0">
-                        <img src="{{ _asset('svg/inlinePerformance/back.svg') }}" width="15" height="15">
-                        <span>Back</span>
-                    </button>
-                </div>
+    <div class="container-fluid dashboard-wrap">
+        <!-- Header -->
+        <div class="dashboard-header">
+            <div class="header-left">
+                <button
+                    type="button"
+                    onclick="history.back()"
+                    class="back-btn border-0 bg-transparent text-white p-0">
+                    <img src="{{ _asset('svg/inlinePerformance/back.svg') }}" width="15" height="15">
+                    <span>Back</span>
+                </button>
+            </div>
 
-                <div class="header-right">
-                    <span id="liveClock"></span>
+            <div class="header-right align-items-center ">
+                <span id="liveClock"></span>
+                <button class="export-btn bg-transparent border-0 p-0 d-flex align-items-center">
+                    <img src="{{ _asset('svg/inlinePerformance/export.svg') }}" style="width:27px; height:27px;">
+                    <span class="custom-tooltip">Export</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Card -->
+        <div class="row g-3 mt-1">
+            <div class="col-12 col-sm-6 col-md-4 col-lg">
+                <div class="color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                    <h4 class="fw-bold text-start text-red mb-2">LOCATION</h4>
+                    <div>
+                        <h5 class="fw-bold" style="color: white;">{{$namaline}}</h5>
+                    </div>
                 </div>
             </div>
 
-            <div class="line-select-wrap">
-                <div class="d-flex justify-content-center" style="color: white;">
-                    <h1 class="fw-bold">Select Line</h1>
+            <!-- QTY INSPECT -->
+            <div class="col-6 col-md-4 col-lg">
+                <div class="color-box-yellow metric-card h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
+                    <img src="{{ _asset('svg/inlinePerformance/qty-inspect.svg') }}" class="img-fluid" style="width:60px;height:60px;">
+                    <div>
+                        <h6 class="fw-bold text-start text-yellow mb-0">QTY INSPECT</h6>
+                        <div class="d-flex align-items-end text-white">
+                             <h2 class="fw-bold mb-0 lh-2" id="tot_inspect">{{ $tot_inspect ?? 0 }}</h2>
+                            <small class="ms-1">pcs</small>
+                        </div>
+                    </div>
                 </div>
-                @php
-                    $lines = $data->keyBy(function ($item) {
-                        preg_match('/(\d+)/', $item->namagroup, $match);
-                        return $match[1] ?? null;
-                    });
+            </div>
 
-                    $maxLine = $lines->keys()->max();
-                @endphp
+            <!-- QTY DEFECT -->
+            <div class="col-6 col-md-4 col-lg">
+                <div class="color-box-red metric-card h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
+                    <img src="{{ _asset('svg/inlinePerformance/qty-defect.svg') }}" class="img-fluid" style="width:60px;height:60px;">
+                    <div>
+                        <h6 class="fw-bold text-start text-red mb-0">QTY DEFECT</h6>
+                        <div class="d-flex align-items-end text-white">
+                             <h2 class="fw-bold mb-0 lh-2" id="tot_defect">{{ $tot_defect ?? 0 }}</h2>
+                            <small class="ms-1">pcs</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-                <div class="line-select-body mt-5 pb-4 px-3">
-                    <div class="line-select-grid">
-                        @for($i = 1; $i <= $maxLine; $i++)
+            <!-- RFT -->
+            <div class="col-6 col-md-4 col-lg">
+                <div class="color-box-green metric-card h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
+                    <img src="{{ _asset('svg/inlinePerformance/rft.svg') }}" class="img-fluid" style="width:60px;height:60px;">
+                    <div>
+                        <h6 class="fw-bold text-start text-green mb-0">RFT</h6>
+                        <div class="d-flex align-items-end text-white">
+                            <h2 class="fw-bold mb-0 lh-2">
+                                 <span id="rft">{{ $rft ?? '0.00' }}%</span>
+                            </h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-                            @php
-                                $line = $lines->get($i);
-                            @endphp
-
-                            @if($line)
-                            <a href="{{ route('monitoring_inlineperformanceinlinetls', [
-                                    'line' => $line->namagroup,
-                                    'kodegroup' => $line->kodegroup
-                                ]) }}"
-                                class="card-line">
-                                <span>{{ $line->namagroup }}</span>
-                            </a>
-                            @else
-                                <button
-                                    type="button"
-                                    class="card-line-noactive border-0"
-                                    disabled>
-                                    <span>Line {{ $i }}</span>
-                                </button>
-                            @endif
-
-                        @endfor
+            <!-- WFT -->
+            <div class="col-6 col-md-4 col-lg">
+                <div class="color-box-blue metric-card h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
+                    <img src="{{ _asset('svg/inlinePerformance/wft.svg') }}" class="img-fluid" style="width:60px;height:60px;">
+                    <div>
+                        <h6 class="fw-bold text-start text-blue mb-0">WFT</h6>
+                        <div class="d-flex align-items-end text-white">
+                            <h2 class="fw-bold mb-0 lh-2">
+                                 <span id="rft">{{ $wft ?? '0.00' }}%</span>
+                            </h2>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
+        <!-- Round Status Table -->
+        <div class="rounded text-white datatable-wrap">
+            <div class="col-md-12 m-0">
+                <div id="datatable-container" class="w-100">
+                    @include('monitoring::inlineperformance.inlineLts.datatable', [
+                        'operators' => $operators ?? [],
+                        'rounds'    => $rounds ?? [],
+                    ])
+                </div>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="d-flex justify-content-center mt-2">
+            <div class="legend-wrap d-flex flex-wrap text-white py-1 gap-3 fs-6">
+                <div class="d-flex gap-3 align-items-center">
+                    <div class="legend-box" style="background-color: #219653;"></div>
+                    <p class="legend-text mb-0">No Defect Data</p>
+                </div>
+
+                <div class="d-flex gap-3 align-items-center">
+                    <div class="legend-box" style="background-color: #F24C4C;"></div>
+                    <p class="legend-text mb-0">Found One Defect Data</p>
+                </div>
+
+                <div class="d-flex gap-3 align-items-center">
+                    <div class="legend-box" style="background-color: #F24C4C;">
+                        <img class="legend-icon" style="width: 20px; height:20px" src="{{ _asset('svg/inlinePerformance/defect2.svg') }}">
+                    </div>
+                    <p class="legend-text mb-0">Found Two or More Defect Data</p>
+                </div>
+
+                <div class="d-flex gap-3 align-items-center">
+                    <div class="legend-box" style="background-color: #F9E21D;">
+                        <img class="legend-icon" style="width: 20px; height:20px" src="{{ _asset('svg/inlinePerformance/pencil.svg') }}">
+                    </div>
+                    <p class="legend-text mb-0">CAP Already Filled In</p>
+                </div>
+            </div>
+        </div>
+
         <!-- Footer -->
-        <div class="footer-title mt-2 text-white d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div class="footer-title mt-2 text-white d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0">
             <div class="d-flex align-items-center gap-2">
                 <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" style="width: 18px; height: 18px;">
                 Data Update
@@ -563,6 +562,7 @@
 @section('extrascript')
     <script>
         $(document).ready(function () {
+
             function updateDataTime() {
                 let now = new Date();
                 let day = String(now.getDate()).padStart(2, '0');
@@ -583,11 +583,34 @@
 
             window.updateDataTime = updateDataTime;
 
+            let currentLine      = @json($kodegroup ?? null);
+            let currentLineLabel = @json($namaline ?? null);
+            let currentDate       = @json($date);
+            let skipInitialChange = true;
+
+            const formattedDate = new Date(currentDate).toLocaleDateString('en-GB', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+            });
+
+            function updateClock() {
+                const now = new Date();
+                const hour = String(now.getHours()).padStart(2, '0');
+                const minute = String(now.getMinutes()).padStart(2, '0');
+                const second = String(now.getSeconds()).padStart(2, '0');
+
+                const formatted = `${day} ${month[now.getMonth()]} ${year} - ${hour} : ${minute} : ${second}`;
+
+                const addDate = `${formattedDate} - ${hour} : ${minute} : ${second}`;
+                document.getElementById('liveClock').innerHTML = addDate;
+            }
+
             $('#line').select2({
                 placeholder: 'Select Line',
                 width: '100%',
                 ajax: {
-                    url: "{{ route('monitoring_inlineperformance_selectlinelts') }}",
+                    url: "{{ route('monitoring_inlineperformanceselectline') }}",
                     type: "GET",
                     dataType: "json",
                     delay: 500,
@@ -596,7 +619,6 @@
                             q: params.term,
                             page: params.page || 1
                         };
-                         updateDataTime()
                     },
                     processResults: function (data) {
                         return {
@@ -615,6 +637,252 @@
                 }
             });
 
+            if (currentLine) {
+                const preOption = new Option(currentLineLabel, currentLine, true, true);
+                $('#line').append(preOption).trigger('change');
+            }
+
+            function fetchInlineLts() {
+                if (!currentLine) return;
+
+                $('#datatable-container').css('opacity', 0.5);
+
+                $.ajax({
+                    url: "{{ route('monitoring_inlineperformance_filterInlineLts') }}",
+                    type: "GET",
+                    data: { line: currentLine, date: currentDate },
+                    success: function (res) {
+                        $('#tot_inspect').text(res.tot_inspect);
+                        $('#tot_defect').text(res.tot_defect);
+                        $('#rft').text(res.rft);
+                        $('#wft').text(res.wft);
+                        $('#datatable-container').html(res.html);
+                    },
+                    error: function (xhr) {
+                        console.log(xhr.responseJSON ? xhr.responseJSON.message : 'Request failed');
+                    },
+                    complete: function () {
+                        $('#datatable-container').css('opacity', 1);
+                    }
+                });
+            }
+
+            $('#line').on('change', function () {
+                if (skipInitialChange) {
+                    skipInitialChange = false;
+                    return;
+                }
+                currentLine = $(this).val();
+                fetchInlineLts();
+            });
+
+            $('.export-btn').on('click', function () {
+                if (!currentLine) {
+                    alert('Pilih line terlebih dahulu sebelum export.');
+                    return;
+                }
+            });
+
         });
     </script>
 @endsection
+
+
+@php
+    function roundColor($roundData)
+    {
+        if (($roundData['has_cap'] ?? false)) {
+            return ['bg' => '#F2994A', 'border' => '#F2C94C'];
+        }
+
+        if (($roundData['has_defect'] ?? false)) {
+            return ['bg' => '#F24C4C', 'border' => '#D63737'];
+        }
+
+        return ['bg' => '#219653', 'border' => '#4CF299'];
+    }
+
+    $statusIcon = [
+        'none'  => '<img src="' . _asset('svg/inlinePerformance/checklist.svg') . '" alt="No Defect">',
+        'one'   => '',
+        'multi' => '<img src="' . _asset('svg/inlinePerformance/defect2.svg') . '" alt="Multi Defect">',
+        'cap'   => '<img src="' . _asset('svg/inlinePerformance/pencil.svg') . '" alt="CAP Filled">',
+    ];
+
+    $operators = $operators ?? [];
+    $rounds    = $rounds ?? [];
+    $minColumns = 10;
+    $colCount   = max($minColumns, count($operators));
+@endphp
+
+<style>
+    #datalist th:first-child,
+    #datalist td:first-child {
+        min-width: 130px;
+        position: sticky;
+        left: 0;
+        z-index: 2;
+        background-color: #242E3E;
+    }
+
+    .round-badge {
+        display: inline-block;
+        padding: 0.5rem 1.25rem;
+        border-radius: 999px;
+        font-size: 15px;
+        font-weight: 400;
+        white-space: nowrap;
+    }
+
+    .card-operator p {
+        line-height: 1.4;
+    }
+
+    .status-empty {
+        min-height: 1px;
+    }
+
+    @media (max-width: 400px) {
+        #datalist th:first-child,
+        #datalist td:first-child {
+            min-width: 95px;
+        }
+
+        .round-badge {
+            padding: 0.3rem 0.6rem;
+            font-size: 11px;
+        }
+
+        .round-status-table .btn-detail img {
+            width: 16px;
+            height: 16px;
+        }
+    }
+
+    @media (max-width: 767.98px) {
+        #datalist th:first-child,
+        #datalist td:first-child {
+            min-width: 110px;
+        }
+
+        .round-badge {
+            padding: 0.35rem 0.85rem;
+            font-size: 12px;
+        }
+
+        .card-operator p {
+            font-size: 0.75rem;
+        }
+
+        .round-status-table .btn-detail img {
+            width: 18px;
+            height: 18px;
+        }
+    }
+
+    @media (max-width: 1024px) {
+        .table-scroll-wrapper {
+            height: 600px;
+        }
+    }
+
+    .table-scroll-wrapper::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .table-scroll-wrapper::-webkit-scrollbar-track {
+        background: #242E3E;
+        border-radius: 4px;
+    } */
+
+    .table-scroll-wrapper::-webkit-scrollbar-thumb {
+        background: #D9D9D9;
+        border-radius: 4px;
+    }
+
+    .table-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+        background: #D9D9D9;
+    }
+
+    .table-scroll-wrapper {
+        scrollbar-width: thin;
+        scrollbar-color: #D9D9D9 #242E3E;
+    }
+</style>
+
+<div class="table-scroll-wrapper">
+    <table id="datalist"
+           class="table table-bordered round-status-table"
+           style="min-width: {{ 130 + ($colCount * 90) }}px;">
+        <thead style="background-color:#242E3E;">
+            <tr id="operators">
+                <th class="text-center">OPERATORS</th>
+                @foreach($operators as $op)
+                @php
+                   $nm = explode(' ', $op['nama'] ?? '');
+                   $displayName = count($nm) > 1 ? $nm[0] . ' ' . $nm[1] : ($nm[0] ?: 'No Data');
+                @endphp
+                <th class="card-operator text-center ">
+                   <div class="d-flex flex-column mb-0 fw-normal align-items-center m-auto" style="width: 160px;">
+                       {{ $op['sequence_process'] ?? '-' }}<br>
+                       {{ $op['nik'] ?? '-' }}<br>
+                       <p class="fw-bold m-0">
+                           {{ $displayName }}
+                       </p>
+                   </div>
+                </th>
+           @endforeach
+
+           @for ($i = count($operators); $i < $minColumns; $i++)
+               <th class="text-center"><p class="mb-0"><br><br></p></th>
+           @endfor
+            </tr>
+        </thead>
+
+        <tbody>
+            @forelse($rounds as $roundData)
+                @php $rc = roundColor($roundData); @endphp
+                <tr>
+                    <td class="text-center round-label" style="width: 230px;">
+                        <span class="round-badge"
+                            style="background-color:{{ $rc['bg'] }}; border:2px solid {{ $rc['border'] }};">
+                            Round {{ $roundData['round'] }}
+                        </span>
+                    </td>
+                    @foreach(($roundData['cells'] ?? []) as $cell)
+                        @if (($cell['status'] ?? 'empty') === 'empty')
+                            <td class="text-center status-empty"></td>
+                        @else
+                            <td class="text-center">
+                                <div class="btn-detail status-{{ $cell['status'] }}">
+                                    {!! $statusIcon[$cell['status']] ?? '' !!}
+                                </div>
+                            </td>
+                        @endif
+                    @endforeach
+
+                    @for ($i = count($roundData['cells'] ?? []); $i < $minColumns; $i++)
+                       <td class="text-center status-empty"></td>
+                    @endfor
+                </tr>
+            @empty
+                @for ($round = 1; $round <= 5; $round++)
+                    @php $rc = $roundColors[$round]; @endphp
+                    <tr>
+                        <td class="text-center round-label">
+                            <span class="round-badge"
+                                  style="background-color:{{ $rc['bg'] }}; border:2px solid {{ $rc['border'] }};">
+                                Round {{ $round }}
+                            </span>
+                        </td>
+                        @for ($i = 1; $i <= $minColumns; $i++)
+                            <td class="text-center status-empty"></td>
+                        @endfor
+                    </tr>
+                @endfor
+            @endforelse
+        </tbody>
+    </table>
+</div>
+
+
