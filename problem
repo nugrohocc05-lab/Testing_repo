@@ -2,25 +2,34 @@
 
     @section('extracss')
     <style>
+        /* ============================================================
+           BASE (MOBILE-FIRST): halaman boleh scroll natural.
+           Layout "fixed height dashboard" (overflow:hidden + internal
+           scroll) baru dinyalakan di >=992px lewat media query di bawah.
+           Ini menggantikan pendekatan lama yang overflow:hidden by
+           default lalu cuma di-auto-kan lagi di <=576px, sehingga
+           rentang 577px-991px (HP besar landscape & tablet) kontennya
+           kepotong karena tidak bisa discroll.
+           ============================================================ */
         html, body {
-            height: 100%;
+            height: auto;
+            min-height: 100%;
         }
         body {
-            overflow: hidden;
+            overflow-y: auto;
             padding: 1rem;
         }
         .dashboard-wrap {
-            height: 100%;
+            min-height: 100%;
             display: flex;
             flex-direction: column;
-            min-height: 0;
         }
         .flex-fill-area {
             flex: 1 1 auto;
             min-height: 0;
             display: flex;
             flex-direction: column;
-            overflow: auto;
+            -webkit-overflow-scrolling: touch;
         }
 
         .btn-custom {
@@ -77,7 +86,7 @@
             color: #4CF299
         }
 
-        /* Stats Card */
+        /* Stat Card */
         .stat-card {
             height: 110px;
             overflow: hidden;
@@ -98,6 +107,8 @@
         #topDefectList {
             max-height: 90px;
             width: 100%;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
         }
 
         #topDefectList::-webkit-scrollbar {
@@ -161,7 +172,7 @@
             right: 130%;
         }
 
-        /* custom-tooltip-bottom  */
+        /* custom-tooltip-bottom */
         .custom-tooltip-bottom {
             position: absolute;
             top: 100%;
@@ -198,26 +209,68 @@
             transform: translateY(0);
         }
 
-         /* Mobile Kecil */
-        @media (max-width: 576px) {
+        /* ============================================================
+           MEDIA QUERIES — sengaja diurutkan dari max-width TERBESAR ke
+           TERKECIL. Karena semua pakai max-width, blok yang tertulis
+           PALING TERAKHIR yang menang untuk properti yang sama di layar
+           sempit. Urutan lama (576 -> 768 -> 1024) membuat rule 1024px
+           menimpa rule 768px di HP kecil (bug). Urutan di bawah ini
+           memastikan rule paling spesifik (layar paling sempit) yang
+           menang terakhir.
+           ============================================================ */
+
+        /* Desktop/Laptop (992px - 1400px): aktifkan layout fixed-height */
+        @media (min-width: 992px) {
+            html, body {
+                height: 100%;
+            }
             body {
+                overflow: hidden;
+            }
+            .dashboard-wrap {
+                height: 100%;
+                min-height: 0;
+            }
+            .flex-fill-area {
                 overflow: auto;
-            }
-            .dashboard-title { font-size: 1.1rem; }
-            .dashboard-subtitle { display: none; }
-            .btn-custom { width: 100%; justify-content: center; }
-            .d-flex.flex-wrap > .d-flex { width: 100%; }
-            .color-box-yellow img, .color-box-red img,
-            .color-box-blue img, .color-box-green img {
-                width: 40px !important; height: 40px !important;
-            }
-            .color-box-yellow h2, .color-box-red h2,
-            .color-box-blue h2, .color-box-green h2 {
-                font-size: 1.4rem;
             }
         }
 
-        /* Mobile */
+        @media (min-width: 992px) and (max-width: 1400px) {
+            .dashboard-title { font-size: 1.5rem; }
+            .dashboard-subtitle { font-size: 0.85rem !important; }
+            .btn-custom {
+                padding-left: 0.85rem !important;
+                padding-right: 0.85rem !important;
+                padding-top: 0.6rem !important;
+                padding-bottom: 0.6rem !important;
+                font-size: 0.9rem;
+                white-space: nowrap;
+            }
+            .row.mt-4 .box-custom { width: 26px; height: 26px; }
+            .row.mt-4 img[style*="30px"] { width: 22px !important; height: 22px !important; }
+            .row.mt-4.border-custom > [class*="col-"] {
+                gap: 0.75rem !important;
+                padding-left: 0.5rem;
+                padding-right: 0.5rem;
+            }
+            .row.mt-4 label { font-size: 0.8rem; }
+            .stat-card { font-size: 14px; padding: 0.75rem !important; height: 165px; }
+            .stat-card img { width: 45px !important; height: 45px !important; }
+            .stat-card h2 { font-size: 1.4rem; }
+            .stat-card h6 { font-size: 0.8rem; }
+            #topDefectList { max-height: 80px; }
+        }
+
+        /* Tablet Mini (<=1024px) */
+        @media (max-width: 1024px) {
+            .button-inline {
+                width: 100%;
+                justify-content: start;
+            }
+        }
+
+        /* Mobile (<=768px) */
         @media (max-width: 768px) {
             .dashboard-title { font-size: 1.4rem; }
             .dashboard-subtitle { font-size: 1rem !important; }
@@ -242,63 +295,19 @@
             }
         }
 
-        /* Tablet Mini */
-        @media (max-width: 1024px) {
-            .button-inline {
-                width: 100%;
-                justify-content: start;
+        /* Mobile Kecil (<=576px) */
+        @media (max-width: 576px) {
+            .dashboard-title { font-size: 1.1rem; }
+            .dashboard-subtitle { display: none; }
+            .btn-custom { width: 100%; justify-content: center; }
+            .d-flex.flex-wrap > .d-flex { width: 100%; }
+            .color-box-yellow img, .color-box-red img,
+            .color-box-blue img, .color-box-green img {
+                width: 40px !important; height: 40px !important;
             }
-        }
-
-        /* Laptop Mas Doni */
-        @media (min-width: 992px) and (max-width: 1400px) {
-            html, body {
-                height: 100%;
-            }
-
-            body {
-                overflow: hidden;
-            }
-
-            .dashboard-wrap {
-                height: 100%;
-                display: flex;
-                flex-direction: column;
-                min-height: 0;
-            }
-
-            .dashboard-title { font-size: 1.5rem; }
-            .dashboard-subtitle { font-size: 0.85rem !important; }
-            .btn-custom {
-                padding-left: 0.85rem !important;
-                padding-right: 0.85rem !important;
-                padding-top: 0.6rem !important;
-                padding-bottom: 0.6rem !important;
-                font-size: 0.9rem;
-                white-space: nowrap;
-            }
-            .row.mt-4 .box-custom { width: 26px; height: 26px; }
-            .row.mt-4 img[style*="30px"] { width: 22px !important; height: 22px !important; }
-            .row.mt-4.border-custom > [class*="col-"] {
-                gap: 0.75rem !important;
-                padding-left: 0.5rem;
-                padding-right: 0.5rem;
-            }
-            .row.mt-4 label { font-size: 0.8rem; }
-            .stat-card { font-size: 14px; }
-
-            .stat-card { padding: 0.75rem !important; height: 165px; }
-            .stat-card img { width: 45px !important; height: 45px !important; }
-            .stat-card h2 { font-size: 1.4rem; }
-            .stat-card h6 { font-size: 0.8rem; }
-            #topDefectList { max-height: 80px; }
-
-             .flex-fill-area {
-                flex: 1 1 auto;
-                min-height: 0;
-                display: flex;
-                flex-direction: column;
-                overflow: auto;
+            .color-box-yellow h2, .color-box-red h2,
+            .color-box-blue h2, .color-box-green h2 {
+                font-size: 1.4rem;
             }
         }
 
@@ -309,10 +318,9 @@
 
         .table-scroll-area {
             flex: 1 1 auto;
-            min-height: 0;
+            min-height: 200px;
             height: auto;
             max-height: none;
-            min-height: 200px;
         }
 
         .dashboard-wrap > .d-flex.flex-wrap.justify-content-between,
@@ -330,6 +338,7 @@
                 <img
                     src="{{ _asset('svg/inlinePerformance/machine.svg') }}"
                     class="flex-shrink-0"
+                    alt="Inline Performance"
                     style="width: 60px; height: 60px;">
 
                 <div class="d-flex flex-column justify-content-center">
@@ -344,7 +353,7 @@
             <div class="button-inline d-flex gap-3">
                 <a href="{{ route('monitoring_inlineperformance_selectlinelts') }}"
                    class="btn-custom px-4 py-3 text-decoration-none d-flex align-items-center">
-                    <img src="{{ _asset('svg/inlinePerformance/inline.svg') }}" class="me-2">
+                    <img src="{{ _asset('svg/inlinePerformance/inline.svg') }}" class="me-2" alt="">
                     INLINE TLS
                 </a>
 
@@ -353,6 +362,7 @@
                     class="export-btn px-3"
                     style="border: none; background: transparent; outline: none; box-shadow: none; padding: 0;"
                     onclick="location.reload()"
+                    aria-label="Refresh"
                 >
                     <img src="{{ _asset('svg/inlinePerformance/reload.svg') }}" alt="Refresh">
                     <span class="custom-tooltip-bottom">Refresh</span>
@@ -369,7 +379,7 @@
             <div class="col-6 col-sm-4 col-lg-2">
                 <div class="stat-card color-box-yellow h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
                     <img src="{{ _asset('svg/inlinePerformance/qty-inspect.svg') }}"
-                        class="img-fluid mb-3" style="width:60px;height:60px;">
+                        class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
                     <h6 class="fw-bold text-yellow mb-2">INSPECT QTY</h6>
                     <div class="d-flex align-items-end text-white">
                         <h2 class="fw-bold mb-0" id="cardQtyInspect">-</h2>
@@ -382,7 +392,7 @@
             <div class="col-6 col-sm-4 col-lg-2">
                 <div class="stat-card color-box-green h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
                     <img src="{{ _asset('svg/inlinePerformance/qty-defect.svg') }}"
-                        class="img-fluid mb-3" style="width:60px;height:60px;">
+                        class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
                     <h6 id="defectText" class="fw-bold text-green mb-2">DEFECT QTY</h6>
                     <div class="d-flex align-items-end text-white">
                         <h2 class="fw-bold mb-0" id="cardQtyDefect">-</h2>
@@ -395,7 +405,7 @@
             <div class="col-6 col-sm-4 col-lg-2">
                 <div class="stat-card color-box-green h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
                     <img src="{{ _asset('svg/inlinePerformance/rft.svg') }}"
-                        class="img-fluid mb-3" style="width:60px;height:60px;">
+                        class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
                     <h6 class="fw-bold text-green mb-2">RFT</h6>
                     <h2 class="fw-bold mb-0 text-white"><span id="cardRft">-</span> %</h2>
                 </div>
@@ -405,7 +415,7 @@
             <div class="col-6 col-sm-4 col-lg-2">
                 <div class="stat-card color-box-blue h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
                     <img src="{{ _asset('svg/inlinePerformance/wft.svg') }}"
-                        class="img-fluid mb-3" style="width:60px;height:60px;">
+                        class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
                     <h6 class="fw-bold text-blue mb-2">WFT</h6>
                     <h2 class="fw-bold mb-0 text-white"><span id="cardWft">-</span> %</h2>
                 </div>
@@ -415,7 +425,7 @@
             <div class="col-6 col-sm-4 col-lg-2">
                 <div id="targetColor" class="stat-card color-box-green h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
                     <img src="{{ _asset('svg/inlinePerformance/target.svg') }}"
-                        class="img-fluid mb-3" style="width:60px;height:60px;">
+                        class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
                     <h6 id="targetText" class="fw-bold text-green mb-2">TARGET RFT</h6>
                     <h2 class="fw-bold mb-0 text-white">97 %</h2>
                 </div>
@@ -427,7 +437,7 @@
                     <div class="d-flex flex-column justify-content-center align-items-center text-center  gap-3">
 
                         <div class="d-flex justify-content-center align-items-center gap-3">
-                            <svg id="topDefectChart" viewBox="0 0 120 120" width="60" height="60">
+                            <svg id="topDefectChart" viewBox="0 0 120 120" width="60" height="60" role="img" aria-label="Top defect chart">
                                 <!-- circle akan digenerate lewat JS -->
                             </svg>
                             <h6 class="fw-bold text-white mb-0">TOP DEFECT</h6>
@@ -448,7 +458,7 @@
         <!-- Footer -->
         <div class="footer-title mt-2 text-white d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0">
             <div class="d-flex align-items-center gap-2">
-                <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" style="width: 18px; height: 18px;">
+                <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" style="width: 18px; height: 18px;" alt="">
                 Data Update
                 <span id="liveClock"></span>
             </div>
@@ -536,1170 +546,3 @@
     @stack('scripts')
     @include('layouts.loading')
     @endsection
-
-<style>
-    .bg-custom-select {
-        background: #242E3E;
-        color: #fff;
-        border: 0;
-    }
-
-    .border-end-custom {
-        border-right: 1px solid #242E3E !important;
-    }
-
-    .box-custom {
-        width: 35px;
-        height: 35px;
-    }
-
-    .form-control,
-    .select2-container--default .select2-selection--single {
-        height: 38px;
-        border-radius: 0.375rem;
-    }
-
-    input[type="text"] {
-        background-color: #222F4A;
-        color: white;
-        border: none;
-    }
-
-    input[type="text"]:focus {
-        background-color: #222F4A;
-        color: white;
-        border-color: #576376;
-        box-shadow: none;
-    }
-
-    .select2-container {
-        width: 100% !important;
-    }
-
-    .select2-container--default .select2-selection--single {
-        background: #222F4A;
-        border: none;
-        display: flex;
-        align-items: center;
-    }
-
-    .select2-container--default .select2-selection--single .select2-selection__rendered {
-        color: white;
-        line-height: 38px;
-        padding-left: 0.75rem;
-    }
-
-    .select2-container--default .select2-selection--single .select2-selection__arrow {
-        height: 38px;
-    }
-
-    .select2-container--default .select2-selection--single .select2-selection__placeholder {
-        color: #ffffff !important;
-    }
-
-    .select2-container--default .select2-results__option--highlighted[aria-selected] {
-        background-color: transparent !important;
-        color: white !important;
-    }
-
-    .select2-container--default .select2-results__option[aria-selected="true"] {
-        background-color: transparent !important;
-        color: white !important;
-    }
-
-    .select2-dropdown {
-        background: #222F4A;
-        color: white;
-    }
-
-    .select2-results__option {
-        color: white;
-    }
-
-    .select2-search__field {
-        background: #222F4A;
-        color: white;
-        border: none;
-    }
-
-    .btn-custom:hover {
-        background-color: #242E3E;
-    }
-
-    .text-title { color: #5A587E; }
-
-    .flatpickr-calendar {
-        background: #242E3E;
-        border-radius: 12px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.35);
-        border: none;
-        width: 100%;
-        max-width: 307px;
-    }
-    .flatpickr-calendar.arrowTop:before,
-    .flatpickr-calendar.arrowTop:after {
-        display: none;
-    }
-    .flatpickr-months {
-        border-radius: 12px 12px 0 0;
-        padding: 10px 0;
-    }
-    .flatpickr-current-month {
-        color: #fff;
-        font-weight: 700;
-        font-size: 1.1rem;
-    }
-    .flatpickr-current-month .flatpickr-monthDropdown-months,
-    .flatpickr-current-month input.cur-year {
-        color: #fff;
-        background: transparent;
-    }
-    .flatpickr-months .flatpickr-prev-month,
-    .flatpickr-months .flatpickr-next-month {
-        color: #fff;
-        fill: #fff;
-        top: 12px;
-    }
-    .flatpickr-months .flatpickr-prev-month svg,
-    .flatpickr-months .flatpickr-next-month svg {
-        fill: #fff;
-    }
-    .flatpickr-weekdays { background: #1e2a44; }
-    span.flatpickr-weekday {
-        background: #1e2a44;
-        color: #cfd8ec;
-        font-weight: 600;
-    }
-    .flatpickr-days { background: #1e2a44; border: none; }
-    .dayContainer { background: #1e2a44; }
-    .flatpickr-day { color: #fff; border-radius: 10px; }
-    .flatpickr-day:hover { background: #33456b; }
-    .flatpickr-day.today { border-color: #6c8cd5; }
-    .flatpickr-day.prevMonthDay,
-    .flatpickr-day.nextMonthDay { color: #5a6785; }
-    .flatpickr-day.selected,
-    .flatpickr-day.selected:hover {
-        background: #32549A;
-        border-color: #32549A;
-        color: #fff;
-    }
-
-    .period-date .position-relative {
-        flex: 1 1 0;
-        min-width: 0;
-    }
-    .period-date input {
-        font-size: 0.85rem;
-    }
-
-    .margin-button {
-        margin-right: 80px;
-    }
-
-    .action-btn {
-        display: flex;
-        align-items: end;
-        gap: 12px;
-    }
-
-    .flatpickr-day.flatpickr-disabled,
-    .flatpickr-day.flatpickr-disabled:hover {
-        color: #5a6785;
-        cursor: not-allowed;
-    }
-
-    .select2-results__options::-webkit-scrollbar {
-        width: 6px;
-    }
-    .select2-results__options::-webkit-scrollbar-track {
-        /* background: #1C2536; */
-    }
-    .select2-results__options::-webkit-scrollbar-thumb {
-        background: #D9D9D9;
-        border-radius: 4px;
-    }
-
-    @media (max-width: 767.98px) {
-        .period-date { flex-direction: column; align-items: stretch; }
-        .period-date .position-relative { width: 100%; }
-        .period-date span.px-2 {
-            text-align: center;
-            padding: 4px 0 !important;
-        }
-        #findbtn { width: 100%; }
-
-        .icon-filter {
-            display: none;
-        }
-
-        .action-btn{
-            width:100%;
-            justify-content: space-between;
-            align-items:center;
-        }
-
-        .margin-button {
-            margin-right: 0;
-        }
-    }
-
-    @media (max-width: 1024px) {
-        .period-date {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .icon-filter {
-            display: none;
-        }
-
-        .to {
-            display:none;
-        }
-
-        .wrapper-date {
-            width: 50px;
-            margin: 0;
-            padding: 0 !important;
-            align-items: stretch !important;
-        }
-
-        .margin-button {
-            width: 200px;
-            margin-right: 0;
-        }
-    }
-
-    @media (min-width: 1024px) and (max-width: 1030px) {
-
-        .margin-button {
-            width: 100px;
-            margin-right: 0;
-        }
-    }
-
-    @media (min-width: 992px) and (max-width: 1400px) {
-        #line, #groupbuyer, #datea, #dateb { font-size: 0.85rem; }
-        #findbtn {
-            white-space: nowrap;
-            padding-left: 0.75rem;
-            padding-right: 0.75rem;
-        }
-
-        .period-date .position-relative { flex: 1; }
-        .period-date input {
-            font-size: 0.8rem;
-            padding-left: .5rem;
-            padding-right: 2rem;
-        }
-    }
-</style>
-
-<!-- Filter -->
-<div class="row mt-4 border-custom rounded px-2 py-2 text-white" style="margin: 0 1px 0 1px;">
-    <!-- Line -->
-    <div class="col-12 col-md-3 border-end-custom d-flex gap-4 mb-3 mb-md-0">
-        <div class="icon-filter">
-            <div class="box-custom" style="height: 31px;"></div>
-            <div class="">
-                <img src="{{ _asset('svg/inlinePerformance/line.svg') }}"
-                    style="width:30px; height:30px;">
-            </div>
-        </div>
-
-        <div class="w-100">
-            <label class="mb-1 text-title ">
-                Line
-            </label>
-            <select id="line" class="form-select select2 w-100">
-                <option></option>
-            </select>
-        </div>
-    </div>
-
-    <!-- Periode Date -->
-    <div class="col-12 col-md-5 border-end-custom d-flex gap-4 mb-3 mb-md-0">
-        <div class="icon-filter">
-            <div class="box-custom bg-transparent" style="height: 31px;"></div>
-            <div>
-                <img src="{{ _asset('svg/inlinePerformance/calendar.svg') }}"
-                    style="width:30px; height:30px;">
-            </div>
-        </div>
-
-        <div class="w-100">
-            <label class="mb-1 text-title">
-                Periode Date
-            </label>
-            <div class="wrapper-date d-flex align-items-center gap-2 w-100 flex-nowrap period-date">
-                <div class="position-relative flex-grow-1" style="min-width:130px;">
-                    <input
-                        type="text"
-                        id="datea"
-                        class="form-control pe-5"
-                        placeholder="Pilih tanggal">
-                    <img
-                        src="{{ _asset('svg/inlinePerformance/calendar-flat.svg') }}"
-                        class="position-absolute top-50 end-0 translate-middle-y me-3"
-                        style="width:18px; height:18px; pointer-events:none;">
-                </div>
-
-                <span class="to px-2">to</span>
-                <div class="position-relative flex-grow-1" style="min-width:130px;">
-                    <input
-                        type="text"
-                        id="dateb"
-                        class="form-control pe-5"
-                        placeholder="Pilih tanggal">
-                    <img
-                        src="{{ _asset('svg/inlinePerformance/calendar-flat.svg') }}"
-                        class="position-absolute top-50 end-0 translate-middle-y me-3"
-                        style="width:18px; height:18px; pointer-events:none;">
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Group Buyer -->
-    <div class="col-12 col-md-4 d-flex gap-4 mb-3 mb-md-0">
-        <div class="icon-filter">
-            <div class="box-custom bg-transparent" style="height: 31px;"></div>
-            <div>
-                <img src="{{ _asset('svg/inlinePerformance/user.svg') }}"
-                    style="width:30px; height:30px;">
-            </div>
-        </div>
-
-        <div class="w-100">
-            <label class="mb-1 text-title">
-                Group Buyer
-            </label>
-            <div class="d-flex flex-column flex-lg-row align-items-stretch align-items-lg-end gap-3 w-100">
-                <div class="flex-grow-1">
-                    <select id="groupbuyer" class="form-select select2 w-100">
-                        <option></option>
-                    </select>
-                </div>
-
-                <div class="action-btn align-items-center">
-                    <button class="margin-button btn btn-custom" id="findbtn">
-                        <img src="{{ _asset('svg/inlinePerformance/search.svg') }}"
-                            style="width:20px;height:15px;margin-right:2px;">
-                        Find
-                    </button>
-
-                    <button class="export-btn bg-transparent border-0 p-0" id="export-btn">
-                        <img src="{{ _asset('svg/inlinePerformance/export.svg') }}"
-                            style="width:27px;height:27px;">
-                        <span class="custom-tooltip">Export</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-@push('scripts')
-<script>
-    $(function () {
-        const dateOpt = {
-            dateFormat: "d-m-Y",
-            altInput: true,
-            altFormat: "d F Y",
-            allowInput: true,
-            monthSelectorType: "static",
-            disableMobile: true,
-            defaultDate: "today",
-            maxDate: "today"
-        };
-        flatpickr("#datea", dateOpt);
-        flatpickr("#dateb", dateOpt);
-
-        $('#line').select2({
-            placeholder: 'Select Line',
-            width: '100%',
-            ajax: {
-                url: "{{ route('monitoring_inlineperformanceselectline') }}",
-                type: "GET",
-                dataType: "json",
-                delay: 500,
-                data: function (params) {
-                    return {
-                        q: params.term,
-                        page: params.page || 1
-                    }
-                },
-                processResults: function (data) {
-                    if (data.current_page == 1) {
-                        data.data.unshift({ kodegroup: 'all' });
-                    }
-                    return {
-                        results: $.map(data.data, function (item) {
-                            if (item.kodegroup == 'all') {
-                                return { id: 'all', text: 'All Lines' }
-                            }
-                            return {
-                                id: item.kodegroup,
-                                text: item.namabagian + ' - ' + item.namagroup
-                            }
-                        }),
-                        pagination: {
-                            more: data.to < data.total
-                        }
-                    }
-                },
-                cache: true
-            }
-        });
-
-        $('#groupbuyer').select2({
-            placeholder: 'Select Buyer',
-            width: '100%',
-            ajax: {
-                url: "{{ route('monitoring_inlineperformancegroupbuyer') }}",
-                type: "GET",
-                dataType: "json",
-                delay: 500,
-                data: function (params) {
-                    return {
-                        q: params.term,
-                        page: params.page || 1
-                    };
-                },
-                processResults: function (data) {
-                    return { results: data.results };
-                },
-                cache: true
-            }
-        });
-
-        window.currentFilter = {
-            line: 'all',
-            datea: $('#datea').val(),
-            dateb: $('#dateb').val(),
-            groupbuyer: 'all'
-        };
-
-        function loadCards(filter) {
-            $.ajax({
-                url: "{{ route('monitoring_inlineperformancefilterdata') }}",
-                type: "GET",
-                data: filter,
-                beforeSend: function () {
-                    $('#loading').show();
-                },
-                success: function (response) {
-                    $('#cardQtyInspect').text(response.tot_inspect ?? '-');
-                    $('#cardQtyDefect').text(response.tot_defect ?? '-');
-                    $('#cardRft').text(response.rft ?? '-');
-                    $('#cardWft').text(response.wft ?? '-');
-
-                    // TOP DEFECT
-                    let html = '';
-
-                    if (response.top_defect && response.top_defect.length > 0) {
-
-                        response.top_defect.forEach(function (item) {
-                            html += `
-                                <div class="d-flex align-items-center mb-2 w-100">
-                                    <div style="
-                                        width:15px;
-                                        height:15px;
-                                        background:${item.color};
-                                        flex-shrink:0;
-                                    "></div>
-
-                                    <span class="text-white small ms-2 flex-grow-1 text-truncate"
-                                        style="min-width:0;">
-                                        ${item.total} ${item.nmdefect}
-                                    </span>
-
-                                    <span class="small ms-2 flex-shrink-0"
-                                        style="color:${item.color}">
-                                        ${item.percent}%
-                                    </span>
-                                </div>
-                            `;
-                        });
-
-                    } else {
-                        html = `
-                            <div class="text-white small text-center">
-
-                            </div>
-                        `;
-                    }
-
-                    $('#topDefectList').html(html);
-                    updateTopDefectChart(response.top_defect);
-
-                    // logic warna defect
-                    const card = $('#cardQtyDefect').closest('.stat-card');
-                    const cardText = $('#defectText');
-
-                    if (Number(response.tot_defect) === 0) {
-                        card.removeClass('color-box-red')
-                            .addClass('color-box-green');
-                        cardText.removeClass('text-red')
-                            .addClass('text-green');
-                    } else {
-                        card.removeClass('color-box-green')
-                            .addClass('color-box-red');
-                        cardText.removeClass('text-green')
-                            .addClass('text-red');
-                    }
-
-                    // Logic warna target
-                    const target = $('#targetColor');
-                    const targetText = $('#targetText');
-
-                    if (response.target === true) {
-                        target.removeClass('color-box-green').addClass('color-box-red');
-                        targetText.removeClass('text-green').addClass('text-red');
-                    } else {
-                        target.removeClass('color-box-red').addClass('color-box-green');
-                        targetText.removeClass('text-red').addClass('text-green');
-                    }
-
-                    updateDataTime();
-
-                },
-                error: function (xhr) {
-                    console.log(xhr.responseText);
-                },
-                complete: function () {
-                    $('#loading').hide();
-                }
-            });
-        }
-
-        $('#export-btn').click(function () {
-            let url = "{{ route('monitoring_inlineperformance_exportexcel') }}" +
-                "?datea=" + currentFilter.datea +
-                "&dateb=" + currentFilter.dateb +
-                "&line=" + currentFilter.line +
-                "&groupbuyer=" + currentFilter.groupbuyer;
-
-            window.location.href = url;
-        });
-
-        $('#findbtn').on('click', function (e) {
-            e.preventDefault();
-
-            currentFilter = {
-                line: $('#line').val(),
-                datea: $('#datea').val(),
-                dateb: $('#dateb').val(),
-                groupbuyer: $('#groupbuyer').val()
-            };
-
-            if (currentFilter.line == null || currentFilter.line == '') {
-                swal('Warning!', 'Please select Line first!', 'warning');
-                return;
-            }
-
-            if (currentFilter.groupbuyer == null || currentFilter.groupbuyer == '') {
-                swal('Warning!', 'Please select Group Buyer!', 'warning');
-                return;
-            }
-
-            if (currentFilter.datea == null || currentFilter.datea == '' ||
-                currentFilter.dateb == null || currentFilter.dateb == '') {
-                swal('Warning!', 'Please select Periode Date!', 'warning');
-                return;
-            }
-
-            function parseDMY(str) {
-                const [d, m, y] = str.split('-');
-                return new Date(`${y}-${m}-${d}`);
-            }
-
-            if (parseDMY(currentFilter.datea) > parseDMY(currentFilter.dateb)) {
-                swal('Warning!', 'Start date cannot be later than end date!', 'warning');
-                return;
-            }
-
-            updateDataTime();
-            loadCards(currentFilter);
-        });
-    });
-</script>
-@endpush
-
-<style>
-    .border-custom-datatable {
-        border: 1px solid #4C8CF2 !important;
-        background-color: #212B3E;
-    }
-
-    .table-custom th {
-        background-color: #1C2536 !important;
-        color: white;
-    }
-
-    .table-custom td {
-        background-color: #242E3E !important;
-        color: white;
-    }
-
-    #tableInlinePerformance {
-        border-collapse: separate;
-        border-spacing: 0;
-    }
-
-    #tableInlinePerformance thead th {
-        position: sticky;
-        top: 0;
-        z-index: 2;
-        will-change: transform;
-    }
-
-    #tableInlinePerformance tfoot td {
-        position: sticky;
-        bottom: 0;
-        z-index: 2;
-        background-color: #1C2536 !important;
-        will-change: transform;
-    }
-
-    #tableInlinePerformance tbody td:nth-child(3) { color: #4CF299; }
-    #tableInlinePerformance tbody td:nth-child(4) { color: #4C8CF2; }
-    #tableInlinePerformance tbody td:nth-child(5) { color: #E65858; }
-    #tableInlinePerformance tbody td:nth-child(6) { color: #4CF299; }
-    #tableInlinePerformance tbody td:nth-child(7) { color: #E65858; }
-
-    #searchLine::placeholder {
-        color: white;
-        opacity: 1;
-        font-weight: 300;
-    }
-
-    .datatable-wrap {
-        display: flex;
-        flex-direction: column;
-        overflow-y: hidden ;
-    }
-
-    .table-scroll-area {
-        overflow-y: auto;
-        overscroll-behavior: contain;
-        height: max(280px, calc(100vh - 560px));
-    }
-
-    #datedatatables {
-        max-width: 100%;
-    }
-
-    h5.text-nowrap {
-        white-space: nowrap;
-    }
-
-    .wrapper-title {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 12px;
-        width: 100%;
-    }
-
-    .datatable-header-left {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        flex-wrap: wrap;
-    }
-
-    .datatable-header-right {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: nowrap;
-    }
-
-    .search-wrapper {
-        position: relative;
-        width: 250px;
-    }
-
-    .search-icon {
-        position: absolute;
-        left: 12px;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 18px;
-        height: 18px;
-        pointer-events: none;
-    }
-
-    .search-input {
-        width: 250px;
-        max-width: 100%;
-        padding-left: 40px;
-    }
-
-    .export-text {
-        display: none;
-    }
-
-    /* Skeleton Loading */
-    .skeleton-td {
-        padding: 10px 8px !important;
-    }
-
-    .skeleton-bar {
-        height: 14px;
-        border-radius: 6px;
-        background: linear-gradient(
-            90deg,
-            #2a3346 25%,
-            #3a4560 37%,
-            #2a3346 63%
-        );
-        background-size: 400% 100%;
-        animation: skeleton-shimmer 1.4s ease infinite;
-    }
-
-    .skeleton-badge {
-        height: 28px;
-        width: 90px;
-        margin: 0 auto;
-        border-radius: 999px;
-    }
-
-    @keyframes skeleton-shimmer {
-        0% { background-position: 100% 50%; }
-        100% { background-position: 0 50%; }
-    }
-
-     /* Chrome, Edge, Safari (Webkit) */
-    .table-scroll-wrapper::-webkit-scrollbar {
-        height: 8px;
-        width: 8px;
-    }
-
-    .table-scroll-wrapper::-webkit-scrollbar-track {
-        background: #242E3E;
-        border-radius: 4px;
-    }
-
-    .table-scroll-wrapper::-webkit-scrollbar-thumb {
-        background: #D9D9D9;
-        border-radius: 4px;
-    }
-
-    .table-scroll-wrapper::-webkit-scrollbar-thumb:hover {
-        background: #D9D9D9;
-    }
-
-    /* Firefox */
-    .table-scroll-wrapper {
-        scrollbar-width: thin;
-        scrollbar-color: #D9D9D9 #242E3E;
-    }
-
-    .table-scroll-area {
-        overflow-y: auto;
-        overscroll-behavior: contain;
-        height: max(280px, calc(100vh - 560px));
-    }
-
-    #tableInlinePerformanceFoot {
-        flex-shrink: 0;
-    }
-
-    #tableInlinePerformanceFoot td {
-        background-color: #1C2536 !important;
-    }
-
-    .position-relative {
-        flex-grow: 0;
-        width: 250px;
-        min-width: 160px;
-    }
-
-    /* Mobile */
-    @media (max-width: 767.98px) {
-        #datedatatables { width: 100% !important; }
-        .search-input { width: 100%; }
-        #find { flex-shrink: 0; }
-
-        .wrapper-title {
-            flex-direction: column;
-            align-items: stretch;
-        }
-
-        .datatable-header-left {
-            width: 100%;
-            flex-wrap: wrap;
-            row-gap: 0.5rem;
-        }
-        .datatable-header-left h5.text-nowrap {
-            white-space: normal;
-            font-size: 0.95rem;
-            flex: 1 1 auto;
-            min-width: 0;
-            word-break: break-word;
-        }
-        .datatable-header-left .position-relative {
-            width: 100%;
-            flex-grow: 0;
-            min-width: 0;
-        }
-
-        .datatable-header-right {
-            width: 100%;
-            justify-content: space-between;
-        }
-        .datatable-header-right .search-input {
-            flex: 1 1 100%;
-        }
-
-        .search-wrapper {
-            flex: 1;
-        }
-
-        .export-btn {
-            padding: 6px 12px !important;
-            color: white;
-            font-size: 0.85rem;
-            font-weight: 500;
-        }
-        .export-text {
-            display: inline-block;
-        }
-
-        .detailIcon {
-            display: none;
-        }
-
-        .position-relative {
-            flex-grow: 1;
-            width: none;
-            min-width: none;
-        }
-    }
-
-    /* Laptop Mas Doni */
-    @media (min-width: 992px) and (max-width: 1400px) {
-        #datedatatables {
-            font-size: 0.85rem;
-        }
-        .search-input {
-            width: 170px;
-        }
-        h5.text-nowrap {
-            font-size: 1.05rem;
-        }
-
-        .datatable-wrap {
-            flex-grow: 1;
-            min-height: 0;
-            /* overflow-y: auto; */
-        }
-        .table-scroll-area {
-            flex-grow: 1;
-            min-height: 0;
-            max-height: none;
-            height: auto;
-        }
-
-        .wrapper-title {
-            flex-wrap: nowrap;
-        }
-        .datatable-header-left {
-            flex: 1 1 auto;
-            min-width: 0;
-        }
-        .datatable-header-right {
-            flex: 0 0 auto;
-            margin-left: auto;
-        }
-        #datedatatables {
-            max-width: 100%;
-        }
-        h5.text-nowrap {
-            white-space: nowrap;
-        }
-    }
-
-    /* Tablet */
-    @media (min-width: 768px) and (max-width: 991.98px) {
-        .datatable-header-left,
-        .datatable-header-right {
-            width: 100%;
-            flex-wrap: wrap;
-        }
-        .datatable-header-left h5.text-nowrap {
-            white-space: normal;
-            font-size: 1rem;
-            flex: 1 1 auto;
-            min-width: 0;
-        }
-        .datatable-header-left .position-relative {
-            flex: 1 1 220px;
-            min-width: 200px;
-        }
-        .datatable-header-right {
-            justify-content: flex-start;
-        }
-        .datatable-header-right .search-input {
-            width: 240px;
-            flex: 1 1 240px;
-        }
-    }
-</style>
-
-<!-- Datatables -->
-<div class="table-scroll-wrapper mt-3 border-custom-datatable rounded p-3 text-white datatable-wrap">
-    <div class="d-flex align-items-center mb-3 wrapper-title justify-content-between">
-        <div class="datatable-header-left">
-            <img src="{{ _asset('svg/inlinePerformance/line.svg') }}" style="width:25px;height:25px;" class="detailIcon">
-            <h5 class="mb-0 fw-normal text-nowrap">
-                DETAIL PER LINE INLINE PERFORMANCE
-            </h5>
-            <div class="position-relative">
-                <input
-                    type="text"
-                    id="datedatatables"
-                    class="form-control pe-5 w-100"
-                    placeholder="Pilih tanggal">
-                <img
-                    src="{{ _asset('svg/inlinePerformance/calendar-flat.svg') }}"
-                    class="position-absolute top-50 end-0 translate-middle-y me-3"
-                    style="width:18px; height:18px; pointer-events:none;">
-            </div>
-        </div>
-
-        <div class="datatable-header-right">
-            <div class="search-wrapper">
-                <img
-                    src="{{ _asset('svg/inlinePerformance/search.svg') }}"
-                    class="search-icon"
-                    alt="Search">
-                <input
-                    type="text"
-                    id="searchLine"
-                    class="form-control search-input"
-                    placeholder="Search Line">
-            </div>
-
-            <button class="export-btn bg-transparent border-0 p-0 d-flex align-items-center gap-1" id="export-datatable-btn">
-                <img src="{{ _asset('svg/inlinePerformance/export.svg') }}"
-                    class="export-icon"
-                    style="width:27px; height:27px;">
-                <span class="custom-tooltip-bottom">Export</span>
-            </button>
-        </div>
-    </div>
-
-    <!-- Datatable Main -->
-    <div class="table-responsive table-scroll-area mt-1">
-        <table id="tableInlinePerformance" class="table-custom table table-borderless align-middle w-100">
-            <thead>
-                <tr>
-                    <th class="text-center" style="width:10%">Line</th>
-                    <th class="text-center" style="width:20%">Style</th>
-                    <th class="text-center" style="width:10%">QTY RFT<br>(Pcs)</th>
-                    <th class="text-center" style="width:10%">QTY Inspect<br>(Pcs)</th>
-                    <th class="text-center" style="width:10%">QTY Defect<br>(Pcs)</th>
-                    <th class="text-center" style="width:10%">RFT<br>(%)</th>
-                    <th class="text-center" style="width:10%">WFT<br>(%)</th>
-                    <th class="text-center" style="width:20%">Last Status</th>
-                </tr>
-            </thead>
-            <tbody id="tableInlinePerformanceBody">
-
-            </tbody>
-        </table>
-    </div>
-
-    <table id="tableInlinePerformanceFoot" class="table-custom table table-borderless align-middle w-100 mb-0" style="table-layout: fixed;">
-        <tbody>
-            <tr class="">
-                <td class="total fw-bold text-center" style="width:10%; color:#4C8CF2">TOTAL</td>
-                <td style="width:20%"></td>
-                <td class="text-center fw-bold" id="footQtyRft" style="width:10%; color:#4CF299;">0</td>
-                <td class="text-center fw-bold" id="footQtyInspect" style="width:10%; color:#4C8CF2">0</td>
-                <td class="text-center fw-bold" id="footQtyDefect" style="width:10%; color:#b95a5a">0</td>
-                <td style="width:10%"></td>
-                <td style="width:10%"></td>
-                <td style="width:20%"></td>
-            </tr>
-        </tbody>
-    </table>
-</div>
-
-@push('scripts')
-<script>
-    $(function () {
-        flatpickr("#datedatatables", {
-            dateFormat: "d-m-Y",
-            altInput: true,
-            altFormat: "d F Y",
-            allowInput: true,
-            monthSelectorType: "static",
-            disableMobile: true,
-            defaultDate: "{{ \Carbon\Carbon::parse($date)->format('d-m-Y') }}",
-            onChange: function (selectedDates, dateStr) {
-                if (!dateStr) return;
-                reloadTable(dateStr);
-            },
-            maxDate: "today"
-        });
-
-        const initialDate = "{{ \Carbon\Carbon::parse($date)->format('d-m-Y') }}";
-        $('#tableInlinePerformanceBody').html(renderSkeletonRows(6));
-        initTable();
-        reloadTable(initialDate);
-
-        function initTable() {
-            window.table = $('#tableInlinePerformance').DataTable({
-                paging: false,
-                ordering: false,
-                info: false,
-                dom: '',
-                buttons: [
-                    {
-                        extend: 'excelHtml5',
-                        title: 'Detail Per Line Inline Performance ' + '{{ date("d-m-Y") }}',
-                        exportOptions: { columns: ':visible' }
-                    }
-                ]
-            });
-
-            table.off('draw').on('draw', function () {
-                updateFooterTotals();
-            });
-
-            updateFooterTotals();
-        }
-
-        function updateFooterTotals() {
-            let totalRft = 0, totalInspect = 0, totalDefect = 0;
-
-            table.rows({ search: 'applied' }).every(function () {
-                const cells = $(this.node()).find('td');
-                if (cells.length < 8) return;
-
-                totalRft += parseInt($(cells[2]).text().trim()) || 0;
-                totalInspect += parseInt($(cells[3]).text().trim()) || 0;
-                totalDefect += parseInt($(cells[4]).text().trim()) || 0;
-            });
-
-            $('#footQtyRft').text(totalRft);
-            $('#footQtyInspect').text(totalInspect);
-            $('#footQtyDefect').text(totalDefect);
-        }
-
-        function reloadTable(dateStr) {
-            table.destroy();
-            $('#tableInlinePerformanceBody').html(renderSkeletonRows(7));
-
-            $.get("{{ route('monitoring_inlineperformancedatatables') }}", { date: dateStr })
-                .done(function (html) {
-                    $('#tableInlinePerformanceBody').html(html);
-                    initTable();
-                    $('#searchLine').val('');
-                    updateDataTime();
-                })
-                .fail(function (xhr) {
-                    console.error(xhr.responseText);
-                    $('#tableInlinePerformanceBody').html(
-                        '<tr><td colspan="8" class="text-center text-danger">Failed to load data</td></tr>'
-                    );
-                    initTable();
-                });
-        }
-
-        // Search
-        $('#searchLine, #find').on('keyup click', function (e) {
-            if (e.type === 'click' || e.key === 'Enter' || e.type === 'keyup') {
-                table.column(0).search($('#searchLine').val()).draw();
-            }
-        });
-
-        $('#export-datatable-btn').on('click', function () {
-            table.button('.buttons-excel').trigger();
-        });
-
-        function renderSkeletonRows(rowCount = 6) {
-            let rows = '';
-            for (let i = 0; i < rowCount; i++) {
-                rows += `
-                    <tr class="skeleton-row">
-                        <td class="text-center skeleton-td"><div class="skeleton-bar" style="width:60%;margin:0 auto;"></div></td>
-                        <td class="text-center skeleton-td"><div class="skeleton-bar" style="width:80%;margin:0 auto;"></div></td>
-                        <td class="text-center skeleton-td"><div class="skeleton-bar" style="width:50%;margin:0 auto;"></div></td>
-                        <td class="text-center skeleton-td"><div class="skeleton-bar" style="width:50%;margin:0 auto;"></div></td>
-                        <td class="text-center skeleton-td"><div class="skeleton-bar" style="width:50%;margin:0 auto;"></div></td>
-                        <td class="text-center skeleton-td"><div class="skeleton-bar" style="width:40%;margin:0 auto;"></div></td>
-                        <td class="text-center skeleton-td"><div class="skeleton-bar" style="width:40%;margin:0 auto;"></div></td>
-                        <td class="text-center skeleton-td"><div class="skeleton-bar skeleton-badge"></div></td>
-                    </tr>`;
-            }
-            return rows;
-        }
-    });
-</script>
-@endpush
-
-@php
-    $totalRft = 0;
-    $totalInspect = 0;
-    $totalDefect = 0;
-@endphp
-@forelse ($data as $d)
-    @php
-        $totalRft += (int) $d['qty_rft'];
-        $totalInspect += (int) $d['qty_inspect'];
-        $totalDefect += (int) $d['qty_defect'];
-    @endphp
-    <tr class="" style="background-color: #1C2536;">
-        <td class="text-center fw-normal" style="width: 10%;">{{ $d['line'] ?? '-' }}</td>
-        <td class="text-center fw-normal" style="width: 20%; max-width: 0;">
-            <span
-                class="d-inline-block text-truncate w-100"
-                style="max-width: 250px; vertical-align: middle;"
-                title="{{ !empty($d['style']) ? implode(', ', $d['style']) : '-' }}"
-            >
-                {{ !empty($d['style']) ? implode(', ', $d['style']) : '-' }}
-            </span>
-        </td>
-        <td class="text-center fw-normal" style="width: 10%;" >{{ $d['qty_rft'] ?? '-' }}</td>
-        <td class="text-center fw-normal" style="width: 10%;">{{ $d['qty_inspect'] ?? '-' }}</td>
-        <td class="text-center fw-normal" style="width: 10%;">{{ $d['qty_defect'] ?? '-' }}</td>
-        <td class="text-center fw-normal" style="width: 10%;">{{ $d['rft'] ?? '-' }}</td>
-        <td class="text-center fw-normal" style="width: 10%;">{{ $d['wft'] ?? '-' }}</td>
-        <td class="text-center fw-normal" style="width: 20%;">
-            @if (!$d['last_round'])
-                -
-            @else
-                <a href="{{ route('monitoring_inlineperformanceinlinetls', [
-                        'line'      => $d['line'],
-                        'kodegroup' => $d['kodegroup'],
-                        'date'      => $date,
-                    ]) }}">
-                    @if ($d['has_cap'])
-                        <div class="badge px-4 py-2 rounded-5" style="background-color: #F2994A; border: 2px solid #F2C94C; font-size:15px; font-weight:400">
-                            Round {{ $d['last_round'] }}
-                        </div>
-                    @elseif ($d['last_round_has_defect'])
-                        <div class="badge px-4 py-2 rounded-5" style="background-color: #F24C4C; border: 2px solid #D63737; font-size:15px; font-weight:400">
-                            Round {{ $d['last_round'] }}
-                        </div>
-                    @else
-                        <div class="badge px-4 py-2 rounded-5" style="background-color: #219653; border: 2px solid #4CF299; font-size:15px; font-weight:400">
-                            Round {{ $d['last_round'] }}
-                        </div>
-                    @endif
-                </a>
-            @endif
-        </td>
-    </tr>
-@empty
-    <tr>
-        <td colspan="8" class="text-center">Tidak ada data</td>
-    </tr>
-@endforelse
-<template id="footTotals" data-rft="{{ $totalRft }}" data-inspect="{{ $totalInspect }}" data-defect="{{ $totalDefect }}"></template>
-
-
