@@ -86,10 +86,16 @@
             color: #4CF299
         }
 
-        /* Stat Card */
+        /* Stat Card
+           Sebelumnya height:110px + overflow:hidden = konten yang lebih
+           tinggi dari 110px (khususnya card TOP DEFECT yang isinya
+           chart + judul + list defect dinamis) langsung terpotong.
+           Sekarang pakai min-height + height:auto supaya card mengikuti
+           tinggi kontennya. Card lain (icon+label+angka) tetap selalu
+           muat di min-height, jadi tampilannya tidak berubah. */
         .stat-card {
-            height: 110px;
-            overflow: hidden;
+            min-height: 110px;
+            height: auto;
         }
 
         .stat-card h2,
@@ -102,6 +108,23 @@
 
         .stat-card .d-flex.align-items-end {
             max-width: 100%;
+        }
+
+        /* TOP DEFECT card: biarkan tinggi menyesuaikan konten (chart +
+           judul selalu utuh terlihat). List defect di dalamnya yang
+           dibatasi & scroll sendiri lewat #topDefectList, jadi row
+           tidak ikut membengkak tak terbatas walau defect-nya banyak. */
+        .stat-card-defect {
+            height: auto;
+        }
+        .stat-card-defect > div {
+            width: 100%;
+        }
+        .defect-header {
+            width: 100%;
+        }
+        #topDefectList {
+            width: 100%;
         }
 
         #topDefectList {
@@ -255,7 +278,7 @@
                 padding-right: 0.5rem;
             }
             .row.mt-4 label { font-size: 0.8rem; }
-            .stat-card { font-size: 14px; padding: 0.75rem !important; height: 165px; }
+            .stat-card { font-size: 14px; padding: 0.75rem !important; min-height: 165px; height: auto; }
             .stat-card img { width: 45px !important; height: 45px !important; }
             .stat-card h2 { font-size: 1.4rem; }
             .stat-card h6 { font-size: 0.8rem; }
@@ -279,9 +302,15 @@
                 padding-top: 30px;
             }
 
-            .stat-card { padding: 0.75rem !important; height: 150px; font-size: 12px; }
+            .stat-card { padding: 0.75rem !important; min-height: 150px; height: auto; font-size: 12px; }
             .stat-card img { width: 45px !important; height: 45px !important; }
             #topDefectList { max-height: 70px; }
+            /* di col-6 (2 kartu per baris) chart+judul jadi sempit,
+               ditumpuk vertikal biar tidak berdesakan */
+            .defect-header {
+                flex-direction: column;
+                gap: 0.5rem !important;
+            }
             .border-end-custom {
                 border-right: none !important;
                 border-bottom: 1px solid rgba(255,255,255,.2);
@@ -433,10 +462,10 @@
 
             <!-- TOP DEFECT -->
             <div class="col-6 col-sm-4 col-lg-2">
-                <div class="stat-card color-box-red h-105 p-4">
-                    <div class="d-flex flex-column justify-content-center align-items-center text-center  gap-3">
+                <div class="stat-card stat-card-defect color-box-red h-100 p-4">
+                    <div class="d-flex flex-column justify-content-center align-items-center text-center gap-3">
 
-                        <div class="d-flex justify-content-center align-items-center gap-3">
+                        <div class="d-flex justify-content-center align-items-center gap-3 defect-header">
                             <svg id="topDefectChart" viewBox="0 0 120 120" width="60" height="60" role="img" aria-label="Top defect chart">
                                 <!-- circle akan digenerate lewat JS -->
                             </svg>
