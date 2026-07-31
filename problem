@@ -15,7 +15,6 @@
             width: 100%;
         }
 
-        /* ---------- Header ---------- */
         .dashboard-header {
             display: flex;
             flex-wrap: wrap;
@@ -73,10 +72,6 @@
             border-radius: 5px;
         }
 
-        /* ---------- Location + metric cards ----------
-           auto-fit grid: cards keep a comfortable minimum width and wrap
-           to a new line on their own whenever the wrapper isn't wide
-           enough — no manual breakpoint juggling, no squished cards. */
         .metrics-wrap {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -89,11 +84,12 @@
             min-height: 130px;
             padding: 1rem;
             display: flex;
-            flex-direction: column;
+            /* flex-direction: column; */
             justify-content: center;
             align-items: center;
             text-align: center;
             gap: 0.5rem;
+            font-size: ;
         }
 
         .metric-card .metric-value {
@@ -119,7 +115,6 @@
             margin: 0;
         }
 
-        /* ---------- Round status table area ---------- */
         .datatable-wrap {
             display: flex;
             flex-direction: column;
@@ -326,9 +321,6 @@
             font-size: 0.9rem;
         }
 
-        /* ================= Responsive breakpoints (mobile-first) ================= */
-
-        /* >= 400px: tiny phones get a touch more breathing room */
         @media (min-width: 400px) {
             .metric-icon {
                 width: 40px;
@@ -336,7 +328,6 @@
             }
         }
 
-        /* >= 576px (sm) */
         @media (min-width: 576px) {
             .metric-icon {
                 width: 48px;
@@ -361,7 +352,6 @@
             }
         }
 
-        /* >= 768px (md): footer spreads out; icons get a bit bigger */
         @media (min-width: 768px) {
             .metrics-wrap {
                 gap: 1rem;
@@ -391,7 +381,6 @@
             }
         }
 
-        /* >= 992px (lg): lock to viewport height, table area scrolls internally */
         @media (min-width: 992px) {
             html, body {
                 height: 100%;
@@ -449,48 +438,55 @@
             </div>
         </div>
 
-        <!-- Location + Metric cards: one self-wrapping grid, all cards same shape -->
         <div class="metrics-wrap">
-            <div class="location-box color-box-red">
+            <div class="location-box d-flex flex-column color-box-red">
                 <h4 class="fw-bold text-red mb-0">LOCATION</h4>
-                <h5 class="fw-bold mb-0" style="color: white;">{{$namaline}}</h5>
+                <span class="location-text fw-bold mb-0" style="color: white;">{{$namaline}}</span>
             </div>
 
             <!-- QTY INSPECT -->
             <div class="color-box-yellow metric-card">
                 <img src="{{ _asset('svg/inlinePerformance/qty-inspect.svg') }}" class="metric-icon img-fluid">
-                <h6 class="fw-bold text-yellow">QTY INSPECT</h6>
-                <div class="metric-value text-white">
-                    <h2 class="fw-bold" id="tot_inspect">{{ $tot_inspect ?? 0 }}</h2>
-                    <small>pcs</small>
+                <div>
+                    <h6 class="fw-bold text-yellow">QTY INSPECT</h6>
+                    <div class="metric-value text-white">
+                        <h2 class="fw-bold" id="tot_inspect">{{ $tot_inspect ?? 0 }}</h2>
+                        <small>pcs</small>
+                    </div>
                 </div>
             </div>
 
             <!-- QTY DEFECT -->
             <div class="color-box-red metric-card">
                 <img src="{{ _asset('svg/inlinePerformance/qty-defect.svg') }}" class="metric-icon img-fluid">
-                <h6 class="fw-bold text-red">QTY DEFECT</h6>
-                <div class="metric-value text-white">
-                    <h2 class="fw-bold" id="tot_defect">{{ $tot_defect ?? 0 }}</h2>
-                    <small>pcs</small>
+                <div>
+                    <h6 class="fw-bold text-red">QTY DEFECT</h6>
+                    <div class="metric-value text-white">
+                        <h2 class="fw-bold" id="tot_defect">{{ $tot_defect ?? 0 }}</h2>
+                        <small>pcs</small>
+                    </div>
                 </div>
             </div>
 
             <!-- RFT -->
             <div class="color-box-green metric-card">
                 <img src="{{ _asset('svg/inlinePerformance/rft.svg') }}" class="metric-icon img-fluid">
-                <h6 class="fw-bold text-green">RFT</h6>
-                <div class="metric-value text-white">
-                    <h2 class="fw-bold"><span id="rft">{{ $rft ?? '0.00' }}%</span></h2>
+                <div>
+                    <h6 class="fw-bold text-green">RFT</h6>
+                    <div class="metric-value text-white">
+                        <h2 class="fw-bold"><span id="rft">{{ $rft ?? '0.00' }}%</span></h2>
+                    </div>
                 </div>
             </div>
 
             <!-- WFT -->
             <div class="color-box-blue metric-card">
                 <img src="{{ _asset('svg/inlinePerformance/wft.svg') }}" class="metric-icon img-fluid">
-                <h6 class="fw-bold text-blue">WFT</h6>
-                <div class="metric-value text-white">
-                    <h2 class="fw-bold"><span id="wft">{{ $wft ?? '0.00' }}%</span></h2>
+                <div>
+                    <h6 class="fw-bold text-blue">WFT</h6>
+                    <div class="metric-value text-white">
+                        <h2 class="fw-bold"><span id="wft">{{ $wft ?? '0.00' }}%</span></h2>
+                    </div>
                 </div>
             </div>
         </div>
@@ -675,7 +671,6 @@
     </script>
 @endsection
 
-
 @php
     function roundColor($roundData)
     {
@@ -754,7 +749,6 @@
         scrollbar-color: #D9D9D9 #242E3E;
     }
 
-    /* Mobile-first: grow badge/first-column/text sizes as the viewport grows */
     @media (min-width: 576px) {
         #datalist th:first-child,
         #datalist td:first-child {
@@ -868,3 +862,6 @@
         </tbody>
     </table>
 </div>
+
+
+
