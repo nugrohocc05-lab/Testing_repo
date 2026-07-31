@@ -1,163 +1,574 @@
-@php
-    $roundColors = [
-        1 => ['bg' => '#219653', 'border' => '#4CF299'],
-        2 => ['bg' => '#219653', 'border' => '#4CF299'],
-        3 => ['bg' => '#219653', 'border' => '#4CF299'],
-        4 => ['bg' => '#219653', 'border' => '#4CF299'],
-        5 => ['bg' => '#219653', 'border' => '#4CF299'],
-    ];
-
-    $statusIcon = [
-        'none'  => '<img src="' . _asset('svg/inlinePerformance/checklist.svg') . '" alt="No Defect">',
-        'one'   => '',
-        'multi' => '<img src="' . _asset('svg/inlinePerformance/defect2.svg') . '" alt="Multi Defect">',
-        'cap'   => '<img src="' . _asset('svg/inlinePerformance/pencil.svg') . '" alt="CAP Filled">',
-    ];
-
-    $operators = $operators ?? [];
-    $rounds    = $rounds ?? [];
-    $colCount  = count($operators) > 0 ? count($operators) : 10;
-@endphp
-
 <style>
-    /*
-     * Kolom pertama (label ROUND / OPERATORS) dibuat sticky supaya
-     * tetap terlihat di kiri walau wrapper di-scroll ke kanan.
-     * background-color WAJIB solid (bukan transparent) supaya konten
-     * kolom lain di baliknya tidak terlihat menembus saat scroll.
-     */
-    #datalist th:first-child,
-    #datalist td:first-child {
-        min-width: 130px;
-        position: sticky;
-        left: 0;
-        z-index: 2;
-        background-color: #242E3E;
+    .border-custom-datatable {
+        border: 1px solid #4C8CF2 !important;
+        background-color: #212B3E;
     }
 
-    .round-badge {
-        display: inline-block;
-        padding: 0.5rem 1.25rem;
-        border-radius: 999px;
-        font-size: 15px;
-        font-weight: 400;
+    .table-custom th {
+        background-color: #1C2536 !important;
+        color: white;
+    }
+
+    .table-custom td {
+        background-color: #242E3E !important;
+        color: white;
+    }
+
+    #tableInlinePerformance {
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+
+    #tableInlinePerformance thead th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        will-change: transform;
+    }
+
+    /* NOTE: tabel ini tidak punya <tfoot> (footer total dibuat sbg
+       tabel terpisah #tableInlinePerformanceFoot di bawah), jadi
+       rule sticky utk tfoot yang lama dihapus krn tidak pernah kepakai. */
+
+    #tableInlinePerformance tbody td:nth-child(3) { color: #4CF299; }
+    #tableInlinePerformance tbody td:nth-child(4) { color: #4C8CF2; }
+    #tableInlinePerformance tbody td:nth-child(5) { color: #E65858; }
+    #tableInlinePerformance tbody td:nth-child(6) { color: #4CF299; }
+    #tableInlinePerformance tbody td:nth-child(7) { color: #E65858; }
+
+    #searchLine::placeholder {
+        color: white;
+        opacity: 1;
+        font-weight: 300;
+    }
+
+    .datatable-wrap {
+        display: flex;
+        flex-direction: column;
+        overflow-y: hidden;
+    }
+
+    .table-scroll-area {
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        height: max(280px, calc(100vh - 560px));
+    }
+
+    #datedatatables {
+        max-width: 100%;
+    }
+
+    h5.text-nowrap {
         white-space: nowrap;
     }
 
-    .card-operator p {
-        line-height: 1.4;
+    .wrapper-title {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
     }
 
-    .status-empty {
-        min-height: 1px;
+    .datatable-header-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
     }
 
+    .datatable-header-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: nowrap;
+    }
+
+    .search-wrapper {
+        position: relative;
+        width: 250px;
+    }
+
+    .search-icon {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 18px;
+        height: 18px;
+        pointer-events: none;
+    }
+
+    .search-input {
+        width: 250px;
+        max-width: 100%;
+        padding-left: 40px;
+    }
+
+    .export-text {
+        display: none;
+    }
+
+    /* Skeleton Loading */
+    .skeleton-td {
+        padding: 10px 8px !important;
+    }
+
+    .skeleton-bar {
+        height: 14px;
+        border-radius: 6px;
+        background: linear-gradient(
+            90deg,
+            #2a3346 25%,
+            #3a4560 37%,
+            #2a3346 63%
+        );
+        background-size: 400% 100%;
+        animation: skeleton-shimmer 1.4s ease infinite;
+    }
+
+    .skeleton-badge {
+        height: 28px;
+        width: 90px;
+        margin: 0 auto;
+        border-radius: 999px;
+    }
+
+    @keyframes skeleton-shimmer {
+        0% { background-position: 100% 50%; }
+        100% { background-position: 0 50%; }
+    }
+
+    /* Chrome, Edge, Safari (Webkit) */
+    .table-scroll-wrapper::-webkit-scrollbar {
+        height: 8px;
+        width: 8px;
+    }
+
+    .table-scroll-wrapper::-webkit-scrollbar-track {
+        background: #242E3E;
+        border-radius: 4px;
+    }
+
+    .table-scroll-wrapper::-webkit-scrollbar-thumb {
+        background: #D9D9D9;
+        border-radius: 4px;
+    }
+
+    /* Firefox */
+    .table-scroll-wrapper {
+        scrollbar-width: thin;
+        scrollbar-color: #D9D9D9 #242E3E;
+    }
+
+    /* Beri hint visual bahwa tabel bisa discroll ke samping di layar
+       sempit (best practice: sinyal affordance utk horizontal scroll) */
+    .table-responsive {
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #tableInlinePerformanceFoot {
+        flex-shrink: 0;
+    }
+
+    #tableInlinePerformanceFoot td {
+        background-color: #1C2536 !important;
+    }
+
+    .position-relative {
+        flex-grow: 0;
+        width: 250px;
+        min-width: 160px;
+    }
+
+    /* ============================================================
+       Diurutkan dari max-width TERBESAR -> TERKECIL (lihat catatan
+       di index.blade.php mengenai bug cascade media query).
+       ============================================================ */
+
+    /* Laptop Mas Doni */
+    @media (min-width: 992px) and (max-width: 1400px) {
+        #datedatatables {
+            font-size: 0.85rem;
+        }
+        .search-input {
+            width: 170px;
+        }
+        h5.text-nowrap {
+            font-size: 1.05rem;
+        }
+
+        .datatable-wrap {
+            flex-grow: 1;
+            min-height: 0;
+        }
+        .table-scroll-area {
+            flex-grow: 1;
+            min-height: 0;
+            max-height: none;
+            height: auto;
+        }
+
+        .wrapper-title {
+            flex-wrap: nowrap;
+        }
+        .datatable-header-left {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+        .datatable-header-right {
+            flex: 0 0 auto;
+            margin-left: auto;
+        }
+        #datedatatables {
+            max-width: 100%;
+        }
+        h5.text-nowrap {
+            white-space: nowrap;
+        }
+    }
+
+    /* Tablet (768px - 991.98px) */
+    @media (min-width: 768px) and (max-width: 991.98px) {
+        .datatable-header-left,
+        .datatable-header-right {
+            width: 100%;
+            flex-wrap: wrap;
+        }
+        .datatable-header-left h5.text-nowrap {
+            white-space: normal;
+            font-size: 1rem;
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+        .datatable-header-left .position-relative {
+            flex: 1 1 220px;
+            min-width: 200px;
+        }
+        .datatable-header-right {
+            justify-content: flex-start;
+        }
+        .datatable-header-right .search-input {
+            width: 240px;
+            flex: 1 1 240px;
+        }
+    }
+
+    /* Mobile (<=767.98px) */
     @media (max-width: 767.98px) {
-        #datalist th:first-child,
-        #datalist td:first-child {
-            min-width: 110px;
+        #datedatatables { width: 100% !important; }
+        .search-input { width: 100%; }
+        #find { flex-shrink: 0; }
+
+        .wrapper-title {
+            flex-direction: column;
+            align-items: stretch;
         }
 
-        .round-badge {
-            padding: 0.35rem 0.85rem;
-            font-size: 12px;
+        .datatable-header-left {
+            width: 100%;
+            flex-wrap: wrap;
+            row-gap: 0.5rem;
+        }
+        .datatable-header-left h5.text-nowrap {
+            white-space: normal;
+            font-size: 0.95rem;
+            flex: 1 1 auto;
+            min-width: 0;
+            word-break: break-word;
+        }
+        .datatable-header-left .position-relative {
+            width: 100%;
+            flex-grow: 0;
+            min-width: 0;
         }
 
-        .card-operator p {
-            font-size: 0.75rem;
+        .datatable-header-right {
+            width: 100%;
+            justify-content: space-between;
+        }
+        .datatable-header-right .search-input {
+            flex: 1 1 100%;
         }
 
-        .round-status-table .btn-detail img {
-            width: 18px;
-            height: 18px;
-        }
-    }
-
-    @media (max-width: 400px) {
-        #datalist th:first-child,
-        #datalist td:first-child {
-            min-width: 95px;
+        .search-wrapper {
+            flex: 1;
+            width: auto;
         }
 
-        .round-badge {
-            padding: 0.3rem 0.6rem;
-            font-size: 11px;
+        .export-btn {
+            padding: 6px 12px !important;
+            color: white;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        .export-text {
+            display: inline-block;
         }
 
-        .round-status-table .btn-detail img {
-            width: 16px;
-            height: 16px;
+        .detailIcon {
+            display: none;
+        }
+
+        .position-relative {
+            flex-grow: 1;
+            width: auto;
+            min-width: 0;
         }
     }
 </style>
 
-<div class="table-scroll-wrapper">
-    <table id="datalist"
-           class="table table-bordered table-hover round-status-table"
-           style="min-width: {{ 130 + ($colCount * 90) }}px;">
-        <thead style="background-color:#242E3E;">
-            <tr id="operators">
-                <th class="text-center">OPERATORS</th>
+<!-- Datatables -->
+<div class="table-scroll-wrapper mt-3 border-custom-datatable rounded p-3 text-white datatable-wrap">
+    <div class="d-flex align-items-center mb-3 wrapper-title justify-content-between">
+        <div class="datatable-header-left">
+            <img src="{{ _asset('svg/inlinePerformance/line.svg') }}" style="width:25px;height:25px;" class="detailIcon" alt="">
+            <h5 class="mb-0 fw-normal text-nowrap">
+                DETAIL PER LINE INLINE PERFORMANCE
+            </h5>
+            <div class="position-relative">
+                <input
+                    type="text"
+                    id="datedatatables"
+                    class="form-control pe-5 w-100"
+                    placeholder="Pilih tanggal">
+                <img
+                    src="{{ _asset('svg/inlinePerformance/calendar-flat.svg') }}"
+                    class="position-absolute top-50 end-0 translate-middle-y me-3"
+                    style="width:18px; height:18px; pointer-events:none;" alt="">
+            </div>
+        </div>
 
-                @forelse($operators as $op)
-                    @php
-                        $nm = explode(' ', $op['nama'] ?? '');
-                        $displayName = count($nm) > 1 ? $nm[0] . ' ' . $nm[1] : ($nm[0] ?: 'No Data');
-                    @endphp
-                    <th class="card-operator text-center">
-                        <p class="mb-0">
-                            {{ $op['sequence_process'] ?? '-' }}<br>
-                            {{ $op['nik'] ?? '-' }}<br>
-                            {{ $displayName }}
-                        </p>
-                    </th>
-                @empty
-                    @for ($i = 1; $i <= 10; $i++)
-                        <th class="text-center"><p class="mb-0"><br><br></p></th>
-                    @endfor
-                @endforelse
-            </tr>
-        </thead>
+        <div class="datatable-header-right">
+            <div class="search-wrapper">
+                <img
+                    src="{{ _asset('svg/inlinePerformance/search.svg') }}"
+                    class="search-icon"
+                    alt="Search">
+                <input
+                    type="text"
+                    id="searchLine"
+                    class="form-control search-input"
+                    placeholder="Search Line">
+            </div>
 
-        <tbody>
-            @forelse($rounds as $roundData)
-                @php $rc = $roundColors[$roundData['round']] ?? $roundColors[1]; @endphp
+            <button class="export-btn bg-transparent border-0 p-0 d-flex align-items-center gap-1" id="export-datatable-btn" aria-label="Export">
+                <img src="{{ _asset('svg/inlinePerformance/export.svg') }}"
+                    class="export-icon"
+                    style="width:27px; height:27px;" alt="Export">
+                <span class="custom-tooltip-bottom">Export</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Datatable Main -->
+    <div class="table-responsive table-scroll-area mt-1">
+        <table id="tableInlinePerformance" class="table-custom table table-borderless align-middle w-100">
+            <thead>
                 <tr>
-                    <td class="text-center round-label">
-                        <span class="round-badge"
-                              style="background-color:{{ $rc['bg'] }}; border:2px solid {{ $rc['border'] }};">
-                            Round {{ $roundData['round'] }}
-                        </span>
-                    </td>
-
-                    @foreach(($roundData['cells'] ?? []) as $cell)
-                        @if (($cell['status'] ?? 'empty') === 'empty')
-                            <td class="text-center status-empty"></td>
-                        @else
-                            <td class="text-center">
-                                <div class="btn-detail status-{{ $cell['status'] }}">
-                                    {!! $statusIcon[$cell['status']] ?? '' !!}
-                                </div>
-                            </td>
-                        @endif
-                    @endforeach
+                    <th class="text-center" style="width:10%">Line</th>
+                    <th class="text-center" style="width:20%">Style</th>
+                    <th class="text-center" style="width:10%">QTY RFT<br>(Pcs)</th>
+                    <th class="text-center" style="width:10%">QTY Inspect<br>(Pcs)</th>
+                    <th class="text-center" style="width:10%">QTY Defect<br>(Pcs)</th>
+                    <th class="text-center" style="width:10%">RFT<br>(%)</th>
+                    <th class="text-center" style="width:10%">WFT<br>(%)</th>
+                    <th class="text-center" style="width:20%">Last Status</th>
                 </tr>
-            @empty
-                @for ($round = 1; $round <= 5; $round++)
-                    @php $rc = $roundColors[$round]; @endphp
-                    <tr>
-                        <td class="text-center round-label">
-                            <span class="round-badge"
-                                  style="background-color:{{ $rc['bg'] }}; border:2px solid {{ $rc['border'] }};">
-                                Round {{ $round }}
-                            </span>
-                        </td>
-                        @for ($i = 1; $i <= 10; $i++)
-                            <td class="text-center status-empty"></td>
-                        @endfor
-                    </tr>
-                @endfor
-            @endforelse
+            </thead>
+            <tbody id="tableInlinePerformanceBody">
+
+            </tbody>
+        </table>
+    </div>
+
+    <table id="tableInlinePerformanceFoot" class="table-custom table table-borderless align-middle w-100 mb-0" style="table-layout: fixed;">
+        <tbody>
+            <tr class="">
+                <td class="total fw-bold text-center" style="width:10%; color:#4C8CF2">TOTAL</td>
+                <td style="width:20%"></td>
+                <td class="text-center fw-bold" id="footQtyRft" style="width:10%; color:#4CF299;">0</td>
+                <td class="text-center fw-bold" id="footQtyInspect" style="width:10%; color:#4C8CF2">0</td>
+                <td class="text-center fw-bold" id="footQtyDefect" style="width:10%; color:#b95a5a">0</td>
+                <td style="width:10%"></td>
+                <td style="width:10%"></td>
+                <td style="width:20%"></td>
+            </tr>
         </tbody>
     </table>
 </div>
+
+@push('scripts')
+<script>
+    $(function () {
+        flatpickr("#datedatatables", {
+            dateFormat: "d-m-Y",
+            altInput: true,
+            altFormat: "d F Y",
+            allowInput: true,
+            monthSelectorType: "static",
+            disableMobile: true,
+            defaultDate: "{{ \Carbon\Carbon::parse($date)->format('d-m-Y') }}",
+            onChange: function (selectedDates, dateStr) {
+                if (!dateStr) return;
+                reloadTable(dateStr);
+            },
+            maxDate: "today"
+        });
+
+        const initialDate = "{{ \Carbon\Carbon::parse($date)->format('d-m-Y') }}";
+        $('#tableInlinePerformanceBody').html(renderSkeletonRows(6));
+        initTable();
+        reloadTable(initialDate);
+
+        function initTable() {
+            window.table = $('#tableInlinePerformance').DataTable({
+                paging: false,
+                ordering: false,
+                info: false,
+                dom: '',
+                buttons: [
+                    {
+                        extend: 'excelHtml5',
+                        title: 'Detail Per Line Inline Performance ' + '{{ date("d-m-Y") }}',
+                        exportOptions: { columns: ':visible' }
+                    }
+                ]
+            });
+
+            table.off('draw').on('draw', function () {
+                updateFooterTotals();
+            });
+
+            updateFooterTotals();
+        }
+
+        function updateFooterTotals() {
+            let totalRft = 0, totalInspect = 0, totalDefect = 0;
+
+            table.rows({ search: 'applied' }).every(function () {
+                const cells = $(this.node()).find('td');
+                if (cells.length < 8) return;
+
+                totalRft += parseInt($(cells[2]).text().trim()) || 0;
+                totalInspect += parseInt($(cells[3]).text().trim()) || 0;
+                totalDefect += parseInt($(cells[4]).text().trim()) || 0;
+            });
+
+            $('#footQtyRft').text(totalRft);
+            $('#footQtyInspect').text(totalInspect);
+            $('#footQtyDefect').text(totalDefect);
+        }
+
+        function reloadTable(dateStr) {
+            table.destroy();
+            $('#tableInlinePerformanceBody').html(renderSkeletonRows(7));
+
+            $.get("{{ route('monitoring_inlineperformancedatatables') }}", { date: dateStr })
+                .done(function (html) {
+                    $('#tableInlinePerformanceBody').html(html);
+                    initTable();
+                    $('#searchLine').val('');
+                    updateDataTime();
+                })
+                .fail(function (xhr) {
+                    console.error(xhr.responseText);
+                    $('#tableInlinePerformanceBody').html(
+                        '<tr><td colspan="8" class="text-center text-danger">Failed to load data</td></tr>'
+                    );
+                    initTable();
+                });
+        }
+
+        // Search
+        $('#searchLine, #find').on('keyup click', function (e) {
+            if (e.type === 'click' || e.key === 'Enter' || e.type === 'keyup') {
+                table.column(0).search($('#searchLine').val()).draw();
+            }
+        });
+
+        $('#export-datatable-btn').on('click', function () {
+            table.button('.buttons-excel').trigger();
+        });
+
+        function renderSkeletonRows(rowCount = 6) {
+            let rows = '';
+            for (let i = 0; i < rowCount; i++) {
+                rows += `
+                    <tr class="skeleton-row">
+                        <td class="text-center skeleton-td"><div class="skeleton-bar" style="width:60%;margin:0 auto;"></div></td>
+                        <td class="text-center skeleton-td"><div class="skeleton-bar" style="width:80%;margin:0 auto;"></div></td>
+                        <td class="text-center skeleton-td"><div class="skeleton-bar" style="width:50%;margin:0 auto;"></div></td>
+                        <td class="text-center skeleton-td"><div class="skeleton-bar" style="width:50%;margin:0 auto;"></div></td>
+                        <td class="text-center skeleton-td"><div class="skeleton-bar" style="width:50%;margin:0 auto;"></div></td>
+                        <td class="text-center skeleton-td"><div class="skeleton-bar" style="width:40%;margin:0 auto;"></div></td>
+                        <td class="text-center skeleton-td"><div class="skeleton-bar" style="width:40%;margin:0 auto;"></div></td>
+                        <td class="text-center skeleton-td"><div class="skeleton-bar skeleton-badge"></div></td>
+                    </tr>`;
+            }
+            return rows;
+        }
+    });
+</script>
+@endpush
+
+@php
+    $totalRft = 0;
+    $totalInspect = 0;
+    $totalDefect = 0;
+@endphp
+@forelse ($data as $d)
+    @php
+        $totalRft += (int) $d['qty_rft'];
+        $totalInspect += (int) $d['qty_inspect'];
+        $totalDefect += (int) $d['qty_defect'];
+    @endphp
+    <tr class="" style="background-color: #1C2536;">
+        <td class="text-center fw-normal" style="width: 10%;">{{ $d['line'] ?? '-' }}</td>
+        <td class="text-center fw-normal" style="width: 20%; max-width: 0;">
+            <span
+                class="d-inline-block text-truncate w-100"
+                style="max-width: 250px; vertical-align: middle;"
+                title="{{ !empty($d['style']) ? implode(', ', $d['style']) : '-' }}"
+            >
+                {{ !empty($d['style']) ? implode(', ', $d['style']) : '-' }}
+            </span>
+        </td>
+        <td class="text-center fw-normal" style="width: 10%;">{{ $d['qty_rft'] ?? '-' }}</td>
+        <td class="text-center fw-normal" style="width: 10%;">{{ $d['qty_inspect'] ?? '-' }}</td>
+        <td class="text-center fw-normal" style="width: 10%;">{{ $d['qty_defect'] ?? '-' }}</td>
+        <td class="text-center fw-normal" style="width: 10%;">{{ $d['rft'] ?? '-' }}</td>
+        <td class="text-center fw-normal" style="width: 10%;">{{ $d['wft'] ?? '-' }}</td>
+        <td class="text-center fw-normal" style="width: 20%;">
+            @if (!$d['last_round'])
+                -
+            @else
+                <a href="{{ route('monitoring_inlineperformanceinlinetls', [
+                        'line'      => $d['line'],
+                        'kodegroup' => $d['kodegroup'],
+                        'date'      => $date,
+                    ]) }}">
+                    @if ($d['has_cap'])
+                        <div class="badge px-4 py-2 rounded-5" style="background-color: #F2994A; border: 2px solid #F2C94C; font-size:15px; font-weight:400">
+                            Round {{ $d['last_round'] }}
+                        </div>
+                    @elseif ($d['last_round_has_defect'])
+                        <div class="badge px-4 py-2 rounded-5" style="background-color: #F24C4C; border: 2px solid #D63737; font-size:15px; font-weight:400">
+                            Round {{ $d['last_round'] }}
+                        </div>
+                    @else
+                        <div class="badge px-4 py-2 rounded-5" style="background-color: #219653; border: 2px solid #4CF299; font-size:15px; font-weight:400">
+                            Round {{ $d['last_round'] }}
+                        </div>
+                    @endif
+                </a>
+            @endif
+        </td>
+    </tr>
+@empty
+    <tr>
+        <td colspan="8" class="text-center">Tidak ada data</td>
+    </tr>
+@endforelse
+<template id="footTotals" data-rft="{{ $totalRft }}" data-inspect="{{ $totalInspect }}" data-defect="{{ $totalDefect }}"></template>
