@@ -1,8 +1,8 @@
-cek kode ini, apakah semisal saya ingin buat sebuah popup export untuk preview export excel , dan ada tombol export menggunakan datatable apa bisa ?
-
 @extends('layouts.masternonavbar')
 
 @section('extracss')
+    <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
+
     <style>
         html, body {
             margin: 0;
@@ -73,13 +73,6 @@ cek kode ini, apakah semisal saya ingin buat sebuah popup export untuk preview e
             border: 1px solid #4CF299;
             border-radius: 5px;
         }
-
-        /* .metrics-wrap {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-            gap: 0.75rem;
-            margin-top: 0.75rem;
-        } */
 
         .metrics-wrap {
             display: grid;
@@ -324,6 +317,35 @@ cek kode ini, apakah semisal saya ingin buat sebuah popup export untuk preview e
             gap: 10px;
         }
 
+        /* Export Preview Modal */
+        #exportPreviewModal .modal-content {
+            background-color: #242E3E;
+            color: #ffffff;
+        }
+
+        #exportPreviewModal .modal-header,
+        #exportPreviewModal .modal-footer {
+            border-color: #576376;
+        }
+
+        #exportPreviewModal .btn-close {
+            filter: invert(1);
+        }
+
+        #exportTable {
+            color: #ffffff;
+        }
+
+        #exportTable th,
+        #exportTable td {
+            border-color: #576376;
+            white-space: nowrap;
+        }
+
+        .dt-buttons .btn {
+            margin-bottom: 8px;
+        }
+
         @media (min-width: 400px) {
             .metric-icon {
                 width: 40px;
@@ -487,11 +509,12 @@ cek kode ini, apakah semisal saya ingin buat sebuah popup export untuk preview e
 
             <div class="header-right">
                 <span id="liveClock"></span>
-                <a href="{{ route('monitoring_inlineperformance_exportData') }}"
-                    class="export-btn bg-transparent border-0 p-0 d-flex align-items-center">
+                <button type="button"
+                    class="export-btn bg-transparent border-0 p-0 d-flex align-items-center"
+                    data-bs-toggle="modal" data-bs-target="#exportPreviewModal">
                     <img src="{{ _asset('svg/inlinePerformance/export.svg') }}" style="width:27px; height:27px;">
                     <span class="custom-tooltip">Export</span>
-                </a>
+                </button>
             </div>
         </div>
 
@@ -598,9 +621,39 @@ cek kode ini, apakah semisal saya ingin buat sebuah popup export untuk preview e
             </div>
         </div>
     </div>
+
+    <!-- Export Preview Modal -->
+    <div class="modal fade" id="exportPreviewModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Preview Export Data</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="exportLoading" class="text-center text-white py-4">
+                        Memuat data...
+                    </div>
+                    <div class="table-responsive">
+                        <table id="exportTable" class="table table-bordered table-sm w-100 d-none">
+                            <thead id="exportTableHead"></thead>
+                            <tbody id="exportTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                </div>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @section('extrascript')
+    <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
     <script>
         $(document).ready(function () {
 
@@ -615,6 +668,7 @@ cek kode ini, apakah semisal saya ingin buat sebuah popup export untuk preview e
             let currentLineLabel = @json($namaline ?? null);
             let currentDate       = @json($date);
             let skipInitialChange = true;
+            let exportDT          = null;
 
             console.log(currentDate);
 
@@ -741,15 +795,96 @@ cek kode ini, apakah semisal saya ingin buat sebuah popup export untuk preview e
                 fetchInlineLts();
             });
 
+            /* ============================
+               EXPORT PREVIEW MODAL LOGIC
+               ============================ */
+
+            function resetExportModal() {
+                if (exportDT) {
+                    exportDT.destroy();
+                    exportDT = null;
+                }
+                $('#exportTableHead').empty();
+                $('#exportTableBody').empty();
+                $('#exportTable').addClass('d-none');
+                $('#exportLoading').removeClass('d-none').text('Memuat data...');
+            }
+
+            function loadExportPreview() {
+                resetExportModal();
+
+                $.ajax({
+                    url: "{{ route('monitoring_inlineperformance_exportData') }}",
+                    type: "GET",
+                    data: { line: currentLine, date: currentDate },
+                    dataType: "json",
+                    success: function (res) {
+                        // res diharapkan berbentuk:
+                        // { headers: ['Col1','Col2', ...], rows: [ [v1,v2,...], [v1,v2,...] ] }
+                        if (!res || !res.headers || !res.rows) {
+                            $('#exportLoading').text('Data export tidak tersedia.');
+                            return;
+                        }
+
+                        let theadHtml = '<tr>' + res.headers.map(function (h) {
+                            return '<th>' + h + '</th>';
+                        }).join('') + '</tr>';
+                        $('#exportTableHead').html(theadHtml);
+
+                        let tbodyHtml = res.rows.map(function (row) {
+                            return '<tr>' + row.map(function (cell) {
+                                return '<td>' + (cell ?? '') + '</td>';
+                            }).join('') + '</tr>';
+                        }).join('');
+                        $('#exportTableBody').html(tbodyHtml);
+
+                        $('#exportLoading').addClass('d-none');
+                        $('#exportTable').removeClass('d-none');
+
+                        exportDT = $('#exportTable').DataTable({
+                            scrollX: true,
+                            paging: true,
+                            searching: true,
+                            lengthChange: true,
+                            dom: 'Bfrtip',
+                            buttons: [
+                                {
+                                    extend: 'excelHtml5',
+                                    text: 'Download Excel',
+                                    className: 'btn btn-success btn-sm',
+                                    title: 'InlinePerformance_' + (currentLine || '') + '_' + (currentDate || '')
+                                }
+                            ]
+                        });
+                    },
+                    error: function (xhr) {
+                        $('#exportLoading').text('Gagal memuat data export.');
+                        console.log(xhr.responseJSON ? xhr.responseJSON.message : 'Request failed');
+                    }
+                });
+            }
+
             $('.export-btn').on('click', function () {
                 if (!currentLine) {
                     alert('Pilih line terlebih dahulu sebelum export.');
+                    return false;
+                }
+                // modal akan terbuka via data-bs-toggle, data di-load saat event shown
+            });
+
+            $('#exportPreviewModal').on('show.bs.modal', function (e) {
+                if (!currentLine) {
+                    e.preventDefault();
+                    alert('Pilih line terlebih dahulu sebelum export.');
                     return;
                 }
+                loadExportPreview();
+            });
+
+            $('#exportPreviewModal').on('hidden.bs.modal', function () {
+                resetExportModal();
             });
 
         });
     </script>
 @endsection
-
-
