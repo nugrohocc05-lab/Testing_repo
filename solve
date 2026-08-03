@@ -1,588 +1,591 @@
-<style>
-    .bg-custom-select {
-        background: #242E3E;
-        color: #fff;
-        border: 0;
+<?php
+
+namespace Modules\Monitoring\Http\Controllers;
+
+use DB;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+use App\Http\Controllers\Controller;
+use App\Http\Controllers\SmvController;
+use App\Http\Models\FactoryParameter;
+use App\Http\Models\Main\MasterEmployeeGroup;
+use App\Http\Models\Main\MasterEmployeeSection;
+use App\Http\Models\Main\MasterGroupBuyer;
+use App\Http\Models\PurchaseOrder;
+use App\Http\Models\Main\Buyer;
+use App\Http\Models\InlineDetail;
+use App\Http\Models\InlineHeader;
+use App\Http\Models\Main\Employee;
+use App\Http\Models\Main\EmployeeAttendance;
+use App\Http\Models\Main\MasterInlineDefect;
+use App\Http\Models\Main\Style;
+use App\Http\Models\Main\Param;
+use App\Http\Models\Main\QCDefect;
+use App\Http\Models\MpsDetail;
+use App\Http\Models\MpsHeader;
+use App\Http\Models\SewingOutput;
+use Modules\Sewing\Http\Controllers\WorktimeSettingController;
+use Nexmo\Client\Exception\Validation;
+
+class InlinePerformanceController extends Controller
+{
+    protected $m_modul = 'report';
+
+    function __construct()
+    {
+        $this->middleware('auth');
     }
 
-    .border-end-custom {
-        border-right: 1px solid #242E3E !important;
-    }
-
-    .box-custom {
-        width: 35px;
-        height: 35px;
-    }
-
-    .form-control,
-    .select2-container--default .select2-selection--single {
-        height: 38px;
-        border-radius: 0.375rem;
-    }
-
-    input[type="text"] {
-        background-color: #222F4A;
-        color: white;
-        border: none;
-    }
-
-    input[type="text"]:focus {
-        background-color: #222F4A;
-        color: white;
-        border-color: #576376;
-        box-shadow: none;
-    }
-
-    .select2-container {
-        width: 100% !important;
-    }
-
-    .select2-container--default .select2-selection--single {
-        background: #222F4A;
-        border: none;
-        display: flex;
-        align-items: center;
-    }
-
-    .select2-container--default .select2-selection--single .select2-selection__rendered {
-        color: white;
-        line-height: 38px;
-        padding-left: 0.75rem;
-    }
-
-    .select2-container--default .select2-selection--single .select2-selection__arrow {
-        height: 38px;
-    }
-
-    .select2-container--default .select2-selection--single .select2-selection__placeholder {
-        color: #ffffff !important;
-    }
-
-    .select2-container--default .select2-results__option--highlighted[aria-selected] {
-        background-color: transparent !important;
-        color: white !important;
-    }
-
-    .select2-container--default .select2-results__option[aria-selected="true"] {
-        background-color: transparent !important;
-        color: white !important;
-    }
-
-    .select2-dropdown {
-        background: #222F4A;
-        color: white;
-    }
-
-    .select2-results__option {
-        color: white;
-    }
-
-    .select2-search__field {
-        background: #222F4A;
-        color: white;
-        border: none;
-    }
-
-    .flatpickr-calendar {
-        background: #242E3E;
-        border-radius: 12px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.35);
-        border: none;
-        width: 100%;
-        max-width: 307px;
-    }
-    .flatpickr-calendar.arrowTop:before,
-    .flatpickr-calendar.arrowTop:after {
-        display: none;
-    }
-    .flatpickr-months {
-        border-radius: 12px 12px 0 0;
-        padding: 10px 0;
-    }
-    .flatpickr-current-month {
-        color: #fff;
-        font-weight: 700;
-        font-size: 1.1rem;
-    }
-    .flatpickr-current-month .flatpickr-monthDropdown-months,
-    .flatpickr-current-month input.cur-year {
-        color: #fff;
-        background: transparent;
-    }
-    .flatpickr-months .flatpickr-prev-month,
-    .flatpickr-months .flatpickr-next-month {
-        color: #fff;
-        fill: #fff;
-        top: 12px;
-    }
-    .flatpickr-months .flatpickr-prev-month svg,
-    .flatpickr-months .flatpickr-next-month svg {
-        fill: #fff;
-    }
-    .flatpickr-weekdays { background: #1e2a44; }
-    span.flatpickr-weekday {
-        background: #1e2a44;
-        color: #cfd8ec;
-        font-weight: 600;
-    }
-    .flatpickr-days { background: #1e2a44; border: none; }
-    .dayContainer { background: #1e2a44; }
-    .flatpickr-day { color: #fff; border-radius: 10px; }
-    .flatpickr-day:hover { background: #33456b; }
-    .flatpickr-day.today { border-color: #6c8cd5; }
-    .flatpickr-day.prevMonthDay,
-    .flatpickr-day.nextMonthDay { color: #5a6785; }
-    .flatpickr-day.selected,
-    .flatpickr-day.selected:hover {
-        background: #32549A;
-        border-color: #32549A;
-        color: #fff;
-    }
-    .flatpickr-day.flatpickr-disabled,
-    .flatpickr-day.flatpickr-disabled:hover {
-        color: #5a6785;
-        cursor: not-allowed;
-    }
-
-    .period-date .position-relative {
-        flex: 1 1 0;
-        min-width: 0;
-    }
-    .period-date input {
-        font-size: 0.85rem;
-    }
-
-    .margin-button {
-        margin-right: 80px;
-    }
-
-    .action-btn {
-        display: flex;
-        align-items: end;
-        gap: 12px;
-    }
-
-    .select2-results__options::-webkit-scrollbar {
-        width: 6px;
-    }
-    .select2-results__options::-webkit-scrollbar-thumb {
-        background: #D9D9D9;
-        border-radius: 4px;
-    }
-
-    /* ============================================================
-       Diurutkan dari max-width TERBESAR -> TERKECIL supaya rule utk
-       layar paling sempit yang menang terakhir di cascade (lihat
-       penjelasan di index.blade.php).
-       ============================================================ */
-
-    /* Laptop Mas Doni */
-    @media (min-width: 992px) and (max-width: 1400px) {
-        #line, #groupbuyer, #datea, #dateb { font-size: 0.85rem; }
-        #findbtn {
-            white-space: nowrap;
-            padding-left: 0.75rem;
-            padding-right: 0.75rem;
+    function index(Request $request)
+    {
+        if ($this->myaccess() == '0') {
+            return redirect()
+                ->back()
+                ->with('alert', [
+                    'title' => 'Unauthorized!',
+                    'message' => 'You Dont Have Any Access Here!',
+                    'status' => 'warning',
+                ]);
         }
 
-        .period-date .position-relative { flex: 1; }
-        .period-date input {
-            font-size: 0.8rem;
-            padding-left: .5rem;
-            padding-right: 2rem;
-        }
+        preconnect(session('db'));
+
+        $table = $this->getInlinePerformanceTable($request->date);
+
+        return view('monitoring::inlineperformance.index.index', [
+            'date' => $table['date'],
+            'data' => $table['data'],
+        ]);
     }
 
-    /* Tablet (<=1024px) */
-    @media (max-width: 1024px) {
-        .period-date {
-            display: flex;
-            flex-direction: column;
-        }
+    function selectline(Request $request)
+    {
+        $g = (new MasterEmployeeGroup())->getTable();
+        $s = (new MasterEmployeeSection())->getTable();
 
-        .icon-filter {
-            display: none;
-        }
+        $data = MasterEmployeeGroup::select(
+                "$g.id as kodegroup", "$g.section_id as kodebagian",
+                "$g.name as namagroup", "$s.name as namabagian"
+            )
+            ->join($s, "$s.id", '=', "$g.section_id")
+            ->distinct()
+            ->whereHas('groupline', function($q){
+                $q->where('factory_id', session('db')->iddb)
+                    ->where('is_show', 1)
+                    ->where('is_line', 1);
+            });
 
-        .to {
-            display: none;
-        }
-
-        /* FIX: sebelumnya width:50px membuat filter tanggal rusak
-           di tablet. Container date range harus melebar penuh. */
-        .wrapper-date {
-            width: 100%;
-            margin: 0;
-            padding: 0 !important;
-            align-items: stretch !important;
-        }
-
-        .margin-button {
-            width: 200px;
-            margin-right: 0;
-        }
-    }
-
-    @media (min-width: 1024px) and (max-width: 1030px) {
-        .margin-button {
-            width: 100px;
-            margin-right: 0;
-        }
-    }
-
-    /* Mobile (<=767.98px) */
-    @media (max-width: 767.98px) {
-        .period-date { flex-direction: column; align-items: stretch; }
-        .period-date .position-relative { width: 100%; }
-        .period-date span.px-2 {
-            text-align: center;
-            padding: 4px 0 !important;
-        }
-        #findbtn { width: 100%; }
-
-        .icon-filter {
-            display: none;
-        }
-
-        .action-btn {
-            width: 100%;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .margin-button {
-            margin-right: 0;
-            width: auto;
-        }
-    }
-</style>
-
-<!-- Filter -->
-<div class="row mt-4 border-custom rounded px-2 py-2 text-white" style="margin: 0 1px 0 1px;">
-    <!-- Line -->
-    <div class="col-12 col-md-3 border-end-custom d-flex gap-4 mb-3 mb-md-0">
-        <div class="icon-filter">
-            <div class="box-custom" style="height: 31px;"></div>
-            <div class="">
-                <img src="{{ _asset('svg/inlinePerformance/line.svg') }}"
-                    style="width:30px; height:30px;" alt="">
-            </div>
-        </div>
-
-        <div class="w-100">
-            <label class="mb-1 text-title ">
-                Line
-            </label>
-            <select id="line" class="form-select select2 w-100">
-                <option></option>
-            </select>
-        </div>
-    </div>
-
-    <!-- Periode Date -->
-    <div class="col-12 col-md-5 border-end-custom d-flex gap-4 mb-3 mb-md-0">
-        <div class="icon-filter">
-            <div class="box-custom bg-transparent" style="height: 31px;"></div>
-            <div>
-                <img src="{{ _asset('svg/inlinePerformance/calendar.svg') }}"
-                    style="width:30px; height:30px;" alt="">
-            </div>
-        </div>
-
-        <div class="w-100">
-            <label class="mb-1 text-title">
-                Periode Date
-            </label>
-            <div class="wrapper-date d-flex align-items-center gap-2 w-100 flex-nowrap period-date">
-                <div class="position-relative flex-grow-1" style="min-width:130px;">
-                    <input
-                        type="text"
-                        id="datea"
-                        class="form-control pe-5"
-                        placeholder="Pilih tanggal">
-                    <img
-                        src="{{ _asset('svg/inlinePerformance/calendar-flat.svg') }}"
-                        class="position-absolute top-50 end-0 translate-middle-y me-3"
-                        style="width:18px; height:18px; pointer-events:none;" alt="">
-                </div>
-
-                <span class="to px-2">to</span>
-                <div class="position-relative flex-grow-1" style="min-width:130px;">
-                    <input
-                        type="text"
-                        id="dateb"
-                        class="form-control pe-5"
-                        placeholder="Pilih tanggal">
-                    <img
-                        src="{{ _asset('svg/inlinePerformance/calendar-flat.svg') }}"
-                        class="position-absolute top-50 end-0 translate-middle-y me-3"
-                        style="width:18px; height:18px; pointer-events:none;" alt="">
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Group Buyer -->
-    <div class="col-12 col-md-4 d-flex gap-4 mb-3 mb-md-0">
-        <div class="icon-filter">
-            <div class="box-custom bg-transparent" style="height: 31px;"></div>
-            <div>
-                <img src="{{ _asset('svg/inlinePerformance/user.svg') }}"
-                    style="width:30px; height:30px;" alt="">
-            </div>
-        </div>
-
-        <div class="w-100">
-            <label class="mb-1 text-title">
-                Group Buyer
-            </label>
-            <div class="d-flex flex-column flex-lg-row align-items-stretch align-items-lg-end gap-3 w-100">
-                <div class="flex-grow-1">
-                    <select id="groupbuyer" class="form-select select2 w-100">
-                        <option></option>
-                    </select>
-                </div>
-
-                <div class="action-btn align-items-center">
-                    <button class="margin-button btn btn-custom" id="findbtn">
-                        <img src="{{ _asset('svg/inlinePerformance/search.svg') }}"
-                            style="width:20px;height:15px;margin-right:2px;" alt="">
-                        Find
-                    </button>
-
-                    <button class="export-btn bg-transparent border-0 p-0" id="export-btn" aria-label="Export">
-                        <img src="{{ _asset('svg/inlinePerformance/export.svg') }}"
-                            style="width:27px;height:27px;" alt="Export">
-                        <span class="custom-tooltip">Export</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-@push('scripts')
-<script>
-    $(function () {
-        const dateOpt = {
-            dateFormat: "d-m-Y",
-            altInput: true,
-            altFormat: "d F Y",
-            allowInput: true,
-            monthSelectorType: "static",
-            disableMobile: true,
-            defaultDate: "today",
-            maxDate: "today"
-        };
-        flatpickr("#datea", dateOpt);
-        flatpickr("#dateb", dateOpt);
-
-        $('#line').select2({
-            placeholder: 'Select Line',
-            width: '100%',
-            ajax: {
-                url: "{{ route('monitoring_inlineperformanceselectline') }}",
-                type: "GET",
-                dataType: "json",
-                delay: 500,
-                data: function (params) {
-                    return {
-                        q: params.term,
-                        page: params.page || 1
-                    }
-                },
-                processResults: function (data) {
-                    if (data.current_page == 1) {
-                        data.data.unshift({ kodegroup: 'all' });
-                    }
-                    return {
-                        results: $.map(data.data, function (item) {
-                            if (item.kodegroup == 'all') {
-                                return { id: 'all', text: 'All Lines' }
-                            }
-                            return {
-                                id: item.kodegroup,
-                                text: item.namabagian + ' - ' + item.namagroup
-                            }
-                        }),
-                        pagination: {
-                            more: data.to < data.total
-                        }
-                    }
-                },
-                cache: true
-            }
-        });
-
-        $('#groupbuyer').select2({
-            placeholder: 'Select Buyer',
-            width: '100%',
-            ajax: {
-                url: "{{ route('monitoring_inlineperformancegroupbuyer') }}",
-                type: "GET",
-                dataType: "json",
-                delay: 500,
-                data: function (params) {
-                    return {
-                        q: params.term,
-                        page: params.page || 1
-                    };
-                },
-                processResults: function (data) {
-                    return { results: data.results };
-                },
-                cache: true
-            }
-        });
-
-        window.currentFilter = {
-            line: 'all',
-            datea: $('#datea').val(),
-            dateb: $('#dateb').val(),
-            groupbuyer: 'all'
-        };
-
-        function loadCards(filter) {
-            $.ajax({
-                url: "{{ route('monitoring_inlineperformancefilterdata') }}",
-                type: "GET",
-                data: filter,
-                beforeSend: function () {
-                    $('#loading').show();
-                },
-                success: function (response) {
-                    $('#cardQtyInspect').text(response.tot_inspect ?? '-');
-                    $('#cardQtyDefect').text(response.tot_defect ?? '-');
-                    $('#cardRft').text(response.rft ?? '-');
-                    $('#cardWft').text(response.wft ?? '-');
-
-                    // TOP DEFECT
-                    let html = '';
-
-                    if (response.top_defect && response.top_defect.length > 0) {
-
-                        response.top_defect.forEach(function (item) {
-                            html += `
-                                <div class="d-flex align-items-center mb-2 w-100">
-                                    <div style="
-                                        width:15px;
-                                        height:15px;
-                                        background:${item.color};
-                                        flex-shrink:0;
-                                    "></div>
-
-                                    <span class="text-white small ms-2 flex-grow-1 text-truncate"
-                                        style="min-width:0;">
-                                        ${item.total} ${item.nmdefect}
-                                    </span>
-
-                                    <span class="small ms-2 flex-shrink-0"
-                                        style="color:${item.color}">
-                                        ${item.percent}%
-                                    </span>
-                                </div>
-                            `;
-                        });
-
-                    } else {
-                        html = `
-                            <div class="text-white small text-center">
-
-                            </div>
-                        `;
-                    }
-
-                    $('#topDefectList').html(html);
-                    updateTopDefectChart(response.top_defect);
-
-                    // logic warna defect
-                    const card = $('#cardQtyDefect').closest('.stat-card');
-                    const cardText = $('#defectText');
-
-                    if (Number(response.tot_defect) === 0) {
-                        card.removeClass('color-box-red')
-                            .addClass('color-box-green');
-                        cardText.removeClass('text-red')
-                            .addClass('text-green');
-                    } else {
-                        card.removeClass('color-box-green')
-                            .addClass('color-box-red');
-                        cardText.removeClass('text-green')
-                            .addClass('text-red');
-                    }
-
-                    // Logic warna target
-                    const target = $('#targetColor');
-                    const targetText = $('#targetText');
-
-                    if (response.target === true) {
-                        target.removeClass('color-box-green').addClass('color-box-red');
-                        targetText.removeClass('text-green').addClass('text-red');
-                    } else {
-                        target.removeClass('color-box-red').addClass('color-box-green');
-                        targetText.removeClass('text-red').addClass('text-green');
-                    }
-
-                    updateDataTime();
-
-                },
-                error: function (xhr) {
-                    console.log(xhr.responseText);
-                },
-                complete: function () {
-                    $('#loading').hide();
-                }
+        if ($request->q) {
+            $data = $data->where(function ($q) use ($request, $g) {
+                $q->where("$g.name", 'like', "%$request->q%");
             });
         }
+        $data = $data->orderBy('kodegroup')->paginate(15, $request->page);
 
-        $('#export-btn').click(function () {
-            let url = "{{ route('monitoring_inlineperformance_exportexcel') }}" +
-                "?datea=" + currentFilter.datea +
-                "&dateb=" + currentFilter.dateb +
-                "&line=" + currentFilter.line +
-                "&groupbuyer=" + currentFilter.groupbuyer;
+        return response()->json($data);
+    }
 
-            window.location.href = url;
+    function groupbuyer(Request $request)
+    {
+        $q = $request->get('q');
+
+        $data = MasterGroupBuyer::select('id', 'group_name')
+            ->when($q, function ($query) use ($q) {
+                $query->where('group_name', 'like', '%' . $q . '%');
+            })
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->id,
+                    'text' => $item->group_name
+                ];
+            });
+
+        return response()->json([
+            'results' => $data
+        ]);
+    }
+
+    function getFilterData($request)
+    {
+        // $m_da = $request->datea > $request->dateb ? $request->dateb : $request->datea;
+        // $m_db = $request->datea > $request->dateb ? $request->datea : $request->dateb;
+
+            $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
+            $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+
+            $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
+            $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+
+            $headerQuery = InlineHeader::whereBetween('date', [$dta, $dtb]);
+
+            if ($request->line && $request->line != 'all') {
+                $headerQuery = $headerQuery->where('group_id', $request->line);
+            }
+
+            // Filter Group Buyer -> idpo
+            if ($request->groupbuyer && $request->groupbuyer != 'all') {
+                $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
+                $poIds = PurchaseOrder::whereIn('idbuyer', $buyerIds)->pluck('idpo');
+                $headerQuery = $headerQuery->whereIn('idpo', $poIds);
+            }
+
+            $headerIds = (clone $headerQuery)->pluck('id');
+            $headerCount = $headerIds->count();
+
+            // Qty Inspect
+            $totInspect = $headerCount * 5;
+
+            // Qty Defect
+            $totDefect = InlineDetail::whereIn('inline_header_id', $headerIds)->count();
+
+            // RFT
+            $rft = $totInspect > 0
+                ? (($totInspect - $totDefect) / $totInspect) * 100
+                : 0;
+
+            // WFT
+            $wft = $totInspect > 0
+                ? ($totDefect / $totInspect) * 100
+                : 0;
+
+            // Kondisi warna target
+            $target = Param::where('header', 'qc')
+                ->where('key', 'rft_inline_target')
+                ->value('value');
+
+            $rftTarget = $rft <= $target ? true : false;
+
+           $allDefect = InlineDetail::whereIn('inline_header_id', $headerIds)
+                ->select('defect_id', DB::raw('count(*) as total'))
+                ->groupBy('defect_id')
+                ->orderByDesc('total')
+                ->orderBy('defect_id', 'asc')
+                ->get();
+
+            $topDefect = $allDefect->take(3);
+
+            $othersTotal = $allDefect->slice(3)->sum('total');
+
+
+            $defectIds = $topDefect->pluck('defect_id');
+
+            $masterQcDefects = QCDefect::whereIn('kddefect', $defectIds)
+                ->pluck('deskripsi', 'kddefect');
+
+            $colors = [
+                '#2F80ED',
+                '#219653',
+                '#F2C94C',
+            ];
+
+            $topDefect = $topDefect->values()->map(function ($item, $index) use ($masterQcDefects, $totDefect, $colors) {
+
+                $percent = $totDefect > 0
+                    ? ($item->total / $totDefect) * 100
+                    : 0;
+
+                return [
+                    'defect_id' => $item->defect_id,
+                    'nmdefect'  => $masterQcDefects[$item->defect_id] ?? '-',
+                    'total'     => $item->total,
+                    'percent'   => number_format($percent, 2),
+                    'color'     => $colors[$index],
+                ];
+            });
+
+            if ($othersTotal > 0) {
+                $percentOthers = $totDefect > 0
+                    ? ($othersTotal / $totDefect) * 100
+                    : 0;
+
+                $topDefect->push([
+                    'defect_id' => null,
+                    'nmdefect'  => 'Others',
+                    'total'     => $othersTotal,
+                    'percent'   => number_format($percentOthers, 2),
+                    'color'     => '#BDBDBD',
+                ]);
+            }
+
+        return [
+            'periode'     => [
+                'from' => $dta->format('d-m-Y'),
+                'to'   => $dtb->format('d-m-Y'),
+            ],
+            'tot_inspect' => $totInspect,
+            'tot_defect'  => $totDefect,
+            'rft'         => number_format($rft,2),
+            'wft'         => number_format($wft,2),
+            'target'      => $rftTarget,
+            'top_defect'  => $topDefect,
+            'line'        => $request->line,
+            'group_buyer' => $request->groupbuyer,
+        ];
+    }
+
+    function filterData(Request $request)
+    {
+        $data = $this->getFilterData($request);
+
+        return response()->json($data);
+    }
+
+    function getInlinePerformanceTable($dateInput = null)
+    {
+        $date = $dateInput
+            ? Carbon::parse($dateInput)
+            : Carbon::today();
+
+        $dta = $date->copy()->startOfDay();
+        $dtb = $date->copy()->endOfDay();
+
+        $g = (new MasterEmployeeGroup())->getTable();
+        $s = (new MasterEmployeeSection())->getTable();
+
+        $lines = MasterEmployeeGroup::select(
+                "$g.id as kodegroup", "$g.name as namagroup", "$s.name as namabagian"
+            )
+            ->join($s, "$s.id", '=', "$g.section_id")
+            ->distinct()
+            ->whereHas('groupline', function ($q) {
+                $q->where('factory_id', session('db')->iddb)
+                    ->where('is_show', 1)
+                    ->where('is_line', 1);
+            })
+            ->orderBy("$g.id", "asc")
+            ->get();
+
+        $headers = InlineHeader::whereBetween('date', [$dta, $dtb])
+            ->get(['id', 'group_id', 'idpo', 'round']);
+
+        $headersByLine = $headers->groupBy('group_id');
+
+        $allHeaderIds = $headers->pluck('id');
+
+        // Cek kolom problem, action dan rootcause
+        $defectsByHeader = InlineDetail::whereIn('inline_header_id', $allHeaderIds)
+            ->get(['inline_header_id', 'problem', 'action', 'rootcause'])
+            ->groupBy('inline_header_id');
+
+        $result = $lines->map(function ($line) use ($headersByLine, $defectsByHeader) {
+            $headers = $headersByLine->get($line->kodegroup, collect());
+            $hIds = $headers->pluck('id');
+
+            $lastRound = $headers->max('round');
+
+            $lastRoundHeaderIds = $headers->where('round', $lastRound)->pluck('id');
+            $lastRoundDefectCount = InlineDetail::whereIn('inline_header_id', $lastRoundHeaderIds)->count();
+            $lastRoundHasDefect = $lastRoundDefectCount > 0;
+
+            $idpos = $headers->pluck('idpo')->unique();
+
+            $styles = PurchaseOrder::whereIn('idpo', $idpos)->pluck('idstyle')->unique()->values();
+            $nmstyles = Style::whereIn('idstyle', $styles)->pluck('nmstyle')->values();
+
+            $totInspect = $hIds->count() * 5;
+            $totDefect = $hIds->sum(function ($id) use ($defectsByHeader) {
+                return $defectsByHeader->get($id, collect())->count();
+            });
+
+            $hasCap = $lastRoundHeaderIds->contains(function ($id) use ($defectsByHeader) {
+            return $defectsByHeader->get($id, collect())->contains(function ($detail) {
+                return !empty($detail->problem)
+                    || !empty($detail->action)
+                    || !empty($detail->rootcause);
+            });
         });
 
-        $('#findbtn').on('click', function (e) {
-            e.preventDefault();
+            $rft = $totInspect > 0 ? (($totInspect - $totDefect) / $totInspect) * 100 : 0;
+            $wft = $totInspect > 0 ? ($totDefect / $totInspect) * 100 : 0;
 
-            currentFilter = {
-                line: $('#line').val(),
-                datea: $('#datea').val(),
-                dateb: $('#dateb').val(),
-                groupbuyer: $('#groupbuyer').val()
-            };
-
-            if (currentFilter.line == null || currentFilter.line == '') {
-                swal('Warning!', 'Please select Line first!', 'warning');
-                return;
-            }
-
-            if (currentFilter.groupbuyer == null || currentFilter.groupbuyer == '') {
-                swal('Warning!', 'Please select Group Buyer!', 'warning');
-                return;
-            }
-
-            if (currentFilter.datea == null || currentFilter.datea == '' ||
-                currentFilter.dateb == null || currentFilter.dateb == '') {
-                swal('Warning!', 'Please select Periode Date!', 'warning');
-                return;
-            }
-
-            function parseDMY(str) {
-                const [d, m, y] = str.split('-');
-                return new Date(`${y}-${m}-${d}`);
-            }
-
-            if (parseDMY(currentFilter.datea) > parseDMY(currentFilter.dateb)) {
-                swal('Warning!', 'Start date cannot be later than end date!', 'warning');
-                return;
-            }
-
-            updateDataTime();
-            loadCards(currentFilter);
+            return [
+                'line'                  => $line->namagroup,
+                'kodegroup'             => $line->kodegroup,
+                'style'                 => $nmstyles->toArray(),
+                'qty_rft'               => $totInspect - $totDefect,
+                'qty_inspect'           => $totInspect,
+                'qty_defect'            => $totDefect,
+                'rft'                   => number_format($rft, 2),
+                'wft'                   => number_format($wft, 2),
+                'last_round'            => $lastRound,
+                'last_round_has_defect' => $lastRoundHasDefect,
+                'has_cap'               => $hasCap,
+            ];
         });
-    });
-</script>
-@endpush
+
+        return [
+            'date' => $date->format('Y-m-d'),
+            'data' => $result->values(),
+        ];
+    }
+
+    function exportExcel(Request $request)
+    {
+        $data = $this->getFilterData($request);
+
+        header('Content-Type: text/csv');
+        header('Content-Disposition: attachment; filename="Report_Inline_Dashboard.csv"');
+
+        $file = fopen('php://output', 'w');
+
+        // Judul
+        fputcsv($file, ['REPORT INLINE DASHBOARD']);
+
+        fputcsv($file, [
+            $data['periode']['from'] . ' s/d ' . $data['periode']['to']
+        ]);
+
+        // Line
+        fputcsv($file, ['Line', $data['line']]);
+
+        // Group Buyer
+        fputcsv($file, ['Group Buyer', $data['group_buyer']]);
+
+
+        fputcsv($file, []);
+
+        // Header Summary
+        fputcsv($file, ['Total Inspect', 'Total Defect', 'RFT', 'WFT', 'Target']);
+
+        fputcsv($file, [
+            number_format($data['tot_inspect']),
+            number_format($data['tot_defect']),
+            $data['rft'].'%',
+            $data['wft'].'%',
+            $data['target'] ? 'Dibawah 97%' : 'Diatas 97%',
+        ]);
+
+        fputcsv($file, []);
+
+        fputcsv($file, ['Defect', 'Qty', '%']);
+
+        foreach ($data['top_defect'] as $defect) {
+            fputcsv($file, [
+                $defect['nmdefect'],
+                number_format($defect['total']),
+                $defect['percent'].'%'
+            ]);
+        }
+
+        fclose($file);
+        exit;
+    }
+
+    function datatables(Request $request)
+    {
+        preconnect(session('db'));
+
+        try {
+            $table = $this->getInlinePerformanceTable($request->date);
+
+            return view('monitoring::inlineperformance.index.datatables-rows', [
+                'data' => $table['data'],
+                'date' => $table['date'],
+            ]);
+        } catch (\Throwable $e) {
+            return $e->getMessage();
+        }
+    }
+
+    function inlinetls(Request $request)
+    {
+        preconnect(session('db'));
+
+        $kodegroup = $request->kodegroup;
+        $date      = $request->date ?? Carbon::now()->format('Y-m-d');
+        $namaline  = null;
+
+        if ($kodegroup) {
+            $g = (new MasterEmployeeGroup())->getTable();
+            $s = (new MasterEmployeeSection())->getTable();
+
+            $groupInfo = MasterEmployeeGroup::select(
+                    "$g.id as kodegroup", "$g.name as namagroup", "$s.name as namabagian"
+                )
+                ->join($s, "$s.id", '=', "$g.section_id")
+                ->where("$g.id", $kodegroup)
+                ->first();
+
+            $namaline = $groupInfo
+                ? $groupInfo->namabagian . ' - ' . $groupInfo->namagroup
+                : $request->line;
+        }
+
+        $result = $kodegroup
+            ? $this->buildInlineLtsData($kodegroup, $date)
+            : ['tot_inspect' => 0, 'tot_defect' => 0, 'rft' => '0.00', 'wft' => '0.00', 'operators' => [], 'rounds' => []];
+
+        return view('monitoring::inlineperformance.inlineLts.inline', [
+            'kodegroup'   => $kodegroup,
+            'namaline'    => $namaline,
+            'date'        => $date,
+            'tot_inspect' => $result['tot_inspect'],
+            'tot_defect'  => $result['tot_defect'],
+            'rft'         => $result['rft'],
+            'wft'         => $result['wft'],
+            'operators'   => $result['operators'],
+            'rounds'      => $result['rounds'],
+        ]);
+    }
+
+    function buildInlineLtsData($line, $date = null)
+    {
+        $date = $date ? Carbon::parse($date) : Carbon::now();
+        $dta = $date->copy()->startOfDay();
+        $dtb = $date->copy()->endOfDay();
+
+        $headers = InlineHeader::whereBetween('date', [$dta, $dtb])
+            ->where('group_id', $line)
+            ->get(['id', 'round', 'sequence_process', 'userid_operator']);
+
+        $headerIds = $headers->pluck('id');
+        $headerCount = $headerIds->count();
+
+        $totInspect = $headerCount * 5;
+        $totDefect = InlineDetail::whereIn('inline_header_id', $headerIds)->count();
+
+        $rft = $totInspect > 0 ? (($totInspect - $totDefect) / $totInspect) * 100 : 0;
+        $wft = $totInspect > 0 ? ($totDefect / $totInspect) * 100 : 0;
+
+        $detailsByHeader = InlineDetail::whereIn('inline_header_id', $headerIds)
+            ->get(['inline_header_id', 'problem', 'action', 'rootcause'])
+            ->groupBy('inline_header_id');
+
+        $operatorsMeta = $headers
+            ->groupBy('userid_operator')
+            ->map(fn($rows) => $rows->sortBy('round')->first())
+            ->sortBy('sequence_process')
+            ->values();
+
+        $niks = $operatorsMeta->pluck('userid_operator')->unique()->values();
+        $employeeNames = Employee::whereIn('nik', $niks)->pluck('name', 'nik');
+
+        $operators = $operatorsMeta->map(function ($h) use ($employeeNames) {
+            return [
+                'nik'              => $h->userid_operator,
+                'nama'             => $employeeNames[$h->userid_operator] ?? null,
+                'sequence_process' => $h->sequence_process,
+            ];
+        })->values();
+
+        $headersByOperatorRound = $headers->groupBy(function ($h) {
+            return $h->userid_operator . '-' . $h->round;
+        });
+
+        $maxRound = 5;
+        $rounds = [];
+        for ($r = 1; $r <= $maxRound; $r++) {
+            $cells = [];
+            $roundHasDefect = false;
+            $roundHasCap    = false;
+            foreach ($operators as $op) {
+                $key = $op['nik'] . '-' . $r;
+                $headerGroup = $headersByOperatorRound->get($key);
+
+                if (!$headerGroup || $headerGroup->isEmpty()) {
+                    $cells[] = ['status' => 'empty'];
+                    continue;
+                }
+
+                $hIdsThisCell = $headerGroup->pluck('id');
+                $details = collect();
+                foreach ($hIdsThisCell as $hid) {
+                    $details = $details->merge($detailsByHeader->get($hid, collect()));
+                }
+
+                $defectCount = $details->count();
+                $hasCap = $details->contains(function ($d) {
+                    return !empty($d->problem) || !empty($d->action) || !empty($d->rootcause);
+                });
+
+                $status = $hasCap
+                    ? 'cap'
+                    : ($defectCount == 0 ? 'none' : ($defectCount == 1 ? 'one' : 'multi'));
+
+                if ($defectCount > 0) {
+                    $roundHasDefect = true;
+                }
+                if ($hasCap) {
+                    $roundHasCap = true;
+                }
+
+                $cells[] = ['status' => $status];
+            }
+            $rounds[] = [
+                'round' => $r,
+                'cells' => $cells,
+                'has_defect' => $roundHasDefect,
+                'has_cap'    => $roundHasCap,
+            ];
+        }
+
+        return [
+            'tot_inspect' => $totInspect,
+            'tot_defect'  => $totDefect,
+            'rft'         => number_format($rft, 2),
+            'wft'         => number_format($wft, 2),
+            'operators'   => $operators,
+            'rounds'      => $rounds,
+        ];
+    }
+
+    function filterInlineLts(Request $request)
+    {
+        if (!$request->line) {
+            return response()->json(['message' => 'Line belum dipilih'], 422);
+        }
+
+        preconnect(session('db'));
+
+        $result = $this->buildInlineLtsData($request->line, $request->date);
+
+        $html = view('monitoring::inlineperformance.inlineLts.datatable', [
+            'operators' => $result['operators'],
+            'rounds'    => $result['rounds'],
+        ])->render();
+
+        return response()->json([
+            'date'        => $request->date ?? Carbon::now()->format('Y-m-d'),
+            'tot_inspect' => $result['tot_inspect'],
+            'tot_defect'  => $result['tot_defect'],
+            'rft'         => $result['rft'],
+            'wft'         => $result['wft'],
+            'html'        => $html,
+        ]);
+    }
+
+    function selectLineLts (Request $request)
+    {
+        $g = (new MasterEmployeeGroup())->getTable();
+        $s = (new MasterEmployeeSection())->getTable();
+
+        $data = MasterEmployeeGroup::select(
+                "$g.id as kodegroup",
+                "$g.name as namagroup",
+            )
+            ->join($s, "$s.id", '=', "$g.section_id")
+            ->distinct()
+            ->whereHas('groupline', function($q){
+                $q->where('factory_id', session('db')->iddb)
+                    ->where('is_show', 1)
+                    ->where('is_line', 1);
+            });
+
+        if ($request->q) {
+            $data = $data->where(function ($q) use ($request, $g) {
+                $q->where("$g.name", 'like', "%$request->q%");
+            });
+        }
+        $data = $data->orderBy('kodegroup')->get();
+
+        return view('monitoring::inlineperformance.inlineLts.selectlinelts', [
+            'data' => $data,
+        ]);
+    }
+
+    function exportData (Request $request)
+    {
+         return view('monitoring::inlineperformance.inlineLts.export');
+    }
+}
