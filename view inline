@@ -1,6 +1,8 @@
 @extends('layouts.masternonavbar')
 
 @section('extracss')
+    <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
+
     <style>
         html, body {
             margin: 0;
@@ -11,75 +13,36 @@
             padding: 1rem;
         }
 
-        @media (min-width: 992px) {
-            html, body {
-                height: 100%;
-            }
-            body {
-                overflow: hidden;
-                display: flex;
-                flex-direction: column;
-            }
-        }
-
         .dashboard-wrap {
             width: 100%;
         }
 
-        @media (min-width: 992px) {
-            .dashboard-wrap {
-                height: 100%;
-                display: flex;
-                flex-direction: column;
-            }
-        }
-
-        /* ---------- Header ---------- */
         .dashboard-header {
             display: flex;
             flex-wrap: wrap;
             align-items: center;
+            justify-content: space-between;
             gap: 12px;
         }
 
-        .header-left,
-        .header-right {
-            flex: 1 1 0;
+        .header-left {
             display: flex;
             align-items: center;
         }
 
         .header-right {
-            justify-content: flex-end;
-            text-align: center;
+            display: flex;
+            align-items: center;
+            gap: 16px;
             color: #ffffff;
-            font-size: 1.5rem;
-            font-weight: 700;
-            gap: 20px;
+            font-size: 1.1rem;
+            font-weight: 600;
         }
 
         .back-btn {
             display: flex;
             align-items: center;
-            gap: 1rem;
-        }
-
-        @media (max-width: 575.98px) {
-            .dashboard-header {
-                gap: 8px;
-            }
-            .header-left {
-                order: 1;
-                flex: 0 0 auto;
-            }
-            .header-right {
-                order: 2;
-                flex: 0 0 auto;
-                margin-left: auto;
-            }
-            .back-btn span {
-                font-size: 0.9rem;
-            }
+            gap: 0.75rem;
         }
 
         /* Text Color */
@@ -111,27 +74,48 @@
             border-radius: 5px;
         }
 
-        .metric-card img {
+        .metrics-wrap {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 0.75rem;
+            margin-top: 0.75rem;
+        }
+
+        .location-box,
+        .metric-card {
+            min-height: 130px;
+            padding: 1rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            gap: 0.5rem;
+            font-size: 25px;
+        }
+
+        .metric-card .metric-value {
+            display: flex;
+            align-items: baseline;
+            justify-content: start;
+            gap: 0.25rem;
+        }
+
+        .metric-icon {
             flex-shrink: 0;
+            width: 36px;
+            height: 36px;
         }
 
-        @media (max-width: 400px) {
-            .metric-card {
-                gap: 0.75rem !important;
-            }
-            .metric-card img {
-                width: 36px !important;
-                height: 36px !important;
-            }
-            .metric-card h2 {
-                font-size: 1.25rem;
-            }
-            .metric-card h6 {
-                font-size: 0.8rem;
-            }
+        .metric-card h6 {
+            font-size: 0.75rem;
+            margin: 0;
         }
 
-        /* ---------- Table area ---------- */
+        .metric-card h2 {
+            font-size: 1.25rem;
+            margin: 0;
+        }
+
         .datatable-wrap {
             display: flex;
             flex-direction: column;
@@ -155,28 +139,13 @@
             transition: opacity 0.15s ease;
         }
 
-        /*
-         * Wrapper dibatasi maksimal selebar 10 kolom operator (90px masing-masing)
-         * + 130px kolom label ROUND = 1030px.
-         * min(100%, 1030px) artinya:
-         *  - Di layar lebar (>1030px tersedia): wrapper tetap 1030px -> pas 10 kolom sebelum scroll.
-         *  - Di layar sempit (<1030px tersedia): wrapper ikut menyempit ke 100%, supaya tidak bocor keluar halaman.
-         */
         .table-scroll-wrapper {
             overflow-x: auto;
-            overflow-y: visible;
+            overflow-y: hidden;
             max-width: 100%;
-            width: min(100%, calc(130px + (10 * 90px))); /* = 1030px */
             -webkit-overflow-scrolling: touch;
-            height: auto; /* isi konten selalu 5 baris round, jadi tinggi tidak perlu dibatasi di ukuran layar manapun */
-        }
-
-        @media (min-width: 992px) {
-            .datatable-wrap {
-                flex-grow: 0;
-                min-height: 0;
-                overflow: visible;
-            }
+            width: 100%;
+            height: 380px;
         }
 
         .export-btn {
@@ -303,8 +272,8 @@
         }
 
         .round-status-table .btn-detail img {
-            width: 22px;
-            height: 22px;
+            width: 16px;
+            height: 16px;
         }
 
         .status-none   { background-color: #219653; }
@@ -314,33 +283,22 @@
 
         /* Legend */
         .legend-box {
-            width: 24px;
-            height: 24px;
+            width: 22px;
+            height: 22px;
             display: flex;
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
         }
 
+        .legend-text {
+            font-size: 1rem;
+        }
+
         .legend-wrap {
             row-gap: 10px;
         }
 
-        @media (max-width: 575.98px) {
-            .legend-wrap {
-                font-size: 0.8rem;
-                gap: 10px !important;
-            }
-            .legend-box {
-                width: 20px;
-                height: 20px;
-            }
-        }
-
-        /*
-         * table-layout: auto (BUKAN fixed) supaya min-width per kolom
-         * di partial datatable benar-benar dihormati oleh browser.
-         */
         #datalist {
             table-layout: auto;
             height: 100%;
@@ -348,57 +306,188 @@
 
         #datalist th,
         #datalist td {
-            min-width: 90px;
+            min-width: 75px;
+            white-space: nowrap;
+            font-size: 0.8rem;
+        }
+
+        .footer-title {
+            justify-content: center;
+            text-align: center;
+            gap: 10px;
+        }
+
+        /* Export Preview Modal */
+        #exportPreviewModal .modal-content {
+            background-color: #242E3E;
+            color: #ffffff;
+        }
+
+        #exportPreviewModal .modal-header,
+        #exportPreviewModal .modal-footer {
+            border-color: #576376;
+        }
+
+        #exportPreviewModal .btn-close {
+            filter: invert(1);
+        }
+
+        #exportTable {
+            color: #ffffff;
+        }
+
+        #exportTable th,
+        #exportTable td {
+            border-color: #576376;
             white-space: nowrap;
         }
 
-        @media (max-width: 767.98px) {
-            #datalist th,
-            #datalist td {
-                min-width: 75px;
-                font-size: 0.8rem;
+        .dt-buttons .btn {
+            margin-bottom: 8px;
+        }
+
+        @media (min-width: 400px) {
+            .metric-icon {
+                width: 40px;
+                height: 40px;
+            }
+
+            .location-text {
+                font-size: 13px;
             }
         }
 
-        /* ---------- Footer ---------- */
-        @media (max-width: 575.98px) {
-            .footer-title {
-                justify-content: center !important;
-                text-align: center;
-                gap: 10px;
+        @media (min-width: 576px) {
+            .metric-icon {
+                width: 48px;
+                height: 48px;
+            }
+            .metric-card h6 {
                 font-size: 0.85rem;
-            }
-        }
-
-        @media (max-width: 767.98px) {
-            .metric-card img {
-                width: 44px !important;
-                height: 44px !important;
             }
             .metric-card h2 {
                 font-size: 1.5rem;
             }
+            .table-scroll-wrapper {
+                height: 420px;
+            }
+            #datalist th:first-child,
+            #datalist td:first-child {
+                min-width: 110px;
+            }
+            .round-status-table .btn-detail img {
+                width: 18px;
+                height: 18px;
+            }
+        }
 
+        @media (min-width: 768px) {
+            .metrics-wrap {
+                gap: 1rem;
+            }
+
+            .metric-icon {
+                width: 56px;
+                height: 56px;
+            }
             .header-right {
-                font-size: 17px;
+                font-size: 1.25rem;
             }
-
-            .legend-box {
-                font-size: 10px;
+            .footer-title {
+                justify-content: space-between;
+                text-align: left;
+                padding-top: 30px;
             }
-
-            .legend-wrap {
-                align-items: start;
-                margin: 0;
-                padding: 0;
-            }
-
             .title-system {
                 display: none;
             }
+            .table-scroll-wrapper {
+                height: 480px;
+            }
+            #datalist th,
+            #datalist td {
+                min-width: 90px;
+                font-size: 0.85rem;
+            }
 
-            .footer-title {
-                padding-top: 30px;
+            html, body {
+                height: 100%;
+            }
+            body {
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+            }
+            .dashboard-wrap {
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+            }
+            .datatable-wrap {
+                flex: 1 1 auto;
+                min-height: 0;
+                overflow: hidden;
+            }
+            .table-scroll-wrapper {
+                height: 100%;
+            }
+
+            .location-text {
+                font-size: medium;
+            }
+        }
+
+        @media (min-width: 992px) {
+            html, body {
+                height: 100%;
+            }
+            body {
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+            }
+            .dashboard-wrap {
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+            }
+            .datatable-wrap {
+                flex: 1 1 auto;
+                min-height: 0;
+                overflow: hidden;
+            }
+            .table-scroll-wrapper {
+                height: 100%;
+            }
+            .metric-icon {
+                width: 60px;
+                height: 60px;
+            }
+            #datalist th:first-child,
+            #datalist td:first-child {
+                min-width: 130px;
+            }
+
+            .location-text {
+                font-size: 23px;
+            }
+
+        }
+
+        @media (max-width: 767.98px) {
+            .metrics-wrap {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Tablet: 768px - 991.98px — location sendiri di baris 1, 4 card sejajar di baris 2 */
+        @media (min-width: 768px) and (max-width: 991.98px) {
+            .metrics-wrap {
+                grid-template-columns: repeat(4, 1fr);
+            }
+
+            .metrics-wrap .location-box {
+                grid-column: 1 / -1;
             }
         }
     </style>
@@ -418,76 +507,65 @@
                 </button>
             </div>
 
-            <div class="header-right align-items-center ">
+            <div class="header-right">
                 <span id="liveClock"></span>
-                <button class="export-btn bg-transparent border-0 p-0 d-flex align-items-center">
+                <button type="button"
+                    class="export-btn bg-transparent border-0 p-0 d-flex align-items-center"
+                    data-bs-toggle="modal" data-bs-target="#exportPreviewModal">
                     <img src="{{ _asset('svg/inlinePerformance/export.svg') }}" style="width:27px; height:27px;">
                     <span class="custom-tooltip">Export</span>
                 </button>
             </div>
         </div>
 
-        <!-- Card -->
-        <div class="row g-3 mt-1">
-            <div class="col-12 col-sm-6 col-md-4 col-lg">
-                <div class="color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <h6 class="fw-bold text-start text-red mb-2 fs-4">LOCATION</h6>
-                    <select id="line" class="form-select select2 w-100">
-                        <option></option>
-                    </select>
-                </div>
+        <div class="metrics-wrap">
+            <div class="location-box d-flex flex-column color-box-red">
+                <h4 class="fw-bold text-red mb-0">LOCATION</h4>
+                <span class="location-text fw-bold mb-0" style="color: white;">{{$namaline}}</span>
             </div>
 
             <!-- QTY INSPECT -->
-            <div class="col-6 col-md-4 col-lg">
-                <div class="color-box-yellow metric-card h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
-                    <img src="{{ _asset('svg/inlinePerformance/qty-inspect.svg') }}" class="img-fluid" style="width:60px;height:60px;margin-bottom: 40px">
-                    <div>
-                        <h6 class="fw-bold text-start text-yellow mb-0">QTY INSPECT</h6>
-                        <div class="d-flex align-items-end text-white">
-                            <h2 class="fw-bold mb-0 lh-2" id="tot_inspect">0</h2>
-                            <small class="ms-1">pcs</small>
-                        </div>
+            <div class="color-box-yellow metric-card ">
+                <img src="{{ _asset('svg/inlinePerformance/qty-inspect.svg') }}" class="metric-icon img-fluid">
+                <div class="justify-content-start">
+                    <h6 class="fw-bold text-yellow">INSPECT QTY</h6>
+                    <div class="metric-value text-white justify-content-start">
+                        <h2 class="fw-bold" id="tot_inspect">{{ $tot_inspect ?? 0 }}</h2>
+                        <small>pcs</small>
                     </div>
                 </div>
             </div>
 
             <!-- QTY DEFECT -->
-            <div class="col-6 col-md-4 col-lg">
-                <div class="color-box-red metric-card h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
-                    <img src="{{ _asset('svg/inlinePerformance/qty-defect.svg') }}" class="img-fluid" style="width:60px;height:60px;margin-bottom: 40px">
-                    <div>
-                        <h6 class="fw-bold text-start text-red mb-0">QTY DEFECT</h6>
-                        <div class="d-flex align-items-end text-white">
-                            <h2 class="fw-bold mb-0 lh-2" id="tot_defect">0</h2>
-                            <small class="ms-1">pcs</small>
-                        </div>
+            <div class="color-box-red metric-card">
+                <img src="{{ _asset('svg/inlinePerformance/qty-defect.svg') }}" class="metric-icon img-fluid">
+                <div class="justify-content-start">
+                    <h6 class="fw-bold text-red">DEFECT QTY</h6 >
+                    <div class="metric-value text-white justify-content-start">
+                        <h2 class="fw-bold" id="tot_defect">{{ $tot_defect ?? 0 }}</h2>
+                        <small>pcs</small>
                     </div>
                 </div>
             </div>
 
             <!-- RFT -->
-            <div class="col-6 col-md-4 col-lg">
-                <div class="color-box-green metric-card h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
-                    <img src="{{ _asset('svg/inlinePerformance/rft.svg') }}" class="img-fluid" style="width:60px;height:60px;margin-bottom: 40px">
-                    <div>
-                        <h6 class="fw-bold text-start text-green mb-0">RFT</h6>
-                        <div class="d-flex align-items-end text-white">
-                            <h2 class="fw-bold mb-0 lh-2"><span id="rft">0.00</span>%</h2>
-                        </div>
+            <div class="color-box-green metric-card">
+                <img src="{{ _asset('svg/inlinePerformance/rft.svg') }}" class="metric-icon img-fluid">
+                <div class="justify-content-start">
+                    <h6 class="fw-bold text-green text-start">RFT</h6>
+                    <div class="metric-value text-white justify-content-start">
+                        <h2 class="fw-bold"><span id="rft">{{ $rft ?? '0.00' }}%</span></h2>
                     </div>
                 </div>
             </div>
 
             <!-- WFT -->
-            <div class="col-6 col-md-4 col-lg">
-                <div class="color-box-blue metric-card h-100 d-flex justify-content-center align-items-center text-center p-3 gap-3">
-                    <img src="{{ _asset('svg/inlinePerformance/wft.svg') }}" class="img-fluid" style="width:60px;height:60px;margin-bottom: 40px">
-                    <div>
-                        <h6 class="fw-bold text-start text-blue mb-0">WFT</h6>
-                        <div class="d-flex align-items-end text-white">
-                            <h2 class="fw-bold mb-0 lh-2"><span id="wft">0.00</span>%</h2>
-                        </div>
+            <div class="color-box-blue metric-card">
+                <img src="{{ _asset('svg/inlinePerformance/wft.svg') }}" class="metric-icon img-fluid">
+                <div>
+                    <h6 class="fw-bold text-blue text-start">WFT</h6>
+                    <div class="metric-value text-white">
+                        <h2 class="fw-bold"><span id="wft">{{ $wft ?? '0.00' }}%</span></h2>
                     </div>
                 </div>
             </div>
@@ -495,7 +573,7 @@
 
         <!-- Round Status Table -->
         <div class="rounded text-white datatable-wrap">
-            <div class="col-md-12">
+            <div class="col-md-12 m-0">
                 <div id="datatable-container" class="w-100">
                     @include('monitoring::inlineperformance.inlineLts.datatable', [
                         'operators' => $operators ?? [],
@@ -510,43 +588,61 @@
             <div class="legend-wrap d-flex flex-wrap text-white py-1 gap-3 fs-6">
                 <div class="d-flex gap-3 align-items-center">
                     <div class="legend-box" style="background-color: #219653;"></div>
-                    <p class="mb-0">No Defect Data</p>
+                    <p class="legend-text mb-0">No Defect Data</p>
                 </div>
 
                 <div class="d-flex gap-3 align-items-center">
                     <div class="legend-box" style="background-color: #F24C4C;"></div>
-                    <p class="mb-0">Found One Defect Data</p>
+                    <p class="legend-text mb-0">Found One Defect Data</p>
                 </div>
 
                 <div class="d-flex gap-3 align-items-center">
                     <div class="legend-box" style="background-color: #F24C4C;">
-                        <img style="width: 20px; height:20px" src="{{ _asset('svg/inlinePerformance/defect2.svg') }}">
+                        <img class="legend-icon" style="width: 12px; height:12px" src="{{ _asset('svg/inlinePerformance/defect2.svg') }}">
                     </div>
-                    <p class="mb-0">Found Two or More Defect Data</p>
+                    <p class="legend-text mb-0">Found Two or More Defect Data</p>
                 </div>
 
                 <div class="d-flex gap-3 align-items-center">
                     <div class="legend-box" style="background-color: #F9E21D;">
-                        <img src="{{ _asset('svg/inlinePerformance/pencil.svg') }}">
+                        <img class="legend-icon" style="width: 12px; height:12px" src="{{ _asset('svg/inlinePerformance/pencil.svg') }}">
                     </div>
-                    <p class="mb-0">CAP Already Filled In</p>
+                    <p class="legend-text mb-0">CAP Already Filled In</p>
                 </div>
             </div>
         </div>
 
         <!-- Footer -->
-        <div class="footer-title mt-2 text-white d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0">
+         <div class="footer-title mt-2 text-white d-flex flex-wrap justify-content-between align-items-center gap-2">
             <div class="d-flex align-items-center gap-2">
                 <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" style="width: 18px; height: 18px;">
                 Data Update
                 <span id="liveClock2"></span>
             </div>
-            <div class="d-flex align-items-center">
-                <div class="mb-0 d-flex align-items-center gap-2">
-                    <span class="title-system">
-                        System Connected
-                    </span>
-                    <div class="rounded-pill" style="background-color:#4CF299; width:20px;height:20px"></div>
+        </div>
+    </div>
+
+    <!-- Export Preview Modal -->
+    <div class="modal fade" id="exportPreviewModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Preview Export Data</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="exportLoading" class="text-center text-white py-4">
+                        Memuat data...
+                    </div>
+                    <div class="table-responsive">
+                        <table id="exportTable" class="table table-bordered table-sm w-100 d-none">
+                            <thead id="exportTableHead"></thead>
+                            <tbody id="exportTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
                 </div>
             </div>
         </div>
@@ -554,28 +650,80 @@
 @endsection
 
 @section('extrascript')
+    <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
     <script>
         $(document).ready(function () {
 
+           $(document).ready(function () {
+                let savedTime = localStorage.getItem('lastDataUpdate');
+                if (savedTime) {
+                    $('#liveClock2').html(savedTime);
+                }
+            });
+
+            let currentLine      = @json($kodegroup ?? null);
+            let currentLineLabel = @json($namaline ?? null);
+            let currentDate       = @json($date);
+            let skipInitialChange = true;
+            let exportDT          = null;
+
+            console.log(currentDate);
+
+            const formattedDate = new Date(currentDate).toLocaleDateString('en-GB', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+            });
+
+           function formatDate(date) {
+                const d = new Date(date);
+
+                const months = [
+                    'January', 'February', 'March', 'April', 'May', 'June',
+                    'July', 'August', 'September', 'October', 'November', 'December'
+                ];
+
+                const day = d.getDate();
+                const monthName = months[d.getMonth()];
+                const year = d.getFullYear();
+
+                const hours = String(d.getHours()).padStart(2, '0');
+                const minutes = String(d.getMinutes()).padStart(2, '0');
+                const seconds = String(d.getSeconds()).padStart(2, '0');
+
+                return `${day} ${monthName} ${year}`;
+            }
+
+            function updateLiveClock() {
+                const now = new Date();
+
+                const formatted = formatDate(now);
+
+                let currentDate = @json($date);
+
+                const dateTime = currentDate ? formatDate(currentDate) : formatted;
+
+                $('#liveClock').text(dateTime);
+            }
+
+
+            updateLiveClock();
+
+
             function updateClock() {
                 const now = new Date();
-                const day = String(now.getDate()).padStart(2, '0');
-                const month = [
-                    "January", "February", "March", "April", "May", "June",
-                    "July", "August", "September", "October", "November", "December"
-                ];
-                const year = now.getFullYear();
                 const hour = String(now.getHours()).padStart(2, '0');
                 const minute = String(now.getMinutes()).padStart(2, '0');
                 const second = String(now.getSeconds()).padStart(2, '0');
 
                 const formatted = `${day} ${month[now.getMonth()]} ${year} - ${hour} : ${minute} : ${second}`;
 
-                document.getElementById('liveClock').innerHTML = formatted;
-                document.getElementById('liveClock2').innerHTML = formatted;
+                const addDate = `${formattedDate} - ${hour} : ${minute} : ${second}`;
+                document.getElementById('liveClock').innerHTML = addDate;
             }
-            updateClock();
-            setInterval(updateClock, 1000);
 
             $('#line').select2({
                 placeholder: 'Select Line',
@@ -608,23 +756,25 @@
                 }
             });
 
-            let currentLine = null;
+            if (currentLine) {
+                const preOption = new Option(currentLineLabel, currentLine, true, true);
+                $('#line').append(preOption).trigger('change');
+            }
 
-            $('#line').on('change', function () {
-                currentLine = $(this).val();
+            function fetchInlineLts() {
+                if (!currentLine) return;
 
                 $('#datatable-container').css('opacity', 0.5);
 
                 $.ajax({
                     url: "{{ route('monitoring_inlineperformance_filterInlineLts') }}",
                     type: "GET",
-                    data: { line: currentLine },
+                    data: { line: currentLine, date: currentDate },
                     success: function (res) {
                         $('#tot_inspect').text(res.tot_inspect);
                         $('#tot_defect').text(res.tot_defect);
                         $('#rft').text(res.rft);
                         $('#wft').text(res.wft);
-
                         $('#datatable-container').html(res.html);
                     },
                     error: function (xhr) {
@@ -634,14 +784,105 @@
                         $('#datatable-container').css('opacity', 1);
                     }
                 });
+            }
+
+            $('#line').on('change', function () {
+                if (skipInitialChange) {
+                    skipInitialChange = false;
+                    return;
+                }
+                currentLine = $(this).val();
+                fetchInlineLts();
             });
+
+            /* ============================
+               EXPORT PREVIEW MODAL LOGIC
+               ============================ */
+
+            function resetExportModal() {
+                if (exportDT) {
+                    exportDT.destroy();
+                    exportDT = null;
+                }
+                $('#exportTableHead').empty();
+                $('#exportTableBody').empty();
+                $('#exportTable').addClass('d-none');
+                $('#exportLoading').removeClass('d-none').text('Memuat data...');
+            }
+
+            function loadExportPreview() {
+                resetExportModal();
+
+                $.ajax({
+                    url: "{{ route('monitoring_inlineperformance_exportData') }}",
+                    type: "GET",
+                    data: { line: currentLine, date: currentDate },
+                    dataType: "json",
+                    success: function (res) {
+                        // res diharapkan berbentuk:
+                        // { headers: ['Col1','Col2', ...], rows: [ [v1,v2,...], [v1,v2,...] ] }
+                        if (!res || !res.headers || !res.rows) {
+                            $('#exportLoading').text('Data export tidak tersedia.');
+                            return;
+                        }
+
+                        let theadHtml = '<tr>' + res.headers.map(function (h) {
+                            return '<th>' + h + '</th>';
+                        }).join('') + '</tr>';
+                        $('#exportTableHead').html(theadHtml);
+
+                        let tbodyHtml = res.rows.map(function (row) {
+                            return '<tr>' + row.map(function (cell) {
+                                return '<td>' + (cell ?? '') + '</td>';
+                            }).join('') + '</tr>';
+                        }).join('');
+                        $('#exportTableBody').html(tbodyHtml);
+
+                        $('#exportLoading').addClass('d-none');
+                        $('#exportTable').removeClass('d-none');
+
+                        exportDT = $('#exportTable').DataTable({
+                            scrollX: true,
+                            paging: true,
+                            searching: true,
+                            lengthChange: true,
+                            dom: 'Bfrtip',
+                            buttons: [
+                                {
+                                    extend: 'excelHtml5',
+                                    text: 'Download Excel',
+                                    className: 'btn btn-success btn-sm',
+                                    title: 'InlinePerformance_' + (currentLine || '') + '_' + (currentDate || '')
+                                }
+                            ]
+                        });
+                    },
+                    error: function (xhr) {
+                        $('#exportLoading').text('Gagal memuat data export.');
+                        console.log(xhr.responseJSON ? xhr.responseJSON.message : 'Request failed');
+                    }
+                });
+            }
 
             $('.export-btn').on('click', function () {
                 if (!currentLine) {
                     alert('Pilih line terlebih dahulu sebelum export.');
+                    return false;
+                }
+                // modal akan terbuka via data-bs-toggle, data di-load saat event shown
+            });
+
+            $('#exportPreviewModal').on('show.bs.modal', function (e) {
+                if (!currentLine) {
+                    e.preventDefault();
+                    alert('Pilih line terlebih dahulu sebelum export.');
                     return;
                 }
-                // Endpoint export dibahas terpisah, disambungkan di sini nanti.
+                loadExportPreview();
+            });
+
+            $('#exportPreviewModal').on('hidden.bs.modal', function () {
+                resetExportModal();
             });
 
         });
