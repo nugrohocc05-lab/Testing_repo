@@ -1,0 +1,66 @@
+ function exportData(Request $request)
+    {
+        if (!$request->line) {
+            return response()->json(['message' => 'Line belum dipilih'], 422);
+        }
+ 
+        preconnect(session('db'));
+ 
+        $result = $this->buildInlineLtsData($request->line, $request->date);
+ 
+        $g = (new MasterEmployeeGroup())->getTable();
+        $s = (new MasterEmployeeSection())->getTable();
+ 
+        $groupInfo = MasterEmployeeGroup::select(
+                "$g.id as kodegroup", "$g.name as namagroup", "$s.name as namabagian"
+            )
+            ->join($s, "$s.id", '=', "$g.section_id")
+            ->where("$g.id", $request->line)
+            ->first();
+ 
+        $namaline = $groupInfo
+            ? $groupInfo->namabagian . ' - ' . $groupInfo->namagroup
+            : $request->line;
+ 
+        $statusLabel = [
+            'empty' => '-',
+            'none'  => 'No Defect',
+            'one'   => '1 Defect',
+            'multi' => '2+ Defect',
+            'cap'   => 'CAP Filled',
+        ];
+ 
+        $headers = array_merge(
+            ['Location', 'Inspect Qty', 'Defect Qty', 'RFT (%)', 'WFT (%)', 'Round'],
+            $result['operators']->map(function ($op) {
+                return $op['nama'] ?? $op['nik'];
+            })->toArray()
+        );
+ 
+        $rows = collect($result['rounds'])->map(function ($round) use ($statusLabel, $namaline, $result) {
+            $row = [
+                $namaline,
+                $result['tot_inspect'],
+                $result['tot_defect'],
+                $result['rft'],
+                $result['wft'],
+                'Round ' . $round['round'],
+            ];
+ 
+            foreach ($round['cells'] as $cell) {
+                $row[] = $statusLabel[$cell['status']] ?? '-';
+            }
+ 
+            return $row;
+        })->toArray();
+ 
+        return response()->json([
+            'headers'     => $headers,
+            'rows'        => $rows,
+            'namaline'    => $namaline,
+            'tot_inspect' => $result['tot_inspect'],
+            'tot_defect'  => $result['tot_defect'],
+            'rft'         => $result['rft'],
+            'wft'         => $result['wft'],
+        ]);
+    }
