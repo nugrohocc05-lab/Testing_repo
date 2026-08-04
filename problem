@@ -1,41 +1,105 @@
-success: function (res) {
-    if (!res || !res.rows) {
-        alert('Data export is not available.');
-        return;
+ // function exportExcel(Request $request)
+    // {
+    //     $data = $this->getFilterData($request);
+
+    //     header('Content-Type: text/csv');
+    //     header('Content-Disposition: attachment; filename="Report_Inline_Dashboard.csv"');
+
+    //     $file = fopen('php://output', 'w');
+
+    //     // Judul
+    //     fputcsv($file, ['REPORT INLINE DASHBOARD']);
+
+    //     fputcsv($file, [
+    //         $data['periode']['from'] . ' s/d ' . $data['periode']['to']
+    //     ]);
+
+    //      fputcsv($file, []);
+
+    //     fputcsv($file, ['Line', 'Group Buyer']);
+
+    //     $condition = $data['line'] === 'all'
+    //         ? 'All Lines'
+    //         : 'Line ' . $data['line'];
+
+
+    //     fputcsv($file, [
+    //         $condition,
+    //         $data['group_buyer'],
+    //     ]);
+
+    //     fputcsv($file, []);
+
+    //     // Header Summary
+    //     fputcsv($file, ['Total Inspect', 'Total Defect', 'RFT', 'WFT', 'Target', 'Status']);
+
+    //     fputcsv($file, [
+    //         number_format($data['tot_inspect']),
+    //         number_format($data['tot_defect']),
+    //         $data['rft'].'%',
+    //         $data['wft'].'%',
+    //         '97.00',
+    //         $data['target'] ? 'Not Achieved' : 'Achieved',
+    //     ]);
+
+    //     fputcsv($file, []);
+
+    //     fputcsv($file, ['Defect', 'Qty', 'Percentage']);
+
+    //     foreach ($data['top_defect'] as $defect) {
+    //         fputcsv($file, [
+    //             $defect['nmdefect'],
+    //             number_format($defect['total']),
+    //             $defect['percent'].'%'
+    //         ]);
+    //     }
+
+    //     fclose($file);
+    //     exit;
+    // }
+
+    public function exportExcel(Request $request)
+    {
+        $data = $this->getFilterData($request);
+
+        header("Content-Type: application/vnd.ms-excel");
+        header("Content-Disposition: attachment; filename=Report_Inline_Dashboard.xls");
+
+
+        echo '
+        <table border="1">
+            <tr>
+                <td colspan="6" style="font-weight:bold;font-size:16px;text-align:center">
+                    REPORT INLINE DASHBOARD
+                </td>
+            </tr>
+
+            <tr>
+                <td colspan="6">
+                    '.$data['periode']['from'].' s/d '.$data['periode']['to'].'
+                </td>
+            </tr>
+
+            <tr>
+                <th>Line</th>
+                <th>Group Buyer</th>
+                <th>Total Inspect</th>
+                <th>Total Defect</th>
+                <th>RFT</th>
+                <th>Status</th>
+            </tr>
+
+            <tr>
+                <td>'.$data['line'].'</td>
+                <td>'.$data['group_buyer'].'</td>
+                <td>'.$data['tot_inspect'].'</td>
+                <td>'.$data['tot_defect'].'</td>
+                <td>'.$data['rft'].'%</td>
+                <td>'.$data['target'].'</td>
+            </tr>
+        </table>
+        ';
+
+        exit;
     }
 
-    let theadHtml = '<tr>' + res.headers.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr>';
-    $('#exportTableHiddenHead').html(theadHtml);
-
-    let tbodyHtml = res.rows.map(function (row) {
-        return '<tr>' + row.map(function (cell) { return '<td>' + (cell ?? '-') + '</td>'; }).join('') + '</tr>';
-    }).join('');
-    $('#exportTableHiddenBody').html(tbodyHtml);
-
-    if (exportDT) {
-        exportDT.destroy();
-        exportDT = null;
-    }
-
-    exportDT = $('#exportTableHidden').DataTable({
-        scrollX: false,
-        paging: false,
-        searching: false,
-        lengthChange: false,
-        info: false,
-        dom: 'B',
-        buttons: [
-            {
-                extend: 'excelHtml5',
-                title: 'Inline LTS_' + (currentLine || '') + '_' + (currentDate || ''),
-                filename: 'Inline LTS_' + (currentLine || '') + '_' + (currentDate || ''),
-                exportOptions: { columns: ':visible' }
-            }
-        ]
-    });
-
-    exportDT.button(0).trigger();
-    exportDT.destroy();
-    exportDT = null;
-    $('#exportTableHiddenHead, #exportTableHiddenBody').empty();
-}
