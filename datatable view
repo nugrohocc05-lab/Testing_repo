@@ -1,400 +1,38 @@
 <style>
-    .border-custom-datatable {
-        border: 1px solid #4C8CF2 !important;
-        background-color: #212B3E;
-    }
-
-    .table-custom {
-        border-collapse: collapse;
-    }
-
-    .table-custom th {
-        background-color: #1C2536 !important;
-        color: white;
-        text-align:center;
-        vertical-align:middle;
-    }
-
-    .table-custom td {
-        background-color: #242E3E !important;
-        color: white;
-        border: 1px solid #1C2536 !important;
-    }
-
+    /* Spesifik file ini saja: selector ber-ID tabel ini + warna kolom sesuai urutan
+       (1 Line, 2 Style, 3 RFT, 4 Inspect, 5 Defect, 6 RFT%, 7 WFT%) */
     #tableInlinePerformance {
         border-collapse: separate;
         border-spacing: 0;
     }
-
     #tableInlinePerformance thead th {
         position: sticky;
         top: 0;
         z-index: 2;
         will-change: transform;
     }
+    #tableInlinePerformance tfoot {
+        position: sticky;
+        bottom: 0;
+        z-index: 3;
+    }
+    #tableInlinePerformance tfoot td {
+        background: var(--bg-dark-3, #1C2536) !important;
+        border-top: 2px solid var(--color-blue, #4C8CF2);
+        font-weight: bold;
+    }
 
-    #tableInlinePerformance tbody td:nth-child(3) { color: #4CF299; }
-    #tableInlinePerformance tbody td:nth-child(4) { color: #4C8CF2; }
-    #tableInlinePerformance tbody td:nth-child(5) { color: #E65858; }
-    #tableInlinePerformance tbody td:nth-child(6) { color: #4CF299; }
-    #tableInlinePerformance tbody td:nth-child(7) { color: #E65858; }
+    #tableInlinePerformance tbody td:nth-child(3) { color: var(--color-green, #4CF299); }
+    #tableInlinePerformance tbody td:nth-child(4) { color: var(--color-blue, #4C8CF2); }
+    #tableInlinePerformance tbody td:nth-child(5) { color: var(--color-red-alt, #E65858); }
+    #tableInlinePerformance tbody td:nth-child(6) { color: var(--color-green, #4CF299); }
+    #tableInlinePerformance tbody td:nth-child(7) { color: var(--color-red-alt, #E65858); }
 
     #searchLine::placeholder {
         color: white;
         opacity: 1;
         font-weight: 300;
     }
-
-    .datatable-wrap {
-        display: flex;
-        flex-direction: column;
-        overflow-y: hidden;
-    }
-
-    .table-scroll-area {
-        overflow-y: auto;
-        overscroll-behavior: contain;
-        -webkit-overflow-scrolling: touch;
-        height: max(280px, calc(100vh - 560px));
-    }
-
-    #datedatatables {
-        max-width: 100%;
-    }
-
-    h5.text-nowrap {
-        white-space: nowrap;
-    }
-
-    .wrapper-title {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 12px;
-        width: 100%;
-    }
-
-    .datatable-header-left {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        flex-wrap: wrap;
-    }
-
-    .datatable-header-right {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: nowrap;
-    }
-
-    .search-wrapper {
-        position: relative;
-        width: 250px;
-    }
-
-    .search-icon {
-        position: absolute;
-        left: 12px;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 18px;
-        height: 18px;
-        pointer-events: none;
-    }
-
-    .search-input {
-        width: 250px;
-        max-width: 100%;
-        padding-left: 40px;
-    }
-
-    .export-text {
-        display: none;
-    }
-
-    /* Skeleton Loading */
-    .skeleton-td {
-        padding: 10px 8px !important;
-    }
-
-    .skeleton-bar {
-        height: 14px;
-        border-radius: 6px;
-        background: linear-gradient(
-            90deg,
-            #2a3346 25%,
-            #3a4560 37%,
-            #2a3346 63%
-        );
-        background-size: 400% 100%;
-        animation: skeleton-shimmer 1.4s ease infinite;
-    }
-
-    .skeleton-badge {
-        height: 28px;
-        width: 90px;
-        margin: 0 auto;
-        border-radius: 999px;
-    }
-
-    @keyframes skeleton-shimmer {
-        0% { background-position: 100% 50%; }
-        100% { background-position: 0 50%; }
-    }
-
-    /* Chrome, Edge, Safari (Webkit) */
-    .table-scroll-wrapper::-webkit-scrollbar {
-        height: 8px;
-        width: 8px;
-    }
-
-    .table-scroll-wrapper::-webkit-scrollbar-track {
-        background: #242E3E;
-        border-radius: 4px;
-    }
-
-    .table-scroll-wrapper::-webkit-scrollbar-thumb {
-        background: #D9D9D9;
-        border-radius: 4px;
-    }
-
-    /* Firefox */
-    .table-scroll-wrapper {
-        scrollbar-width: thin;
-        scrollbar-color: #D9D9D9 #242E3E;
-    }
-
-    .table-responsive {
-        -webkit-overflow-scrolling: touch;
-    }
-
-    #tableInlinePerformanceFoot {
-        flex-shrink: 0;
-    }
-
-    #tableInlinePerformanceFoot td {
-        background-color: #1C2536 !important;
-    }
-
-    .position-relative {
-        flex-grow: 0;
-        width: 250px;
-        min-width: 160px;
-    }
-
-    /* Laptop Mas Doni */
-    @media (min-width: 992px) and (max-width: 1400px) {
-        #datedatatables {
-            font-size: 0.85rem;
-        }
-        .search-input {
-            width: 170px;
-        }
-        h5.text-nowrap {
-            font-size: 1.05rem;
-        }
-
-        .datatable-wrap {
-            flex-grow: 1;
-            min-height: 0;
-        }
-        .table-scroll-area {
-            flex-grow: 1;
-            min-height: 0;
-            max-height: none;
-            height: auto;
-        }
-
-        .wrapper-title {
-            flex-wrap: nowrap;
-        }
-        .datatable-header-left {
-            flex: 1 1 auto;
-            min-width: 0;
-        }
-        .datatable-header-right {
-            flex: 0 0 auto;
-            margin-left: auto;
-        }
-        #datedatatables {
-            max-width: 100%;
-        }
-        h5.text-nowrap {
-            white-space: nowrap;
-        }
-    }
-
-    /* Tablet (768px - 991.98px) */
-    @media (min-width: 768px) and (max-width: 991.98px) {
-        .datatable-header-left,
-        .datatable-header-right {
-            width: 100%;
-            flex-wrap: wrap;
-        }
-        .datatable-header-left h5.text-nowrap {
-            white-space: normal;
-            font-size: 1rem;
-            flex: 1 1 auto;
-            min-width: 0;
-        }
-        .datatable-header-left .position-relative {
-            flex: 1 1 220px;
-            min-width: 200px;
-        }
-        .datatable-header-right {
-            justify-content: flex-start;
-        }
-        .datatable-header-right .search-input {
-            width: 240px;
-            flex: 1 1 240px;
-        }
-    }
-
-    /* Mobile (<=767.98px) */
-    @media (max-width: 767.98px) {
-        #datedatatables { width: 100% !important; }
-        .search-input { width: 100%; }
-        #find { flex-shrink: 0; }
-
-        .wrapper-title {
-            flex-direction: column;
-            align-items: stretch;
-        }
-
-        .datatable-header-left {
-            width: 100%;
-            flex-wrap: wrap;
-            row-gap: 0.5rem;
-        }
-        .datatable-header-left h5.text-nowrap {
-            white-space: normal;
-            font-size: 0.95rem;
-            flex: 1 1 auto;
-            min-width: 0;
-            word-break: break-word;
-        }
-        .datatable-header-left .position-relative {
-            width: 100%;
-            flex-grow: 0;
-            min-width: 0;
-        }
-
-        .datatable-header-right {
-            width: 100%;
-            justify-content: space-between;
-        }
-        .datatable-header-right .search-input {
-            flex: 1 1 100%;
-        }
-
-        .search-wrapper {
-            flex: 1;
-            width: auto;
-        }
-
-        .export-btn {
-            padding: 6px 12px !important;
-            color: white;
-            font-size: 0.85rem;
-            font-weight: 500;
-        }
-        .export-text {
-            display: inline-block;
-        }
-
-        .detailIcon {
-            display: none;
-        }
-
-        .position-relative {
-            flex-grow: 1;
-            width: auto;
-            min-width: 0;
-        }
-    }
-
-    .copyable-cell {
-        cursor: default;
-    }
-
-    @media (max-width: 991.98px) {
-        .copyable-cell {
-            cursor: pointer;
-        }
-    }
-
-    .copy-badge-popover {
-        position: fixed;
-        z-index: 1080;
-        background-color: #1C2536;
-        border: 1px solid #4C8CF2;
-        border-radius: 8px;
-        padding: 8px 12px;
-        color: #fff;
-        font-size: 13px;
-        max-width: 260px;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        animation: copyBadgeFadeIn .15s ease-out;
-    }
-
-    .copy-badge-popover .copy-badge-text {
-        word-break: break-word;
-        flex: 1;
-        line-height: 1.3;
-    }
-
-    .copy-badge-popover .copy-badge-icon {
-        flex-shrink: 0;
-        width: 16px;
-        height: 16px;
-        cursor: pointer;
-        opacity: 0.85;
-    }
-
-    .copy-badge-popover.copied {
-        border-color: #4CF299;
-    }
-
-    .copy-badge-popover .copy-badge-status {
-        font-size: 11px;
-        color: #4CF299;
-        display: none;
-    }
-
-    .copy-badge-popover.copied .copy-badge-status {
-        display: block;
-    }
-
-    .copy-badge-popover.copied .copy-badge-text {
-        display: none;
-    }
-
-    @keyframes copyBadgeFadeIn {
-        from { opacity: 0; transform: translateY(4px); }
-        to   { opacity: 1; transform: translateY(0); }
-    }
-
-    .table-scroll-area {
-        overflow-y: auto;
-        position: relative;
-    }
-
-    #tableInlinePerformance tfoot {
-        position: sticky;
-        bottom: 0;
-        z-index: 3;
-    }
-
-    #tableInlinePerformance tfoot td {
-        background: #1C2536 !important;
-        border-top: 2px solid #4C8CF2;
-        font-weight: bold;
-    }
-
 </style>
 
 <div class="table-scroll-wrapper mt-3 border-custom-datatable rounded p-3 text-white datatable-wrap">
@@ -716,4 +354,3 @@
     });
 </script>
 @endpush
-
