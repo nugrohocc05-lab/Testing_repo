@@ -4,14 +4,21 @@
         background-color: #212B3E;
     }
 
+    .table-custom {
+        border-collapse: collapse;
+    }
+
     .table-custom th {
         background-color: #1C2536 !important;
         color: white;
+        text-align:center;
+        vertical-align:middle;
     }
 
     .table-custom td {
         background-color: #242E3E !important;
         color: white;
+        border: 1px solid #1C2536 !important;
     }
 
     #tableInlinePerformance {
@@ -25,10 +32,6 @@
         z-index: 2;
         will-change: transform;
     }
-
-    /* NOTE: tabel ini tidak punya <tfoot> (footer total dibuat sbg
-       tabel terpisah #tableInlinePerformanceFoot di bawah), jadi
-       rule sticky utk tfoot yang lama dihapus krn tidak pernah kepakai. */
 
     #tableInlinePerformance tbody td:nth-child(3) { color: #4CF299; }
     #tableInlinePerformance tbody td:nth-child(4) { color: #4C8CF2; }
@@ -162,8 +165,6 @@
         scrollbar-color: #D9D9D9 #242E3E;
     }
 
-    /* Beri hint visual bahwa tabel bisa discroll ke samping di layar
-       sempit (best practice: sinyal affordance utk horizontal scroll) */
     .table-responsive {
         -webkit-overflow-scrolling: touch;
     }
@@ -181,11 +182,6 @@
         width: 250px;
         min-width: 160px;
     }
-
-    /* ============================================================
-       Diurutkan dari max-width TERBESAR -> TERKECIL (lihat catatan
-       di index.blade.php mengenai bug cascade media query).
-       ============================================================ */
 
     /* Laptop Mas Doni */
     @media (min-width: 992px) and (max-width: 1400px) {
@@ -317,9 +313,90 @@
             min-width: 0;
         }
     }
+
+    .copyable-cell {
+        cursor: default;
+    }
+
+    @media (max-width: 991.98px) {
+        .copyable-cell {
+            cursor: pointer;
+        }
+    }
+
+    .copy-badge-popover {
+        position: fixed;
+        z-index: 1080;
+        background-color: #1C2536;
+        border: 1px solid #4C8CF2;
+        border-radius: 8px;
+        padding: 8px 12px;
+        color: #fff;
+        font-size: 13px;
+        max-width: 260px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        animation: copyBadgeFadeIn .15s ease-out;
+    }
+
+    .copy-badge-popover .copy-badge-text {
+        word-break: break-word;
+        flex: 1;
+        line-height: 1.3;
+    }
+
+    .copy-badge-popover .copy-badge-icon {
+        flex-shrink: 0;
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+        opacity: 0.85;
+    }
+
+    .copy-badge-popover.copied {
+        border-color: #4CF299;
+    }
+
+    .copy-badge-popover .copy-badge-status {
+        font-size: 11px;
+        color: #4CF299;
+        display: none;
+    }
+
+    .copy-badge-popover.copied .copy-badge-status {
+        display: block;
+    }
+
+    .copy-badge-popover.copied .copy-badge-text {
+        display: none;
+    }
+
+    @keyframes copyBadgeFadeIn {
+        from { opacity: 0; transform: translateY(4px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .table-scroll-area {
+        overflow-y: auto;
+        position: relative;
+    }
+
+    #tableInlinePerformance tfoot {
+        position: sticky;
+        bottom: 0;
+        z-index: 3;
+    }
+
+    #tableInlinePerformance tfoot td {
+        background: #1C2536 !important;
+        border-top: 2px solid #4C8CF2;
+        font-weight: bold;
+    }
+
 </style>
 
-<!-- Datatables -->
 <div class="table-scroll-wrapper mt-3 border-custom-datatable rounded p-3 text-white datatable-wrap">
     <div class="d-flex align-items-center mb-3 wrapper-title justify-content-between">
         <div class="datatable-header-left">
@@ -357,21 +434,21 @@
                 <img src="{{ _asset('svg/inlinePerformance/export.svg') }}"
                     class="export-icon"
                     style="width:27px; height:27px;" alt="Export">
-                <span class="custom-tooltip-bottom">Export</span>
+                <span class="custom-tooltip-bottom">Excel</span>
             </button>
         </div>
     </div>
 
     <!-- Datatable Main -->
     <div class="table-responsive table-scroll-area mt-1">
-        <table id="tableInlinePerformance" class="table-custom table table-borderless align-middle w-100">
+        <table id="tableInlinePerformance" class="table-custom table table-borderless align-middle w-100 table-hover">
             <thead>
                 <tr>
-                    <th class="text-center" style="width:10%">Line</th>
+                    <th class="text-center" style="width:10%;background-color:red !important align-items-center">Line</th>
                     <th class="text-center" style="width:20%">Style</th>
-                    <th class="text-center" style="width:10%">QTY RFT<br>(Pcs)</th>
-                    <th class="text-center" style="width:10%">QTY Inspect<br>(Pcs)</th>
-                    <th class="text-center" style="width:10%">QTY Defect<br>(Pcs)</th>
+                    <th class="text-center" style="width:10%">RFT QTY<br>(Pcs)</th>
+                    <th class="text-center" style="width:10%">Inspect QTY<br>(Pcs)</th>
+                    <th class="text-center" style="width:10%">Defect QTY<br>(Pcs)</th>
                     <th class="text-center" style="width:10%">RFT<br>(%)</th>
                     <th class="text-center" style="width:10%">WFT<br>(%)</th>
                     <th class="text-center" style="width:20%">Last Status</th>
@@ -380,23 +457,20 @@
             <tbody id="tableInlinePerformanceBody">
 
             </tbody>
+            <tfoot>
+                <tr class="">
+                    <td class="total fw-bold text-center" style="width:9.5%; color:#4C8CF2">TOTAL</td>
+                    <td style="width:20%"></td>
+                    <td class="text-center fw-bold" id="footQtyRft" style="width:10%; color:#4CF299;">0</td>
+                    <td class="text-center fw-bold" id="footQtyInspect" style="width:10%; color:#4C8CF2">0</td>
+                    <td class="text-center fw-bold" id="footQtyDefect" style="width:10%; color:#b95a5a">0</td>
+                    <td style="width:10%"></td>
+                    <td style="width:10%"></td>
+                    <td style="width:20%"></td>
+                </tr>
+            </tfoot>
         </table>
     </div>
-
-    <table id="tableInlinePerformanceFoot" class="table-custom table table-borderless align-middle w-100 mb-0" style="table-layout: fixed;">
-        <tbody>
-            <tr class="">
-                <td class="total fw-bold text-center" style="width:10%; color:#4C8CF2">TOTAL</td>
-                <td style="width:20%"></td>
-                <td class="text-center fw-bold" id="footQtyRft" style="width:10%; color:#4CF299;">0</td>
-                <td class="text-center fw-bold" id="footQtyInspect" style="width:10%; color:#4C8CF2">0</td>
-                <td class="text-center fw-bold" id="footQtyDefect" style="width:10%; color:#b95a5a">0</td>
-                <td style="width:10%"></td>
-                <td style="width:10%"></td>
-                <td style="width:20%"></td>
-            </tr>
-        </tbody>
-    </table>
 </div>
 
 @push('scripts')
@@ -414,7 +488,7 @@
                 if (!dateStr) return;
                 reloadTable(dateStr);
             },
-            maxDate: "today"
+            maxDate: "today",
         });
 
         const initialDate = "{{ \Carbon\Carbon::parse($date)->format('d-m-Y') }}";
@@ -427,14 +501,30 @@
                 paging: false,
                 ordering: false,
                 info: false,
+                footer: true,
                 dom: '',
                 buttons: [
-                    {
-                        extend: 'excelHtml5',
-                        title: 'Detail Per Line Inline Performance ' + '{{ date("d-m-Y") }}',
-                        exportOptions: { columns: ':visible' }
-                    }
-                ]
+    {
+        extend: 'excelHtml5',
+        title: function () {
+            const currentDate = $('#datedatatables').val() || '{{ date("d-m-Y") }}';
+            return 'Report_Detail_Per_Line_' + currentDate;
+        },
+        exportOptions: { columns: ':visible' },
+        customizeData: function(data) {
+            data.body.push([
+                'TOTAL',
+                '',
+                $('#footQtyRft').text(),
+                $('#footQtyInspect').text(),
+                $('#footQtyDefect').text(),
+                '',
+                '',
+                ''
+            ]);
+        }
+    }
+]
             });
 
             table.off('draw').on('draw', function () {
@@ -509,66 +599,121 @@
             }
             return rows;
         }
+
+        $(document).on('click', '.target-loading', function (e) {
+            e.preventDefault();
+
+            const targetUrl = $(this).attr('href');
+
+            $('#loading').show();
+
+            setTimeout(function () {
+                window.location.href = targetUrl;
+            }, 100);
+        });
+
+        window.addEventListener('pageshow', function (event) {
+            if (event.persisted) {
+                $('#loading').hide();
+            }
+        });
+
+        // Copy style in mobile
+        (function () {
+            let activePopover = null;
+
+            function isMobileOrTablet() {
+                return window.matchMedia('(max-width: 991.98px)').matches;
+            }
+
+            function removePopover() {
+                if (activePopover) {
+                    activePopover.remove();
+                    activePopover = null;
+                }
+            }
+
+            function copyToClipboard(text) {
+                if (navigator.clipboard && window.isSecureContext) {
+                    return navigator.clipboard.writeText(text);
+                }
+                return new Promise((resolve, reject) => {
+                    const ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.style.position = 'fixed';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.focus();
+                    ta.select();
+                    try {
+                        document.execCommand('copy');
+                        resolve();
+                    } catch (err) {
+                        reject(err);
+                    } finally {
+                        document.body.removeChild(ta);
+                    }
+                });
+            }
+
+            function showCopyBadge(targetEl, value) {
+                removePopover();
+
+                const rect = targetEl.getBoundingClientRect();
+                const popover = document.createElement('div');
+                popover.className = 'copy-badge-popover';
+                popover.innerHTML = `
+                    <span class="copy-badge-text">${value}</span>
+                    <span class="copy-badge-status">Copied!</span>
+                `;
+
+                document.body.appendChild(popover);
+
+                const popRect = popover.getBoundingClientRect();
+                let top = rect.bottom + 6;
+                let left = rect.left;
+
+                if (left + popRect.width > window.innerWidth - 8) {
+                    left = window.innerWidth - popRect.width - 8;
+                }
+                if (top + popRect.height > window.innerHeight - 8) {
+                    top = rect.top - popRect.height - 6;
+                }
+
+                popover.style.top = top + 'px';
+                popover.style.left = Math.max(8, left) + 'px';
+
+                popover.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    copyToClipboard(value).then(function () {
+                        popover.classList.add('copied');
+                        setTimeout(removePopover, 1200);
+                    });
+                });
+
+                activePopover = popover;
+            }
+
+            document.addEventListener('click', function (e) {
+                const cell = e.target.closest('.copyable-cell');
+
+                if (cell) {
+                    if (!isMobileOrTablet()) return;
+                    e.stopPropagation();
+                    const value = cell.getAttribute('data-copy-value') || cell.textContent.trim();
+                    showCopyBadge(cell, value);
+                    return;
+                }
+
+                if (!e.target.closest('.copy-badge-popover')) {
+                    removePopover();
+                }
+            });
+
+            window.addEventListener('scroll', removePopover, true);
+            window.addEventListener('resize', removePopover);
+        })();
     });
 </script>
 @endpush
 
-@php
-    $totalRft = 0;
-    $totalInspect = 0;
-    $totalDefect = 0;
-@endphp
-@forelse ($data as $d)
-    @php
-        $totalRft += (int) $d['qty_rft'];
-        $totalInspect += (int) $d['qty_inspect'];
-        $totalDefect += (int) $d['qty_defect'];
-    @endphp
-    <tr class="" style="background-color: #1C2536;">
-        <td class="text-center fw-normal" style="width: 10%;">{{ $d['line'] ?? '-' }}</td>
-        <td class="text-center fw-normal" style="width: 20%; max-width: 0;">
-            <span
-                class="d-inline-block text-truncate w-100"
-                style="max-width: 250px; vertical-align: middle;"
-                title="{{ !empty($d['style']) ? implode(', ', $d['style']) : '-' }}"
-            >
-                {{ !empty($d['style']) ? implode(', ', $d['style']) : '-' }}
-            </span>
-        </td>
-        <td class="text-center fw-normal" style="width: 10%;">{{ $d['qty_rft'] ?? '-' }}</td>
-        <td class="text-center fw-normal" style="width: 10%;">{{ $d['qty_inspect'] ?? '-' }}</td>
-        <td class="text-center fw-normal" style="width: 10%;">{{ $d['qty_defect'] ?? '-' }}</td>
-        <td class="text-center fw-normal" style="width: 10%;">{{ $d['rft'] ?? '-' }}</td>
-        <td class="text-center fw-normal" style="width: 10%;">{{ $d['wft'] ?? '-' }}</td>
-        <td class="text-center fw-normal" style="width: 20%;">
-            @if (!$d['last_round'])
-                -
-            @else
-                <a href="{{ route('monitoring_inlineperformanceinlinetls', [
-                        'line'      => $d['line'],
-                        'kodegroup' => $d['kodegroup'],
-                        'date'      => $date,
-                    ]) }}">
-                    @if ($d['has_cap'])
-                        <div class="badge px-4 py-2 rounded-5" style="background-color: #F2994A; border: 2px solid #F2C94C; font-size:15px; font-weight:400">
-                            Round {{ $d['last_round'] }}
-                        </div>
-                    @elseif ($d['last_round_has_defect'])
-                        <div class="badge px-4 py-2 rounded-5" style="background-color: #F24C4C; border: 2px solid #D63737; font-size:15px; font-weight:400">
-                            Round {{ $d['last_round'] }}
-                        </div>
-                    @else
-                        <div class="badge px-4 py-2 rounded-5" style="background-color: #219653; border: 2px solid #4CF299; font-size:15px; font-weight:400">
-                            Round {{ $d['last_round'] }}
-                        </div>
-                    @endif
-                </a>
-            @endif
-        </td>
-    </tr>
-@empty
-    <tr>
-        <td colspan="8" class="text-center">Tidak ada data</td>
-    </tr>
-@endforelse
-<template id="footTotals" data-rft="{{ $totalRft }}" data-inspect="{{ $totalInspect }}" data-defect="{{ $totalDefect }}"></template>
