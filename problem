@@ -1,112 +1,17 @@
-function buildInlineLtsExportData($line, $date = null, $namaline = null)
-{
-    $raw = $this->fetchInlineLtsRaw($line, $date);
+$result = $this->buildInlineLtsExportData($request->line, $request->date, $namaline);
 
-    $operators              = $raw['operators'];
-    $detailsByHeader        = $raw['detailsByHeader'];
-    $headersByOperatorRound = $raw['headersByOperatorRound'];
+$headers = array_merge(
+    ['Date', 'Location', 'Inspect Qty', 'Defect Qty', 'RFT (%)', 'WFT (%)', 'Round', 'Name', 'Inspection Status', 'Total Defect'],
+    $result['defect_headers']
+);
 
-    $allDefectIds = $detailsByHeader
-        ->flatten(1)
-        ->pluck('defect_id')
-        ->filter()
-        ->unique()
-        ->values();
-
-    $defectMaster = QCDefect::whereIn('kddefect', $allDefectIds)
-        ->pluck('deskripsi', 'kddefect');
-
-    $dateFormatted = $raw['date']->format('d F Y');
-
-    $statusLabel = [
-        'cap'   => 'CAP Filled',
-        'none'  => 'No Defect',
-        'one'   => 'Defect Found',
-        'multi' => 'Defect Found',
-    ];
-
-    $rawRows        = []; // baris mentah, defect belum di-pad
-    $maxDefectTypes = 0;  // jenis defect unik terbanyak dalam 1 cell
-
-    for ($r = 1; $r <= $raw['max_round_actual']; $r++) {
-        foreach ($operators as $op) {
-            $key = $op['nik'] . '-' . $r;
-            $headerGroup = $headersByOperatorRound->get($key);
-
-            $baseCols = [
-                $dateFormatted,
-                $namaline,
-                $raw['tot_inspect'],
-                $raw['tot_defect'],
-                $raw['rft'] . '%',
-                $raw['wft'] . '%',
-                'Round ' . $r,
-                $op['nama'] ?? $op['nik'],
-            ];
-
-            if (!$headerGroup || $headerGroup->isEmpty()) {
-                $rawRows[] = ['base' => $baseCols, 'status' => 'Not Inspected', 'total' => '-', 'defects' => []];
-                continue;
-            }
-
-            $hIdsThisCell = $headerGroup->pluck('id');
-            $details = collect();
-            foreach ($hIdsThisCell as $hid) {
-                $details = $details->merge($detailsByHeader->get($hid, collect()));
-            }
-
-            $defectCount = $details->count();
-            $hasCap = $details->contains(fn($d) => !empty($d->problem) || !empty($d->action) || !empty($d->rootcause));
-
-            $status = $hasCap
-                ? 'cap'
-                : ($defectCount == 0 ? 'none' : ($defectCount == 1 ? 'one' : 'multi'));
-
-            $inspectionStatus = $statusLabel[$status] ?? '-';
-
-            if ($status === 'cap') {
-                $rawRows[] = ['base' => $baseCols, 'status' => $inspectionStatus, 'total' => '-', 'defects' => []];
-                continue;
-            }
-
-            // Seluruh jenis defect ditampilkan, diurut dari yang paling sering
-            $defectLabels = $details
-                ->filter(fn($d) => !empty($d->defect_id))
-                ->groupBy('defect_id')
-                ->map(fn($grp, $defectId) => [
-                    'count' => $grp->count(),
-                    'label' => ($defectMaster[$defectId] ?? '-') . ' (' . $defectId . ')',
-                ])
-                ->sortByDesc('count')
-                ->pluck('label')
-                ->values()
-                ->all();
-
-            $maxDefectTypes = max($maxDefectTypes, count($defectLabels));
-
-            $rawRows[] = ['base' => $baseCols, 'status' => $inspectionStatus, 'total' => $defectCount, 'defects' => $defectLabels];
-        }
-    }
-
-    // Header dinamis: Defect 1 s/d Defect N (N = jenis defect terbanyak yang ditemukan)
-    $defectHeaders = [];
-    for ($i = 1; $i <= max($maxDefectTypes, 1); $i++) {
-        $defectHeaders[] = 'Defect ' . $i;
-    }
-
-    // Pad tiap baris biar jumlah kolom defect-nya seragam
-    $rows = array_map(function ($row) use ($maxDefectTypes) {
-        $defectCols = array_pad($row['defects'], max($maxDefectTypes, 1), '-');
-        return array_merge($row['base'], [$row['status'], $row['total']], $defectCols);
-    }, $rawRows);
-
-    return [
-        'date'           => $dateFormatted,
-        'tot_inspect'    => $raw['tot_inspect'],
-        'tot_defect'     => $raw['tot_defect'],
-        'rft'            => $raw['rft'],
-        'wft'            => $raw['wft'],
-        'rows'           => $rows,
-        'defect_headers' => $defectHeaders,
-    ];
-}
+return response()->json([
+    'headers'     => $headers,
+    'rows'        => $result['rows'],
+    'namaline'    => $namaline,
+    'date'        => $result['date'],
+    'tot_inspect' => $result['tot_inspect'],
+    'tot_defect'  => $result['tot_defect'],
+    'rft'         => $result['rft'],
+    'wft'         => $result['wft'],
+]);
