@@ -108,91 +108,88 @@ class InlinePerformanceController extends Controller
 
     function getFilterData($request)
     {
-        // $m_da = $request->datea > $request->dateb ? $request->dateb : $request->datea;
-        // $m_db = $request->datea > $request->dateb ? $request->datea : $request->dateb;
+        $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
+        $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
 
-            $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
-            $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+        $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
+        $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
 
-            $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
-            $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+        $headerQuery = InlineHeader::whereBetween('date', [$dta, $dtb]);
 
-            $headerQuery = InlineHeader::whereBetween('date', [$dta, $dtb]);
+        if ($request->line && $request->line != 'all') {
+            $headerQuery = $headerQuery->where('group_id', $request->line);
+        }
 
-            if ($request->line && $request->line != 'all') {
-                $headerQuery = $headerQuery->where('group_id', $request->line);
-            }
+        // Filter Group Buyer -> idpo
+        if ($request->groupbuyer && $request->groupbuyer != 'all') {
+            $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
+            $poIds = PurchaseOrder::whereIn('idbuyer', $buyerIds)->pluck('idpo');
+            $headerQuery = $headerQuery->whereIn('idpo', $poIds);
+        }
 
-            // Filter Group Buyer -> idpo
-            if ($request->groupbuyer && $request->groupbuyer != 'all') {
-                $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
-                $poIds = PurchaseOrder::whereIn('idbuyer', $buyerIds)->pluck('idpo');
-                $headerQuery = $headerQuery->whereIn('idpo', $poIds);
-            }
+        $headerIds = (clone $headerQuery)->pluck('id');
+        $headerCount = $headerIds->count();
 
-            $headerIds = (clone $headerQuery)->pluck('id');
-            $headerCount = $headerIds->count();
+        // Qty Inspect
+        $totInspect = $headerCount * 5;
 
-            // Qty Inspect
-            $totInspect = $headerCount * 5;
+        // Qty Defect
+        $totDefect = InlineDetail::whereIn('inline_header_id', $headerIds)->count();
 
-            // Qty Defect
-            $totDefect = InlineDetail::whereIn('inline_header_id', $headerIds)->count();
-
-            // RFT
-            $rft = $totInspect > 0
+        // RFT
+        $rft = $totInspect > 0
                 ? (($totInspect - $totDefect) / $totInspect) * 100
                 : 0;
 
-            // WFT
-            $wft = $totInspect > 0
+        // WFT
+        $wft = $totInspect > 0
                 ? ($totDefect / $totInspect) * 100
                 : 0;
 
-            // Kondisi warna target
-            $target = Param::where('header', 'qc')
-                ->where('key', 'rft_inline_target')
-                ->value('value');
+        // Kondisi warna target
+        $target = Param::where('header', 'qc')
+            ->where('key', 'rft_inline_target')
+            ->value('value');
 
-            $rftTarget = $rft <= $target ? true : false;
+        $rftTarget = $rft <= $target ? true : false;
 
-           $allDefect = InlineDetail::whereIn('inline_header_id', $headerIds)
-                ->select('defect_id', DB::raw('count(*) as total'))
-                ->groupBy('defect_id')
-                ->orderByDesc('total')
-                ->orderBy('defect_id', 'asc')
-                ->get();
+        $allDefect = InlineDetail::whereIn('inline_header_id', $headerIds)
+            ->select('defect_id', DB::raw('count(*) as total'))
+            ->groupBy('defect_id')
+            ->orderByDesc('total')
+            ->orderBy('defect_id', 'asc')
+            ->get();
 
-            $topDefect = $allDefect->take(3);
+        $topDefect = $allDefect->take(3);
 
-            $othersTotal = $allDefect->slice(3)->sum('total');
+        $othersTotal = $allDefect->slice(3)->sum('total');
 
 
-            $defectIds = $topDefect->pluck('defect_id');
+        $defectIds = $topDefect->pluck('defect_id');
 
-            $masterQcDefects = QCDefect::whereIn('kddefect', $defectIds)
-                ->pluck('deskripsi', 'kddefect');
+        $masterQcDefects = QCDefect::whereIn('kddefect', $defectIds)
+            ->pluck('deskripsi', 'kddefect');
 
-            $colors = [
-                '#2F80ED',
-                '#219653',
-                '#F2C94C',
-            ];
+        $colors = [
+            '#2F80ED',
+            '#219653',
+            '#F2C94C',
+        ];
 
-            $topDefect = $topDefect->values()->map(function ($item, $index) use ($masterQcDefects, $totDefect, $colors) {
+        $topDefect = $topDefect->values()->map(function ($item, $index) use ($masterQcDefects, $totDefect, $colors) {
 
-                $percent = $totDefect > 0
+            $percent = $totDefect > 0
                     ? ($item->total / $totDefect) * 100
                     : 0;
 
-                return [
-                    'defect_id' => $item->defect_id,
-                    'nmdefect'  => $masterQcDefects[$item->defect_id] ?? '-',
-                    'total'     => $item->total,
-                    'percent'   => number_format($percent, 2),
-                    'color'     => $colors[$index],
-                ];
-            });
+            return [
+                'defect_id' => $item->defect_id,
+                'nmdefect'  => $masterQcDefects[$item->defect_id] ?? '-',
+                'total'     => $item->total,
+                'percent'   => number_format($percent, 2),
+                'color'     => $colors[$index],
+            ];
+        });
 
             if ($othersTotal > 0) {
                 $percentOthers = $totDefect > 0
@@ -263,7 +260,6 @@ class InlinePerformanceController extends Controller
 
         $allHeaderIds = $headers->pluck('id');
 
-        // Cek kolom problem, action dan rootcause
         $defectsByHeader = InlineDetail::whereIn('inline_header_id', $allHeaderIds)
             ->get(['inline_header_id', 'problem', 'action', 'rootcause'])
             ->groupBy('inline_header_id');
@@ -320,56 +316,35 @@ class InlinePerformanceController extends Controller
         ];
     }
 
-    function exportExcel(Request $request)
+    // Export Summary
+    public function exportExcel(Request $request)
     {
+        preconnect(session('db'));
+
         $data = $this->getFilterData($request);
 
-        header('Content-Type: text/csv');
-        header('Content-Disposition: attachment; filename="Report_Inline_Dashboard.csv"');
+        $lineLabel = (empty($data['line']) || $data['line'] === 'all')
+            ? 'All Lines'
+            : $data['line'];
 
-        $file = fopen('php://output', 'w');
-
-        // Judul
-        fputcsv($file, ['REPORT INLINE DASHBOARD']);
-
-        fputcsv($file, [
-            $data['periode']['from'] . ' s/d ' . $data['periode']['to']
-        ]);
-
-        // Line
-        fputcsv($file, ['Line', $data['line']]);
-
-        // Group Buyer
-        fputcsv($file, ['Group Buyer', $data['group_buyer']]);
-
-
-        fputcsv($file, []);
-
-        // Header Summary
-        fputcsv($file, ['Total Inspect', 'Total Defect', 'RFT', 'WFT', 'Target']);
-
-        fputcsv($file, [
-            number_format($data['tot_inspect']),
-            number_format($data['tot_defect']),
-            $data['rft'].'%',
-            $data['wft'].'%',
-            $data['target'] ? 'Dibawah 97%' : 'Diatas 97%',
-        ]);
-
-        fputcsv($file, []);
-
-        fputcsv($file, ['Defect', 'Qty', '%']);
-
-        foreach ($data['top_defect'] as $defect) {
-            fputcsv($file, [
-                $defect['nmdefect'],
-                number_format($defect['total']),
-                $defect['percent'].'%'
-            ]);
+        $groupBuyerName = 'All Buyers';
+        if ($data['group_buyer'] && $data['group_buyer'] !== 'all') {
+            $gb = MasterGroupBuyer::find($data['group_buyer']);
+            $groupBuyerName = $gb->group_name ?? '-';
         }
 
-        fclose($file);
-        exit;
+        $targetLabel = $data['target'] ? 'NO' : 'YES';
+
+       $html = view('monitoring::inlineperformance.index.export', [
+            'data'           => $data,
+            'lineLabel'      => $lineLabel,
+            'groupBuyerName' => $groupBuyerName,
+            'targetLabel'    => $targetLabel,
+        ])->render();
+
+        return response($html)
+            ->header('Content-Type', 'application/vnd.ms-excel')
+            ->header('Content-Disposition', 'attachment; filename=Report_Inline_Summary.xls');
     }
 
     function datatables(Request $request)
@@ -431,51 +406,14 @@ class InlinePerformanceController extends Controller
 
     function buildInlineLtsData($line, $date = null)
     {
-        $date = $date ? Carbon::parse($date) : Carbon::now();
-        $dta = $date->copy()->startOfDay();
-        $dtb = $date->copy()->endOfDay();
+        $raw = $this->fetchInlineLtsRaw($line, $date);
 
-        $headers = InlineHeader::whereBetween('date', [$dta, $dtb])
-            ->where('group_id', $line)
-            ->get(['id', 'round', 'sequence_process', 'userid_operator']);
+        $operators              = $raw['operators'];
+        $detailsByHeader        = $raw['detailsByHeader'];
+        $headersByOperatorRound = $raw['headersByOperatorRound'];
 
-        $headerIds = $headers->pluck('id');
-        $headerCount = $headerIds->count();
-
-        $totInspect = $headerCount * 5;
-        $totDefect = InlineDetail::whereIn('inline_header_id', $headerIds)->count();
-
-        $rft = $totInspect > 0 ? (($totInspect - $totDefect) / $totInspect) * 100 : 0;
-        $wft = $totInspect > 0 ? ($totDefect / $totInspect) * 100 : 0;
-
-        $detailsByHeader = InlineDetail::whereIn('inline_header_id', $headerIds)
-            ->get(['inline_header_id', 'problem', 'action', 'rootcause'])
-            ->groupBy('inline_header_id');
-
-        $operatorsMeta = $headers
-            ->groupBy('userid_operator')
-            ->map(fn($rows) => $rows->sortBy('round')->first())
-            ->sortBy('sequence_process')
-            ->values();
-
-        $niks = $operatorsMeta->pluck('userid_operator')->unique()->values();
-        $employeeNames = Employee::whereIn('nik', $niks)->pluck('name', 'nik');
-
-        $operators = $operatorsMeta->map(function ($h) use ($employeeNames) {
-            return [
-                'nik'              => $h->userid_operator,
-                'nama'             => $employeeNames[$h->userid_operator] ?? null,
-                'sequence_process' => $h->sequence_process,
-            ];
-        })->values();
-
-        $headersByOperatorRound = $headers->groupBy(function ($h) {
-            return $h->userid_operator . '-' . $h->round;
-        });
-
-        $maxRound = 5;
         $rounds = [];
-        for ($r = 1; $r <= $maxRound; $r++) {
+        for ($r = 1; $r <= $raw['max_round']; $r++) {
             $cells = [];
             $roundHasDefect = false;
             $roundHasCap    = false;
@@ -503,12 +441,8 @@ class InlinePerformanceController extends Controller
                     ? 'cap'
                     : ($defectCount == 0 ? 'none' : ($defectCount == 1 ? 'one' : 'multi'));
 
-                if ($defectCount > 0) {
-                    $roundHasDefect = true;
-                }
-                if ($hasCap) {
-                    $roundHasCap = true;
-                }
+                if ($defectCount > 0) $roundHasDefect = true;
+                if ($hasCap) $roundHasCap = true;
 
                 $cells[] = ['status' => $status];
             }
@@ -521,10 +455,10 @@ class InlinePerformanceController extends Controller
         }
 
         return [
-            'tot_inspect' => $totInspect,
-            'tot_defect'  => $totDefect,
-            'rft'         => number_format($rft, 2),
-            'wft'         => number_format($wft, 2),
+            'tot_inspect' => $raw['tot_inspect'],
+            'tot_defect'  => $raw['tot_defect'],
+            'rft'         => $raw['rft'],
+            'wft'         => $raw['wft'],
             'operators'   => $operators,
             'rounds'      => $rounds,
         ];
@@ -557,6 +491,8 @@ class InlinePerformanceController extends Controller
 
     function selectLineLts (Request $request)
     {
+        preconnect(session('db'));
+
         $g = (new MasterEmployeeGroup())->getTable();
         $s = (new MasterEmployeeSection())->getTable();
 
@@ -584,15 +520,184 @@ class InlinePerformanceController extends Controller
         ]);
     }
 
-       function exportData(Request $request)
+    // Export Inline Lts
+    function fetchInlineLtsRaw($line, $date = null)
+    {
+        preconnect(session('db'));
+
+        $date = $date ? Carbon::parse($date) : Carbon::now();
+        $dta = $date->copy()->startOfDay();
+        $dtb = $date->copy()->endOfDay();
+
+        $headers = InlineHeader::whereBetween('date', [$dta, $dtb])
+            ->where('group_id', $line)
+            ->get(['id', 'round', 'sequence_process', 'userid_operator']);
+
+        $headerIds = $headers->pluck('id');
+        $headerCount = $headerIds->count();
+
+        $totInspect = $headerCount * 5;
+        $totDefect = InlineDetail::whereIn('inline_header_id', $headerIds)->count();
+
+        $rft = $totInspect > 0 ? (($totInspect - $totDefect) / $totInspect) * 100 : 0;
+        $wft = $totInspect > 0 ? ($totDefect / $totInspect) * 100 : 0;
+
+        $detailsByHeader = InlineDetail::whereIn('inline_header_id', $headerIds)
+            ->get(['inline_header_id', 'problem', 'action', 'rootcause', 'defect_id'])
+            ->groupBy('inline_header_id');
+
+        $operatorsMeta = $headers
+            ->groupBy('userid_operator')
+            ->map(fn($rows) => $rows->sortBy('round')->first())
+            ->sortBy('sequence_process')
+            ->values();
+
+        $niks = $operatorsMeta->pluck('userid_operator')->unique()->values();
+        $employeeNames = Employee::whereIn('nik', $niks)->pluck('name', 'nik');
+
+        $operators = $operatorsMeta->map(function ($h) use ($employeeNames) {
+            return [
+                'nik'              => $h->userid_operator,
+                'nama'             => $employeeNames[$h->userid_operator] ?? null,
+                'sequence_process' => $h->sequence_process,
+            ];
+        })->values();
+
+        $headersByOperatorRound = $headers->groupBy(function ($h) {
+            return $h->userid_operator . '-' . $h->round;
+        });
+
+        return [
+            'date'                   => $date,
+            'detailsByHeader'        => $detailsByHeader,
+            'operators'              => $operators,
+            'headersByOperatorRound' => $headersByOperatorRound,
+            'tot_inspect'            => $totInspect,
+            'tot_defect'             => $totDefect,
+            'rft'                    => number_format($rft, 2),
+            'wft'                    => number_format($wft, 2),
+            'max_round'              => 5,
+            'max_round_actual'       => $headers->max('round') ?? 0,
+        ];
+    }
+
+    function buildInlineLtsExportData($line, $date = null, $namaline = null)
+    {
+        $raw = $this->fetchInlineLtsRaw($line, $date);
+
+        $operators              = $raw['operators'];
+        $detailsByHeader        = $raw['detailsByHeader'];
+        $headersByOperatorRound = $raw['headersByOperatorRound'];
+
+        $allDefectIds = $detailsByHeader
+            ->flatten(1)
+            ->pluck('defect_id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $defectMaster = QCDefect::whereIn('kddefect', $allDefectIds)
+            ->pluck('deskripsi', 'kddefect');
+
+        $dateFormatted = $raw['date']->format('d F Y');
+
+        $statusLabel = [
+            'cap'   => 'CAP Filled',
+            'none'  => 'No Defect',
+            'one'   => 'Defect Found',
+            'multi' => 'Defect Found',
+        ];
+
+        $rawRows        = [];
+        $maxDefectTypes = 0;
+
+        for ($r = 1; $r <= $raw['max_round_actual']; $r++) {
+            foreach ($operators as $op) {
+                $key = $op['nik'] . '-' . $r;
+                $headerGroup = $headersByOperatorRound->get($key);
+
+                $baseCols = [
+                    $dateFormatted,
+                    $namaline,
+                    $raw['tot_inspect'],
+                    $raw['tot_defect'],
+                    $raw['rft'] . '%',
+                    $raw['wft'] . '%',
+                    'Round ' . $r,
+                    $op['nama'] ?? $op['nik'],
+                ];
+
+                if (!$headerGroup || $headerGroup->isEmpty()) {
+                    $rawRows[] = ['base' => $baseCols, 'status' => 'Not Inspected', 'total' => '-', 'defects' => []];
+                    continue;
+                }
+
+                $hIdsThisCell = $headerGroup->pluck('id');
+                $details = collect();
+                foreach ($hIdsThisCell as $hid) {
+                    $details = $details->merge($detailsByHeader->get($hid, collect()));
+                }
+
+                $defectCount = $details->count();
+                $hasCap = $details->contains(fn($d) => !empty($d->problem) || !empty($d->action) || !empty($d->rootcause));
+
+                $status = $hasCap
+                    ? 'cap'
+                    : ($defectCount == 0 ? 'none' : ($defectCount == 1 ? 'one' : 'multi'));
+
+                $inspectionStatus = $statusLabel[$status] ?? '-';
+
+                if ($status === 'cap') {
+                    $rawRows[] = ['base' => $baseCols, 'status' => $inspectionStatus, 'total' => '-', 'defects' => []];
+                    continue;
+                }
+
+                $defectLabels = $details
+                    ->filter(fn($d) => !empty($d->defect_id))
+                    ->groupBy('defect_id')
+                    ->map(fn($grp, $defectId) => [
+                        'count' => $grp->count(),
+                        'label' => ($defectMaster[$defectId] ?? '-'),
+                    ])
+                    ->sortByDesc('count')
+                    ->pluck('label')
+                    ->values()
+                    ->all();
+
+                $maxDefectTypes = max($maxDefectTypes, count($defectLabels));
+
+                $rawRows[] = ['base' => $baseCols, 'status' => $inspectionStatus, 'total' => $defectCount, 'defects' => $defectLabels];
+            }
+        }
+
+        $defectHeaders = [];
+        for ($i = 1; $i <= max($maxDefectTypes, 1); $i++) {
+            $defectHeaders[] = 'Defect ' . $i;
+        }
+
+        $rows = array_map(function ($row) use ($maxDefectTypes) {
+            $defectCols = array_pad($row['defects'], max($maxDefectTypes, 1), '-');
+            return array_merge($row['base'], [$row['status'], $row['total']], $defectCols);
+        }, $rawRows);
+
+        return [
+            'date'           => $dateFormatted,
+            'tot_inspect'    => $raw['tot_inspect'],
+            'tot_defect'     => $raw['tot_defect'],
+            'rft'            => $raw['rft'],
+            'wft'            => $raw['wft'],
+            'rows'           => $rows,
+            'defect_headers' => $defectHeaders,
+        ];
+    }
+
+    function exportData(Request $request)
     {
         if (!$request->line) {
             return response()->json(['message' => 'Line belum dipilih'], 422);
         }
 
         preconnect(session('db'));
-
-        $result = $this->buildInlineLtsData($request->line, $request->date);
 
         $g = (new MasterEmployeeGroup())->getTable();
         $s = (new MasterEmployeeSection())->getTable();
@@ -608,42 +713,18 @@ class InlinePerformanceController extends Controller
             ? $groupInfo->namabagian . ' - ' . $groupInfo->namagroup
             : $request->line;
 
-        $statusLabel = [
-            'empty' => '-',
-            'none'  => 'No Defect',
-            'one'   => '1 Defect',
-            'multi' => '2+ Defect',
-            'cap'   => 'CAP Filled',
-        ];
+        $result = $this->buildInlineLtsExportData($request->line, $request->date, $namaline);
 
         $headers = array_merge(
-            ['Location', 'Inspect Qty', 'Defect Qty', 'RFT (%)', 'WFT (%)', 'Round'],
-            $result['operators']->map(function ($op) {
-                return $op['nama'] ?? $op['nik'];
-            })->toArray()
+            ['Date', 'Location', 'Inspect Qty', 'Defect Qty', 'RFT (%)', 'WFT (%)', 'Round', 'Name', 'Inspection Status', 'Total Defect'],
+            $result['defect_headers']
         );
-
-        $rows = collect($result['rounds'])->map(function ($round) use ($statusLabel, $namaline, $result) {
-            $row = [
-                $namaline,
-                $result['tot_inspect'],
-                $result['tot_defect'],
-                $result['rft'],
-                $result['wft'],
-                'Round ' . $round['round'],
-            ];
-
-            foreach ($round['cells'] as $cell) {
-                $row[] = $statusLabel[$cell['status']] ?? '-';
-            }
-
-            return $row;
-        })->toArray();
 
         return response()->json([
             'headers'     => $headers,
-            'rows'        => $rows,
+            'rows'        => $result['rows'],
             'namaline'    => $namaline,
+            'date'        => $result['date'],
             'tot_inspect' => $result['tot_inspect'],
             'tot_defect'  => $result['tot_defect'],
             'rft'         => $result['rft'],
