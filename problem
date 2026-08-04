@@ -1,4 +1,4 @@
-function buildInlineLtsData($line, $date = null)
+function buildInlineLtsExportData($line, $date = null, $namaline = null)
 {
     $raw = $this->fetchInlineLtsRaw($line, $date);
 
@@ -6,17 +6,49 @@ function buildInlineLtsData($line, $date = null)
     $detailsByHeader        = $raw['detailsByHeader'];
     $headersByOperatorRound = $raw['headersByOperatorRound'];
 
-    $rounds = [];
+    $allDefectIds = $detailsByHeader
+        ->flatten(1)
+        ->pluck('defect_id')
+        ->filter()
+        ->unique()
+        ->values();
+
+    $defectMaster = QCDefect::whereIn('kddefect', $allDefectIds)
+        ->pluck('deskripsi', 'kddefect');
+
+    $dateFormatted = $raw['date']->format('d F Y'); // "28 July 2026"
+
+    $statusLabel = [
+        'cap'   => 'CAP Filled',
+        'none'  => 'No Defect',
+        'one'   => 'Defect Found',
+        'multi' => 'Defect Found',
+    ];
+
+    $rows = [];
+
     for ($r = 1; $r <= $raw['max_round']; $r++) {
-        $cells = [];
-        $roundHasDefect = false;
-        $roundHasCap    = false;
         foreach ($operators as $op) {
             $key = $op['nik'] . '-' . $r;
             $headerGroup = $headersByOperatorRound->get($key);
 
+            $roundLabel = 'Round ' . $r;
+            $name       = $op['nama'] ?? $op['nik'];
+
+            $baseCols = [
+                $dateFormatted,
+                $namaline,
+                $raw['tot_inspect'],
+                $raw['tot_defect'],
+                $raw['rft'] . '%',
+                $raw['wft'] . '%',
+                $roundLabel,
+                $name,
+            ];
+
+            // Round kosong / operator tidak inspect di round ini -> tetap ditampilkan, isi '-'
             if (!$headerGroup || $headerGroup->isEmpty()) {
-                $cells[] = ['status' => 'empty'];
+                $rows[] = array_merge($baseCols, ['-', '-', '-', '-', '-']);
                 continue;
             }
 
@@ -35,25 +67,43 @@ function buildInlineLtsData($line, $date = null)
                 ? 'cap'
                 : ($defectCount == 0 ? 'none' : ($defectCount == 1 ? 'one' : 'multi'));
 
-            if ($defectCount > 0) $roundHasDefect = true;
-            if ($hasCap) $roundHasCap = true;
+            $inspectionStatus = $statusLabel[$status] ?? '-';
 
-            $cells[] = ['status' => $status];
+            if ($status === 'cap') {
+                // CAP Filled -> Total Defect & Defect 1-3 selalu '-'
+                $rows[] = array_merge($baseCols, [$inspectionStatus, '-', '-', '-', '-']);
+                continue;
+            }
+
+            // Defect terbanyak dulu (top 3), Total Defect tetap jumlah asli semua record
+            $topDefects = $details
+                ->filter(fn($d) => !empty($d->defect_id))
+                ->groupBy('defect_id')
+                ->map(fn($grp, $defectId) => [
+                    'defect_id' => $defectId,
+                    'count'     => $grp->count(),
+                    'label'     => ($defectMaster[$defectId] ?? '-') . ' (' . $defectId . ')',
+                ])
+                ->sortByDesc('count')
+                ->values()
+                ->take(3);
+
+            $defectCols = [
+                $topDefects->get(0)['label'] ?? '-',
+                $topDefects->get(1)['label'] ?? '-',
+                $topDefects->get(2)['label'] ?? '-',
+            ];
+
+            $rows[] = array_merge($baseCols, [$inspectionStatus, $defectCount], $defectCols);
         }
-        $rounds[] = [
-            'round' => $r,
-            'cells' => $cells,
-            'has_defect' => $roundHasDefect,
-            'has_cap'    => $roundHasCap,
-        ];
     }
 
     return [
+        'date'        => $dateFormatted,
         'tot_inspect' => $raw['tot_inspect'],
         'tot_defect'  => $raw['tot_defect'],
         'rft'         => $raw['rft'],
         'wft'         => $raw['wft'],
-        'operators'   => $operators,
-        'rounds'      => $rounds,
+        'rows'        => $rows,
     ];
 }
