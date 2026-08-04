@@ -1,109 +1,38 @@
-function buildInlineLtsExportData($line, $date = null, $namaline = null)
+function exportData(Request $request)
 {
-    $raw = $this->fetchInlineLtsRaw($line, $date);
-
-    $operators              = $raw['operators'];
-    $detailsByHeader        = $raw['detailsByHeader'];
-    $headersByOperatorRound = $raw['headersByOperatorRound'];
-
-    $allDefectIds = $detailsByHeader
-        ->flatten(1)
-        ->pluck('defect_id')
-        ->filter()
-        ->unique()
-        ->values();
-
-    $defectMaster = QCDefect::whereIn('kddefect', $allDefectIds)
-        ->pluck('deskripsi', 'kddefect');
-
-    $dateFormatted = $raw['date']->format('d F Y'); // "28 July 2026"
-
-    $statusLabel = [
-        'cap'   => 'CAP Filled',
-        'none'  => 'No Defect',
-        'one'   => 'Defect Found',
-        'multi' => 'Defect Found',
-    ];
-
-    $rows = [];
-
-    for ($r = 1; $r <= $raw['max_round']; $r++) {
-        foreach ($operators as $op) {
-            $key = $op['nik'] . '-' . $r;
-            $headerGroup = $headersByOperatorRound->get($key);
-
-            $roundLabel = 'Round ' . $r;
-            $name       = $op['nama'] ?? $op['nik'];
-
-            $baseCols = [
-                $dateFormatted,
-                $namaline,
-                $raw['tot_inspect'],
-                $raw['tot_defect'],
-                $raw['rft'] . '%',
-                $raw['wft'] . '%',
-                $roundLabel,
-                $name,
-            ];
-
-            // Round kosong / operator tidak inspect di round ini -> tetap ditampilkan, isi '-'
-            if (!$headerGroup || $headerGroup->isEmpty()) {
-                $rows[] = array_merge($baseCols, ['-', '-', '-', '-', '-']);
-                continue;
-            }
-
-            $hIdsThisCell = $headerGroup->pluck('id');
-            $details = collect();
-            foreach ($hIdsThisCell as $hid) {
-                $details = $details->merge($detailsByHeader->get($hid, collect()));
-            }
-
-            $defectCount = $details->count();
-            $hasCap = $details->contains(function ($d) {
-                return !empty($d->problem) || !empty($d->action) || !empty($d->rootcause);
-            });
-
-            $status = $hasCap
-                ? 'cap'
-                : ($defectCount == 0 ? 'none' : ($defectCount == 1 ? 'one' : 'multi'));
-
-            $inspectionStatus = $statusLabel[$status] ?? '-';
-
-            if ($status === 'cap') {
-                // CAP Filled -> Total Defect & Defect 1-3 selalu '-'
-                $rows[] = array_merge($baseCols, [$inspectionStatus, '-', '-', '-', '-']);
-                continue;
-            }
-
-            // Defect terbanyak dulu (top 3), Total Defect tetap jumlah asli semua record
-            $topDefects = $details
-                ->filter(fn($d) => !empty($d->defect_id))
-                ->groupBy('defect_id')
-                ->map(fn($grp, $defectId) => [
-                    'defect_id' => $defectId,
-                    'count'     => $grp->count(),
-                    'label'     => ($defectMaster[$defectId] ?? '-') . ' (' . $defectId . ')',
-                ])
-                ->sortByDesc('count')
-                ->values()
-                ->take(3);
-
-            $defectCols = [
-                $topDefects->get(0)['label'] ?? '-',
-                $topDefects->get(1)['label'] ?? '-',
-                $topDefects->get(2)['label'] ?? '-',
-            ];
-
-            $rows[] = array_merge($baseCols, [$inspectionStatus, $defectCount], $defectCols);
-        }
+    if (!$request->line) {
+        return response()->json(['message' => 'Line belum dipilih'], 422);
     }
 
-    return [
-        'date'        => $dateFormatted,
-        'tot_inspect' => $raw['tot_inspect'],
-        'tot_defect'  => $raw['tot_defect'],
-        'rft'         => $raw['rft'],
-        'wft'         => $raw['wft'],
-        'rows'        => $rows,
-    ];
+    preconnect(session('db'));
+
+    $g = (new MasterEmployeeGroup())->getTable();
+    $s = (new MasterEmployeeSection())->getTable();
+
+    $groupInfo = MasterEmployeeGroup::select(
+            "$g.id as kodegroup", "$g.name as namagroup", "$s.name as namabagian"
+        )
+        ->join($s, "$s.id", '=', "$g.section_id")
+        ->where("$g.id", $request->line)
+        ->first();
+
+    $namaline = $groupInfo
+        ? $groupInfo->namabagian . ' - ' . $groupInfo->namagroup
+        : $request->line;
+
+    $result = $this->buildInlineLtsExportData($request->line, $request->date, $namaline);
+
+    return response()->json([
+        'headers' => [
+            'Date', 'Location', 'Inspect Qty', 'Defect Qty', 'RFT (%)', 'WFT (%)',
+            'Round', 'Name', 'Inspection Status', 'Total Defect', 'Defect 1', 'Defect 2', 'Defect 3',
+        ],
+        'rows'        => $result['rows'],
+        'namaline'    => $namaline,
+        'date'        => $result['date'],
+        'tot_inspect' => $result['tot_inspect'],
+        'tot_defect'  => $result['tot_defect'],
+        'rft'         => $result['rft'],
+        'wft'         => $result['wft'],
+    ]);
 }
