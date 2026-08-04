@@ -1,38 +1,41 @@
-function exportData(Request $request)
-{
-    if (!$request->line) {
-        return response()->json(['message' => 'Line belum dipilih'], 422);
+success: function (res) {
+    if (!res || !res.rows) {
+        alert('Data export is not available.');
+        return;
     }
 
-    preconnect(session('db'));
+    let theadHtml = '<tr>' + res.headers.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr>';
+    $('#exportTableHiddenHead').html(theadHtml);
 
-    $g = (new MasterEmployeeGroup())->getTable();
-    $s = (new MasterEmployeeSection())->getTable();
+    let tbodyHtml = res.rows.map(function (row) {
+        return '<tr>' + row.map(function (cell) { return '<td>' + (cell ?? '-') + '</td>'; }).join('') + '</tr>';
+    }).join('');
+    $('#exportTableHiddenBody').html(tbodyHtml);
 
-    $groupInfo = MasterEmployeeGroup::select(
-            "$g.id as kodegroup", "$g.name as namagroup", "$s.name as namabagian"
-        )
-        ->join($s, "$s.id", '=', "$g.section_id")
-        ->where("$g.id", $request->line)
-        ->first();
+    if (exportDT) {
+        exportDT.destroy();
+        exportDT = null;
+    }
 
-    $namaline = $groupInfo
-        ? $groupInfo->namabagian . ' - ' . $groupInfo->namagroup
-        : $request->line;
+    exportDT = $('#exportTableHidden').DataTable({
+        scrollX: false,
+        paging: false,
+        searching: false,
+        lengthChange: false,
+        info: false,
+        dom: 'B',
+        buttons: [
+            {
+                extend: 'excelHtml5',
+                title: 'Inline LTS_' + (currentLine || '') + '_' + (currentDate || ''),
+                filename: 'Inline LTS_' + (currentLine || '') + '_' + (currentDate || ''),
+                exportOptions: { columns: ':visible' }
+            }
+        ]
+    });
 
-    $result = $this->buildInlineLtsExportData($request->line, $request->date, $namaline);
-
-    return response()->json([
-        'headers' => [
-            'Date', 'Location', 'Inspect Qty', 'Defect Qty', 'RFT (%)', 'WFT (%)',
-            'Round', 'Name', 'Inspection Status', 'Total Defect', 'Defect 1', 'Defect 2', 'Defect 3',
-        ],
-        'rows'        => $result['rows'],
-        'namaline'    => $namaline,
-        'date'        => $result['date'],
-        'tot_inspect' => $result['tot_inspect'],
-        'tot_defect'  => $result['tot_defect'],
-        'rft'         => $result['rft'],
-        'wft'         => $result['wft'],
-    ]);
+    exportDT.button(0).trigger();
+    exportDT.destroy();
+    exportDT = null;
+    $('#exportTableHiddenHead, #exportTableHiddenBody').empty();
 }
