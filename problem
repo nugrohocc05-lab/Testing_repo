@@ -150,6 +150,11 @@
             position: relative;
         }
 
+        .export-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
         .custom-tooltip {
             position: absolute;
             top: 100%;
@@ -462,41 +467,6 @@
                 grid-column: 1 / -1;
             }
         }
-
-        /* Export Preview Modal */
-        #exportPreviewModal .modal-content {
-            background-color: #242E3E;
-            color: #ffffff;
-        }
-
-        #exportPreviewModal .modal-header,
-        #exportPreviewModal .modal-footer {
-            border-color: #576376;
-        }
-
-        #exportPreviewModal .btn-close {
-            filter: invert(1);
-        }
-
-        #exportTable {
-            color: #ffffff;
-        }
-
-        #exportTable th,
-        #exportTable td {
-            border-color: #576376;
-            white-space: nowrap;
-        }
-
-        #exportTableHead th {
-            background-color: #242E3E;
-            color: white;
-        }
-
-        #exportTableBody td {
-            background-color: #242E3E;
-            color: white;
-        }
     </style>
 @endsection
 
@@ -516,11 +486,10 @@
 
             <div class="header-right">
                 <span id="liveClock"></span>
-                <button type="button"
-                    class="export-btn bg-transparent border-0 p-0 d-flex align-items-center"
-                    data-bs-toggle="modal" data-bs-target="#exportPreviewModal">
+                <button type="button" id="btnExport"
+                    class="export-btn bg-transparent border-0 p-0 d-flex align-items-center">
                     <img src="{{ _asset('svg/inlinePerformance/export.svg') }}" style="width:27px; height:27px;">
-                    <span class="custom-tooltip">Export</span>
+                    <span class="custom-tooltip" id="exportTooltip">Export</span>
                 </button>
             </div>
         </div>
@@ -629,31 +598,13 @@
         </div>
     </div>
 
-    <!-- Export Preview Modal -->
-    <div class="modal fade" id="exportPreviewModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-xl modal-dialog-scrollable">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Export Data</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div id="exportLoading" class="text-center text-white py-4">
-                        Loading...
-                    </div>
-                    <div class="d-flex flex-column">
-                        <div id="exportButtons" class="mb-2"></div>
-                        <div id="exportSummary"></div>
-                    </div>
-                    <div class="table-responsive table-scroll-wrapper">
-                        <table id="exportTable" class="table table-bordered table-sm w-100 d-none">
-                            <thead id="exportTableHead"></thead>
-                            <tbody id="exportTableBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <!-- Hidden table used only to let DataTables Buttons generate the Excel file.
+         Kept off-screen (not display:none) so DataTables can compute column widths. -->
+    <div style="position:absolute; left:-9999px; top:-9999px;">
+        <table id="exportTableHidden">
+            <thead id="exportTableHiddenHead"></thead>
+            <tbody id="exportTableHiddenBody"></tbody>
+        </table>
     </div>
 @endsection
 
@@ -672,7 +623,6 @@
             let currentLineLabel = @json($namaline ?? null);
             let currentDate       = @json($date);
             let skipInitialChange = true;
-            let exportDT          = null;
 
             const formattedDate = new Date(currentDate).toLocaleDateString('en-GB', {
                 day: 'numeric',
@@ -794,23 +744,19 @@
                 fetchInlineLts();
             });
 
-            function resetExportModal() {
-                if (exportDT) {
-                    exportDT.destroy();
-                    exportDT = null;
-                }
-                $('#exportButtons').empty();
-                $('#exportSummary').empty();
-                $('#exportTableHead').empty();
-                $('#exportTableBody').empty();
-                $('#exportTable').addClass('d-none');
-                $('#exportLoading').removeClass('d-none').text('Loading...');
-            }
-
+            // ================== EXPORT (langsung download, tanpa preview) ==================
+            let exportDT = null;
             let lastExportData = null;
 
-            function loadExportPreview() {
-                resetExportModal();
+            function doExport() {
+                if (!currentLine) {
+                    alert('Select the line first before exporting.');
+                    return;
+                }
+
+                const $btn = $('#btnExport');
+                $btn.prop('disabled', true);
+                $('#exportTooltip').text('Preparing...');
 
                 $.ajax({
                     url: "{{ route('monitoring_inlineperformance_exportData') }}",
@@ -819,55 +765,39 @@
                     dataType: "json",
                     success: function (res) {
                         if (!res) {
-                            $('#exportLoading').text('Data export is not available.');
+                            alert('Data export is not available.');
                             return;
                         }
 
                         lastExportData = res;
 
-                            let summaryHtml = `
-                                <div class="mb-3 text-white">
-                                    <table class="exportPreviewModal table table-sm table-borderless mb-0" style="width:auto;">
-                                        <tr>
-                                            <td class="pe-4"><strong>Location</strong>: ${res.namaline ?? '-'}</td>
-                                            <td class="pe-4"><strong>Date</strong>: ${res.date ?? '-'}</td>
-                                            <td class="pe-4"><strong>Inspect Qty</strong>: ${res.tot_inspect ?? 0}</td>
-                                            <td class="pe-4"><strong>Defect Qty</strong>: ${res.tot_defect ?? 0}</td>
-                                            <td class="pe-4"><strong>RFT (%)</strong>: ${res.rft ?? '0.00'}</td>
-                                            <td><strong>WFT (%)</strong>: ${res.wft ?? '0.00'}</td>
-                                        </tr>
-                                    </table>
-                                </div>
-                            `;
-                            $('#exportSummary').html(summaryHtml);
-
                         let theadHtml = '<tr><th>Round</th>' +
                             res.operator_names.map(function (n) { return '<th>' + n + '</th>'; }).join('') +
                             '</tr>';
-                        $('#exportTableHead').html(theadHtml);
+                        $('#exportTableHiddenHead').html(theadHtml);
 
                         let tbodyHtml = res.round_rows.map(function (row) {
                             return '<tr>' + row.map(function (cell) {
                                 return '<td>' + (cell ?? '') + '</td>';
                             }).join('') + '</tr>';
                         }).join('');
-                        $('#exportTableBody').html(tbodyHtml);
+                        $('#exportTableHiddenBody').html(tbodyHtml);
 
-                        $('#exportLoading').addClass('d-none');
-                        $('#exportTable').removeClass('d-none');
+                        if (exportDT) {
+                            exportDT.destroy();
+                            exportDT = null;
+                        }
 
-                        exportDT = $('#exportTable').DataTable({
-                            scrollX: true,
+                        exportDT = $('#exportTableHidden').DataTable({
+                            scrollX: false,
                             paging: false,
                             searching: false,
                             lengthChange: false,
                             info: false,
-                            dom: 'frtip',
+                            dom: 'B',
                             buttons: [
                                 {
                                     extend: 'excelHtml5',
-                                    text: 'Download Excel',
-                                    className: 'btn btn-success btn-sm',
                                     title: 'Inline LTS' + (currentLine || '') + '_' + (currentDate || ''),
                                     filename: 'Inline LTS' + (currentLine || '') + '_' + (currentDate || ''),
                                     exportOptions: { columns: ':visible' },
@@ -907,748 +837,28 @@
                                 }
                             ]
                         });
-                        exportDT.buttons().container().appendTo('#exportButtons');
 
+                        // langsung trigger download, tanpa preview
+                        exportDT.button(0).trigger();
+
+                        exportDT.destroy();
+                        exportDT = null;
+                        $('#exportTableHiddenHead, #exportTableHiddenBody').empty();
                     },
                     error: function (xhr) {
-                        $('#exportLoading').text('Gagal memuat data export.');
+                        alert('Gagal memuat data export.');
                         console.log(xhr.responseJSON ? xhr.responseJSON.message : 'Request failed');
+                    },
+                    complete: function () {
+                        $btn.prop('disabled', false);
+                        $('#exportTooltip').text('Export');
                     }
                 });
             }
 
-            $('.export-btn').on('click', function () {
-                if (!currentLine) {
-                    alert('Select the line first before exporting.');
-                    return false;
-                }
-            });
-
-            $('#exportPreviewModal').on('show.bs.modal', function (e) {
-                if (!currentLine) {
-                    e.preventDefault();
-                    alert('Select the line first before exporting.');
-                    return;
-                }
-                loadExportPreview();
-            });
-
-            $('#exportPreviewModal').on('hidden.bs.modal', function () {
-                resetExportModal();
-            });
+            $('#btnExport').on('click', doExport);
+            // ================================================================================
 
         });
     </script>
 @endsection
-
-
-<?php
-
-namespace Modules\Monitoring\Http\Controllers;
-
-use DB;
-use Carbon\Carbon;
-use Illuminate\Http\Request;
-use App\Http\Controllers\Controller;
-use App\Http\Controllers\SmvController;
-use App\Http\Models\FactoryParameter;
-use App\Http\Models\Main\MasterEmployeeGroup;
-use App\Http\Models\Main\MasterEmployeeSection;
-use App\Http\Models\Main\MasterGroupBuyer;
-use App\Http\Models\PurchaseOrder;
-use App\Http\Models\Main\Buyer;
-use App\Http\Models\InlineDetail;
-use App\Http\Models\InlineHeader;
-use App\Http\Models\Main\Employee;
-use App\Http\Models\Main\EmployeeAttendance;
-use App\Http\Models\Main\MasterInlineDefect;
-use App\Http\Models\Main\Style;
-use App\Http\Models\Main\Param;
-use App\Http\Models\Main\QCDefect;
-use App\Http\Models\MpsDetail;
-use App\Http\Models\MpsHeader;
-use App\Http\Models\SewingOutput;
-use Modules\Sewing\Http\Controllers\WorktimeSettingController;
-use Nexmo\Client\Exception\Validation;
-
-class InlinePerformanceController extends Controller
-{
-    protected $m_modul = 'report';
-
-    function __construct()
-    {
-        $this->middleware('auth');
-    }
-
-    function index(Request $request)
-    {
-        if ($this->myaccess() == '0') {
-            return redirect()
-                ->back()
-                ->with('alert', [
-                    'title' => 'Unauthorized!',
-                    'message' => 'You Dont Have Any Access Here!',
-                    'status' => 'warning',
-                ]);
-        }
-
-        preconnect(session('db'));
-
-        $table = $this->getInlinePerformanceTable($request->date);
-
-        return view('monitoring::inlineperformance.index.index', [
-            'date' => $table['date'],
-            'data' => $table['data'],
-        ]);
-    }
-
-    function selectline(Request $request)
-    {
-        $g = (new MasterEmployeeGroup())->getTable();
-        $s = (new MasterEmployeeSection())->getTable();
-
-        $data = MasterEmployeeGroup::select(
-                "$g.id as kodegroup", "$g.section_id as kodebagian",
-                "$g.name as namagroup", "$s.name as namabagian"
-            )
-            ->join($s, "$s.id", '=', "$g.section_id")
-            ->distinct()
-            ->whereHas('groupline', function($q){
-                $q->where('factory_id', session('db')->iddb)
-                    ->where('is_show', 1)
-                    ->where('is_line', 1);
-            });
-
-        if ($request->q) {
-            $data = $data->where(function ($q) use ($request, $g) {
-                $q->where("$g.name", 'like', "%$request->q%");
-            });
-        }
-        $data = $data->orderBy('kodegroup')->paginate(15, $request->page);
-
-        return response()->json($data);
-    }
-
-    function groupbuyer(Request $request)
-    {
-        $q = $request->get('q');
-
-        $data = MasterGroupBuyer::select('id', 'group_name')
-            ->when($q, function ($query) use ($q) {
-                $query->where('group_name', 'like', '%' . $q . '%');
-            })
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'id' => $item->id,
-                    'text' => $item->group_name
-                ];
-            });
-
-        return response()->json([
-            'results' => $data
-        ]);
-    }
-
-    function getFilterData($request)
-    {
-        // $m_da = $request->datea > $request->dateb ? $request->dateb : $request->datea;
-        // $m_db = $request->datea > $request->dateb ? $request->datea : $request->dateb;
-
-            $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
-            $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
-
-            $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
-            $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
-
-            $headerQuery = InlineHeader::whereBetween('date', [$dta, $dtb]);
-
-            if ($request->line && $request->line != 'all') {
-                $headerQuery = $headerQuery->where('group_id', $request->line);
-            }
-
-            // Filter Group Buyer -> idpo
-            if ($request->groupbuyer && $request->groupbuyer != 'all') {
-                $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
-                $poIds = PurchaseOrder::whereIn('idbuyer', $buyerIds)->pluck('idpo');
-                $headerQuery = $headerQuery->whereIn('idpo', $poIds);
-            }
-
-            $headerIds = (clone $headerQuery)->pluck('id');
-            $headerCount = $headerIds->count();
-
-            // Qty Inspect
-            $totInspect = $headerCount * 5;
-
-            // Qty Defect
-            $totDefect = InlineDetail::whereIn('inline_header_id', $headerIds)->count();
-
-            // RFT
-            $rft = $totInspect > 0
-                ? (($totInspect - $totDefect) / $totInspect) * 100
-                : 0;
-
-            // WFT
-            $wft = $totInspect > 0
-                ? ($totDefect / $totInspect) * 100
-                : 0;
-
-            // Kondisi warna target
-            $target = Param::where('header', 'qc')
-                ->where('key', 'rft_inline_target')
-                ->value('value');
-
-            $rftTarget = $rft <= $target ? true : false;
-
-           $allDefect = InlineDetail::whereIn('inline_header_id', $headerIds)
-                ->select('defect_id', DB::raw('count(*) as total'))
-                ->groupBy('defect_id')
-                ->orderByDesc('total')
-                ->orderBy('defect_id', 'asc')
-                ->get();
-
-            $topDefect = $allDefect->take(3);
-
-            $othersTotal = $allDefect->slice(3)->sum('total');
-
-
-            $defectIds = $topDefect->pluck('defect_id');
-
-            $masterQcDefects = QCDefect::whereIn('kddefect', $defectIds)
-                ->pluck('deskripsi', 'kddefect');
-
-            $colors = [
-                '#2F80ED',
-                '#219653',
-                '#F2C94C',
-            ];
-
-            $topDefect = $topDefect->values()->map(function ($item, $index) use ($masterQcDefects, $totDefect, $colors) {
-
-                $percent = $totDefect > 0
-                    ? ($item->total / $totDefect) * 100
-                    : 0;
-
-                return [
-                    'defect_id' => $item->defect_id,
-                    'nmdefect'  => $masterQcDefects[$item->defect_id] ?? '-',
-                    'total'     => $item->total,
-                    'percent'   => number_format($percent, 2),
-                    'color'     => $colors[$index],
-                ];
-            });
-
-            if ($othersTotal > 0) {
-                $percentOthers = $totDefect > 0
-                    ? ($othersTotal / $totDefect) * 100
-                    : 0;
-
-                $topDefect->push([
-                    'defect_id' => null,
-                    'nmdefect'  => 'Others',
-                    'total'     => $othersTotal,
-                    'percent'   => number_format($percentOthers, 2),
-                    'color'     => '#BDBDBD',
-                ]);
-            }
-
-        return [
-            'periode'     => [
-                'from' => $dta->format('d-m-Y'),
-                'to'   => $dtb->format('d-m-Y'),
-            ],
-            'tot_inspect' => $totInspect,
-            'tot_defect'  => $totDefect,
-            'rft'         => number_format($rft,2),
-            'wft'         => number_format($wft,2),
-            'target'      => $rftTarget,
-            'top_defect'  => $topDefect,
-            'line'        => $request->line,
-            'group_buyer' => $request->groupbuyer,
-        ];
-    }
-
-    function filterData(Request $request)
-    {
-        $data = $this->getFilterData($request);
-
-        return response()->json($data);
-    }
-
-    function getInlinePerformanceTable($dateInput = null)
-    {
-        $date = $dateInput
-            ? Carbon::parse($dateInput)
-            : Carbon::today();
-
-        $dta = $date->copy()->startOfDay();
-        $dtb = $date->copy()->endOfDay();
-
-        $g = (new MasterEmployeeGroup())->getTable();
-        $s = (new MasterEmployeeSection())->getTable();
-
-        $lines = MasterEmployeeGroup::select(
-                "$g.id as kodegroup", "$g.name as namagroup", "$s.name as namabagian"
-            )
-            ->join($s, "$s.id", '=', "$g.section_id")
-            ->distinct()
-            ->whereHas('groupline', function ($q) {
-                $q->where('factory_id', session('db')->iddb)
-                    ->where('is_show', 1)
-                    ->where('is_line', 1);
-            })
-            ->orderBy("$g.id", "asc")
-            ->get();
-
-        $headers = InlineHeader::whereBetween('date', [$dta, $dtb])
-            ->get(['id', 'group_id', 'idpo', 'round']);
-
-        $headersByLine = $headers->groupBy('group_id');
-
-        $allHeaderIds = $headers->pluck('id');
-
-        // Cek kolom problem, action dan rootcause
-        $defectsByHeader = InlineDetail::whereIn('inline_header_id', $allHeaderIds)
-            ->get(['inline_header_id', 'problem', 'action', 'rootcause'])
-            ->groupBy('inline_header_id');
-
-        $result = $lines->map(function ($line) use ($headersByLine, $defectsByHeader) {
-            $headers = $headersByLine->get($line->kodegroup, collect());
-            $hIds = $headers->pluck('id');
-
-            $lastRound = $headers->max('round');
-
-            $lastRoundHeaderIds = $headers->where('round', $lastRound)->pluck('id');
-            $lastRoundDefectCount = InlineDetail::whereIn('inline_header_id', $lastRoundHeaderIds)->count();
-            $lastRoundHasDefect = $lastRoundDefectCount > 0;
-
-            $idpos = $headers->pluck('idpo')->unique();
-
-            $styles = PurchaseOrder::whereIn('idpo', $idpos)->pluck('idstyle')->unique()->values();
-            $nmstyles = Style::whereIn('idstyle', $styles)->pluck('nmstyle')->values();
-
-            $totInspect = $hIds->count() * 5;
-            $totDefect = $hIds->sum(function ($id) use ($defectsByHeader) {
-                return $defectsByHeader->get($id, collect())->count();
-            });
-
-            $hasCap = $lastRoundHeaderIds->contains(function ($id) use ($defectsByHeader) {
-            return $defectsByHeader->get($id, collect())->contains(function ($detail) {
-                return !empty($detail->problem)
-                    || !empty($detail->action)
-                    || !empty($detail->rootcause);
-            });
-        });
-
-            $rft = $totInspect > 0 ? (($totInspect - $totDefect) / $totInspect) * 100 : 0;
-            $wft = $totInspect > 0 ? ($totDefect / $totInspect) * 100 : 0;
-
-            return [
-                'line'                  => $line->namagroup,
-                'kodegroup'             => $line->kodegroup,
-                'style'                 => $nmstyles->toArray(),
-                'qty_rft'               => $totInspect - $totDefect,
-                'qty_inspect'           => $totInspect,
-                'qty_defect'            => $totDefect,
-                'rft'                   => number_format($rft, 2),
-                'wft'                   => number_format($wft, 2),
-                'last_round'            => $lastRound,
-                'last_round_has_defect' => $lastRoundHasDefect,
-                'has_cap'               => $hasCap,
-            ];
-        });
-
-        return [
-            'date' => $date->format('Y-m-d'),
-            'data' => $result->values(),
-        ];
-    }
-
-    function exportExcel(Request $request)
-    {
-        $data = $this->getFilterData($request);
-
-        header('Content-Type: text/csv');
-        header('Content-Disposition: attachment; filename="Report_Inline_Dashboard.csv"');
-
-        $file = fopen('php://output', 'w');
-
-        // Judul
-        fputcsv($file, ['REPORT INLINE DASHBOARD']);
-
-        fputcsv($file, [
-            $data['periode']['from'] . ' s/d ' . $data['periode']['to']
-        ]);
-
-        // Line
-        fputcsv($file, ['Line', $data['line']]);
-
-        // Group Buyer
-        fputcsv($file, ['Group Buyer', $data['group_buyer']]);
-
-
-        fputcsv($file, []);
-
-        // Header Summary
-        fputcsv($file, ['Total Inspect', 'Total Defect', 'RFT', 'WFT', 'Target', 'Status']);
-
-        fputcsv($file, [
-            number_format($data['tot_inspect']),
-            number_format($data['tot_defect']),
-            $data['rft'].'%',
-            $data['wft'].'%',
-            '97.00',
-            $data['target'] ? 'Not Achieved' : 'Achieved',
-        ]);
-
-        fputcsv($file, []);
-
-        fputcsv($file, ['Defect', 'Qty', '%']);
-
-        foreach ($data['top_defect'] as $defect) {
-            fputcsv($file, [
-                $defect['nmdefect'],
-                number_format($defect['total']),
-                $defect['percent'].'%'
-            ]);
-        }
-
-        fclose($file);
-        exit;
-    }
-
-    function datatables(Request $request)
-    {
-        preconnect(session('db'));
-
-        try {
-            $table = $this->getInlinePerformanceTable($request->date);
-
-            return view('monitoring::inlineperformance.index.datatables-rows', [
-                'data' => $table['data'],
-                'date' => $table['date'],
-            ]);
-        } catch (\Throwable $e) {
-            return $e->getMessage();
-        }
-    }
-
-    function inlinetls(Request $request)
-    {
-        preconnect(session('db'));
-
-        $kodegroup = $request->kodegroup;
-        $date      = $request->date ?? Carbon::now()->format('Y-m-d');
-        $namaline  = null;
-
-        if ($kodegroup) {
-            $g = (new MasterEmployeeGroup())->getTable();
-            $s = (new MasterEmployeeSection())->getTable();
-
-            $groupInfo = MasterEmployeeGroup::select(
-                    "$g.id as kodegroup", "$g.name as namagroup", "$s.name as namabagian"
-                )
-                ->join($s, "$s.id", '=', "$g.section_id")
-                ->where("$g.id", $kodegroup)
-                ->first();
-
-            $namaline = $groupInfo
-                ? $groupInfo->namabagian . ' - ' . $groupInfo->namagroup
-                : $request->line;
-        }
-
-        $result = $kodegroup
-            ? $this->buildInlineLtsData($kodegroup, $date)
-            : ['tot_inspect' => 0, 'tot_defect' => 0, 'rft' => '0.00', 'wft' => '0.00', 'operators' => [], 'rounds' => []];
-
-        return view('monitoring::inlineperformance.inlineLts.inline', [
-            'kodegroup'   => $kodegroup,
-            'namaline'    => $namaline,
-            'date'        => $date,
-            'tot_inspect' => $result['tot_inspect'],
-            'tot_defect'  => $result['tot_defect'],
-            'rft'         => $result['rft'],
-            'wft'         => $result['wft'],
-            'operators'   => $result['operators'],
-            'rounds'      => $result['rounds'],
-        ]);
-    }
-
-    function buildInlineLtsData($line, $date = null)
-    {
-        $date = $date ? Carbon::parse($date) : Carbon::now();
-        $dta = $date->copy()->startOfDay();
-        $dtb = $date->copy()->endOfDay();
-
-        $headers = InlineHeader::whereBetween('date', [$dta, $dtb])
-            ->where('group_id', $line)
-            ->get(['id', 'round', 'sequence_process', 'userid_operator']);
-
-        $headerIds = $headers->pluck('id');
-        $headerCount = $headerIds->count();
-
-        $totInspect = $headerCount * 5;
-        $totDefect = InlineDetail::whereIn('inline_header_id', $headerIds)->count();
-
-        $rft = $totInspect > 0 ? (($totInspect - $totDefect) / $totInspect) * 100 : 0;
-        $wft = $totInspect > 0 ? ($totDefect / $totInspect) * 100 : 0;
-
-        $detailsByHeader = InlineDetail::whereIn('inline_header_id', $headerIds)
-            ->get(['inline_header_id', 'problem', 'action', 'rootcause'])
-            ->groupBy('inline_header_id');
-
-        $operatorsMeta = $headers
-            ->groupBy('userid_operator')
-            ->map(fn($rows) => $rows->sortBy('round')->first())
-            ->sortBy('sequence_process')
-            ->values();
-
-        $niks = $operatorsMeta->pluck('userid_operator')->unique()->values();
-        $employeeNames = Employee::whereIn('nik', $niks)->pluck('name', 'nik');
-
-        $operators = $operatorsMeta->map(function ($h) use ($employeeNames) {
-            return [
-                'nik'              => $h->userid_operator,
-                'nama'             => $employeeNames[$h->userid_operator] ?? null,
-                'sequence_process' => $h->sequence_process,
-            ];
-        })->values();
-
-        $headersByOperatorRound = $headers->groupBy(function ($h) {
-            return $h->userid_operator . '-' . $h->round;
-        });
-
-        $maxRound = 5;
-        $rounds = [];
-        for ($r = 1; $r <= $maxRound; $r++) {
-            $cells = [];
-            $roundHasDefect = false;
-            $roundHasCap    = false;
-            foreach ($operators as $op) {
-                $key = $op['nik'] . '-' . $r;
-                $headerGroup = $headersByOperatorRound->get($key);
-
-                if (!$headerGroup || $headerGroup->isEmpty()) {
-                    $cells[] = ['status' => 'empty'];
-                    continue;
-                }
-
-                $hIdsThisCell = $headerGroup->pluck('id');
-                $details = collect();
-                foreach ($hIdsThisCell as $hid) {
-                    $details = $details->merge($detailsByHeader->get($hid, collect()));
-                }
-
-                $defectCount = $details->count();
-                $hasCap = $details->contains(function ($d) {
-                    return !empty($d->problem) || !empty($d->action) || !empty($d->rootcause);
-                });
-
-                $status = $hasCap
-                    ? 'cap'
-                    : ($defectCount == 0 ? 'none' : ($defectCount == 1 ? 'one' : 'multi'));
-
-                if ($defectCount > 0) {
-                    $roundHasDefect = true;
-                }
-                if ($hasCap) {
-                    $roundHasCap = true;
-                }
-
-                $cells[] = ['status' => $status];
-            }
-            $rounds[] = [
-                'round' => $r,
-                'cells' => $cells,
-                'has_defect' => $roundHasDefect,
-                'has_cap'    => $roundHasCap,
-            ];
-        }
-
-        return [
-            'tot_inspect' => $totInspect,
-            'tot_defect'  => $totDefect,
-            'rft'         => number_format($rft, 2),
-            'wft'         => number_format($wft, 2),
-            'operators'   => $operators,
-            'rounds'      => $rounds,
-        ];
-    }
-
-    function filterInlineLts(Request $request)
-    {
-        if (!$request->line) {
-            return response()->json(['message' => 'Line belum dipilih'], 422);
-        }
-
-        preconnect(session('db'));
-
-        $result = $this->buildInlineLtsData($request->line, $request->date);
-
-        $html = view('monitoring::inlineperformance.inlineLts.datatable', [
-            'operators' => $result['operators'],
-            'rounds'    => $result['rounds'],
-        ])->render();
-
-        return response()->json([
-            'date'        => $request->date ?? Carbon::now()->format('Y-m-d'),
-            'tot_inspect' => $result['tot_inspect'],
-            'tot_defect'  => $result['tot_defect'],
-            'rft'         => $result['rft'],
-            'wft'         => $result['wft'],
-            'html'        => $html,
-        ]);
-    }
-
-    function selectLineLts (Request $request)
-    {
-        $g = (new MasterEmployeeGroup())->getTable();
-        $s = (new MasterEmployeeSection())->getTable();
-
-        $data = MasterEmployeeGroup::select(
-                "$g.id as kodegroup",
-                "$g.name as namagroup",
-            )
-            ->join($s, "$s.id", '=', "$g.section_id")
-            ->distinct()
-            ->whereHas('groupline', function($q){
-                $q->where('factory_id', session('db')->iddb)
-                    ->where('is_show', 1)
-                    ->where('is_line', 1);
-            });
-
-        if ($request->q) {
-            $data = $data->where(function ($q) use ($request, $g) {
-                $q->where("$g.name", 'like', "%$request->q%");
-            });
-        }
-        $data = $data->orderBy('kodegroup')->get();
-
-        return view('monitoring::inlineperformance.inlineLts.selectlinelts', [
-            'data' => $data,
-        ]);
-    }
-
-    // function exportData(Request $request)
-    // {
-    //     if (!$request->line) {
-    //         return response()->json(['message' => 'Line belum dipilih'], 422);
-    //     }
-
-    //     preconnect(session('db'));
-
-    //     $result = $this->buildInlineLtsData($request->line, $request->date);
-
-    //     $g = (new MasterEmployeeGroup())->getTable();
-    //     $s = (new MasterEmployeeSection())->getTable();
-
-    //     $groupInfo = MasterEmployeeGroup::select(
-    //             "$g.id as kodegroup", "$g.name as namagroup", "$s.name as namabagian"
-    //         )
-    //         ->join($s, "$s.id", '=', "$g.section_id")
-    //         ->where("$g.id", $request->line)
-    //         ->first();
-
-    //     $namaline = $groupInfo
-    //         ? $groupInfo->namabagian . ' - ' . $groupInfo->namagroup
-    //         : $request->line;
-
-    //     $statusLabel = [
-    //         'empty' => '-',
-    //         'none'  => 'No Defect',
-    //         'one'   => '1 Defect',
-    //         'multi' => '2+ Defect',
-    //         'cap'   => 'CAP Filled',
-    //     ];
-
-    //     $headers = array_merge(
-    //         ['Location', 'Inspect Qty', 'Defect Qty', 'RFT (%)', 'WFT (%)', 'Round'],
-    //         $result['operators']->map(function ($op) {
-    //             return $op['nama'] ?? $op['nik'];
-    //         })->toArray()
-    //     );
-
-    //     $rows = collect($result['rounds'])->map(function ($round) use ($statusLabel, $namaline, $result) {
-    //         $row = [
-    //             $namaline,
-    //             $result['tot_inspect'],
-    //             $result['tot_defect'],
-    //             $result['rft'],
-    //             $result['wft'],
-    //             'Round ' . $round['round'],
-    //         ];
-
-    //         foreach ($round['cells'] as $cell) {
-    //             $row[] = $statusLabel[$cell['status']] ?? '-';
-    //         }
-
-    //         return $row;
-    //     })->toArray();
-
-    //     return response()->json([
-    //         'headers'     => $headers,
-    //         'rows'        => $rows,
-    //         'namaline'    => $namaline,
-    //         'tot_inspect' => $result['tot_inspect'],
-    //         'tot_defect'  => $result['tot_defect'],
-    //         'rft'         => $result['rft'],
-    //         'wft'         => $result['wft'],
-    //     ]);
-    // }
-
-    function exportData(Request $request)
-    {
-        if (!$request->line) {
-            return response()->json(['message' => 'Line belum dipilih'], 422);
-        }
-
-        preconnect(session('db'));
-
-        $result = $this->buildInlineLtsData($request->line, $request->date);
-
-        $g = (new MasterEmployeeGroup())->getTable();
-        $s = (new MasterEmployeeSection())->getTable();
-
-        $groupInfo = MasterEmployeeGroup::select(
-                "$g.id as kodegroup", "$g.name as namagroup", "$s.name as namabagian"
-            )
-            ->join($s, "$s.id", '=', "$g.section_id")
-            ->where("$g.id", $request->line)
-            ->first();
-
-        $namaline = $groupInfo
-            ? $groupInfo->namabagian . ' - ' . $groupInfo->namagroup
-            : $request->line;
-
-        $statusLabel = [
-            'empty' => '-',
-            'none'  => 'No Defect',
-            'one'   => '1 Defect',
-            'multi' => '2+ Defect',
-            'cap'   => 'CAP Filled',
-        ];
-
-        $operatorNames = $result['operators']->map(function ($op) {
-            return $op['nama'] ?? $op['nik'];
-        })->toArray();
-
-        $roundRows = collect($result['rounds'])->map(function ($round) use ($statusLabel) {
-            $row = ['Round ' . $round['round']];
-            foreach ($round['cells'] as $cell) {
-                $row[] = $statusLabel[$cell['status']] ?? '-';
-            }
-            return $row;
-        })->toArray();
-
-        return response()->json([
-            'namaline'      => $namaline,
-            'date'          => $request->date ?? Carbon::now()->format('Y-m-d'),
-            'tot_inspect'   => $result['tot_inspect'],
-            'tot_defect'    => $result['tot_defect'],
-            'rft'           => $result['rft'],
-            'wft'           => $result['wft'],
-            'operator_names'=> $operatorNames,
-            'round_rows'    => $roundRows,
-        ]);
-    }
-}
