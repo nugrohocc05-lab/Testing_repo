@@ -1,57 +1,59 @@
-private function fetchInlineLtsRaw($line, $date = null)
+function buildInlineLtsData($line, $date = null)
 {
-    $date = $date ? Carbon::parse($date) : Carbon::now();
-    $dta = $date->copy()->startOfDay();
-    $dtb = $date->copy()->endOfDay();
+    $raw = $this->fetchInlineLtsRaw($line, $date);
 
-    $headers = InlineHeader::whereBetween('date', [$dta, $dtb])
-        ->where('group_id', $line)
-        ->get(['id', 'round', 'sequence_process', 'userid_operator']);
+    $operators              = $raw['operators'];
+    $detailsByHeader        = $raw['detailsByHeader'];
+    $headersByOperatorRound = $raw['headersByOperatorRound'];
 
-    $headerIds = $headers->pluck('id');
-    $headerCount = $headerIds->count();
+    $rounds = [];
+    for ($r = 1; $r <= $raw['max_round']; $r++) {
+        $cells = [];
+        $roundHasDefect = false;
+        $roundHasCap    = false;
+        foreach ($operators as $op) {
+            $key = $op['nik'] . '-' . $r;
+            $headerGroup = $headersByOperatorRound->get($key);
 
-    $totInspect = $headerCount * 5;
-    $totDefect = InlineDetail::whereIn('inline_header_id', $headerIds)->count();
+            if (!$headerGroup || $headerGroup->isEmpty()) {
+                $cells[] = ['status' => 'empty'];
+                continue;
+            }
 
-    $rft = $totInspect > 0 ? (($totInspect - $totDefect) / $totInspect) * 100 : 0;
-    $wft = $totInspect > 0 ? ($totDefect / $totInspect) * 100 : 0;
+            $hIdsThisCell = $headerGroup->pluck('id');
+            $details = collect();
+            foreach ($hIdsThisCell as $hid) {
+                $details = $details->merge($detailsByHeader->get($hid, collect()));
+            }
 
-    // Tambah defect_id di sini (sebelumnya cuma problem/action/rootcause)
-    $detailsByHeader = InlineDetail::whereIn('inline_header_id', $headerIds)
-        ->get(['inline_header_id', 'problem', 'action', 'rootcause', 'defect_id'])
-        ->groupBy('inline_header_id');
+            $defectCount = $details->count();
+            $hasCap = $details->contains(function ($d) {
+                return !empty($d->problem) || !empty($d->action) || !empty($d->rootcause);
+            });
 
-    $operatorsMeta = $headers
-        ->groupBy('userid_operator')
-        ->map(fn($rows) => $rows->sortBy('round')->first())
-        ->sortBy('sequence_process')
-        ->values();
+            $status = $hasCap
+                ? 'cap'
+                : ($defectCount == 0 ? 'none' : ($defectCount == 1 ? 'one' : 'multi'));
 
-    $niks = $operatorsMeta->pluck('userid_operator')->unique()->values();
-    $employeeNames = Employee::whereIn('nik', $niks)->pluck('name', 'nik');
+            if ($defectCount > 0) $roundHasDefect = true;
+            if ($hasCap) $roundHasCap = true;
 
-    $operators = $operatorsMeta->map(function ($h) use ($employeeNames) {
-        return [
-            'nik'              => $h->userid_operator,
-            'nama'             => $employeeNames[$h->userid_operator] ?? null,
-            'sequence_process' => $h->sequence_process,
+            $cells[] = ['status' => $status];
+        }
+        $rounds[] = [
+            'round' => $r,
+            'cells' => $cells,
+            'has_defect' => $roundHasDefect,
+            'has_cap'    => $roundHasCap,
         ];
-    })->values();
-
-    $headersByOperatorRound = $headers->groupBy(function ($h) {
-        return $h->userid_operator . '-' . $h->round;
-    });
+    }
 
     return [
-        'date'                   => $date,
-        'detailsByHeader'        => $detailsByHeader,
-        'operators'              => $operators,
-        'headersByOperatorRound' => $headersByOperatorRound,
-        'tot_inspect'            => $totInspect,
-        'tot_defect'             => $totDefect,
-        'rft'                    => number_format($rft, 2),
-        'wft'                    => number_format($wft, 2),
-        'max_round'              => 5,
+        'tot_inspect' => $raw['tot_inspect'],
+        'tot_defect'  => $raw['tot_defect'],
+        'rft'         => $raw['rft'],
+        'wft'         => $raw['wft'],
+        'operators'   => $operators,
+        'rounds'      => $rounds,
     ];
 }
