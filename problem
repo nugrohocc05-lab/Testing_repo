@@ -748,6 +748,29 @@
             let exportDT = null;
             let lastExportData = null;
 
+            function formatIndonesianDate(dateStr) {
+                if (!dateStr) return dateStr;
+
+                const bulanIndo = [
+                    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+                    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+                ];
+
+                // Pecah manual "Y-m-d" biar tidak kena masalah timezone parsing new Date()
+                const parts = String(dateStr).split('-');
+                if (parts.length !== 3) return dateStr;
+
+                const year  = parseInt(parts[0], 10);
+                const month = parseInt(parts[1], 10) - 1;
+                const day   = parseInt(parts[2], 10);
+
+                if (isNaN(year) || isNaN(month) || isNaN(day) || !bulanIndo[month]) {
+                    return dateStr;
+                }
+
+                return `${day} ${bulanIndo[month]} ${year}`;
+            }
+
             function doExport() {
                 if (!currentLine) {
                     alert('Select the line first before exporting.');
@@ -809,7 +832,7 @@
                                         let summaryHeader = ['Location', 'Date', 'Inspect Qty', 'Defect Qty', 'RFT (%)', 'WFT (%)'];
 
                                         // Baris 3: data summary
-                                        let summaryData = [d.namaline, d.date, d.tot_inspect, d.tot_defect, d.rft, d.wft];
+                                        let summaryData = [d.namaline, formatIndonesianDate(d.date), d.tot_inspect, d.tot_defect, d.rft, d.wft];
 
                                         // Baris 4: kosong
                                         let blankRow = [];
