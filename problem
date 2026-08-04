@@ -1,105 +1,83 @@
- // function exportExcel(Request $request)
-    // {
-    //     $data = $this->getFilterData($request);
+public function exportExcel(Request $request)
+{
+    $data = $this->getFilterData($request);
 
-    //     header('Content-Type: text/csv');
-    //     header('Content-Disposition: attachment; filename="Report_Inline_Dashboard.csv"');
+    $lineLabel = (empty($data['line']) || $data['line'] === 'all')
+        ? 'All Lines'
+        : $data['line'];
 
-    //     $file = fopen('php://output', 'w');
-
-    //     // Judul
-    //     fputcsv($file, ['REPORT INLINE DASHBOARD']);
-
-    //     fputcsv($file, [
-    //         $data['periode']['from'] . ' s/d ' . $data['periode']['to']
-    //     ]);
-
-    //      fputcsv($file, []);
-
-    //     fputcsv($file, ['Line', 'Group Buyer']);
-
-    //     $condition = $data['line'] === 'all'
-    //         ? 'All Lines'
-    //         : 'Line ' . $data['line'];
-
-
-    //     fputcsv($file, [
-    //         $condition,
-    //         $data['group_buyer'],
-    //     ]);
-
-    //     fputcsv($file, []);
-
-    //     // Header Summary
-    //     fputcsv($file, ['Total Inspect', 'Total Defect', 'RFT', 'WFT', 'Target', 'Status']);
-
-    //     fputcsv($file, [
-    //         number_format($data['tot_inspect']),
-    //         number_format($data['tot_defect']),
-    //         $data['rft'].'%',
-    //         $data['wft'].'%',
-    //         '97.00',
-    //         $data['target'] ? 'Not Achieved' : 'Achieved',
-    //     ]);
-
-    //     fputcsv($file, []);
-
-    //     fputcsv($file, ['Defect', 'Qty', 'Percentage']);
-
-    //     foreach ($data['top_defect'] as $defect) {
-    //         fputcsv($file, [
-    //             $defect['nmdefect'],
-    //             number_format($defect['total']),
-    //             $defect['percent'].'%'
-    //         ]);
-    //     }
-
-    //     fclose($file);
-    //     exit;
-    // }
-
-    public function exportExcel(Request $request)
-    {
-        $data = $this->getFilterData($request);
-
-        header("Content-Type: application/vnd.ms-excel");
-        header("Content-Disposition: attachment; filename=Report_Inline_Dashboard.xls");
-
-
-        echo '
-        <table border="1">
-            <tr>
-                <td colspan="6" style="font-weight:bold;font-size:16px;text-align:center">
-                    REPORT INLINE DASHBOARD
-                </td>
-            </tr>
-
-            <tr>
-                <td colspan="6">
-                    '.$data['periode']['from'].' s/d '.$data['periode']['to'].'
-                </td>
-            </tr>
-
-            <tr>
-                <th>Line</th>
-                <th>Group Buyer</th>
-                <th>Total Inspect</th>
-                <th>Total Defect</th>
-                <th>RFT</th>
-                <th>Status</th>
-            </tr>
-
-            <tr>
-                <td>'.$data['line'].'</td>
-                <td>'.$data['group_buyer'].'</td>
-                <td>'.$data['tot_inspect'].'</td>
-                <td>'.$data['tot_defect'].'</td>
-                <td>'.$data['rft'].'%</td>
-                <td>'.$data['target'].'</td>
-            </tr>
-        </table>
-        ';
-
-        exit;
+    $groupBuyerName = 'All Buyers';
+    if ($data['group_buyer'] && $data['group_buyer'] !== 'all') {
+        $gb = MasterGroupBuyer::find($data['group_buyer']);
+        $groupBuyerName = $gb->group_name ?? '-';
     }
 
+    $targetLabel = $data['target'] ? 'NO' : 'YES';
+
+    header("Content-Type: application/vnd.ms-excel");
+    header("Content-Disposition: attachment; filename=Report_Inline_Dashboard.xls");
+
+    $defectRows = '';
+    $lastIndex  = count($data['top_defect']) - 1;
+
+    foreach ($data['top_defect'] as $i => $defect) {
+        $border = ($i === $lastIndex) ? 'border-bottom:3px double #000;' : '';
+
+        $defectRows .= '
+            <tr>
+                <td style="'.$border.'">'.$defect['nmdefect'].'</td>
+                <td style="text-align:center;'.$border.'">'.number_format($defect['total']).'</td>
+                <td style="text-align:center;'.$border.'">'.$defect['percent'].'</td>
+            </tr>';
+    }
+
+    echo '
+    <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;font-family:Calibri, Arial, sans-serif;">
+        <tr><td colspan="8" style="border:none;"></td></tr>
+        <tr>
+            <td style="border:none;"></td>
+            <td colspan="6" style="border:none;text-align:center;font-weight:bold;font-size:16px;color:#A9782F;">
+                REPORT INLINE DASHBOARD
+            </td>
+            <td style="border:none;"></td>
+        </tr>
+        <tr><td colspan="8" style="border:none;"></td></tr>
+        <tr>
+            <td style="border:none;font-weight:bold;">Line</td>
+            <td colspan="4" style="border:none;">'.$lineLabel.'</td>
+            <td style="border:none;"></td>
+            <td colspan="2" style="border:none;text-align:right;font-weight:bold;">Group Buyer</td>
+        </tr>
+        <tr>
+            <td colspan="5" style="border:none;font-weight:bold;">'.$data['periode']['from'].' s/d '.$data['periode']['to'].'</td>
+            <td style="border:none;"></td>
+            <td colspan="2" style="border:none;text-align:right;">'.$groupBuyerName.'</td>
+        </tr>
+        <tr><td colspan="8" style="border:none;"></td></tr>
+        <tr style="background-color:#D9D9D9;font-weight:bold;">
+            <td style="text-align:center;">Total Inspect</td>
+            <td style="text-align:center;">Total Defect</td>
+            <td style="text-align:center;">RFT</td>
+            <td style="text-align:center;">WFT</td>
+            <td style="text-align:center;">Target</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;border-bottom:3px double #000;">'.number_format($data['tot_inspect']).'</td>
+            <td style="text-align:center;border-bottom:3px double #000;">'.number_format($data['tot_defect']).'</td>
+            <td style="text-align:center;border-bottom:3px double #000;">'.$data['rft'].'%</td>
+            <td style="text-align:center;border-bottom:3px double #000;">'.$data['wft'].'%</td>
+            <td style="text-align:center;border-bottom:3px double #000;">'.$targetLabel.'</td>
+        </tr>
+        <tr><td colspan="8" style="border:none;"></td></tr>
+        <tr><td colspan="8" style="border:none;"></td></tr>
+        <tr style="background-color:#D9D9D9;font-weight:bold;">
+            <td>Defect</td>
+            <td style="text-align:center;">Qty</td>
+            <td style="text-align:center;">%</td>
+        </tr>
+        '.$defectRows.'
+    </table>
+    ';
+
+    exit;
+}
