@@ -1,6 +1,57 @@
-Date	Location	Inspect Qty	Defect Qty	RFT (%)	WFT (%)	Round	Name	Inspection Status	Total Defect	Defect 1	Defect 2	Defect 3
-28 July 2026	LINE SEWING A - Line 11	60	10	83.33%	16.67%	Round 1	Siti Comariyah	CAP Filled	-	-	-	-
-28 July 2026	LINE SEWING A - Line 11	60	10	83.33%	16.67%	Round 1	Siti Munawaroh	Defect Found	2	Pilling (C8)	Color shading within one garment (C3)	-
-28 July 2026	LINE SEWING A - Line 11	60	10	83.33%	16.67%	Round 1	Siti Rahmatun	No Defect	0	-	-	-
-28 July 2026	LINE SEWING A - Line 11	60	10	83.33%	16.67%	Round 1	Siti Syarifah	Defect Found	1	Incorrect stitch density (C7)	-	-
-28 July 2026	LINE SEWING A - Line 11	60	10	83.33%	16.67%	Round 1	Siti Badriyah	Defect Found	2	Skipped stitches – chain stitches (C4)	Twisted, wavy, uneven body/hem (C4)	-
+private function fetchInlineLtsRaw($line, $date = null)
+{
+    $date = $date ? Carbon::parse($date) : Carbon::now();
+    $dta = $date->copy()->startOfDay();
+    $dtb = $date->copy()->endOfDay();
+
+    $headers = InlineHeader::whereBetween('date', [$dta, $dtb])
+        ->where('group_id', $line)
+        ->get(['id', 'round', 'sequence_process', 'userid_operator']);
+
+    $headerIds = $headers->pluck('id');
+    $headerCount = $headerIds->count();
+
+    $totInspect = $headerCount * 5;
+    $totDefect = InlineDetail::whereIn('inline_header_id', $headerIds)->count();
+
+    $rft = $totInspect > 0 ? (($totInspect - $totDefect) / $totInspect) * 100 : 0;
+    $wft = $totInspect > 0 ? ($totDefect / $totInspect) * 100 : 0;
+
+    // Tambah defect_id di sini (sebelumnya cuma problem/action/rootcause)
+    $detailsByHeader = InlineDetail::whereIn('inline_header_id', $headerIds)
+        ->get(['inline_header_id', 'problem', 'action', 'rootcause', 'defect_id'])
+        ->groupBy('inline_header_id');
+
+    $operatorsMeta = $headers
+        ->groupBy('userid_operator')
+        ->map(fn($rows) => $rows->sortBy('round')->first())
+        ->sortBy('sequence_process')
+        ->values();
+
+    $niks = $operatorsMeta->pluck('userid_operator')->unique()->values();
+    $employeeNames = Employee::whereIn('nik', $niks)->pluck('name', 'nik');
+
+    $operators = $operatorsMeta->map(function ($h) use ($employeeNames) {
+        return [
+            'nik'              => $h->userid_operator,
+            'nama'             => $employeeNames[$h->userid_operator] ?? null,
+            'sequence_process' => $h->sequence_process,
+        ];
+    })->values();
+
+    $headersByOperatorRound = $headers->groupBy(function ($h) {
+        return $h->userid_operator . '-' . $h->round;
+    });
+
+    return [
+        'date'                   => $date,
+        'detailsByHeader'        => $detailsByHeader,
+        'operators'              => $operators,
+        'headersByOperatorRound' => $headersByOperatorRound,
+        'tot_inspect'            => $totInspect,
+        'tot_defect'             => $totDefect,
+        'rft'                    => number_format($rft, 2),
+        'wft'                    => number_format($wft, 2),
+        'max_round'              => 5,
+    ];
+}
