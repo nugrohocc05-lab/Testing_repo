@@ -1,1359 +1,1709 @@
-coba cek kode ini, kenapa saat tabel discroll, ada warna merah tersisa dibawah dan diatas tabel, untuk warna merah memang sengaja saya tambahkan untuk debugging, coba cek kodenya 
-<style>
-    .border-custom-datatable {
-        border: 1px solid #4C8CF2 !important;
-        background-color: #212B3E;
+    <?php
+
+    namespace Modules\Monitoring\Http\Controllers;
+
+    use DB;
+    use Carbon\Carbon;
+    use Illuminate\Support\Facades\Cache;
+    use Illuminate\Support\Collection;
+    use Illuminate\Http\Request;
+    use Illuminate\Support\Facades\Validator;
+    use App\Http\Controllers\Controller;
+    use App\Http\Models\Main\MasterEmployeeGroup;
+    use App\Http\Models\Main\MasterEmployeeSection;
+    use App\Http\Models\Main\MasterGroupBuyer;
+    use App\Http\Models\PurchaseOrder;
+    use App\Http\Models\Main\Buyer;
+    use App\Http\Models\InlineDetail;
+    use App\Http\Models\InlineHeader;
+    use App\Http\Models\Main\Employee;
+    use App\Http\Models\Main\Style;
+    use App\Http\Models\Main\Param;
+    use App\Http\Models\Main\QCDefect;
+    use App\Http\Models\OutputDetail;
+    use App\Http\Models\SewingOutput;
+
+    class EndlinePerformanceController extends Controller
+    {
+        protected $m_modul = 'report';
+
+        function __construct()
+        {
+            $this->middleware('auth');
+        }
+
+        function index(Request $request)
+        {
+            if ($this->myaccess() == '0') {
+                return redirect()
+                    ->back()
+                    ->with('alert', [
+                        'title' => 'Unauthorized!',
+                        'message' => 'You Dont Have Any Access Here!',
+                        'status' => 'warning',
+                    ]);
+            }
+
+            preconnect(session('db'));
+
+            return view('monitoring::endlineperformance.performance.index');
+        }
+
+        function selectline(Request $request)
+        {
+            preconnect(session('db'));
+
+            $g = (new MasterEmployeeGroup())->getTable();
+            $s = (new MasterEmployeeSection())->getTable();
+
+            $data = MasterEmployeeGroup::select(
+                    "$g.id as kodegroup", "$g.section_id as kodebagian",
+                    "$g.name as namagroup", "$s.name as namabagian"
+                )
+                ->join($s, "$s.id", '=', "$g.section_id")
+                ->distinct()
+                ->whereHas('groupline', function($q){
+                    $q->where('factory_id', session('db')->iddb)
+                        ->where('is_show', 1)
+                        ->where('is_line', 1);
+                });
+
+            if ($request->q) {
+                $data = $data->where(function ($q) use ($request, $g) {
+                    $q->where("$g.name", 'like', "%$request->q%");
+                });
+            }
+            $data = $data->orderBy('kodegroup')->paginate(15, $request->page);
+
+            return response()->json($data);
+        }
+
+        function groupbuyer(Request $request)
+        {
+            preconnect(session('db'));
+
+            $q = $request->get('q');
+
+            $data = MasterGroupBuyer::select('id', 'group_name')
+                ->when($q, function ($query) use ($q) {
+                    $query->where('group_name', 'like', '%' . $q . '%');
+                })
+                ->orderBy('group_name', 'asc')
+                ->get()
+                ->map(function ($item) {
+                    return [
+                        'id' => $item->id,
+                        'text' => $item->group_name
+                    ];
+                });
+
+            return response()->json([
+                'results' => $data
+            ]);
+        }
+
+        function summaryFilter(Request $request)
+        {
+            $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
+            $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+
+            $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
+            $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+
+            // Tanggal
+            $headerQuery = SewingOutput::whereBetween('date', [$dta, $dtb]);
+
+            // Line
+            if ($request->line && $request->line != 'all') {
+                $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
+                $poIds = PurchaseOrder::whereIn('idbuyer', $buyerIds)->pluck('idpo');
+                $outputId = OutputDetail::whereIn('idpo', $poIds)->pluck('barcode');
+                $headerQuery = $headerQuery->where('line', $request->line);
+            }
+
+            // Group Buyer -> idpo
+            if ($request->groupbuyer && $request->groupbuyer != 'all') {
+                $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
+                $poIds = PurchaseOrder::whereIn('idbuyer', $buyerIds)->pluck('idpo');
+                $outputId = OutputDetail::whereIn('idpo', $poIds)->pluck('barcode');
+                $headerQuery = $headerQuery->whereIn('barcode', $outputId)->where('is_qc', 1);
+            }
+
+            $headerIds = (clone $headerQuery)->pluck('id');
+
+            // Total Output
+            $totOutput = SewingOutput::whereIn('id', $headerIds)
+                ->where('is_output', 1)
+                ->count();
+
+            // Qty Inspects
+            $totInspect = $headerIds->count();
+
+            // Qty Defects
+            $totDefect = SewingOutput::whereIn('id', $headerIds)
+                ->whereNotNull('defect_code')
+                ->count();
+
+            // RFT
+            $rft = $totInspect > 0
+                ? round((($totInspect - $totDefect) / $totInspect) * 100, 2)
+                : 0;
+
+            // WFT
+            $wft = $totInspect > 0
+                ? round(($totDefect / $totInspect) * 100, 2)
+                : 0;
+
+            // Kondisi warna target
+            $target = Param::where('header', 'qc')
+                ->where('key', 'rft_endline_target')
+                ->value('value');
+
+            $rftTarget = $rft <= $target ? true : false;
+
+            // Top 5 Defect
+            $topDefect = SewingOutput::whereIn('id', $headerIds)
+                ->whereNotNull('defect_code')
+                ->whereNotIn('defect_code', [800, 900])
+                ->select(
+                    'defect_code',
+                    DB::raw('COUNT(*) as total')
+                )
+                ->groupBy('defect_code')
+                ->orderByDesc('total')
+                ->orderBy('defect_code', 'asc')
+                ->limit(4)
+                ->get();
+
+            $defectIds = $topDefect->pluck('defect_code');
+
+            // Master defect untuk Top 4
+            $masterQcDefects = QCDefect::whereIn('kdcacat', $defectIds)
+                ->pluck('deskripsi', 'kdcacat');
+
+            $colors = [
+                '#004FE0',
+                '#3DAA25',
+                '#F4947E',
+                '#F24C4C',
+                '#29B1AE',
+            ];
+
+
+            // Mapping Top 4
+            $topDefect = $topDefect->values()->map(function ($item, $index) use (
+                $masterQcDefects,
+                $totDefect,
+                $colors
+            ) {
+                $percent = $totDefect > 0
+                    ? ($item->total / $totDefect) * 100
+                    : 0;
+
+                return [
+                    'defect_id' => $item->defect_code,
+                    'nmdefect'  => $masterQcDefects[$item->defect_code] ?? '-',
+                    'total'     => (int) $item->total,
+                    'percent'   => number_format($percent, 2),
+                    'color'     => $colors[$index] ?? '#BDBDBD',
+                ];
+            });
+
+            // Others
+            $top4Total = $topDefect->sum('total');
+
+            $othersTotal = $totDefect - $top4Total;
+
+            if ($othersTotal > 0) {
+                $othersPercent = $totDefect > 0
+                    ? ($othersTotal / $totDefect) * 100
+                    : 0;
+
+                $topDefect->push([
+                    'defect_id' => 'others',
+                    'nmdefect'  => 'Others',
+                    'total'     => (int) $othersTotal,
+                    'percent'   => number_format($othersPercent, 2),
+                    'color'     => '#29B1AE',
+                ]);
+            }
+
+            return response()->json([
+                'tot_output'  =>  $totOutput,
+                'tot_inspect' => $totInspect,
+                'tot_defect'  => $totDefect,
+                'rft'         => $rft,
+                'wft'         => $wft,
+                'rft_target'  => $rftTarget,
+                'top_defect'  => $topDefect,
+            ]);
+        }
+
+        private function buildWeeks($year)
+        {
+            return Cache::remember("weeks_list_{$year}", now()->addDay(), function () use ($year) {
+                $startOfYear = Carbon::createFromDate($year, 1, 1)->startOfDay();
+                $endOfYear   = Carbon::createFromDate($year, 12, 31)->endOfDay();
+
+                $weeks = [];
+                $weekNumber = 1;
+                $current = $startOfYear->copy();
+
+                while ($current->lte($endOfYear)) {
+                    $weekStart = $current->copy();
+                    $weekEnd   = $current->copy()->addDays(6);
+
+                    if ($weekEnd->gt($endOfYear)) {
+                        $weekEnd = $endOfYear->copy();
+                    }
+
+                    $weeks[] = [
+                        'id'    => $year . '-' . $weekNumber,
+                        'year'  => $year,
+                        'week'  => $weekNumber,
+                        'start' => $weekStart->format('Y-m-d'),
+                        'end'   => $weekEnd->format('Y-m-d'),
+                        'text'  => 'Week ' . $weekNumber . ' (' . $weekStart->format('d M') . ' - ' . $weekEnd->format('d M Y') . ')',
+                    ];
+
+                    $weekNumber++;
+                    $current->addDays(7);
+                }
+
+                return $weeks;
+            });
+        }
+
+
+        // Deteksi year + week number dari tanggal (default hari ini)
+        private function detectCurrentWeek($date = null)
+        {
+            $date = $date ? Carbon::parse($date) : Carbon::now();
+            $year = $date->year;
+
+            $startOfYear = Carbon::createFromDate($year, 1, 1)->startOfDay();
+            $dayOfYear   = $startOfYear->diffInDays($date->copy()->startOfDay()) + 1;
+            $weekNumber  = (int) ceil($dayOfYear / 7);
+
+            return [
+                'id'   => $year . '-' . $weekNumber,
+                'year' => $year,
+                'week' => $weekNumber,
+            ];
+        }
+
+        // Endpoint select2 AJAX — HANYA tahun berjalan (tahun sekarang).
+        public function selectWeek(Request $request)
+        {
+            $year   = Carbon::now()->year;
+            $search = trim((string) $request->q);
+
+            $weeks = collect($this->buildWeeks($year));
+
+            if ($search !== '') {
+                $needle = mb_strtolower($search);
+                $weeks = $weeks->filter(fn ($w) => str_contains(mb_strtolower($w['text']), $needle))->values();
+            }
+
+            $perPage = 20;
+            $page    = (int) ($request->page ?? 1);
+            $paged   = $weeks->slice(($page - 1) * $perPage, $perPage)->values();
+
+            return response()->json([
+                'results'    => $paged->map(fn ($w) => ['id' => $w['id'], 'text' => $w['text']]),
+                'pagination' => ['more' => $weeks->count() > $page * $perPage],
+            ]);
+        }
+
+        public function currentWeek()
+        {
+            $current = $this->detectCurrentWeek();
+
+            $weeks = collect($this->buildWeeks($current['year']));
+
+            $selectedWeek = $weeks->first(function ($week) use ($current) {
+                return $week['week'] === $current['week'];
+            });
+
+            return response()->json([
+                'selected' => [
+                    'id'   => $selectedWeek['id'],
+                    'text' => $selectedWeek['text'],
+                ],
+            ]);
+        }
+
+
+        private function getTopStyleForDefect(Collection $headerIds, array $defectCodes, int $limit = 2): array
+        {
+            $barcodes = SewingOutput::whereIn('id', $headerIds)
+                ->whereIn('defect_code', $defectCodes)
+                ->pluck('barcode');
+
+            if ($barcodes->isEmpty()) {
+                return ['rows' => [], 'total' => 0];
+            }
+
+            $styleQty = OutputDetail::whereIn('barcode', $barcodes)
+                ->select('idpo', DB::raw('COUNT(*) as total'))
+                ->groupBy('idpo')
+                ->get();
+
+            $totalDefectQty = $styleQty->sum('total');
+
+            $poToStyle = PurchaseOrder::whereIn('idpo', $styleQty->pluck('idpo'))
+                ->pluck('idstyle', 'idpo');
+
+            $styleNames = Style::whereIn('idstyle', $poToStyle->values()->unique())
+                ->pluck('nmstyle', 'idstyle');
+
+            $grouped = [];
+            foreach ($styleQty as $row) {
+                $idstyle = $poToStyle[$row->idpo] ?? null;
+                $nmstyle = $idstyle ? ($styleNames[$idstyle] ?? '-') : '-';
+
+                $grouped[$nmstyle] = ($grouped[$nmstyle] ?? 0) + $row->total;
+            }
+
+            arsort($grouped);
+
+            $top = array_slice($grouped, 0, $limit, true);
+            $othersQty = $totalDefectQty - array_sum($top);
+
+            $rows = [];
+            foreach ($top as $nmstyle => $qty) {
+                $rows[] = [
+                    'style'   => $nmstyle,
+                    'qty'     => $qty,
+                    'percent' => $totalDefectQty > 0 ? number_format(($qty / $totalDefectQty) * 100, 2) : '0.00',
+                ];
+            }
+
+            if ($othersQty > 0) {
+                $rows[] = [
+                    'style'   => 'Others',
+                    'qty'     => $othersQty,
+                    'percent' => $totalDefectQty > 0 ? number_format(($othersQty / $totalDefectQty) * 100, 2) : '0.00',
+                ];
+            }
+
+            return ['rows' => $rows, 'total' => $totalDefectQty];
+        }
+
+
+
+        public function getWeeklyData(Request $request)
+        {
+            preconnect(session('db'));
+
+            $request->validate([
+                'week_id' => 'required|string',
+            ]);
+
+            [$year, $weekNumber] = explode('-', $request->week_id);
+            $weekNumber = (int) $weekNumber;
+
+            if ($weekNumber < 1 || $weekNumber > 53) {
+                abort(422, 'Week tidak valid');
+            }
+
+            $dta = Carbon::createFromDate($year, 1, 1)
+                ->startOfDay()
+                ->addDays(($weekNumber - 1) * 7);
+
+            $dtb = $dta->copy()
+                ->addDays(6)
+                ->endOfDay();
+
+            $endOfYear = Carbon::createFromDate($year, 12, 31)->endOfDay();
+
+            if ($dtb->gt($endOfYear)) {
+                $dtb = $endOfYear->copy();
+            }
+
+            $headerQuery = SewingOutput::whereBetween('date', [$dta, $dtb]);
+            $headerIds = (clone $headerQuery)->pluck('id');
+
+            $totInspect = $headerIds->count();
+
+            $totDefect = SewingOutput::whereIn('id', $headerIds)
+                ->whereNotNull('defect_code')
+                ->count();
+
+            $rft_qty = $totInspect - $totDefect;
+
+            $rft = $totInspect > 0
+                ? round((($totInspect - $totDefect) / $totInspect) * 100, 2)
+                : 0;
+
+            $wft = $totInspect > 0
+                ? round(($totDefect / $totInspect) * 100, 2)
+                : 0;
+
+            $header = [
+                'week'   => 'Week ' . $weekNumber,
+                'period' => 'Week ' . $weekNumber . ' (' . $dta->format('d M') . ' - ' . $dtb->format('d M Y') . ')',
+            ];
+
+            // Top 4 Defect — HANYA di ranking Top-4 ini yang exclude 800/900
+            // (biar 800/900 tidak jadi salah satu dari 4 defect teratas, tapi tetap dihitung di Others)
+            $topDefect = SewingOutput::whereIn('id', $headerIds)
+                ->whereNotNull('defect_code')
+                ->whereNotIn('defect_code', [800, 900])
+                ->select(
+                    'defect_code',
+                    DB::raw('COUNT(*) as total')
+                )
+                ->groupBy('defect_code')
+                ->orderByDesc('total')
+                ->orderBy('defect_code', 'asc')
+                ->limit(4)
+                ->get();
+
+            $defectIds = $topDefect->pluck('defect_code');
+
+            $masterQcDefects = QCDefect::whereIn('kdcacat', $defectIds)
+                ->pluck('deskripsi', 'kdcacat');
+
+            $colors = [
+                '#004FE0',
+                '#3DAA25',
+                '#F4947E',
+                '#F24C4C',
+                '#29B1AE',
+            ];
+
+            $totTop4DefectQty = $topDefect->sum('total');
+
+            $othersQty = max(0, $totDefect - $totTop4DefectQty);
+
+            $othersPercent = $totDefect > 0
+                ? ($othersQty / $totDefect) * 100
+                : 0;
+
+            // Mapping Top 4 Defect + Top Style tiap defect
+            $topDefect = $topDefect->values()->map(function ($item, $index) use (
+                $masterQcDefects,
+                $totDefect,
+                $colors,
+                $headerIds
+            ) {
+                $percent = $totDefect > 0 ? ($item->total / $totDefect) * 100 : 0;
+
+                return [
+                    'defect_id'  => $item->defect_code,
+                    'nmdefect'   => $masterQcDefects[$item->defect_code] ?? '-',
+                    'defect_qty' => (int) $item->total,
+                    'percent'    => number_format($percent, 2),
+                    'color'      => $colors[$index] ?? '#29B1AE',
+                    'top_style'  => $this->getTopStyleForDefect($headerIds, [$item->defect_code])['rows'],
+                ];
+            });
+
+            $othersDefectCodes = SewingOutput::whereIn('id', $headerIds)
+                ->whereNotNull('defect_code')
+                ->whereNotIn('defect_code', $defectIds->toArray())
+                ->pluck('defect_code')
+                ->unique()
+                ->values()
+                ->toArray();
+
+            $topDefect->push([
+                'defect_id'  => 'others',
+                'nmdefect'   => 'Others',
+                'defect_qty' => (int) $othersQty,
+                'percent'    => number_format($othersPercent, 2),
+                'color'      => '#29B1AE',
+                'top_style'  => $this->getTopStyleForDefect($headerIds, $othersDefectCodes)['rows'],
+            ]);
+
+            $totTopDefect = $topDefect->sum('defect_qty');
+
+            return view('monitoring::endlineperformance.performance.partials.weekly', [
+                'header'       => $header,
+                'rft_qty'      => $rft_qty,
+                'inspect_qty'  => $totInspect,
+                'defect_qty'   => $totDefect,
+                'rft'          => $rft,
+                'wft'          => $wft,
+                'top_defect'   => $topDefect,
+                'totTopDefect' => $totTopDefect,
+            ]);
+        }
+
     }
 
-    #tableInlinePerformance {
-        table-layout:fixed;
-        border-collapse: separate !important;
-        border-spacing: 0;
+
+<style>
+    .defect-card-body {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
     }
-    #tableInlinePerformance thead th {
+
+    .table-wrapper {
+        max-height: 300px;
+        overflow-y: auto;
+        overflow-x: auto;
+    }
+
+    .table-wrapper thead th {
         position: sticky;
         top: 0;
-        z-index: 2;
-        backface-visibility: hidden;
-        transform: translateZ(0);
+        z-index: 10;
     }
-    #tableInlinePerformance tfoot td {
+
+    .table-wrapper tfoot th,
+    .table-wrapper tfoot td {
         position: sticky;
         bottom: 0;
-        z-index: 6;
-        background: var(--bg-dark-3, #1C2536) !important;
-        border-top: 2px solid var(--color-blue, #4C8CF2);
-        font-weight: bold;
+        z-index: 10;
     }
 
-    #tableInlinePerformance tbody td:nth-child(3) { color: var(--color-green, #4CF299); }
-    #tableInlinePerformance tbody td:nth-child(4) { color: var(--color-blue, #4C8CF2); }
-    #tableInlinePerformance tbody td:nth-child(5) { color: var(--color-red-alt, #E65858); }
-    #tableInlinePerformance tbody td:nth-child(6) { color: var(--color-green, #4CF299); }
-    #tableInlinePerformance tbody td:nth-child(7) { color: var(--color-red-alt, #E65858); }
-
-    #searchLine::placeholder {
-        color: white;
-        opacity: 1;
-        font-weight: 300;
+    .table-head {
+        table-layout: fixed;
+    }
+    .table-foot {
+        table-layout: fixed;
     }
 
-    .badge {
-        padding: 4px 16px;
-        font-size:15px; font-weight:400
-    }
-
-      @media (min-width: 992px) and (max-width: 1400px) {
-            .badge {
-                padding: 3px 10px;
-                font-size:12px; font-weight:400
-            }
-
-            #tableInlinePerformance {
-                border-collapse: separate;
-                border-spacing: 0;
-                table-layout: fixed;
-            }
+    @media (min-width: 992px) and (max-width: 1400px) {
+        .table-wrapper {
+            max-height: 140px;
+            overflow-y: auto;
+            overflow-x: hidden;
         }
+
+        .table-res {
+            font-size: 10px !important;
+        }
+
+        .subheader {
+            font-size: 15px;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .table-wrapper {
+            max-height: 280px;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .table-res {
+            font-size: 10px !important;
+        }
+    }
+
+    .table-res {
+        font-size: 13px;
+    }
+
+    /* filter */
+    .defect-filter {
+        gap: 8px;
+    }
+
+    .filter-label {
+        color: #FFFFFF;
+        font-size: 14px;
+        white-space: nowrap;
+    }
+
+    .filter-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background-color: #004FE0;
+        color: #FFFFFF;
+        font-size: 13px;
+        padding: 4px 10px;
+        border-radius: 20px;
+        white-space: nowrap;
+    }
+
+    .filter-chip .chip-remove {
+        cursor: pointer;
+        font-size: 12px;
+        line-height: 1;
+        opacity: 0.85;
+        border: none;
+        background: transparent;
+        color: inherit;
+        padding: 0;
+    }
+
+    .filter-chip .chip-remove:hover {
+        opacity: 1;
+    }
+
+    .add-filter-btn {
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border-radius: 50%;
+        border: 1px solid #3A4557;
+        background-color: #35476C;
+        color: #FFFFFF;
+        font-size: 16px;
+        line-height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+
+
+    .add-filter-btn:hover {
+        background-color: #242E3E;
+    }
+
+    .filter-dropdown {
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 0;
+        width: 280px;
+        max-height: 240px;
+        overflow-y: auto;
+        background-color: #1B2434;
+        border: 1px solid #3A4557;
+        border-radius: 10px;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.35);
+        z-index: 1000;
+        padding: 12px;
+    }
+
+    .filter-options-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .filter-option-pill {
+        display: inline-flex;
+        align-items: center;
+        background-color: #242E3E;
+        border: 1px solid #3A4557;
+        color: #FFFFFF;
+        font-size: 13px;
+        padding: 5px 12px;
+        border-radius: 20px;
+        cursor: pointer;
+        transition: background-color .15s ease, border-color .15s ease;
+    }
+
+    .filter-option-pill:hover {
+        background-color: #004FE0;
+        border-color: #004FE0;
+    }
+
+    .filter-option-pill.is-selected {
+        background-color: #004FE0;
+        border-color: #004FE0;
+    }
+
+    .filter-option-empty {
+        font-size: 13px;
+        color: #8A93A6;
+    }
+
+    .d-none {
+        display: none;
+    }
+
+    .chart-wrapper {
+        border-radius: 10px;
+        padding: 20px;
+        flex: 1 1 auto;
+        min-height: 200px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    #defectChart {
+        width: 100%;
+        height: 100%;
+        min-height: 200px;
+    }
+
+    @media (min-width: 992px) and (max-width: 1400px) {
+        .chart-wrapper {
+            min-height: 160px;
+        }
+
+        #defectChart {
+            min-height: 160px;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .chart-wrapper {
+            min-height: 220px;
+            padding: 12px;
+        }
+
+        #defectChart {
+            min-height: 220px;
+        }
+    }
+
+    .toggle-wrapper {
+        display: inline-flex;
+        background-color: #212B3E;
+        border-radius: 8px;
+        gap: 4px;
+    }
+
+    .toggle-btn {
+        min-width: 70px;
+        padding: 5px 10px;
+        text-align: center;
+        color: white;
+        background-color: transparent;
+        cursor: pointer;
+        font-weight: 400;
+        transition: all 0.2s ease;
+        margin: 0;
+    }
+
+    /* Aktif */
+    .toggle-wrapper {
+        display: inline-flex;
+        background-color: #212B3E;
+        border-radius: 8px;
+        gap: 0;
+        overflow: hidden;
+    }
+
+    .toggle-btn {
+        min-width: 70px;
+        padding: 5px 10px;
+        text-align: center;
+        color: #fff;
+        background-color: transparent;
+        cursor: pointer;
+        font-weight: 400;
+        transition: all 0.2s ease;
+        margin: 0;
+    }
+
+    /* Weekly aktif - kiri */
+    #weekly:checked + .toggle-btn {
+        color: #fff;
+        background-color: #4C8CF2;
+        border-radius: 8px 0 0 8px;
+    }
+
+    /* Day aktif - kanan */
+    #day:checked + .toggle-btn {
+        color: #fff;
+        background-color: #4C8CF2;
+        border-radius: 0 8px 8px 0;
+    }
+
+    .btn-check:checked + .toggle-btn:hover {
+        color: #fff;
+    }
+
+    .defect-filter-container {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+    gap: 12px;
+}
+
+.defect-filter {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 8px;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: visible;
+}
+
+.filter-label {
+    color: #FFFFFF;
+    font-size: 14px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+#selectedChips {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 8px;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+}
+
+
+.filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background-color: #004FE0;
+    color: #FFFFFF;
+    font-size: 13px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.add-filter-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid #3A4557;
+    background-color: #35476C;
+    color: #FFFFFF;
+    font-size: 16px;
+    line-height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.filter-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    width: 280px;
+    max-height: 240px;
+    overflow-y: auto;
+    background-color: #1B2434;
+    border: 1px solid #3A4557;
+    border-radius: 10px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+    z-index: 9999;
+    padding: 12px;
+}
+
+.filter-options-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.filter-option-pill {
+    display: inline-flex;
+    align-items: center;
+    background-color: #242E3E;
+    border: 1px solid #3A4557;
+    color: #FFFFFF;
+    font-size: 13px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+}
+
+.filter-option-pill:hover,
+.filter-option-pill.is-selected {
+    background-color: #004FE0;
+    border-color: #004FE0;
+}
+
+.btn-find {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+
 </style>
 
-<div class=" mt-3 border-custom-datatable rounded p-3 text-white datatable-wrap">
+<div class="defect-card-body">
+    <!-- Header -->
     <div class="d-flex align-items-center wrapper-title justify-content-between">
         <div class="datatable-header-left">
-            <img src="{{ _asset('svg/inlinePerformance/line.svg') }}" style="width:25px;height:25px;" class="detailIcon" alt="">
+            <img src="{{ _asset('svg/endlinePerformance/defect-monitor.svg') }}" style="width:25px;height:25px;" class="detailIcon" alt="">
             <h5 class="mb-0 fw-normal text-nowrap">
-                DETAIL PER LINE INLINE PERFORMANCE
+                DEFECT MONITORING (WFT%)
             </h5>
-            <div class="position-relative">
-                <input
-                    type="text"
-                    id="datedatatables"
-                    class="form-control pe-5 w-100"
-                    placeholder="Pilih tanggal">
-                <img
-                    src="{{ _asset('svg/inlinePerformance/calendar-flat.svg') }}"
-                    class="position-absolute top-50 end-0 translate-middle-y me-3"
-                    style="width:18px; height:18px; pointer-events:none;" alt="">
-            </div>
         </div>
 
-        <div class="datatable-header-right">
-            <div class="search-wrapper">
-                <img
-                    src="{{ _asset('svg/inlinePerformance/search.svg') }}"
-                    class="search-icon"
-                    alt="Search">
+        <div class="datatable-header-right gap-4" >
+            <div class="toggle-wrapper">
                 <input
-                    type="text"
-                    id="searchLine"
-                    class="form-control search-input"
-                    placeholder="Search Line">
+                    type="radio"
+                    name="schedule_type"
+                    id="weekly"
+                    value="weekly"
+                    class="btn-check"
+                    autocomplete="off"
+                    checked
+                >
+
+                <label class="toggle-btn" for="weekly">
+                    Weekly
+                </label>
+
+                <input
+                    type="radio"
+                    name="schedule_type"
+                    id="day"
+                    value="day"
+                    class="btn-check"
+                    autocomplete="off"
+                >
+
+                <label class="toggle-btn" for="day">
+                    Day
+                </label>
             </div>
 
             <button class="export-btn bg-transparent border-0 p-0 d-flex align-items-center gap-1" id="export-datatable-btn" aria-label="Export">
-                <img src="{{ _asset('svg/inlinePerformance/export.svg') }}"
-                    class="export-icon"
-                    style="width:27px; height:27px;" alt="Export">
+                <img src="{{ _asset('svg/inlinePerformance/export.svg') }}" class="export-icon" style="width:27px; height:27px;" alt="Export">
                 <span class="custom-tooltip-bottom">Excel</span>
             </button>
         </div>
     </div>
 
-    <!-- Datatable Main -->
-    <div class="table-scroll-wrapper table-scroll-area mt-1">
-        <table id="tableInlinePerformance" class="table-custom table table-borderless align-middle w-100 table-hover">
-            <thead>
-                <tr>
-                    <th class="text-center" style="width:10%;">Line</th>
-                    <th class="text-center" style="width:20%">Style</th>
-                    <th class="text-center" style="width:10%">RFT QTY<br>(Pcs)</th>
-                    <th class="text-center" style="width:10%">Inspect QTY<br>(Pcs)</th>
-                    <th class="text-center" style="width:10%">Defect QTY<br>(Pcs)</th>
-                    <th class="text-center" style="width:10%">RFT<br>(%)</th>
-                    <th class="text-center" style="width:10%">WFT<br>(%)</th>
-                    <th class="text-center" style="width:20%">Last Status</th>
-                </tr>
-            </thead>
-            <tbody id="tableInlinePerformanceBody">
+    <!-- Filter Defect-->
+    <div class="d-flex flex-column gap-3">
+        <!-- Section Filter -->
+        <div class="defect-filter-container my-2">
+            <div class="defect-filter">
+                <span class="filter-label">
+                    Filter Defect:
+                </span>
 
-            </tbody>
-            <tfoot>
-                <tr class="">
-                    <td class="total fw-bold text-center" style="width:10%; color:#4C8CF2">TOTAL</td>
-                    <td style="width:20%"></td>
-                    <td class="text-center fw-bold" id="footQtyRft" style="width:10%; color:#4CF299;">0</td>
-                    <td class="text-center fw-bold" id="footQtyInspect" style="width:10%; color:#4C8CF2">0</td>
-                    <td class="text-center fw-bold" id="footQtyDefect" style="width:10%; color:#b95a5a">0</td>
-                    <td style="width:10%"></td>
-                    <td style="width:10%"></td>
-                    <td style="width:20%"></td>
-                </tr>
-            </tfoot>
-        </table>
+                <div id="selectedChips">
+                </div>
+
+                <div class="position-relative">
+                    <button
+                        id="addFilterBtn"
+                        class="add-filter-btn"
+                        type="button"
+                        aria-label="Add filter"
+                    >
+                        +
+                    </button>
+
+                    <div id="filterDropdown" class="filter-dropdown d-none">
+                        <div id="filterOptionsList" class="filter-options-list"></div>
+                    </div>
+                </div>
+
+            </div>
+
+            <button class="btn-find" id="findbtn">
+                <img
+                    src="{{ _asset('svg/inlinePerformance/search.svg') }}"
+                    style="width:20px;height:15px;"
+                    alt=""
+                >
+                Find
+            </button>
+        </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="chart-wrapper">
+        <div id="defectChart"></div>
     </div>
 </div>
 
 @push('scripts')
 <script>
     $(function () {
-        flatpickr("#datedatatables", {
-            dateFormat: "d-m-Y",
-            altInput: true,
-            altFormat: "d F Y",
-            allowInput: false,
-            monthSelectorType: "static",
-            disableMobile: true,
-            defaultDate: "{{ \Carbon\Carbon::parse($date)->format('d-m-Y') }}",
-            onChange: function (selectedDates, dateStr) {
-                if (!dateStr) return;
-                reloadTable(dateStr);
-            },
-            maxDate: "today",
-        });
+        const allDefects = ['Open Seam', 'Skip Stitch', 'Dirty', 'Broken Stitch', 'Uneven Stitch', 'Puckering'];
+        let selectedDefects = ['Open Seam'];
 
-        const initialDate = "{{ \Carbon\Carbon::parse($date)->format('d-m-Y') }}";
-        $('#tableInlinePerformanceBody').html(renderSkeletonRows(6));
-        initTable();
-        reloadTable(initialDate);
+        const $chips = $('#selectedChips');
+        const $dropdown = $('#filterDropdown');
+        const $optionsList = $('#filterOptionsList');
 
-        function initTable() {
-            window.table = $('#tableInlinePerformance').DataTable({
-                paging: false,
-                ordering: false,
-                info: false,
-                footer: true,
-                dom: '',
-                buttons: [
-                    {
-                        extend: 'excelHtml5',
-                        title: function () {
-                            const currentDate = $('#datedatatables').val() || '{{ date("d-m-Y") }}';
-                            return 'Report_Detail_Per_Line_' + currentDate;
-                        },
-                        exportOptions: { columns: ':visible' },
-                        customizeData: function(data) {
-                            data.body.push([
-                                'TOTAL',
-                                '',
-                                $('#footQtyRft').text(),
-                                $('#footQtyInspect').text(),
-                                $('#footQtyDefect').text(),
-                                '',
-                                '',
-                                ''
-                            ]);
-                        }
-                    }
-                ]
-            });
+        const chartDom = document.getElementById('defectChart');
+        const myChart = echarts.init(chartDom);
 
-            table.off('draw').on('draw', function () {
-                updateFooterTotals();
-            });
+        const defectColors = {
+            'Open Seam': '#1B4FE0',
+            'Skip Stitch': '#F4977B',
+            'Dirty': '#36B37E',
+            'Broken Stitch': '#FFAB00',
+            'Uneven Stitch': '#8777D9',
+            'Puckering': '#00B8D9'
+        };
 
-            updateFooterTotals();
+        // Data
+        const dummySource = {
+            'Open Seam':      [1.2, 3.5, 2.5, 0.9, 6.4, 2.5],
+            'Skip Stitch':    [5.8, 1.8, 7.2, 5.8, 4.7, 7.0],
+            'Dirty':          [0.5, 0.6, 0.4, 0.8, 0.6, 0.7],
+            'Broken Stitch':  [1.5, 1.2, 1.8, 1.6, 2.1, 1.7],
+            'Uneven Stitch':  [0.9, 1.1, 1.0, 0.8, 1.3, 1.0],
+            'Puckering':      [0.6, 0.7, 0.5, 0.9, 0.6, 0.8],
+        };
+        const xAxisLabels = ['20 Mei', '21 Mei', '22 Mei', '23 Mei', '24 Mei', '25 Mei'];
+
+        function buildChartOption() {
+            const series = selectedDefects.map(defect => ({
+                name: defect,
+                type: 'line',
+                smooth: false,
+                symbol: 'circle',
+                symbolSize: 15,
+                data: dummySource[defect] || [],
+                itemStyle: { color: defectColors[defect] || '#999' },
+                lineStyle: { width: 4, color: defectColors[defect] || '#999' }
+            }));
+
+            // Sumbu Y 0.00% - 10.00% dengan step 2.5%
+            const step = 2.5;
+            const yMax = 10;
+
+            return {
+                backgroundColor: 'transparent',
+                textStyle: { color: '#8A93A6' },
+                tooltip: {
+                    trigger: 'axis',
+                    backgroundColor: '#1B2434',
+                    borderColor: '#3A4557',
+                    textStyle: { color: '#FFFFFF' },
+                    valueFormatter: (val) => `${val}%`
+                },
+                grid: {
+                    left: 55,
+                    right: 25,
+                    top: 45,
+                    bottom: 35,
+                    containLabel: false
+                },
+                xAxis: {
+                    type: 'category',
+                    boundaryGap: true,
+                    data: xAxisLabels,
+                    axisLine: { lineStyle: { color: '#3A4557' } },
+                    axisTick: { show: false },
+                    axisLabel: { color: '#8A93A6', fontSize: 12 },
+                    splitLine: { show: false }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: 'WFT (%)',
+                    nameLocation: 'end',
+                    nameGap: 20,
+                    nameTextStyle: { color: '#8A93A6', fontSize: 12, align: 'left' },
+                    min: 0,
+                    max: yMax,
+                    interval: step,
+                    axisLine: { show: false },
+                    axisTick: { show: false },
+                    axisLabel: {
+                        color: '#8A93A6',
+                        fontSize: 12,
+                        formatter: (val) => `${val.toFixed(2)}%`
+                    },
+                    splitLine: { lineStyle: { color: '#2A3446', type: 'solid' } }
+                },
+                series: series
+            };
         }
 
-        function updateFooterTotals() {
-            let totalRft = 0, totalInspect = 0, totalDefect = 0;
+        function renderChart() {
+            myChart.setOption(buildChartOption(), true);
+        }
 
-            table.rows({ search: 'applied' }).every(function () {
-                const cells = $(this.node()).find('td');
-                if (cells.length < 8) return;
+        window.addEventListener('resize', function () {
+            myChart.resize();
+        });
 
-                totalRft += parseInt($(cells[2]).text().trim()) || 0;
-                totalInspect += parseInt($(cells[3]).text().trim()) || 0;
-                totalDefect += parseInt($(cells[4]).text().trim()) || 0;
+        if (window.ResizeObserver) {
+            const ro = new ResizeObserver(() => {
+                myChart.resize();
             });
-
-            $('#footQtyRft').text(totalRft);
-            $('#footQtyInspect').text(totalInspect);
-            $('#footQtyDefect').text(totalDefect);
+            ro.observe(chartDom.parentElement);
         }
 
-        function reloadTable(dateStr) {
-            table.destroy();
-            $('#tableInlinePerformanceBody').html(renderSkeletonRows(7));
-
-            $.get("{{ route('monitoring_inlineperformancedatatables') }}", { date: dateStr })
-                .done(function (html) {
-                    $('#tableInlinePerformanceBody').html(html);
-                    $('#searchLine').val('');
-                    initTable();
-                    updateDataTime();
-                })
-                .fail(function (xhr) {
-                    console.error(xhr.responseText);
-                    $('#tableInlinePerformanceBody').html(
-                        '<tr><td colspan="8" class="text-center text-danger">Failed to load data</td></tr>'
-                    );
-                    initTable();
-                });
-        }
-
-       $.fn.dataTable.ext.search.push(function (settings, data) {
-            const keyword = $('#searchLine').val().toLowerCase();
-
-            if (keyword === '') return true;
-
-            const line  = data[0].toLowerCase();
-            const style = data[1].toLowerCase();
-
-            return line.includes(keyword) || style.includes(keyword);
-        });
-
-        $('#searchLine').on('keyup', function () {
-            table.draw();
-        });
-
-
-        $('#export-datatable-btn').on('click', function () {
-            table.button('.buttons-excel').trigger();
-        });
-
-        function renderSkeletonRows(rowCount = 6) {
-            let rows = '';
-            for (let i = 0; i < rowCount; i++) {
-                rows += `
-                    <tr class="skeleton-row">
-                        <td class="text-center skeleton-td"><div class="skeleton-bar" style="width:60%;margin:0 auto;"></div></td>
-                        <td class="text-center skeleton-td"><div class="skeleton-bar" style="width:80%;margin:0 auto;"></div></td>
-                        <td class="text-center skeleton-td"><div class="skeleton-bar" style="width:50%;margin:0 auto;"></div></td>
-                        <td class="text-center skeleton-td"><div class="skeleton-bar" style="width:50%;margin:0 auto;"></div></td>
-                        <td class="text-center skeleton-td"><div class="skeleton-bar" style="width:50%;margin:0 auto;"></div></td>
-                        <td class="text-center skeleton-td"><div class="skeleton-bar" style="width:40%;margin:0 auto;"></div></td>
-                        <td class="text-center skeleton-td"><div class="skeleton-bar" style="width:40%;margin:0 auto;"></div></td>
-                        <td class="text-center skeleton-td"><div class="skeleton-bar skeleton-badge"></div></td>
-                    </tr>`;
-            }
-            return rows;
-        }
-
-        $(document).on('click', '.target-loading', function (e) {
-            e.preventDefault();
-
-            const targetUrl = $(this).attr('href');
-
-            $('#loading').show();
-
-            setTimeout(function () {
-                window.location.href = targetUrl;
-            }, 100);
-        });
-
-        window.addEventListener('pageshow', function (event) {
-            if (event.persisted) {
-                $('#loading').hide();
-            }
-        });
-
-        // Copy style in mobile
-        (function () {
-            let activePopover = null;
-
-            function isMobileOrTablet() {
-                return window.matchMedia('(max-width: 991.98px)').matches;
-            }
-
-            function removePopover() {
-                if (activePopover) {
-                    activePopover.remove();
-                    activePopover = null;
-                }
-            }
-
-            function copyToClipboard(text) {
-                if (navigator.clipboard && window.isSecureContext) {
-                    return navigator.clipboard.writeText(text);
-                }
-                return new Promise((resolve, reject) => {
-                    const ta = document.createElement('textarea');
-                    ta.value = text;
-                    ta.style.position = 'fixed';
-                    ta.style.opacity = '0';
-                    document.body.appendChild(ta);
-                    ta.focus();
-                    ta.select();
-                    try {
-                        document.execCommand('copy');
-                        resolve();
-                    } catch (err) {
-                        reject(err);
-                    } finally {
-                        document.body.removeChild(ta);
-                    }
-                });
-            }
-
-            function showCopyBadge(targetEl, value) {
-                removePopover();
-
-                const rect = targetEl.getBoundingClientRect();
-                const popover = document.createElement('div');
-                popover.className = 'copy-badge-popover';
-                popover.innerHTML = `
-                    <span class="copy-badge-text">${value}</span>
-                    <span class="copy-badge-status">Copied!</span>
-                `;
-
-                document.body.appendChild(popover);
-
-                const popRect = popover.getBoundingClientRect();
-                let top = rect.bottom + 6;
-                let left = rect.left;
-
-                if (left + popRect.width > window.innerWidth - 8) {
-                    left = window.innerWidth - popRect.width - 8;
-                }
-                if (top + popRect.height > window.innerHeight - 8) {
-                    top = rect.top - popRect.height - 6;
-                }
-
-                popover.style.top = top + 'px';
-                popover.style.left = Math.max(8, left) + 'px';
-
-                popover.addEventListener('click', function (e) {
-                    e.stopPropagation();
-                    copyToClipboard(value).then(function () {
-                        popover.classList.add('copied');
-                        setTimeout(removePopover, 1200);
-                    });
-                });
-
-                activePopover = popover;
-            }
-
-            document.addEventListener('click', function (e) {
-                const cell = e.target.closest('.copyable-cell');
-
-                if (cell) {
-                    if (!isMobileOrTablet()) return;
-                    e.stopPropagation();
-                    const value = cell.getAttribute('data-copy-value') || cell.textContent.trim();
-                    showCopyBadge(cell, value);
-                    return;
-                }
-
-                if (!e.target.closest('.copy-badge-popover')) {
-                    removePopover();
-                }
+        function renderChips() {
+            $chips.empty();
+            selectedDefects.forEach(defect => {
+                $chips.append(`
+                    <span class="filter-chip" data-defect="${defect}">
+                        ${defect}
+                        <button type="button" class="chip-remove" data-defect="${defect}">✕</button>
+                    </span>
+                `);
             });
+        }
 
-            window.addEventListener('scroll', removePopover, true);
-            window.addEventListener('resize', removePopover);
-        })();
+        // Semua opsi tetap tampil di panel (bukan hilang setelah dipilih),
+        // tapi yang sudah aktif diberi state "is-selected" — klik lagi = toggle off
+        function renderOptions() {
+            $optionsList.empty();
+
+            if (allDefects.length === 0) {
+                $optionsList.append('<span class="filter-option-empty">Tidak ada data defect</span>');
+                return;
+            }
+
+            allDefects.forEach(defect => {
+                const isSelected = selectedDefects.includes(defect);
+                $optionsList.append(`
+                    <span class="filter-option-pill ${isSelected ? 'is-selected' : ''}" data-defect="${defect}">
+                        ${defect}
+                    </span>
+                `);
+            });
+        }
+
+        function applyFilter() {
+            console.log('Filter aktif:', selectedDefects);
+            renderChart();
+        }
+
+        $('#addFilterBtn').on('click', function (e) {
+            e.stopPropagation();
+            renderOptions();
+            $dropdown.toggleClass('d-none');
+        });
+
+        $('#weekly').on('click', function(){
+            alert('Ambil data week');
+        })
+        $('#day').on('click', function(){
+            alert('Ambil data hari');
+        })
+
+        $optionsList.on('click', '.filter-option-pill', function () {
+            const defect = $(this).data('defect');
+            if (selectedDefects.includes(defect)) {
+                selectedDefects = selectedDefects.filter(d => d !== defect);
+            } else {
+                selectedDefects.push(defect);
+            }
+            renderChips();
+            renderOptions();
+            applyFilter();
+        });
+
+        $chips.on('click', '.chip-remove', function () {
+            const defect = $(this).data('defect');
+            selectedDefects = selectedDefects.filter(d => d !== defect);
+            renderChips();
+            renderOptions();
+            applyFilter();
+        });
+
+        $(document).on('click', function (e) {
+            if (!$(e.target).closest('.defect-filter').length) {
+                $dropdown.addClass('d-none');
+            }
+        });
+
+        $('#findbtn').on('click', function () {
+            applyFilter();
+        });
+
+        renderChips();
+        renderOptions();
+        renderChart();
     });
 </script>
+@include('layouts.loading')
 @endpush
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <noscript>
-        <meta http-equiv="refresh" content="0;url={{route('nojs')}}">
-    </noscript>
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
-	<title>{{ config('app.shortname') }}</title>
-	<link rel="icon" href="{!! _asset('img/pbtico.ico') !!}">
+@extends('layouts.masternonavbar')
 
-    <link rel="stylesheet" href="{{ _asset('adminltecomponents/bootstrap-5.3.8/css/bootstrap.min.css') }}">
-    <link rel="stylesheet" href="{{ _asset('adminltecomponents/select2/dist/css/select2.min.css') }}">
-    <link rel="stylesheet" href="{{ asset('/css/flatpickr.min.css') }}">
-    <link rel="stylesheet" href="{{ _asset('css/fixedColumns.bootstrap.min.css') }}">
-    <link rel="stylesheet" href="{{ _asset('css/dataTables.bootstrap.min.css') }}">
-    <link rel="stylesheet" href="{{ _asset('css/datatables.min.css') }}">
-    <link rel="stylesheet" href="{{ _asset('css/rowReorder.dataTables.min.css') }}">
-    <link rel="stylesheet" href="{{ _asset('css/buttons.dataTables.min.css') }}">
-    <link rel="stylesheet" href="{{ _asset('css/loading.css') }}">
+@section('extracss')
+<style>
+    .stat-card {
+        height: 160px !important;
+        min-height: 160px !important;
+    }
 
-    <style>
-        /* --------------------------------------------------------------------
-        1. DESIGN TOKENS (warna & background)
-        -------------------------------------------------------------------- */
-        :root {
-            --color-title: #5A587E;
-            --color-yellow: #F2C94C;
-            --color-red: #F24C4C;
-            --color-red-alt: #E65858;
-            --color-blue: #4C8CF2;
-            --color-green: #4CF299;
+    .stat-card img {
+        width: 40px !important;
+        height: 40px !important;
+        margin-bottom: .45rem !important;
+    }
 
-            --bg-dark-1: #222F4A; /* input, box biru gelap */
-            --bg-dark-2: #242E3E; /* select2/flatpickr bg, table td */
-            --bg-dark-3: #1C2536; /* table th, footer table */
-            --bg-dark-4: #1e2a44; /* flatpickr weekdays/days */
+    .stat-card h6 {
+        font-size: 1rem;
+        margin-bottom: .25rem !important;
+    }
 
-            --border-muted: #576376;
+    .stat-card h2 {
+        font-size: 1.5rem;
+        line-height: 1;
+    }
+
+    .stat-card small {
+        font-size: 1rem;
+    }
+
+    .stat-card-defect {
+        height: auto;
+    }
+
+    .stat-card-defect > div {
+        width: 100%;
+    }
+
+    .defect-header {
+        width: 100%;
+    }
+
+    .defect-list {
+        width: 100%;
+        font-size: 13px;
+        gap: 2px;
+    }
+
+    #topDefectList {
+        max-height: 110px;
+        width: 100%;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #topDefectList::-webkit-scrollbar {
+        width: 3px;
+    }
+
+    #topDefectList::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 4px;
+    }
+
+    #topDefectList .defect-item {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        margin-bottom: 1px;
+    }
+
+    #topDefectList .defect-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .defect-circle {
+        width: 12px;
+        height: 12px;
+    }
+
+    .defect-name {
+        flex: 1;
+        min-width: 0;
+        margin-left: 8px;
+        text-align: left;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .defect-total {
+        flex: 0 0 auto;
+        margin-left: 8px;
+        white-space: nowrap;
+    }
+
+    .defect-percent {
+        flex: 0 0 55px;
+        margin-left: 8px;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .icon-summary {
+        width: 25px;
+        height: 25px;
+    }
+
+    @media (min-width: 992px) and (max-width: 1400px) {
+        #topDefectList {
+            max-height: 83px;
         }
 
-        /* --------------------------------------------------------------------
-        2. SHELL / LAYOUT DASHBOARD
-        -------------------------------------------------------------------- */
-        html, body {
-            height: auto;
-            min-height: 100%;
-        }
-        body {
-            overflow-y: auto;
-            padding: 1rem;
-        }
-        .dashboard-wrap {
-            min-height: 100%;
-            display: flex;
-            flex-direction: column;
-        }
-        .flex-fill-area {
-            flex: 1 1 auto;
-            min-height: 0;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            -webkit-overflow-scrolling: touch;
-        }
-        .dashboard-wrap > .d-flex.flex-wrap.justify-content-between,
-        .dashboard-wrap > .row.g-3.mt-1 {
-            flex-shrink: 0;
-        }
-
-        @media (min-width: 992px) {
-            html, body { height: 100%; }
-            body { overflow: hidden; }
-            .dashboard-wrap { height: 100%; min-height: 0; }
-            .flex-fill-area { overflow: auto; }
-        }
-
-        /* --------------------------------------------------------------------
-        3. TYPOGRAPHY & COLOR UTILITIES
-        -------------------------------------------------------------------- */
-        .dashboard-title { font-size: 2rem; }
-
-        .text-title { color: var(--color-title); }
-        .text-yellow { color: var(--color-yellow); }
-        .text-red { color: var(--color-red); }
-        .text-blue { color: var(--color-blue); }
-        .text-green { color: var(--color-green); }
-
-        .border-custom { border: 1px solid var(--border-muted) !important;margin-top: 20px !important;}
-        .border-color-yellow {
-            border: 1px solid var(--color-yellow);
-            border-radius: 5px;
-        }
-        .border-end-custom { border-right: 1px solid var(--bg-dark-2) !important;gap: 16px; }
-
-
-        @media (max-width: 768px) {
-            .border-end-custom {
-                border-right: none !important;
-                border-bottom: 1px solid rgba(255,255,255,.2);
-                padding-bottom: 1rem;
-                margin-bottom: 1rem;
-            }
-        }
-
-        /* --------------------------------------------------------------------
-        4. BUTTONS
-        -------------------------------------------------------------------- */
-        .btn-custom {
-            background: var(--bg-dark-1);
-            color: #fff;
-            border: none;
-            border-radius: 10px;
-        }
-        .btn-custom:hover { background-color: var(--bg-dark-2); }
-
-        .button-inline { width: 50%; justify-content: end;  }
-
-        @media (max-width: 1180px) {
-            .button-inline { justify-content: space-between;width: 41%;}
-        }
-
-        @media (max-width: 1024px) {
-            .button-inline { justify-content: space-between;width: 45%;}
-        }
-
-        @media (max-width: 768px) {
-            .button-inline { justify-content: space-between;}
-        }
-        @media (max-width: 576px) {
-            .btn-custom { width: 100%; justify-content: center; }
-        }
-
-        /* --------------------------------------------------------------------
-        5. TOOLTIP (export button, dsb)
-        -------------------------------------------------------------------- */
-        .export-btn { position: relative; }
-
-        .custom-tooltip {
-            position: absolute;
-            right: 120%;
-            top: 50%;
-            transform: translateY(-50%);
-            background-color: #000000;
-            color: white;
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 500;
-            white-space: nowrap;
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.2s ease;
-            z-index: 10;
-        }
-        .custom-tooltip::after {
-            content: "";
-            position: absolute;
-            left: 100%;
-            top: 50%;
-            transform: translateY(-50%);
-            border-width: 5px;
-            border-style: solid;
-            border-color: transparent transparent transparent #000000;
-        }
-        .export-btn:hover .custom-tooltip {
-            opacity: 1;
-            visibility: visible;
-            right: 130%;
-        }
-
-        .custom-tooltip-bottom {
-            position: absolute;
-            top: 100%;
-            right: 0;
-            left: auto;
-            transform: translateY(4px);
-            margin-top: 8px;
-            background-color: #000000;
-            color: white;
-            padding: 6px 18px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 500;
-            white-space: nowrap;
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.2s ease;
-            z-index: 10;
-        }
-        .custom-tooltip-bottom::after {
-            content: "";
-            position: absolute;
-            bottom: 100%;
-            right: 12px;
-            border-width: 5px;
-            border-style: solid;
-            border-color: transparent transparent #000000 transparent;
-        }
-        .export-btn:hover .custom-tooltip-bottom {
-            opacity: 1;
-            visibility: visible;
-            transform: translateY(0);
-        }
-
-        /* --------------------------------------------------------------------
-        6. STAT CARD (kartu ringkasan angka: qty, RFT, WFT, target, dll)
-        -------------------------------------------------------------------- */
         .stat-card {
-            min-height: 110px;
+            height: 120px !important;
+            min-height: 120px !important;
+        }
+
+        .stat-card img {
+            width: 24px !important;
+            height: 24px !important;
+            margin-bottom: .35rem !important;
+        }
+
+        .stat-card h6 {
+            font-size: 13px;
+            margin-bottom: .25rem !important;
+        }
+
+        .stat-card h2 {
+            font-size: 15px;
+            line-height: 1;
+        }
+
+        .stat-card small {
+            font-size: 10px;
+        }
+
+        .stat-card-defect {
             height: auto;
         }
-        .stat-card h2,
-        .stat-card h6 {
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 100%;
-        }
-        .stat-card .d-flex.align-items-end { max-width: 100%; }
 
-        .color-box-yellow {
-            background-color: #363633;
-            border: 1px solid var(--color-yellow);
-            border-radius: 5px;
-            color: var(--color-yellow);
-        }
-        .color-box-red {
-            background-color: #352837;
-            border: 1px solid var(--color-red);
-            border-radius: 5px;
-        }
-        .color-box-blue {
-            background-color: #23304E;
-            border: 1px solid #3F5588;
-            border-radius: 5px;
-        }
-        .color-box-green {
-            background-color: #1A3B45;
-            border: 1px solid var(--color-green);
-            border-radius: 5px;
-            color: var(--color-green);
-        }
-
-        .icon-dashboard {
-            width: 60px; height: 60px;
-        }
-
-        .icon-refresh {
-            width: 28px;
-            height: 28px;
-        }
-
-        .icon-button-inline {
-            width: 30px; height: 30px;
-        }
-
-        .btn-custom {
-            padding: 0.8rem 1rem !important;
-            font-size: 1rem;
-            white-space: nowrap;
-        }
-
-        .btn-find {
-            background: var(--bg-dark-1);
-            color: #fff;
-            border: none;
-            border-radius: 10px;
-            padding-left: 1rem !important;
-            padding-right: 1rem !important;
-            padding-top: 0.5rem !important;
-            padding-bottom: 0.5rem !important;
-            font-size: 0.9rem;
-            white-space: nowrap;
-        }
-
-        .btn-find:hover { background-color: var(--bg-dark-2); }
-
-        .date-input-col { min-width: 130px; }
-
-        .card-wrapper {
-                margin-top: 1px;
-            }
-
-        @media (min-width: 992px) and (max-width: 1400px) {
-            .dashboard-title {
-                font-size: 1rem;
-            }
-
-            .dashboard-subtitle {
-                font-size: 0.70rem !important;
-            }
-
-            .icon-inline-lts {
-                width: 20px;
-                height: 20px;
-            }
-
-            .btn-custom {
-                padding: 0.5rem 1rem !important;
-                font-size: 0.8rem;
-                white-space: nowrap;
-            }
-
-            /* Stat card */
-            .stat-card {
-                min-height: 105px;
-                padding: 0.45rem !important;
-                font-size: 12px;
-            }
-
-            .stat-card img {
-                width: 30px !important;
-                height: 30px !important;
-                margin-bottom: .45rem !important;
-            }
-
-            .stat-card h6 {
-                font-size: .70rem;
-                margin-bottom: .25rem !important;
-            }
-
-            .stat-card h2 {
-                font-size: 1.1rem;
-                line-height: 1;
-            }
-
-            .stat-card small {
-                font-size: .65rem;
-            }
-
-            .stat-card-defect {
-                padding: .6rem .5rem !important;
-                height: 90px;
-            }
-
-            .defect-header {
-                gap: .5rem !important;
-            }
-
-            #topDefectChart {
-                width: 30px;
-                height: 30px;
-            }
-
-            #topDefectList {
-                max-height: 65px;
-            }
-
-            #topDefectList .text-white.small {
-                font-size: .65rem;
-                max-width: 140px;
-            }
-
-            .icon-dashboard {
-                width: 32px;
-                height: 32px;
-            }
-
-            .icon-button-inline {
-                width: 20px;
-                height: 20px;
-            }
-
-            .icon-refresh {
-                width: 18px;
-                height: 18px;
-            }
-
-            /* Filter */
-            #line,
-            #groupbuyer,
-            #datea,
-            #dateb {
-                font-size: 0.8rem;
-            }
-
-            #findbtn {
-                white-space: nowrap;
-                padding-left: 0.6rem;
-                padding-right: 0.6rem;
-            }
-
-            .period-date .position-relative {
-                flex: 1;
-            }
-
-            .period-date input {
-                font-size: 0.78rem;
-                padding-left: 0.5rem;
-                padding-right: 2rem;
-            }
-
-            .form-control,
-            .select2-container--default .select2-selection--single {
-                height: 30px !important;
-                font-size: 0.78rem;
-            }
-
-            .select2-container--default .select2-selection--single .select2-selection__rendered {
-                line-height: 30px !important;
-            }
-
-            .select2-container--default .select2-selection--single .select2-selection__arrow {
-                height: 30px !important;
-            }
-
-
-            .select2-dropdown { background: var(--bg-dark-1); color: white;font-size: 12px; }
-
-            .row.mt-4 .box-custom {
-                width: 22px;
-                height: 22px;
-            }
-
-            .row.mt-4 img[style*="30px"] {
-                width: 18px !important;
-                height: 18px !important;
-            }
-
-            .row.mt-4.border-custom > [class*="col-"] {
-                gap: 0.5rem !important;
-                padding-left: 0.4rem;
-                padding-right: 0.4rem;
-            }
-
-            .row.mt-4 label {
-                font-size: 0.72rem;
-            }
-
-            .margin-button {
-                margin-right: 24px;
-            }
-
-            .action-btn {
-                gap: 8px;
-            }
-
-            /* Datatable */
-            #datedatatables {
-                font-size: 0.8rem;
-                max-width: 100%;
-                padding-right: 2rem;
-            }
-
-            .search-input {
-                width: 150px;
-            }
-
-            h5.text-nowrap {
-                font-size: 0.95rem;
-            }
-
-            .datatable-wrap {
-                flex-grow: 1;
-                min-height: 0;
-            }
-
-            .table-scroll-area {
-                flex-grow: 1;
-                min-height: 0;
-                max-height: none;
-                height: auto;
-            }
-
-            .wrapper-title {
-                flex-wrap: nowrap;
-            }
-
-            .datatable-header-left {
-                flex: 1 1 auto;
-                min-width: 0;
-            }
-
-            .datatable-header-right {
-                flex: 0 0 auto;
-                margin-left: auto;
-            }
-
-            .datatable-header-left .position-relative {
-                min-width: 100px;
-            }
-
-            .btn-find {
-                background: var(--bg-dark-1);
-                color: #fff;
-                border: none;
-                border-radius: 5px;
-                padding: 0.34rem 1rem !important;
-                font-size: 0.78rem;
-                white-space: nowrap;
-            }
-
-            .wrapper-date.period-date {
-                gap: 6px !important;
-            }
-
-            .date-input-col {
-                flex: 0 0 210px !important;
-                flex-shrink: 0 !important;
-                min-width: 90px;
-                width: 200px;
-            }
-
-            .date-input-col input {
-                width: 100%;
-                font-size: 0.72rem;
-                padding-left: 0.5rem;
-                padding-right: 1.6rem;
-            }
-
-            .date-input-col img {
-                width: 13px !important;
-                height: 13px !important;
-            }
-
-            .to {
-                padding-left: 2px !important;
-                padding-right: 2px !important;
-            }
-
-            .border-custom-datatable {
-                padding: 0.75rem !important;
-            }
-
-            .border-custom {
-                margin-top: 10px !important;
-            }
-
-            .detailIcon {
-                width: 18px !important;
-                height: 18px !important;
-            }
-
-            .export-btn .export-icon {
-                width: 20px !important;
-                height: 20px !important;
-            }
-
-            /* Isi tabel */
-            #tableInlinePerformance {
-                font-size: 0.78rem;
-            }
-
-            #tableInlinePerformance thead th {
-                padding: 0.5rem 0.4rem;
-                font-size: 0.75rem;
-                line-height: 1.2;
-            }
-
-            #tableInlinePerformance tbody td,
-            #tableInlinePerformance tfoot td {
-                padding: 0.4rem 0.4rem;
-            }
-
-            .skeleton-badge {
-                width: 70px;
-                height: 22px;
-            }
-
-            .text-title {
-                font-size: small;
-            }
-
-            .card-wrapper {
-                margin-top: 1px;
-            }
-
-            .footer-title {
-                font-size: 12px;
-            }
-
-            .swal-modal {
-                width: 300px;
-                padding: 10px;
-            }
-
-            .swal-icon {
-                width: 45px;
-                height: 45px;
-                margin: 10px auto;
-            }
-
-            .swal-icon--warning__body {
-                height: 20px;
-            }
-
-            .swal-icon--warning__dot {
-                width: 5px;
-                height: 5px;
-            }
-
-            .swal-title {
-                font-size: 16px;
-            }
-
-            .swal-text {
-                font-size: 12px;
-            }
-
-            .swal-button {
-                font-size: 11px;
-                padding: 4px 18px;
-            }
-        }
-
-
-        @media (max-width: 768px) {
-            .dashboard-title { font-size: 1.4rem; }
-            .dashboard-subtitle { font-size: 1rem !important; }
-            .footer-title { padding-top: 30px; }
-            .stat-card { padding: 0.75rem !important; min-height: 150px; height: auto; font-size: 12px; }
-            .stat-card img { width: 45px !important; height: 45px !important; }
-        }
-
-        @media (max-width: 576px) {
-            .dashboard-title { font-size: 1.1rem; }
-            .dashboard-subtitle { display: none; }
-            .d-flex.flex-wrap > .d-flex { width: 100%; }
-            .color-box-yellow img, .color-box-red img,
-            .color-box-blue img, .color-box-green img {
-                width: 40px !important; height: 40px !important;
-            }
-            .color-box-yellow h2, .color-box-red h2,
-            .color-box-blue h2, .color-box-green h2 {
-                font-size: 1.4rem;
-            }
-        }
-
-        /* --------------------------------------------------------------------
-        7. FILTER COMPONENT (icon+label+input, select2, flatpickr, action-btn)
-        Dipakai oleh partial "filter" di semua modul dashboard.
-        -------------------------------------------------------------------- */
-        .bg-custom-select {
-            background: var(--bg-dark-2);
-            color: #fff;
-            border: 0;
-        }
-
-        .box-custom { width: 35px; height: 35px; }
-
-        .form-control,
-        .select2-container--default .select2-selection--single {
-            height: 38px;
-            border-radius: 0.375rem;
-        }
-
-        input[type="text"] {
-            background-color: var(--bg-dark-1);
-            color: white;
-            border: none;
-        }
-        input[type="text"]:focus {
-            background-color: var(--bg-dark-1);
-            color: white;
-            border-color: var(--border-muted);
-            box-shadow: none;
-        }
-
-        /* Select2 dark theme */
-        .select2-container { width: 100% !important; }
-        .select2-container--default .select2-selection--single {
-            background: var(--bg-dark-1);
-            border: none;
-            display: flex;
-            align-items: center;
-        }
-        .select2-container--default .select2-selection--single .select2-selection__rendered {
-            color: white;
-            line-height: 38px;
-            padding-left: 0.75rem;
-        }
-        .select2-container--default .select2-selection--single .select2-selection__arrow { height: 38px; }
-        .select2-container--default .select2-selection--single .select2-selection__placeholder { color: #ffffff !important; }
-        .select2-container--default .select2-results__option--highlighted[aria-selected] {
-            background-color: transparent !important;
-            color: white !important;
-        }
-        .select2-container--default .select2-results__option[aria-selected="true"] {
-            background-color: transparent !important;
-            color: white !important;
-        }
-        .select2-dropdown { background: var(--bg-dark-1); color: white; }
-        .select2-results__option { color: white; }
-        .select2-search__field { background: var(--bg-dark-1); color: white; border: none; }
-        .select2-results__options::-webkit-scrollbar { width: 6px; }
-        .select2-results__options::-webkit-scrollbar-thumb { background: #D9D9D9; border-radius: 4px; }
-
-        /* Flatpickr dark theme */
-        .flatpickr-calendar {
-            background: var(--bg-dark-2);
-            border-radius: 12px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.35);
-            border: none;
+        .stat-card-defect > div {
             width: 100%;
-            max-width: 307px;
-        }
-        .flatpickr-calendar.arrowTop:before,
-        .flatpickr-calendar.arrowTop:after { display: none; }
-        .flatpickr-months { border-radius: 12px 12px 0 0; padding: 10px 0; }
-        .flatpickr-current-month { color: #fff; font-weight: 700; font-size: 1.1rem; }
-        .flatpickr-current-month .flatpickr-monthDropdown-months,
-        .flatpickr-current-month input.cur-year { color: #fff; background: transparent; }
-        .flatpickr-months .flatpickr-prev-month,
-        .flatpickr-months .flatpickr-next-month { color: #fff; fill: #fff; top: 12px; }
-        .flatpickr-months .flatpickr-prev-month svg,
-        .flatpickr-months .flatpickr-next-month svg { fill: #fff; }
-        .flatpickr-weekdays { background: var(--bg-dark-4); }
-        span.flatpickr-weekday { background: var(--bg-dark-4); color: #cfd8ec; font-weight: 600; }
-        .flatpickr-days { background: var(--bg-dark-4); border: none; }
-        .dayContainer { background: var(--bg-dark-4); }
-        .flatpickr-day { color: #fff; border-radius: 10px; }
-        .flatpickr-day:hover { background: #33456b; }
-        .flatpickr-day.today { border-color: #6c8cd5; }
-        .flatpickr-day.prevMonthDay,
-        .flatpickr-day.nextMonthDay { color: #5a6785; }
-        .flatpickr-day.selected,
-        .flatpickr-day.selected:hover { background: #32549A; border-color: #32549A; color: #fff; }
-        .flatpickr-day.flatpickr-disabled,
-        .flatpickr-day.flatpickr-disabled:hover { color: #5a6785; cursor: not-allowed; }
-
-        .period-date .position-relative { flex: 1 1 0; min-width: 0; }
-        .period-date input { font-size: 0.85rem; }
-
-        .margin-button { margin-right: 80px; }
-        .action-btn { display: flex; align-items: end; gap: 12px; }
-
-
-        @media (min-width: 992px) and (max-width: 1400px) {
-            #line, #groupbuyer, #datea, #dateb { font-size: 0.85rem; }
-            #findbtn { white-space: nowrap; padding-left: 0.75rem; padding-right: 0.75rem; }
-            .period-date .position-relative { flex: 1;}
-            .period-date input { font-size: 0.8rem; padding-left: .5rem; padding-right: 2rem; }
-
-            /* NOTE: sebelumnya nyasar di index.blade.php, ini sebenarnya styling filter */
-            .row.mt-4 .box-custom { width: 26px; height: 26px; }
-            .row.mt-4 img[style*="30px"] { width: 22px !important; height: 22px !important; }
-            .row.mt-4.border-custom > [class*="col-"] {
-                gap: 0.75rem !important;
-                padding-left: 0.5rem;
-                padding-right: 0.5rem;
-            }
-            .row.mt-4 label { font-size: 0.8rem; }
-
-            .box-custom {
-                height: 27px !important;
-            }
-
-            .icon-summary {
-                width: 25px;
-                height: 25px;
-            }
-
-            .border-end-custom { gap: 5px; }
         }
 
-        @media (max-width: 1024px) {
-            .period-date { display: flex; flex-direction: column; }
-            .icon-filter { display: none; }
-            .to { display: none; }
-            .wrapper-date { width: 100%; margin: 0; padding: 0 !important; align-items: stretch !important; }
-            .margin-button { width: 200px; margin-right: 0; }
+        .defect-header {
+            width: 100%;
         }
 
-        @media (min-width: 1024px) and (max-width: 1030px) {
-            .margin-button { width: 100px; margin-right: 0; }
+        .defect-list {
+            width: 100%;
+            font-size: 10px;
         }
 
-        @media (max-width: 767.98px) {
-            .period-date { flex-direction: column; align-items: stretch; }
-            .period-date .position-relative { width: 100%; }
-            .period-date span.px-2 { text-align: center; padding: 4px 0 !important; }
-            #findbtn { width: 100%; }
-            .icon-filter { display: none; }
-            .action-btn { width: 100%; justify-content: space-between; align-items: center; }
-            .margin-button { margin-right: 0; width: auto; }
+        .flatpickr-calendar {
+            max-width: 315px;
+            padding: 4px;
+            border-radius: 4px;
+        }
+        .flatpickr-day {
+            width: 30px;
+            height: 30px;
+            line-height: 30px;
+            font-size: 0.68rem;
+        }
+        .flatpickr-current-month {
+            font-size: 0.95rem;
+        }
+        span.flatpickr-weekday {
+            font-size: 0.75rem;
         }
 
-        /* --------------------------------------------------------------------
-        8. TABLE / DATATABLE COMPONENT (theme, header, search, skeleton, copy badge)
-        -------------------------------------------------------------------- */
-        .table-custom { border-collapse: separate; }
-        .table-custom th {
-            background-color: var(--bg-dark-3) !important;
-            color: white;
-            text-align: center;
-            vertical-align: middle;
-
-        }
-        .table-custom td {
-            background-color: var(--bg-dark-2) !important;
-            color: white;
-            border: 1px solid var(--bg-dark-3) !important;
+        .text-title {
+            font-size: 12px;
         }
 
-        .datatable-wrap {
-            display: flex;
+        .margin-cstm {
+            margin-top: 10px !important;
+            padding: 6px 0 !important;
+        }
+    }
+
+    @media (max-width: 768px) {
+        #topDefectList {
+            max-height: 70px;
+        }
+
+        .defect-header {
             flex-direction: column;
-            overflow: hidden;
-            flex: 1 1 auto;
-            min-height: 0;
+            gap: 0.5rem !important;
         }
-        .table-scroll-area {
-            flex: 1 1 auto;
-            min-height: 0;
-            height: 100%;
-            max-height: 100%;
-            overflow-y: auto;
-            position: relative;
-            overscroll-behavior: contain;
-            -webkit-overflow-scrolling: touch;
-            background-color: red;
-        }
+    }
+</style>
+@endsection
 
-        @media (max-width: 991.98px) {
-            .table-scroll-area {
-                height: 60vh;
-                max-height: 60vh;
-            }
-        }
+@section('content')
 
-        h5.text-nowrap { white-space: nowrap; }
+<div class="container-fluid dashboard-wrap">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
 
-        .wrapper-title { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; width: 100%;margin-bottom: 15px; }
-        .datatable-header-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-        .datatable-header-right { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+        <div class="d-flex align-items-center gap-3 text-decoration-none">
 
-        .search-wrapper { position: relative; width: 250px; }
-        .search-icon {
-            position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
-            width: 18px; height: 18px; pointer-events: none;
-        }
-        .search-input { width: 250px; max-width: 100%; padding-left: 40px; }
-        .export-text { display: none; }
+            <img
+                src="{{ _asset('svg/endlinePerformance/endline.svg') }}"
+                class="icon-dashboard flex-shrink-0"
+                alt="Endline Performance"
+            >
 
-        .position-relative { flex-grow: 0; width: 250px; min-width: 160px; }
+            <div class="d-flex flex-column justify-content-center">
+                <h2 class="text-white mb-1 dashboard-title">
+                    ENDLINE PERFORMANCE DASHBOARD
+                </h2>
 
-        /* Skeleton loading */
-        .skeleton-td { padding: 10px 8px !important; }
-        .skeleton-bar {
-            height: 14px;
-            border-radius: 6px;
-            background: linear-gradient(90deg, #2a3346 25%, #3a4560 37%, #2a3346 63%);
-            background-size: 400% 100%;
-            animation: skeleton-shimmer 1.4s ease infinite;
-        }
-        .skeleton-badge { height: 28px; width: 90px; margin: 0 auto; border-radius: 999px; }
-        @keyframes skeleton-shimmer {
-            0% { background-position: 100% 50%; }
-            100% { background-position: 0 50%; }
-        }
+                <p class="text-white fs-6 mb-0 dashboard-subtitle">
+                    Real-time monitoring of endline production performance
+                </p>
+            </div>
 
-        /* Scrollbar */
-        .table-scroll-wrapper::-webkit-scrollbar { height: 8px; width: 8px; }
-        .table-scroll-wrapper::-webkit-scrollbar-track { background: var(--bg-dark-2); border-radius: 4px; }
-        .table-scroll-wrapper::-webkit-scrollbar-thumb { background: #D9D9D9; border-radius: 4px; }
-        .table-scroll-wrapper { scrollbar-width: thin; scrollbar-color: #D9D9D9 var(--bg-dark-2); }
-        .table-responsive { -webkit-overflow-scrolling: touch; }
+        </div>
 
-        /* Copy-to-clipboard badge (mobile) */
-        .copyable-cell { cursor: default; }
-        @media (max-width: 991.98px) {
-            .copyable-cell { cursor: pointer; }
-        }
-        .copy-badge-popover {
-            position: fixed;
-            z-index: 1080;
-            background-color: var(--bg-dark-3);
-            border: 1px solid var(--color-blue);
-            border-radius: 8px;
-            padding: 8px 12px;
-            color: #fff;
-            font-size: 13px;
-            max-width: 260px;
-            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            animation: copyBadgeFadeIn .15s ease-out;
-        }
-        .copy-badge-popover .copy-badge-text { word-break: break-word; flex: 1; line-height: 1.3; }
-        .copy-badge-popover .copy-badge-icon { flex-shrink: 0; width: 16px; height: 16px; cursor: pointer; opacity: 0.85; }
-        .copy-badge-popover.copied { border-color: var(--color-green); }
-        .copy-badge-popover .copy-badge-status { font-size: 11px; color: var(--color-green); display: none; }
-        .copy-badge-popover.copied .copy-badge-status { display: block; }
-        .copy-badge-popover.copied .copy-badge-text { display: none; }
-        @keyframes copyBadgeFadeIn {
-            from { opacity: 0; transform: translateY(4px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
+        <div class="button-inline d-flex">
 
-        @media (min-width: 992px) and (max-width: 1400px) {
-            #datedatatables { font-size: 0.85rem; }
-            .search-input { width: 170px; }
-            h5.text-nowrap { font-size: 1.05rem; }
-            .datatable-wrap { flex-grow: 1; min-height: 0; }
-            .table-scroll-area { flex-grow: 1; min-height: 0; max-height: none; height: auto;}
-            .wrapper-title { flex-wrap: nowrap; margin-bottom: 1px; }
-            .datatable-header-left { flex: 1 1 auto; min-width: 0; }
-            .datatable-header-right { flex: 0 0 auto; margin-left: auto; }
-            #datedatatables { max-width: 100%; }
-            .flatpickr-calendar {
-                max-width: 260px;
-                padding: 4px;
-                border-radius: 4px;
-            }
-            .flatpickr-day {
-                width: 30px;
-                height: 30px;
-                line-height: 30px;
-                font-size: 0.70rem;
-            }
-            .flatpickr-current-month {
-                font-size: 0.95rem;
-            }
-            span.flatpickr-weekday {
-                font-size: 0.75rem;
-            }
-        }
+            <a
+                href="{{ route('home') }}"
+                class="d-flex align-items-center gap-3 text-decoration-none px-3"
+            >
+                <img
+                    src="{{ _asset('svg/inlinePerformance/home.svg') }}"
+                    class="icon-button-inline flex-shrink-0"
+                    alt="Home"
+                >
+            </a>
 
-        @media (min-width: 768px) and (max-width: 991.98px) {
-            .datatable-header-left,
-            .datatable-header-right { width: 100%; flex-wrap: wrap; }
-            .datatable-header-left h5.text-nowrap { white-space: normal; font-size: 1rem; flex: 1 1 auto; min-width: 0; }
-            .datatable-header-left .position-relative { flex: 1 1 220px; min-width: 200px; }
-            .datatable-header-right { justify-content: flex-start; }
-            .datatable-header-right .search-input { width: 240px; flex: 1 1 240px; }
-        }
+            <a
+                href="{{ route('monitoring_inlineperformance_selectlinelts') }}"
+                class="loading-target btn-custom text-decoration-none d-flex align-items-center"
+            >
+                <img
+                    src="{{ _asset('svg/inlinePerformance/inline.svg') }}"
+                    class="icon-inline-lts me-2"
+                    alt=""
+                >
+                ENDLINE TLS
+            </a>
 
-        @media (max-width: 767.98px) {
-            #datedatatables { width: 100% !important; }
-            .search-input { width: 100%; }
-            #find { flex-shrink: 0; }
-            .wrapper-title { flex-direction: column; align-items: stretch; }
-            .datatable-header-left { width: 100%; flex-wrap: wrap; row-gap: 0.5rem; }
-            .datatable-header-left h5.text-nowrap { white-space: normal; font-size: 0.95rem; flex: 1 1 auto; min-width: 0; word-break: break-word; }
-            .datatable-header-left .position-relative { width: 100%; flex-grow: 0; min-width: 0; }
-            .datatable-header-right { width: 100%; justify-content: space-between; }
-            .datatable-header-right .search-input { flex: 1 1 100%; }
-            .search-wrapper { flex: 1; width: auto; }
-            .export-btn { padding: 6px 12px !important; color: white; font-size: 0.85rem; font-weight: 500; }
-            .export-text { display: inline-block; }
-            .detailIcon { display: none; }
-            .position-relative { flex-grow: 1; width: auto; min-width: 0; }
-        }
-    </style>
+            <button
+                type="button"
+                class="export-btn px-3"
+                style="border: none; background: transparent; outline: none; box-shadow: none; padding: 0;"
+                onclick="location.reload()"
+                aria-label="Refresh"
+            >
+                <img
+                    src="{{ _asset('svg/inlinePerformance/reload.svg') }}"
+                    alt="Refresh"
+                    class="icon-refresh"
+                >
+                <span class="custom-tooltip-bottom">
+                    Refresh
+                </span>
+            </button>
 
-    @yield('extracss')
-</head>
-<body style="background-color: #1C2536;">
-    @yield('content')
-    @include('layouts.loading')
+        </div>
 
-    <script src="{{ _asset('adminltecomponents/jquery/dist/jquery.min.js') }}"></script>
-    <script src="{{ _asset('adminltecomponents/bootstrap-5.3.8/js/bootstrap.min.js') }}"></script>
-    <script src="{{ _asset('adminltecomponents/select2/dist/js/select2.min.js') }}"></script>
-    <script src="{{ _asset('js/datatables.min.js') }}"></script>
-    <script src="{{ _asset('js/jquery.dataTables.min.js') }}"></script>
-    <script src="{{ asset('/js/flatpickr.min.js') }}"></script>
-    <script src="{{ asset('js/flatpickr_language_id.js') }}"></script>
-    <script src="{{ _asset('js/sweetalert.min.js') }}"></script>
-    <script src="{!! _asset('js/dataTables.buttons.min.js') !!}"></script>
-    <script src="{{ _asset('js/dataTables.bootstrap.min.js') }}"></script>
-    <script src="{{ _asset('js/datatables.min.js') }}"></script>
+    </div>
 
-    @yield('extrascript')
-    @stack('scripts')
-</body>
-</html>
+
+    <!-- Summary Filter -->
+    @include('monitoring::endlineperformance.performance.partials.summary')
+
+
+    <!-- Summary Cards -->
+    <div class="row g-3 card-wrapper">
+
+        <!-- TOTAL OUTPUT -->
+        <div class="col-12 col-sm col-lg">
+            <div class="stat-card color-box-blue h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+
+                <img
+                    src="{{ _asset('svg/endlinePerformance/total-output.svg') }}"
+                    class="img-fluid mb-3"
+                    style="width:60px;height:60px;"
+                    alt=""
+                >
+
+                <h6 class="fw-bold text-blue mb-2">
+                    TOTAL OUTPUT
+                </h6>
+
+                <div class="d-flex align-items-end text-white">
+                    <h2 class="fw-bold mb-0" id="totalOutput">
+                        -
+                    </h2>
+
+                    <small class="ms-1">
+                        pcs
+                    </small>
+                </div>
+
+            </div>
+        </div>
+
+
+        <!-- INSPECT QTY -->
+        <div class="col-12 col-sm col-lg">
+            <div class="stat-card color-box-yellow h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+
+                <img
+                    src="{{ _asset('svg/inlinePerformance/qty-inspect.svg') }}"
+                    class="img-fluid mb-3"
+                    style="width:60px;height:60px;"
+                    alt=""
+                >
+
+                <h6 class="fw-bold text-yellow mb-2">
+                    INSPECT QTY
+                </h6>
+
+                <div class="d-flex align-items-end text-white">
+                    <h2 class="fw-bold mb-0" id="cardQtyInspect">
+                        -
+                    </h2>
+
+                    <small class="ms-1">
+                        pcs
+                    </small>
+                </div>
+
+            </div>
+        </div>
+
+
+        <!-- DEFECT QTY -->
+        <div class="col-12 col-sm col-lg">
+            <div class="stat-card color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+
+                <img
+                    src="{{ _asset('svg/inlinePerformance/qty-defect.svg') }}"
+                    class="img-fluid mb-3"
+                    style="width:60px;height:60px;"
+                    alt=""
+                >
+
+                <h6
+                    id="defectText"
+                    class="fw-bold text-red mb-2"
+                >
+                    DEFECT QTY
+                </h6>
+
+                <div class="d-flex align-items-end text-white">
+                    <h2 class="fw-bold mb-0" id="cardQtyDefect">
+                        -
+                    </h2>
+
+                    <small class="ms-1">
+                        pcs
+                    </small>
+                </div>
+
+            </div>
+        </div>
+
+
+        <!-- RFT -->
+        <div class="col-12 col-sm col-lg">
+            <div class="stat-card color-box-green h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+
+                <img
+                    src="{{ _asset('svg/inlinePerformance/rft.svg') }}"
+                    class="img-fluid mb-3"
+                    style="width:60px;height:60px;"
+                    alt=""
+                >
+
+                <h6 class="fw-bold text-green mb-2">
+                    RFT
+                </h6>
+
+                <div class="d-flex align-items-end text-white">
+                    <h2 class="fw-bold mb-0">
+                        <span id="cardRft">-</span> %
+                    </h2>
+                </div>
+
+            </div>
+        </div>
+
+
+        <!-- WFT -->
+        <div class="col-12 col-sm-4 col-lg">
+            <div class="stat-card color-box-blue h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                <img
+                    src="{{ _asset('svg/inlinePerformance/wft.svg') }}"
+                    class="img-fluid mb-3"
+                    style="width:60px;height:60px;"
+                    alt=""
+                >
+                <h6 class="fw-bold text-blue mb-2">
+                    WFT
+                </h6>
+                <div class="d-flex align-items-end text-white">
+                    <h2 class="fw-bold mb-0">
+                        <span id="cardWft">-</span> %
+                    </h2>
+                </div>
+
+            </div>
+        </div>
+
+
+        <!-- TARGET RFT -->
+        <div class="col-12 col-sm-4 col-lg">
+            <div
+                id="targetColor"
+                class="stat-card color-box-green h-100 d-flex flex-column justify-content-center align-items-center text-center p-3"
+            >
+                <img
+                    src="{{ _asset('svg/inlinePerformance/target.svg') }}"
+                    class="img-fluid mb-3"
+                    style="width:60px;height:60px;"
+                    alt=""
+                >
+                <h6 id="targetText" class="fw-bold text-green mb-2">
+                    TARGET RFT
+                </h6>
+                <div class="d-flex align-items-end text-white">
+                    <h2 class="fw-bold mb-0 text-white">
+                        <span>98</span> %
+                    </h2>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- TOP 5 DEFECT -->
+        <div class="col-12 col-sm-4 col-lg-3">
+            <div class="stat-card color-box-red h-100 d-flex flex-column text-center p-3">
+                <h6 class="fw-bold text-red mb-3 text-start">
+                    TOP 5 DEFECT
+                </h6>
+                <div
+                    id="topDefectList"
+                    class="defect-list text-white ps-4 pe-3 w-100"
+                >
+                    <div class="text-white small text-center">
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Weekly Defect -->
+    <div class="pt-3 flex-grow-1" style="min-height:0;">
+        <div class="row h-100 text-white g-3">
+            <div class="col-12 col-md-12 col-lg-6 d-flex">
+                <div class="p-3 rounded d-flex flex-column w-100" style="min-height:0;border:1px solid #242E3E">
+                    @include('monitoring::endlineperformance.performance.partials.weekly')
+                </div>
+            </div>
+            <div class="col-12 col-md-12 col-lg-6 d-flex">
+                <div class="p-3 rounded d-flex flex-column w-100" style="min-height:0;border:1px solid #242E3E">
+                    @include('monitoring::endlineperformance.performance.partials.defect')
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="footer-title text-white d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0">
+        <div class="d-flex align-items-center gap-2">
+            <img
+                src="{{ _asset('svg/inlinePerformance/time.svg') }}"
+                class="img-foot"
+                alt=""
+            >
+            Data Update
+            <span id="liveClock"></span>
+        </div>
+    </div>
+</div>
+
+
+@section('extrascript')
+<script>
+</script>
+@endsection
+
+@include('layouts.loading')
+
+@endsection
+
