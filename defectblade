@@ -1,0 +1,169 @@
+$(function () {
+    let currentMode = 'weekly';      // 'weekly' | 'day'
+    let currentWeekId = null;        // di-set dari event week:changed
+    let currentDate = null;          // dipakai kalau mode = day (default: hari ini, backend yang handle)
+    let selectedDefects = [];        // array of defect_code (string)
+
+    const $chips = $('#selectedChips');
+    const $dropdown = $('#filterDropdown');
+    const $optionsList = $('#filterOptionsList');
+    const chartDom = document.getElementById('defectChart');
+    const myChart = echarts.init(chartDom);
+
+    let availableOptions = []; // [{code, name}]
+
+    function buildChartOption(labels, series) {
+        return {
+            backgroundColor: 'transparent',
+            textStyle: { color: '#8A93A6' },
+            tooltip: {
+                trigger: 'axis',
+                backgroundColor: '#1B2434',
+                borderColor: '#3A4557',
+                textStyle: { color: '#FFFFFF' },
+                valueFormatter: (val) => `${val}%`
+            },
+            grid: { left: 55, right: 25, top: 45, bottom: 35, containLabel: false },
+            xAxis: {
+                type: 'category', boundaryGap: true, data: labels,
+                axisLine: { lineStyle: { color: '#3A4557' } },
+                axisTick: { show: false },
+                axisLabel: { color: '#8A93A6', fontSize: 12 },
+                splitLine: { show: false }
+            },
+            yAxis: {
+                type: 'value', name: 'WFT (%)', nameLocation: 'end', nameGap: 20,
+                nameTextStyle: { color: '#8A93A6', fontSize: 12, align: 'left' },
+                min: 0,
+                axisLine: { show: false }, axisTick: { show: false },
+                axisLabel: { color: '#8A93A6', fontSize: 12, formatter: (v) => `${v.toFixed(2)}%` },
+                splitLine: { lineStyle: { color: '#2A3446', type: 'solid' } }
+            },
+            series: series.map(s => ({
+                name: s.name, type: 'line', smooth: false,
+                symbol: 'circle', symbolSize: 15,
+                data: s.data,
+                itemStyle: { color: s.color },
+                lineStyle: { width: 4, color: s.color }
+            }))
+        };
+    }
+
+    function fetchOptionsAndRender() {
+        $.get('{{ route("monitoring_endlineperformance_defectoptions") }}', {
+            mode: currentMode,
+            week_id: currentWeekId,
+            date: currentDate,
+        }, function (res) {
+            availableOptions = res.options;
+            // filter selectedDefects supaya cuma yang masih valid di periode ini
+            selectedDefects = selectedDefects.filter(c => availableOptions.some(o => o.code === c));
+            if (selectedDefects.length === 0 && availableOptions.length > 0) {
+                selectedDefects = [availableOptions[0].code]; // default pilih 1 teratas
+            }
+            renderChips();
+            renderOptions();
+            fetchChartData();
+        });
+    }
+
+    function fetchChartData() {
+        $.get('{{ route("monitoring_endlineperformance_defectdata") }}', {
+            mode: currentMode,
+            week_id: currentWeekId,
+            date: currentDate,
+            defects: selectedDefects,
+        }, function (res) {
+            const labels = res.labels;
+            const series = res.series;
+            myChart.setOption(buildChartOption(labels, series), true);
+        });
+    }
+
+    function renderChips() {
+        $chips.empty();
+        selectedDefects.forEach(code => {
+            const opt = availableOptions.find(o => o.code === code);
+            const name = opt ? opt.name : code;
+            $chips.append(`
+                <span class="filter-chip" data-defect="${code}">
+                    ${name}
+                    <button type="button" class="chip-remove" data-defect="${code}">✕</button>
+                </span>
+            `);
+        });
+    }
+
+    function renderOptions() {
+        $optionsList.empty();
+        if (availableOptions.length === 0) {
+            $optionsList.append('<span class="filter-option-empty">Tidak ada data defect</span>');
+            return;
+        }
+        availableOptions.forEach(opt => {
+            const isSelected = selectedDefects.includes(opt.code);
+            $optionsList.append(`
+                <span class="filter-option-pill ${isSelected ? 'is-selected' : ''}" data-defect="${opt.code}">
+                    ${opt.name}
+                </span>
+            `);
+        });
+    }
+
+    // ==== Toggle Weekly / Day ====
+    $('#weekly').on('change', function () {
+        currentMode = 'weekly';
+        fetchOptionsAndRender();
+    });
+    $('#day').on('change', function () {
+        currentMode = 'day';
+        currentDate = null; // biarkan backend default ke hari ini
+        fetchOptionsAndRender();
+    });
+
+    // ==== Sinkron dari card Weekly ====
+    // Panggil ini dari tempat select2 minggu di-trigger, misal:
+    // $(document).trigger('week:changed', { week_id: '2026-33' });
+    $(document).on('week:changed', function (e, payload) {
+        currentWeekId = payload.week_id;
+        if (currentMode === 'weekly') {
+            fetchOptionsAndRender();
+        }
+    });
+
+    $optionsList.on('click', '.filter-option-pill', function () {
+        const code = $(this).data('defect').toString();
+        selectedDefects = selectedDefects.includes(code)
+            ? selectedDefects.filter(c => c !== code)
+            : [...selectedDefects, code];
+        renderChips();
+        renderOptions();
+        fetchChartData();
+    });
+
+    $chips.on('click', '.chip-remove', function () {
+        const code = $(this).data('defect').toString();
+        selectedDefects = selectedDefects.filter(c => c !== code);
+        renderChips();
+        renderOptions();
+        fetchChartData();
+    });
+
+    $('#addFilterBtn').on('click', function (e) {
+        e.stopPropagation();
+        renderOptions();
+        $dropdown.toggleClass('d-none');
+    });
+
+    $(document).on('click', function (e) {
+        if (!$(e.target).closest('.defect-filter').length) $dropdown.addClass('d-none');
+    });
+
+    $('#findbtn').on('click', fetchChartData);
+
+    window.addEventListener('resize', () => myChart.resize());
+    if (window.ResizeObserver) new ResizeObserver(() => myChart.resize()).observe(chartDom.parentElement);
+
+    // init
+    fetchOptionsAndRender();
+});
