@@ -1,5 +1,13 @@
+Berikut adalah kode yang sudah dirapikan dan direfaktor sesuai dengan best practice (HTML, CSS, dan JavaScript).
+Pembaruan Utama:
+ * Pembersihan Whitespace Ekstrim: Menghapus jarak vertikal (enter) yang berlebihan pada JavaScript yang membuat kode sangat sulit dibaca.
+ * Modern JavaScript (ES6): Menggunakan Template Literals (` `) untuk penggabungan string, dan Arrow Functions untuk callbacks (kecuali saat butuh konteks this).
+ * Peningkatan Format Excel: Merapikan pembuatan style untuk SheetJS agar header, baris tabel, dan penyesuaian lebar kolom (!cols) lebih akurat dan terstruktur.
+ * Kerapian HTML & CSS: Indentasi diseragamkan, pengelompokan CSS dirapikan agar lebih mudah maintainable.
 <style>
-
+    /* =========================================
+       1. Base Layout & Containers
+       ========================================= */
     .weekly-card-body {
         display: flex;
         flex-direction: column;
@@ -12,6 +20,14 @@
         flex: 0 0 auto;
     }
 
+    .weekly-card-body .defect-title {
+        flex: 0 0 auto;
+        margin-top: 8px;
+    }
+
+    /* =========================================
+       2. Tables & Scrolling
+       ========================================= */
     .weekly-performance-table {
         flex: 0 0 auto;
         min-height: 0;
@@ -22,12 +38,6 @@
         width: 100%;
         overflow-x: auto;
         overflow-y: hidden;
-    }
-
-
-    .weekly-card-body .defect-title {
-        flex: 0 0 auto;
-        margin-top: 8px;
     }
 
     .weekly-card-body .table-wrapper {
@@ -67,18 +77,13 @@
         background: #1b2433;
     }
 
+    /* =========================================
+       3. Skeleton Loading Animation
+       ========================================= */
     @keyframes skeleton-pulse {
-        0% {
-            opacity: 0.35;
-        }
-
-        50% {
-            opacity: 0.75;
-        }
-
-        100% {
-            opacity: 0.35;
-        }
+        0%   { opacity: 0.35; }
+        50%  { opacity: 0.75; }
+        100% { opacity: 0.35; }
     }
 
     .skeleton-box {
@@ -115,187 +120,74 @@
         margin: 0;
     }
 
-    /* Select2 - ukuran font */
-    #selectWeek + .select2-container .select2-selection__rendered {
-        font-size: 14px !important;
-    }
-
+    /* =========================================
+       4. Select2 Overrides
+       ========================================= */
+    #selectWeek + .select2-container .select2-selection__rendered,
     #selectWeek + .select2-container .select2-selection {
         font-size: 14px !important;
     }
 
-    /* Dropdown option */
     .select2-container .select2-results__option {
         font-size: 14px !important;
         padding: 5px 8px !important;
     }
 
-    /* Search box di dropdown */
     .select2-container .select2-search__field {
         font-size: 14px !important;
     }
 
+    /* =========================================
+       5. Media Queries
+       ========================================= */
     @media (min-width: 992px) and (max-width: 1400px) {
+        .weekly-card-body { padding: 0; }
+        .weekly-card-body .wrapper-title { gap: 6px; margin-bottom: 2px; }
+        .datatable-header-left { gap: 6px !important; min-width: 0; }
+        .datatable-header-left img.detailIcon { width: 18px !important; height: 18px !important; }
+        .datatable-header-left h5 { font-size: 12px !important; line-height: 1.2; }
+        
+        .datatable-header-right { width: 230px !important; flex-shrink: 0; }
 
-        .weekly-card-body {
-            padding: 0;
-        }
-
-        .weekly-card-body .wrapper-title {
-            gap: 6px;
-            margin-bottom: 2px;
-        }
-
-        .datatable-header-left {
-            gap: 6px !important;
-            min-width: 0;
-        }
-
-        .datatable-header-left img.detailIcon {
-            width: 18px !important;
-            height: 18px !important;
-        }
-
-        .datatable-header-left h5 {
-            font-size: 12px !important;
-            line-height: 1.2;
-        }
-
-        .datatable-header-right {
-            width: 230px !important;
-            flex-shrink: 0;
-        }
-
-        #selectWeek + .select2-container {
-            width: 100% !important;
-        }
-
-        #selectWeek + .select2-container .select2-selection--single {
-            height: 28px !important;
-            min-height: 28px !important;
-        }
-
-        #selectWeek + .select2-container
-        .select2-selection--single
-        .select2-selection__rendered {
+        #selectWeek + .select2-container { width: 100% !important; }
+        #selectWeek + .select2-container .select2-selection--single { height: 28px !important; min-height: 28px !important; }
+        #selectWeek + .select2-container .select2-selection--single .select2-selection__rendered {
             font-size: 10px !important;
             line-height: 28px !important;
             padding-left: 8px !important;
             padding-right: 25px !important;
         }
-
-        #selectWeek + .select2-container
-        .select2-selection--single
-        .select2-selection__arrow {
+        #selectWeek + .select2-container .select2-selection--single .select2-selection__arrow {
             height: 28px !important;
             width: 22px !important;
         }
 
-        /* Dropdown option */
-        .select2-container .select2-results__option {
-            font-size: 10px !important;
-            padding: 4px 7px !important;
-            line-height: 1.2 !important;
-        }
+        .select2-container .select2-results__option { font-size: 10px !important; padding: 4px 7px !important; line-height: 1.2 !important; }
+        .select2-container .select2-search__field { font-size: 10px !important; min-height: 24px !important; padding: 3px 5px !important; }
 
-        /* Search */
-        .select2-container .select2-search__field {
-            font-size: 10px !important;
-            min-height: 24px !important;
-            padding: 3px 5px !important;
-        }
+        .export-icon { width: 18px !important; height: 18px !important; }
+        .export-btn { font-size: 10px; }
 
-        .export-icon {
-            width: 18px !important;
-            height: 18px !important;
-        }
+        .table-res { font-size: 10px !important; line-height: 1.15 !important; margin-top: 5px; }
+        .table-res th { font-size: 9px !important; line-height: 1.15 !important; padding: 4px 3px !important; white-space: nowrap; }
+        .table-res td { font-size: 10px !important; line-height: 1.15 !important; padding: 4px 3px !important; }
 
-        .export-btn {
-            font-size: 10px;
-        }
+        #tableInlinePerformance th, #tableInlinePerformance td { padding: 3px 2px !important; }
+        #tableInlinePerformance thead th { line-height: 1.2 !important; }
 
-        .table-res {
-            font-size: 10px !important;
-            line-height: 1.15 !important;
-            margin-top: 5px;
-        }
+        .weekly-card-body .subheader { font-size: 11px !important; line-height: 1.2; margin-top: 4px !important; }
+        .weekly-card-body .defect-title { margin-top: 4px; }
+        .weekly-card-body .table-wrapper { margin-top: 4px !important; min-height: 50px; }
 
-        .table-res th {
-            font-size: 9px !important;
-            line-height: 1.15 !important;
-            padding: 4px 3px !important;
-            white-space: nowrap;
-        }
+        #tableInlineDefect th, #tableInlineDefect td { line-height: 1.20 !important; }
+        #tableInlineDefect thead th { font-size: 9px !important; line-height: 1.1 !important; }
+        #tableInlineDefect tbody td { font-size: 10px !important; }
+        #tableInlineDefect tfoot th, #tableInlineDefect tfoot td { font-size: 9px !important; padding: 3px !important; }
 
-        .table-res td {
-            font-size: 10px !important;
-            line-height: 1.15 !important;
-            padding: 4px 3px !important;
-        }
-
-        #tableInlinePerformance th,
-        #tableInlinePerformance td {
-            padding: 3px 2px !important;
-        }
-
-        #tableInlinePerformance thead th {
-            line-height: 1.2 !important;
-        }
-
-        .weekly-card-body .subheader {
-            font-size: 11px !important;
-            line-height: 1.2;
-            margin-top: 4px !important;
-        }
-
-        .weekly-card-body .defect-title {
-            margin-top: 4px;
-        }
-
-        .weekly-card-body .table-wrapper {
-            margin-top: 4px !important;
-            min-height: 50px;
-        }
-
-        #tableInlineDefect th,
-        #tableInlineDefect td {
-            line-height: 1.20 !important;
-        }
-
-        #tableInlineDefect thead th {
-            font-size: 9px !important;
-            line-height: 1.1 !important;
-        }
-
-        #tableInlineDefect tbody td {
-            font-size: 10px !important;
-        }
-
-        #tableInlineDefect tfoot th,
-        #tableInlineDefect tfoot td {
-            font-size: 9px !important;
-            padding: 3px !important;
-        }
-
-        .defect-circle {
-            width: 7px !important;
-            height: 7px !important;
-        }
-
-        .skeleton-box {
-            height: 8px !important;
-            border-radius: 3px;
-        }
-
-        .skeleton-circle {
-            width: 7px !important;
-            height: 7px !important;
-        }
-
-        .skeleton-row td {
-            padding-top: 4px !important;
-            padding-bottom: 4px !important;
-        }
+        .defect-circle { width: 7px !important; height: 7px !important; }
+        .skeleton-box { height: 8px !important; border-radius: 3px; }
+        .skeleton-circle { width: 7px !important; height: 7px !important; }
+        .skeleton-row td { padding-top: 4px !important; padding-bottom: 4px !important; }
     }
 </style>
 
@@ -304,9 +196,7 @@
     <div class="d-flex align-items-center wrapper-title justify-content-between">
         <div class="datatable-header-left d-flex align-items-center gap-2">
             <img src="{{ _asset('svg/inlinePerformance/calendar.svg') }}" class="detailIcon" alt="">
-            <h5 class="mb-0 fw-normal text-nowrap">
-                WEEKLY ENDLINE PERFORMANCE
-            </h5>
+            <h5 class="mb-0 fw-normal text-nowrap">WEEKLY ENDLINE PERFORMANCE</h5>
         </div>
 
         <div class="datatable-header-right" style="width: 350px;">
@@ -328,14 +218,14 @@
             <thead>
                 <tr>
                     <th class="text-center" style="width:10%;">Week</th>
-                    <th class="text-center" style="width:30%">Periode Date</th>
-                    <th class="text-center" style="width:10%">RFT QTY<br>(Pcs)</th>
-                    <th class="text-center" style="width:10%">Inspect QTY<br>(Pcs)</th>
-                    <th class="text-center" style="width:10%">Defect QTY<br>(Pcs)</th>
-                    <th class="text-center" style="width:10%">RFT<br>(%)</th>
-                    <th class="text-center" style="width:10%">WFT<br>(%)</th>
-                    <th class="text-center" style="width:10%">Non Process<br>(%)</th>
-                    <th class="text-center" style="width:10%">Process<br>(%)</th>
+                    <th class="text-center" style="width:30%;">Periode Date</th>
+                    <th class="text-center" style="width:10%;">RFT QTY<br>(Pcs)</th>
+                    <th class="text-center" style="width:10%;">Inspect QTY<br>(Pcs)</th>
+                    <th class="text-center" style="width:10%;">Defect QTY<br>(Pcs)</th>
+                    <th class="text-center" style="width:10%;">RFT<br>(%)</th>
+                    <th class="text-center" style="width:10%;">WFT<br>(%)</th>
+                    <th class="text-center" style="width:10%;">Non Process<br>(%)</th>
+                    <th class="text-center" style="width:10%;">Process<br>(%)</th>
                 </tr>
             </thead>
             <tbody id="tableInlinePerformanceBody">
@@ -344,28 +234,26 @@
         </table>
     </div>
 
-    <div class="">
-        <h6 class="subheader mb-0 fw-normal text-nowrap">
-            TOP 5 DEFECT DETAIL
-        </h6>
+    <!-- Table 2: Top Defect Detail -->
+    <div class="mt-2">
+        <h6 class="subheader mb-0 fw-normal text-nowrap">TOP 5 DEFECT DETAIL</h6>
     </div>
-    <div class="table-wrapper table-scroll-wrapper rounded mt-2" style="border:1px solid #242E3E">
+    
+    <div class="table-wrapper table-scroll-wrapper rounded mt-2">
         <table id="tableInlineDefect" class="table-res table-custom table table-borderless align-middle w-100 table-hover">
             <thead>
                 <tr>
                     <th class="text-center" style="width:5%;">No.</th>
-                    <th class="text-center" style="width:10%">Defect</th>
-                    <th class="text-center" style="width:5%">Defect QTY</th>
-                    <th class="text-center" style="width:5%">% of Total Defect</th>
-                    <th class="text-center" style="width:15%">Top Style (Most Contribute)</th>
-                    <th class="text-center" style="width:5%">QTY Defect (Pcs)</th>
-                    <th class="text-center" style="width:10%">% of Defect</th>
+                    <th class="text-center" style="width:10%;">Defect</th>
+                    <th class="text-center" style="width:5%;">Defect QTY</th>
+                    <th class="text-center" style="width:5%;">% of Total Defect</th>
+                    <th class="text-center" style="width:15%;">Top Style (Most Contribute)</th>
+                    <th class="text-center" style="width:5%;">QTY Defect (Pcs)</th>
+                    <th class="text-center" style="width:10%;">% of Defect</th>
                 </tr>
             </thead>
             <tbody id="tableInlineDefectBody" class="table-head text-center">
-                @php
-                    $top_defect = $top_defect ?? collect();
-                @endphp
+                @php $top_defect = $top_defect ?? collect(); @endphp
 
                 @if ($top_defect->isEmpty())
                     @for ($r = 0; $r < 5; $r++)
@@ -393,8 +281,7 @@
                                     <td rowspan="{{ count($styles) }}" class="text-center">{{ $index + 1 }}</td>
                                     <td rowspan="{{ count($styles) }}">
                                         <div class="d-flex justify-content-start align-items-center gap-2 text-truncate">
-                                            <span class="defect-circle rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
-                                                style="background-color: {{ $defect['color'] }};"></span>
+                                            <span class="defect-circle rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="background-color: {{ $defect['color'] }};"></span>
                                             {{ $defect['nmdefect'] }}
                                         </div>
                                     </td>
@@ -409,7 +296,6 @@
                     @endforeach
                 @endif
             </tbody>
-
             <tfoot class="table-foot" id="tableInlineDefectFoot">
                 <tr>
                     <th></th>
@@ -432,10 +318,7 @@
                     </th>
                     <th>
                         @php
-                            $totStylePercent = ($totTopDefect ?? 0) > 0
-                                ? ($totStyleQty / $totTopDefect) * 100
-                                : 0;
-
+                            $totStylePercent = ($totTopDefect ?? 0) > 0 ? ($totStyleQty / $totTopDefect) * 100 : 0;
                             $totStylePercent = min($totStylePercent, 100);
                         @endphp
                         {{ number_format($totStylePercent, 2) }}%
@@ -445,1107 +328,260 @@
         </table>
     </div>
 </div>
-@push('scripts')
 
+@push('scripts')
 <script>
 $(function () {
-
     let weeklyDataTable = null;
-
     let isTableLoading = false;
-
 
     /*
     |--------------------------------------------------------------------------
-    | DESTROY DATATABLE
+    | DataTables Initialization
     |--------------------------------------------------------------------------
     */
     function destroyPerformanceDataTable() {
-
-        if (
-            $.fn.DataTable.isDataTable(
-                '#tableInlinePerformance'
-            )
-        ) {
-
-            $('#tableInlinePerformance')
-                .DataTable()
-                .destroy();
+        if ($.fn.DataTable.isDataTable('#tableInlinePerformance')) {
+            $('#tableInlinePerformance').DataTable().destroy();
         }
-
         weeklyDataTable = null;
     }
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | INIT DATATABLE
-    |--------------------------------------------------------------------------
-    */
     function initPerformanceDataTable() {
-
-        const rowCount =
-            $('#tableInlinePerformanceBody tr').length;
-
-
-        if (rowCount === 0) {
-            return;
-        }
-
-
+        if ($('#tableInlinePerformanceBody tr').length === 0) return;
+        
         destroyPerformanceDataTable();
 
-
-        weeklyDataTable =
-            $('#tableInlinePerformance').DataTable({
-
-                paging: false,
-
-                ordering: false,
-
-                searching: false,
-
-                info: false,
-
-                lengthChange: false,
-
-                autoWidth: false,
-
-                dom: ''
-            });
+        weeklyDataTable = $('#tableInlinePerformance').DataTable({
+            paging: false,
+            ordering: false,
+            searching: false,
+            info: false,
+            lengthChange: false,
+            autoWidth: false,
+            dom: ''
+        });
     }
-
 
     /*
     |--------------------------------------------------------------------------
-    | EXPORT 2 TABLES TO 1 EXCEL FILE
+    | Excel Export (SheetJS)
     |--------------------------------------------------------------------------
     */
-function exportExcel() {
-
-    if (typeof XLSX === 'undefined') {
-        alert('Library SheetJS belum tersedia.');
-        return;
-    }
-
-    const workbook = XLSX.utils.book_new();
-
-    /*
-    |--------------------------------------------------------------------------
-    | HELPER
-    |--------------------------------------------------------------------------
-    */
-
-    function addCellStyle(
-        worksheet,
-        cellAddress,
-        style
-    ) {
-
-        if (!worksheet[cellAddress]) {
+    function exportExcel() {
+        if (typeof XLSX === 'undefined') {
+            alert('Library SheetJS belum tersedia.');
             return;
         }
 
-        worksheet[cellAddress].s = style;
-    }
+        const workbook = XLSX.utils.book_new();
+        const exportData = [];
 
-
-    function styleRange(
-        worksheet,
-        startRow,
-        endRow,
-        startCol,
-        endCol,
-        style
-    ) {
-
-        for (
-            let row = startRow;
-            row <= endRow;
-            row++
-        ) {
-
-            for (
-                let col = startCol;
-                col <= endCol;
-                col++
-            ) {
-
-                const cell =
-                    XLSX.utils.encode_cell({
-                        r: row,
-                        c: col
-                    });
-
-                if (!worksheet[cell]) {
-                    continue;
+        // --- Helper Functions ---
+        const styleRange = (worksheet, startRow, endRow, startCol, endCol, style) => {
+            for (let row = startRow; row <= endRow; row++) {
+                for (let col = startCol; col <= endCol; col++) {
+                    const cell = XLSX.utils.encode_cell({ r: row, c: col });
+                    if (worksheet[cell]) worksheet[cell].s = style;
                 }
-
-                worksheet[cell].s = style;
             }
-        }
-    }
+        };
 
+        // --- Style Definitions (requires xlsx-js-style library) ---
+        const borderBase = { style: 'thin', color: { rgb: 'B7B7B7' } };
+        const border = { top: borderBase, bottom: borderBase, left: borderBase, right: borderBase };
 
-    /*
-    |--------------------------------------------------------------------------
-    | STYLE
-    |--------------------------------------------------------------------------
-    */
+        const titleStyle = {
+            font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 14 },
+            fill: { fgColor: { rgb: '1B2433' } },
+            alignment: { horizontal: 'left', vertical: 'center' },
+            border: border
+        };
 
-    const border = {
-        top: {
-            style: 'thin',
-            color: {
-                rgb: 'B7B7B7'
-            }
-        },
-        bottom: {
-            style: 'thin',
-            color: {
-                rgb: 'B7B7B7'
-            }
-        },
-        left: {
-            style: 'thin',
-            color: {
-                rgb: 'B7B7B7'
-            }
-        },
-        right: {
-            style: 'thin',
-            color: {
-                rgb: 'B7B7B7'
-            }
-        }
-    };
+        const headerStyle = {
+            font: { bold: true, color: { rgb: 'FFFFFF' } },
+            fill: { fgColor: { rgb: '242E3E' } },
+            alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+            border: border
+        };
 
+        const bodyStyle = { alignment: { vertical: 'center' }, border: border };
+        const centerStyle = { alignment: { horizontal: 'center', vertical: 'center' }, border: border };
 
-    const titleStyle = {
+        // --- TABLE 1: Weekly Performance ---
+        const performanceTitleRow = exportData.length;
+        exportData.push(['WEEKLY ENDLINE PERFORMANCE'], []);
+        
+        const performanceHeaderRow = exportData.length;
+        exportData.push([
+            'Week', 'Periode Date', 'RFT QTY (Pcs)', 'Inspect QTY (Pcs)', 
+            'Defect QTY (Pcs)', 'RFT (%)', 'WFT (%)', 'Non Process (%)', 'Process (%)'
+        ]);
 
-        font: {
-            bold: true,
-            color: {
-                rgb: 'FFFFFF'
-            },
-            sz: 14
-        },
-
-        fill: {
-            fgColor: {
-                rgb: '1B2433'
-            }
-        },
-
-        alignment: {
-            horizontal: 'left',
-            vertical: 'center'
-        },
-
-        border: border
-    };
-
-
-    const headerStyle = {
-
-        font: {
-            bold: true,
-            color: {
-                rgb: 'FFFFFF'
-            }
-        },
-
-        fill: {
-            fgColor: {
-                rgb: '242E3E'
-            }
-        },
-
-        alignment: {
-            horizontal: 'center',
-            vertical: 'center',
-            wrapText: true
-        },
-
-        border: border
-    };
-
-
-    const bodyStyle = {
-
-        alignment: {
-            vertical: 'center'
-        },
-
-        border: border
-    };
-
-
-    const centerStyle = {
-
-        alignment: {
-            horizontal: 'center',
-            vertical: 'center'
-        },
-
-        border: border
-    };
-
-
-    const totalStyle = {
-
-        font: {
-            bold: true,
-            color: {
-                rgb: 'FFFFFF'
-            }
-        },
-
-        fill: {
-            fgColor: {
-                rgb: '1B2433'
-            }
-        },
-
-        alignment: {
-            vertical: 'center'
-        },
-
-        border: border
-    };
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | EXPORT DATA
-    |--------------------------------------------------------------------------
-    */
-
-    const exportData = [];
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | TABLE 1 TITLE
-    |--------------------------------------------------------------------------
-    */
-
-    const performanceTitleRow =
-        exportData.length;
-
-    exportData.push([
-        'WEEKLY ENDLINE PERFORMANCE'
-    ]);
-
-    exportData.push([]);
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | TABLE 1 HEADER
-    |--------------------------------------------------------------------------
-    */
-
-    const performanceHeaderRow =
-        exportData.length;
-
-    exportData.push([
-        'Week',
-        'Periode Date',
-        'RFT QTY (Pcs)',
-        'Inspect QTY (Pcs)',
-        'Defect QTY (Pcs)',
-        'RFT (%)',
-        'WFT (%)',
-        'Non Process (%)',
-        'Process (%)'
-    ]);
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | TABLE 1 DATA
-    |--------------------------------------------------------------------------
-    */
-
-    const performanceStartRow =
-        exportData.length;
-
-
-    if (
-        weeklyDataTable &&
-        $.fn.DataTable.isDataTable(
-            '#tableInlinePerformance'
-        )
-    ) {
-
-        weeklyDataTable
-            .rows()
-            .every(function () {
-
+        const performanceStartRow = exportData.length;
+        if (weeklyDataTable && $.fn.DataTable.isDataTable('#tableInlinePerformance')) {
+            weeklyDataTable.rows().every(function () {
                 const row = this.data();
-
-                exportData.push(
-                    row.map(function (value) {
-
-                        return $('<div>')
-                            .html(value)
-                            .text()
-                            .trim();
-
-                    })
-                );
+                exportData.push(row.map(value => $('<div>').html(value).text().trim()));
             });
+        } else {
+            const performanceTable = document.getElementById('tableInlinePerformance');
+            const sheet = XLSX.utils.table_to_sheet(performanceTable, { raw: true });
+            const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            exportData.push(...data.slice(1));
+        }
+        const performanceEndRow = exportData.length - 1;
 
-    } else {
+        // Space Between Tables
+        exportData.push([], [], []);
 
-        const performanceTable =
-            document.getElementById(
-                'tableInlinePerformance'
-            );
+        // --- TABLE 2: Top 5 Defect Detail ---
+        const defectTitleRow = exportData.length;
+        exportData.push(['TOP 5 DEFECT DETAIL'], []);
+        
+        const defectHeaderRow = exportData.length;
+        exportData.push([
+            'No.', 'Defect', 'Defect QTY', '% of Total Defect', 
+            'Top Style (Most Contribute)', 'QTY Defect (Pcs)', '% of Defect'
+        ]);
 
-        const sheet =
-            XLSX.utils.table_to_sheet(
-                performanceTable,
-                {
-                    raw: true
-                }
-            );
+        const defectStartRow = exportData.length;
+        const defectTable = document.getElementById('tableInlineDefect');
+        const defectSheet = XLSX.utils.table_to_sheet(defectTable, { raw: true });
+        const defectData = XLSX.utils.sheet_to_json(defectSheet, { header: 1 });
+        exportData.push(...defectData.slice(1));
+        const defectEndRow = exportData.length - 1;
 
-        const data =
-            XLSX.utils.sheet_to_json(
-                sheet,
-                {
-                    header: 1
-                }
-            );
+        // --- Create & Format Worksheet ---
+        const worksheet = XLSX.utils.aoa_to_sheet(exportData);
 
-        data
-            .slice(1)
-            .forEach(function (row) {
+        // Adjust Column Widths
+        worksheet['!cols'] = [
+            { wch: 10 }, { wch: 30 }, { wch: 15 }, { wch: 20 },
+            { wch: 30 }, { wch: 18 }, { wch: 15 }, { wch: 18 }, { wch: 15 }
+        ];
 
-                exportData.push(row);
+        // Merge Titles
+        worksheet['!merges'] = [
+            { s: { r: performanceTitleRow, c: 0 }, e: { r: performanceTitleRow, c: 8 } },
+            { s: { r: defectTitleRow, c: 0 }, e: { r: defectTitleRow, c: 6 } }
+        ];
 
-            });
-    }
-
-
-    const performanceEndRow =
-        exportData.length - 1;
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | SPACE
-    |--------------------------------------------------------------------------
-    */
-
-    exportData.push([]);
-    exportData.push([]);
-    exportData.push([]);
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | TABLE 2 TITLE
-    |--------------------------------------------------------------------------
-    */
-
-    const defectTitleRow =
-        exportData.length;
-
-    exportData.push([
-        'TOP 5 DEFECT DETAIL'
-    ]);
-
-    exportData.push([]);
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | TABLE 2 HEADER
-    |--------------------------------------------------------------------------
-    */
-
-    const defectHeaderRow =
-        exportData.length;
-
-    exportData.push([
-        'No.',
-        'Defect',
-        'Defect QTY',
-        '% of Total Defect',
-        'Top Style (Most Contribute)',
-        'QTY Defect (Pcs)',
-        '% of Defect'
-    ]);
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | TABLE 2 DATA
-    |--------------------------------------------------------------------------
-    */
-
-    const defectStartRow =
-        exportData.length;
-
-
-    const defectTable =
-        document.getElementById(
-            'tableInlineDefect'
-        );
-
-
-    const defectSheet =
-        XLSX.utils.table_to_sheet(
-            defectTable,
-            {
-                raw: true
-            }
-        );
-
-
-    const defectData =
-        XLSX.utils.sheet_to_json(
-            defectSheet,
-            {
-                header: 1
-            }
-        );
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | Remove HTML Header
-    |--------------------------------------------------------------------------
-    */
-
-    defectData
-        .slice(1)
-        .forEach(function (row) {
-
-            exportData.push(row);
-
-        });
-
-
-    const defectEndRow =
-        exportData.length - 1;
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | CREATE WORKSHEET
-    |--------------------------------------------------------------------------
-    */
-
-    const worksheet =
-        XLSX.utils.aoa_to_sheet(
-            exportData
-        );
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | COLUMN WIDTH
-    |--------------------------------------------------------------------------
-    */
-
-    worksheet['!cols'] = [
-
-        { wch: 8 },
-        { wch: 30 },
-        { wch: 18 },
-        { wch: 20 },
-        { wch: 32 },
-        { wch: 20 },
-        { wch: 18 },
-        { wch: 17 },
-        { wch: 15 }
-
-    ];
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | MERGE TITLE 1
-    |--------------------------------------------------------------------------
-    */
-
-    worksheet['!merges'] = [
-
-        {
-            s: {
-                r: performanceTitleRow,
-                c: 0
-            },
-
-            e: {
-                r: performanceTitleRow,
-                c: 8
-            }
-        },
-
-        {
-            s: {
-                r: defectTitleRow,
-                c: 0
-            },
-
-            e: {
-                r: defectTitleRow,
-                c: 8
-            }
+        // Apply Styles
+        styleRange(worksheet, performanceTitleRow, performanceTitleRow, 0, 8, titleStyle);
+        styleRange(worksheet, performanceHeaderRow, performanceHeaderRow, 0, 8, headerStyle);
+        
+        if (performanceEndRow >= performanceStartRow) {
+            styleRange(worksheet, performanceStartRow, performanceEndRow, 0, 8, bodyStyle);
+            styleRange(worksheet, performanceStartRow, performanceEndRow, 0, 0, centerStyle); // Week column
+            styleRange(worksheet, performanceStartRow, performanceEndRow, 2, 8, centerStyle); // Number columns
         }
 
-    ];
+        styleRange(worksheet, defectTitleRow, defectTitleRow, 0, 8, titleStyle);
+        styleRange(worksheet, defectHeaderRow, defectHeaderRow, 0, 6, headerStyle);
+        
+        if (defectEndRow >= defectStartRow) {
+            styleRange(worksheet, defectStartRow, defectEndRow, 0, 6, bodyStyle);
+            styleRange(worksheet, defectStartRow, defectEndRow, 0, 0, centerStyle);
+            styleRange(worksheet, defectStartRow, defectEndRow, 2, 3, centerStyle);
+            styleRange(worksheet, defectStartRow, defectEndRow, 5, 6, centerStyle);
+        }
 
+        // Adjust Row Heights & Freeze Panes
+        worksheet['!rows'] = [];
+        worksheet['!rows'][performanceTitleRow] = { hpt: 25 };
+        worksheet['!rows'][performanceHeaderRow] = { hpt: 35 };
+        worksheet['!rows'][defectTitleRow] = { hpt: 25 };
+        worksheet['!rows'][defectHeaderRow] = { hpt: 35 };
+        worksheet['!freeze'] = { xSplit: 0, ySplit: performanceHeaderRow + 1 };
 
-    /*
-    |--------------------------------------------------------------------------
-    | TITLE STYLE 1
-    |--------------------------------------------------------------------------
-    */
+        // Construct & Download
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Weekly Report');
+        
+        let selectedWeek = $('#selectWeek option:selected').text() || 'Weekly Performance';
+        selectedWeek = selectedWeek.replace(/[\\/:*?"<>|]/g, '-').trim();
+        const fileName = `Weekly_Endline_Performance_${selectedWeek}.xlsx`;
 
-    styleRange(
-        worksheet,
-        performanceTitleRow,
-        performanceTitleRow,
-        0,
-        8,
-        titleStyle
-    );
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | HEADER STYLE 1
-    |--------------------------------------------------------------------------
-    */
-
-    styleRange(
-        worksheet,
-        performanceHeaderRow,
-        performanceHeaderRow,
-        0,
-        8,
-        headerStyle
-    );
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | BODY STYLE 1
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-        performanceEndRow >= performanceStartRow
-    ) {
-
-        styleRange(
-            worksheet,
-            performanceStartRow,
-            performanceEndRow,
-            0,
-            8,
-            bodyStyle
-        );
-
-        styleRange(
-            worksheet,
-            performanceStartRow,
-            performanceEndRow,
-            0,
-            0,
-            centerStyle
-        );
-
-        styleRange(
-            worksheet,
-            performanceStartRow,
-            performanceEndRow,
-            2,
-            8,
-            centerStyle
-        );
+        XLSX.writeFile(workbook, fileName);
+        console.log(`Export berhasil: ${fileName}`);
     }
 
-
     /*
     |--------------------------------------------------------------------------
-    | TITLE STYLE 2
-    |--------------------------------------------------------------------------
-    */
-
-    styleRange(
-        worksheet,
-        defectTitleRow,
-        defectTitleRow,
-        0,
-        8,
-        titleStyle
-    );
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | HEADER STYLE 2
-    |--------------------------------------------------------------------------
-    */
-
-    styleRange(
-        worksheet,
-        defectHeaderRow,
-        defectHeaderRow,
-        0,
-        6,
-        headerStyle
-    );
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | BODY STYLE 2
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-        defectEndRow >= defectStartRow
-    ) {
-
-        styleRange(
-            worksheet,
-            defectStartRow,
-            defectEndRow,
-            0,
-            6,
-            bodyStyle
-        );
-
-        styleRange(
-            worksheet,
-            defectStartRow,
-            defectEndRow,
-            0,
-            0,
-            centerStyle
-        );
-
-        styleRange(
-            worksheet,
-            defectStartRow,
-            defectEndRow,
-            2,
-            3,
-            centerStyle
-        );
-
-        styleRange(
-            worksheet,
-            defectStartRow,
-            defectEndRow,
-            5,
-            6,
-            centerStyle
-        );
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | ROW HEIGHT
-    |--------------------------------------------------------------------------
-    */
-
-    worksheet['!rows'] = [];
-
-    worksheet['!rows'][performanceTitleRow] = {
-        hpt: 25
-    };
-
-    worksheet['!rows'][performanceHeaderRow] = {
-        hpt: 35
-    };
-
-    worksheet['!rows'][defectTitleRow] = {
-        hpt: 25
-    };
-
-    worksheet['!rows'][defectHeaderRow] = {
-        hpt: 35
-    };
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | FREEZE
-    |--------------------------------------------------------------------------
-    */
-
-    worksheet['!freeze'] = {
-        xSplit: 0,
-        ySplit: performanceHeaderRow + 1
-    };
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | ADD SHEET
-    |--------------------------------------------------------------------------
-    */
-
-    XLSX.utils.book_append_sheet(
-        workbook,
-        worksheet,
-        'Weekly Report'
-    );
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | FILE NAME
-    |--------------------------------------------------------------------------
-    */
-
-    let selectedWeek =
-        $('#selectWeek option:selected').text();
-
-
-    if (!selectedWeek) {
-        selectedWeek = 'Weekly Performance';
-    }
-
-
-    selectedWeek =
-        selectedWeek
-            .replace(/[\\/:*?"<>|]/g, '-')
-            .trim();
-
-
-    const fileName =
-        'Weekly_Endline_Performance_' +
-        selectedWeek +
-        '.xlsx';
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | DOWNLOAD
-    |--------------------------------------------------------------------------
-    */
-
-    XLSX.writeFile(
-        workbook,
-        fileName
-    );
-
-    console.log(
-        'Export berhasil:',
-        fileName
-    );
-}
-
-
-
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | SELECT WEEK
+    | Select2 Initialization & Events
     |--------------------------------------------------------------------------
     */
     $('#selectWeek').select2({
-
         placeholder: 'Select Week',
-
         width: '100%',
-
         ajax: {
-
             url: "{{ route('monitoring_endlineperformance_selectweek') }}",
-
             type: "GET",
-
             dataType: "json",
-
             delay: 500,
-
-            data: function (params) {
-
-                return {
-                    q: params.term,
-                    page: params.page || 1
-                };
-            },
-
-            processResults: function (data) {
-
-                return {
-
-                    results: data.results,
-
-                    pagination: data.pagination
-                };
-            },
-
+            data: params => ({ q: params.term, page: params.page || 1 }),
+            processResults: data => ({ results: data.results, pagination: data.pagination }),
             cache: true
         }
     });
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | CURRENT WEEK
-    |--------------------------------------------------------------------------
-    */
-    $.get(
-        "{{ route('monitoring_endlineperformance_currentweek') }}"
-    )
-
-    .done(function (res) {
-
-        if (
-            !res ||
-            !res.selected ||
-            !res.selected.id
-        ) {
-
-            console.error(
-                'Current week tidak ditemukan.',
-                res
-            );
-
-            return;
-        }
-
-
-        const option =
-            new Option(
-                res.selected.text,
-                res.selected.id,
-                true,
-                true
-            );
-
-
-        $('#selectWeek')
-            .append(option)
-            .trigger('change');
-    })
-
-    .fail(function (xhr) {
-
-        console.error(
-            'Gagal mengambil current week.',
-            xhr
-        );
-    });
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | WEEK CHANGED
-    |--------------------------------------------------------------------------
-    */
-    $('#selectWeek').on(
-        'change',
-        function () {
-
-            const weekId =
-                $(this).val();
-
-
-            if (!weekId) {
+    // Fetch Current Week
+    $.get("{{ route('monitoring_endlineperformance_currentweek') }}")
+        .done(res => {
+            if (!res?.selected?.id) {
+                console.error('Current week tidak ditemukan.', res);
                 return;
             }
+            const option = new Option(res.selected.text, res.selected.id, true, true);
+            $('#selectWeek').append(option).trigger('change');
+        })
+        .fail(xhr => console.error('Gagal mengambil current week.', xhr));
 
+    // Handle Week Change
+    $('#selectWeek').on('change', function () {
+        const weekId = $(this).val();
+        if (!weekId) return;
 
-            isTableLoading = true;
+        isTableLoading = true;
+        destroyPerformanceDataTable();
 
+        const week = weekId.split('-')[1];
+        $(document).trigger('week:changed', { week_id: weekId });
+        $('.subheader').text(`TOP 5 DEFECT DETAIL (WEEK ${week})`);
 
-            /*
-            |--------------------------------------------------------------------------
-            | Destroy old DataTable
-            |--------------------------------------------------------------------------
-            */
-            destroyPerformanceDataTable();
+        $.get("{{ route('monitoring_endlineperformance_data') }}", { week_id: weekId })
+            .done(html => {
+                const $res = $(html);
+                
+                ['#tableInlinePerformanceBody', '#tableInlineDefectBody', '#tableInlineDefectFoot'].forEach(selector => {
+                    const content = $res.find(selector);
+                    if (content.length) $(selector).html(content.html());
+                });
 
-
-            /*
-            |--------------------------------------------------------------------------
-            | Week Number
-            |--------------------------------------------------------------------------
-            */
-            const weekParts =
-                weekId.split('-');
-
-
-            const week =
-                weekParts[1];
-
-
-            /*
-            |--------------------------------------------------------------------------
-            | Event
-            |--------------------------------------------------------------------------
-            */
-            $(document).trigger(
-                'week:changed',
-                {
-                    week_id: weekId
-                }
-            );
-
-
-            /*
-            |--------------------------------------------------------------------------
-            | Header
-            |--------------------------------------------------------------------------
-            */
-            $('.subheader').text(
-                'TOP 5 DEFECT DETAIL (WEEK ' +
-                week +
-                ')'
-            );
-
-
-            /*
-            |--------------------------------------------------------------------------
-            | Load Data
-            |--------------------------------------------------------------------------
-            */
-            $.get(
-                "{{ route('monitoring_endlineperformance_data') }}",
-                {
-                    week_id: weekId
-                }
-            )
-
-            .done(function (html) {
-
-                const $res =
-                    $(html);
-
-
-                /*
-                |--------------------------------------------------------------------------
-                | Performance
-                |--------------------------------------------------------------------------
-                */
-                const performanceBody =
-                    $res.find(
-                        '#tableInlinePerformanceBody'
-                    );
-
-
-                if (performanceBody.length) {
-
-                    $('#tableInlinePerformanceBody')
-                        .html(
-                            performanceBody.html()
-                        );
-                }
-
-
-                /*
-                |--------------------------------------------------------------------------
-                | Defect
-                |--------------------------------------------------------------------------
-                */
-                const defectBody =
-                    $res.find(
-                        '#tableInlineDefectBody'
-                    );
-
-
-                if (defectBody.length) {
-
-                    $('#tableInlineDefectBody')
-                        .html(
-                            defectBody.html()
-                        );
-                }
-
-
-                /*
-                |--------------------------------------------------------------------------
-                | Defect Footer
-                |--------------------------------------------------------------------------
-                */
-                const defectFoot =
-                    $res.find(
-                        '#tableInlineDefectFoot'
-                    );
-
-
-                if (defectFoot.length) {
-
-                    $('#tableInlineDefectFoot')
-                        .html(
-                            defectFoot.html()
-                        );
-                }
-
-
-                /*
-                |--------------------------------------------------------------------------
-                | Reinitialize DataTable
-                |--------------------------------------------------------------------------
-                */
                 initPerformanceDataTable();
-
-
-                isTableLoading = false;
             })
-
-            .fail(function (xhr) {
-
-                console.error(
-                    'Gagal mengambil data.',
-                    xhr
-                );
-
-                isTableLoading = false;
-            });
-        }
-    );
-
+            .fail(xhr => console.error('Gagal mengambil data.', xhr))
+            .always(() => isTableLoading = false);
+    });
 
     /*
     |--------------------------------------------------------------------------
-    | EXPORT BUTTON
+    | Export Action Handler
     |--------------------------------------------------------------------------
     */
-    $('#export-datatable-btn')
-    .off('click.exportExcel')
-    .on('click.exportExcel', function (e) {
-
+    $('#export-datatable-btn').off('click.exportExcel').on('click.exportExcel', function (e) {
         e.preventDefault();
         e.stopPropagation();
 
-        console.log('EXPORT BUTTON CLICKED');
-
         if (isTableLoading) {
-
-            console.warn(
-                'Data masih loading, export dibatalkan.'
-            );
-
+            console.warn('Data masih loading, export dibatalkan.');
             return;
         }
-
         exportExcel();
     });
-
-
-
 });
 </script>
 
 @include('layouts.loading')
-
 @endpush
-
 
