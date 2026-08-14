@@ -27,6 +27,17 @@ class EndlinePerformanceController extends Controller
 {
     protected $m_modul = 'report';
 
+    private array $defectColors = [
+        '#1B4FE0',
+        '#F4977B',
+        '#36B37E',
+        '#FFAB00',
+        '#8777D9',
+        '#00B8D9',
+        '#F24C4C',
+        '#29B1AE',
+    ];
+
     function __construct()
     {
         $this->middleware('auth');
@@ -123,11 +134,13 @@ class EndlinePerformanceController extends Controller
             $headerQuery = $headerQuery->whereIn('barcode', $outputId)->where('is_qc', 1);
         }
 
-        $headerIds = (clone $headerQuery)->pluck('id');
-
-        $totOutput  = SewingOutput::whereIn('id', $headerIds)->where('is_output', 1)->count();
-        $totInspect = SewingOutput::whereIn('id', $headerIds)->where('is_qc', 1)->count();
-        $totDefect  = SewingOutput::whereIn('id', $headerIds)->whereNotNull('defect_code')->count();
+        // NOTE: sebelumnya di sini ada pluck('id') lalu whereIn('id', $headerIds) berulang
+        // di 4 query berikutnya. Itu menarik ribuan ID ke memori lalu membangun klausa
+        // IN (...) raksasa. Karena $headerIds pada dasarnya = baris yang match $headerQuery,
+        // kita filter langsung dari clone $headerQuery -> hasil identik, tanpa IN besar.
+        $totOutput  = (clone $headerQuery)->where('is_output', 1)->count();
+        $totInspect = (clone $headerQuery)->where('is_qc', 1)->count();
+        $totDefect  = (clone $headerQuery)->whereNotNull('defect_code')->count();
 
         $rft = $totInspect > 0 ? round((($totInspect - $totDefect) / $totInspect) * 100, 2) : 0;
         $wft = $totInspect > 0 ? round(($totDefect / $totInspect) * 100, 2) : 0;
@@ -135,7 +148,7 @@ class EndlinePerformanceController extends Controller
         $target    = Param::where('header', 'qc')->where('key', 'rft_endline_target')->value('value');
         $rftTarget = $rft <= $target ? true : false;
 
-        $topDefect = SewingOutput::whereIn('id', $headerIds)
+        $topDefect = (clone $headerQuery)
             ->whereNotNull('defect_code')
             ->whereNotIn('defect_code', [800, 900])
             ->select('defect_code', DB::raw('COUNT(*) as total'))
@@ -338,61 +351,117 @@ class EndlinePerformanceController extends Controller
         ]);
     }
 
-
-    private function getTopStyleForDefect(Collection $headerIds, array $defectCodes, int $limit = 2): array
+    /**
+     * Batch version of "top style per defect group".
+     *
+     * Dulu dipanggil sekali per grup (4 defect + 1 "others" = 5x), dan tiap
+     * panggilan menjalankan 4 query (SewingOutput -> OutputDetail -> PurchaseOrder -> Style).
+     * Total sampai ~20 query hanya untuk bagian ini.
+     *
+     * Di sini semua grup diproses dalam SATU pass: 1 query untuk kumpulan
+     * defect_code+barcode, 1 query OutputDetail, 1 query PurchaseOrder, 1 query Style
+     * -- lalu breakdown per grup (top style + percent + Others) dihitung di memori,
+     * dengan logika/angka yang identik dengan method lama per-grup.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder $headerQuery  query dasar (sudah difilter tanggal), belum difilter defect_code
+     * @param  array $groups  ['groupKey' => [defect_code, ...], ...]
+     */
+    private function getTopStylesForGroups($headerQuery, array $groups, int $limit = 2): array
     {
-        $barcodes = SewingOutput::whereIn('id', $headerIds)
-            ->whereIn('defect_code', $defectCodes)
-            ->pluck('barcode');
+        $empty = collect($groups)->mapWithKeys(fn ($codes, $key) => [$key => ['rows' => [], 'total' => 0]])->all();
 
-        if ($barcodes->isEmpty()) {
-            return ['rows' => [], 'total' => 0];
+        $allCodes = collect($groups)->flatten()->unique()->values();
+
+        if ($allCodes->isEmpty()) {
+            return $empty;
         }
 
-        $styleQty = OutputDetail::whereIn('barcode', $barcodes)
-            ->select('idpo', DB::raw('COUNT(*) as total'))
-            ->groupBy('idpo')
+        $barcodeRows = (clone $headerQuery)
+            ->whereIn('defect_code', $allCodes)
+            ->select('defect_code', 'barcode')
             ->get();
 
-        $totalDefectQty = $styleQty->sum('total');
+        if ($barcodeRows->isEmpty()) {
+            return $empty;
+        }
 
-        $poToStyle = PurchaseOrder::whereIn('idpo', $styleQty->pluck('idpo'))
+        $codeToGroup = [];
+        foreach ($groups as $key => $codes) {
+            foreach ($codes as $c) {
+                $codeToGroup[$c] = $key;
+            }
+        }
+
+        $groupBarcodes = [];
+        foreach ($barcodeRows as $row) {
+            $key = $codeToGroup[$row->defect_code] ?? null;
+            if ($key === null) {
+                continue;
+            }
+            $groupBarcodes[$key][] = $row->barcode;
+        }
+
+        $allBarcodes = $barcodeRows->pluck('barcode')->unique()->values();
+
+        $outputRows = OutputDetail::whereIn('barcode', $allBarcodes)
+            ->select('idpo', 'barcode')
+            ->get();
+
+        $poToStyle = PurchaseOrder::whereIn('idpo', $outputRows->pluck('idpo')->unique())
             ->pluck('idstyle', 'idpo');
 
         $styleNames = Style::whereIn('idstyle', $poToStyle->values()->unique())
             ->pluck('nmstyle', 'idstyle');
 
-        $grouped = [];
-        foreach ($styleQty as $row) {
-            $idstyle = $poToStyle[$row->idpo] ?? null;
-            $nmstyle = $idstyle ? ($styleNames[$idstyle] ?? '-') : '-';
+        $result = [];
 
-            $grouped[$nmstyle] = ($grouped[$nmstyle] ?? 0) + $row->total;
+        foreach ($groups as $key => $codes) {
+            $barcodeSet = collect($groupBarcodes[$key] ?? [])->flip();
+
+            if ($barcodeSet->isEmpty()) {
+                $result[$key] = ['rows' => [], 'total' => 0];
+                continue;
+            }
+
+            $styleQty = $outputRows->filter(fn ($r) => $barcodeSet->has($r->barcode))
+                ->groupBy('idpo')
+                ->map->count();
+
+            $totalDefectQty = $styleQty->sum();
+
+            $grouped = [];
+            foreach ($styleQty as $idpo => $total) {
+                $idstyle = $poToStyle[$idpo] ?? null;
+                $nmstyle = $idstyle ? ($styleNames[$idstyle] ?? '-') : '-';
+                $grouped[$nmstyle] = ($grouped[$nmstyle] ?? 0) + $total;
+            }
+
+            arsort($grouped);
+
+            $top = array_slice($grouped, 0, $limit, true);
+            $othersQty = $totalDefectQty - array_sum($top);
+
+            $rows = [];
+            foreach ($top as $nmstyle => $qty) {
+                $rows[] = [
+                    'style'   => $nmstyle,
+                    'qty'     => $qty,
+                    'percent' => $totalDefectQty > 0 ? number_format(($qty / $totalDefectQty) * 100, 2) : '0.00',
+                ];
+            }
+
+            if ($othersQty > 0) {
+                $rows[] = [
+                    'style'   => 'Others',
+                    'qty'     => $othersQty,
+                    'percent' => $totalDefectQty > 0 ? number_format(($othersQty / $totalDefectQty) * 100, 2) : '0.00',
+                ];
+            }
+
+            $result[$key] = ['rows' => $rows, 'total' => $totalDefectQty];
         }
 
-        arsort($grouped);
-
-        $top = array_slice($grouped, 0, $limit, true);
-        $othersQty = $totalDefectQty - array_sum($top);
-
-        $rows = [];
-        foreach ($top as $nmstyle => $qty) {
-            $rows[] = [
-                'style'   => $nmstyle,
-                'qty'     => $qty,
-                'percent' => $totalDefectQty > 0 ? number_format(($qty / $totalDefectQty) * 100, 2) : '0.00',
-            ];
-        }
-
-        if ($othersQty > 0) {
-            $rows[] = [
-                'style'   => 'Others',
-                'qty'     => $othersQty,
-                'percent' => $totalDefectQty > 0 ? number_format(($othersQty / $totalDefectQty) * 100, 2) : '0.00',
-            ];
-        }
-
-        return ['rows' => $rows, 'total' => $totalDefectQty];
+        return $result;
     }
 
     public function getWeeklyData(Request $request)
@@ -425,15 +494,9 @@ class EndlinePerformanceController extends Controller
         }
 
         $headerQuery = SewingOutput::whereBetween('date', [$dta, $dtb]);
-        $headerIds = (clone $headerQuery)->pluck('id');
 
-        $totInspect = SewingOutput::whereIn('id', $headerIds)
-            ->where('is_qc', 1)
-            ->count();
-
-        $totDefect = SewingOutput::whereIn('id', $headerIds)
-            ->whereNotNull('defect_code')
-            ->count();
+        $totInspect = (clone $headerQuery)->where('is_qc', 1)->count();
+        $totDefect  = (clone $headerQuery)->whereNotNull('defect_code')->count();
 
         $rft_qty = $totInspect - $totDefect;
 
@@ -450,7 +513,7 @@ class EndlinePerformanceController extends Controller
             'period' => 'Week ' . $weekNumber . ' (' . $dta->format('d M') . ' - ' . $dtb->format('d M Y') . ')',
         ];
 
-        $topDefect = SewingOutput::whereIn('id', $headerIds)
+        $topDefect = (clone $headerQuery)
             ->whereNotNull('defect_code')
             ->whereNotIn('defect_code', [800, 900])
             ->select(
@@ -484,12 +547,29 @@ class EndlinePerformanceController extends Controller
             ? ($othersQty / $totDefect) * 100
             : 0;
 
+        $othersDefectCodes = (clone $headerQuery)
+            ->whereNotNull('defect_code')
+            ->whereNotIn('defect_code', $defectIds->toArray())
+            ->pluck('defect_code')
+            ->unique()
+            ->values()
+            ->toArray();
+
+        // Dulu: getTopStyleForDefect() dipanggil 5x (top4 + others), masing-masing 4 query -> ~20 query.
+        // Sekarang: satu batch call untuk semua grup sekaligus (~4 query total).
+        $topStyleGroups = ['others' => $othersDefectCodes];
+        foreach ($defectIds as $code) {
+            $topStyleGroups[(string) $code] = [$code];
+        }
+
+        $topStyles = $this->getTopStylesForGroups($headerQuery, $topStyleGroups);
+
         // Mapping Top 4 Defect + Top Style tiap defect
         $topDefect = $topDefect->values()->map(function ($item, $index) use (
             $masterQcDefects,
             $totDefect,
             $colors,
-            $headerIds
+            $topStyles
         ) {
             $percent = $totDefect > 0 ? ($item->total / $totDefect) * 100 : 0;
 
@@ -499,17 +579,9 @@ class EndlinePerformanceController extends Controller
                 'defect_qty' => (int) $item->total,
                 'percent'    => number_format($percent, 2),
                 'color'      => $colors[$index] ?? '#29B1AE',
-                'top_style'  => $this->getTopStyleForDefect($headerIds, [$item->defect_code])['rows'],
+                'top_style'  => $topStyles[(string) $item->defect_code]['rows'] ?? [],
             ];
         });
-
-        $othersDefectCodes = SewingOutput::whereIn('id', $headerIds)
-            ->whereNotNull('defect_code')
-            ->whereNotIn('defect_code', $defectIds->toArray())
-            ->pluck('defect_code')
-            ->unique()
-            ->values()
-            ->toArray();
 
         $topDefect->push([
             'defect_id'  => 'others',
@@ -517,7 +589,7 @@ class EndlinePerformanceController extends Controller
             'defect_qty' => (int) $othersQty,
             'percent'    => number_format($othersPercent, 2),
             'color'      => '#29B1AE',
-            'top_style'  => $this->getTopStyleForDefect($headerIds, $othersDefectCodes)['rows'],
+            'top_style'  => $topStyles['others']['rows'] ?? [],
         ]);
 
         $totTopDefect = $topDefect->sum('defect_qty');
@@ -549,14 +621,25 @@ class EndlinePerformanceController extends Controller
     }
 
     // Helper: pecah range tanggal jadi bucket per hari
+    // Dulu: 1 query SewingOutput per hari di dalam while-loop (7 query untuk 7 hari).
+    // Sekarang: 1 query untuk seluruh range, lalu di-group per tanggal di memori
+    // (pola yang sama seperti buildHourBuckets di bawah, yang memang sudah efisien).
     private function buildDayBuckets(Carbon $dta, Carbon $dtb): array
     {
+        $rows = SewingOutput::whereBetween('date', [$dta, $dtb])
+            ->select('id', DB::raw('DATE(date) as dd'))
+            ->get()
+            ->groupBy('dd');
+
         $buckets = [];
         $cursor = $dta->copy();
 
         while ($cursor->lte($dtb)) {
-            $ids = SewingOutput::whereDate('date', $cursor)->pluck('id');
-            $buckets[] = ['label' => $cursor->format('d M'), 'ids' => $ids];
+            $key = $cursor->format('Y-m-d');
+            $buckets[] = [
+                'label' => $cursor->format('d M'),
+                'ids'   => $rows->has($key) ? $rows[$key]->pluck('id') : collect(),
+            ];
             $cursor->addDay();
         }
 
@@ -582,60 +665,93 @@ class EndlinePerformanceController extends Controller
         return $buckets;
     }
 
-    private function getTopStyleForBucket(Collection $bucketIds, array $defectCodes, int $inspectQty, int $limit = 3): array
+    /**
+     * Batch version of getTopStyleForBucket untuk semua bucket sekaligus.
+     *
+     * Dulu getTopStyleForBucket() dipanggil sekali per bucket (bisa 17x untuk mode "day"),
+     * dan tiap panggilan menjalankan sampai 4 query -> bisa 60-100+ query.
+     *
+     * Di sini kita pakai $rowsMap (is_qc, defect_code, barcode per id) yang sudah
+     * ditarik sekali di getDefectChartData, lalu OutputDetail/PurchaseOrder/Style
+     * ditarik sekali untuk gabungan seluruh barcode dari semua bucket, dan
+     * breakdown per-bucket dihitung di memori -- hasil & rumus wft identik dengan
+     * getTopStyleForBucket yang lama.
+     */
+    private function buildBucketTopStyles(Collection $rowsMap, array $buckets, Collection $defectCodes, array $inspectQtyPerBucket, int $limit = 3): array
     {
-        $barcodes = SewingOutput::whereIn('id', $bucketIds)
-            ->where('is_qc', 1)
-            ->whereIn('defect_code', $defectCodes)
-            ->pluck('barcode');
-
-        if ($barcodes->isEmpty()) {
-            return [];
+        if ($defectCodes->isEmpty()) {
+            return array_fill(0, count($buckets), []);
         }
 
-        $styleQty = OutputDetail::whereIn('barcode', $barcodes)
-            ->select('idpo', DB::raw('COUNT(*) as total'))
-            ->groupBy('idpo')
+        $codesArr = $defectCodes->toArray();
+        $bucketBarcodes = [];
+        $allBarcodes = collect();
+
+        foreach ($buckets as $i => $bucket) {
+            $barcodes = $bucket['ids']
+                ->map(fn ($id) => $rowsMap->get($id))
+                ->filter(fn ($r) => $r && (int) $r->is_qc === 1 && in_array($r->defect_code, $codesArr))
+                ->pluck('barcode');
+
+            $bucketBarcodes[$i] = $barcodes->unique()->values();
+            $allBarcodes = $allBarcodes->merge($barcodes);
+        }
+
+        $allBarcodes = $allBarcodes->unique()->values();
+
+        if ($allBarcodes->isEmpty()) {
+            return array_fill(0, count($buckets), []);
+        }
+
+        $outputRows = OutputDetail::whereIn('barcode', $allBarcodes)
+            ->select('idpo', 'barcode')
             ->get();
 
-        $poToStyle = PurchaseOrder::whereIn('idpo', $styleQty->pluck('idpo'))
+        $poToStyle = PurchaseOrder::whereIn('idpo', $outputRows->pluck('idpo')->unique())
             ->pluck('idstyle', 'idpo');
 
         $styleNames = Style::whereIn('idstyle', $poToStyle->values()->unique())
             ->pluck('nmstyle', 'idstyle');
 
-        $grouped = [];
-        foreach ($styleQty as $row) {
-            $idstyle = $poToStyle[$row->idpo] ?? null;
-            $nmstyle = $idstyle ? ($styleNames[$idstyle] ?? '-') : '-';
-            $grouped[$nmstyle] = ($grouped[$nmstyle] ?? 0) + $row->total;
+        $results = [];
+
+        foreach ($buckets as $i => $bucket) {
+            $barcodeSet = $bucketBarcodes[$i]->flip();
+
+            if ($barcodeSet->isEmpty()) {
+                $results[$i] = [];
+                continue;
+            }
+
+            $styleQty = $outputRows->filter(fn ($r) => $barcodeSet->has($r->barcode))
+                ->groupBy('idpo')
+                ->map->count();
+
+            $grouped = [];
+            foreach ($styleQty as $idpo => $total) {
+                $idstyle = $poToStyle[$idpo] ?? null;
+                $nmstyle = $idstyle ? ($styleNames[$idstyle] ?? '-') : '-';
+                $grouped[$nmstyle] = ($grouped[$nmstyle] ?? 0) + $total;
+            }
+
+            arsort($grouped);
+            $top = array_slice($grouped, 0, $limit, true);
+            $inspectQty = $inspectQtyPerBucket[$i] ?? 0;
+
+            $rows = [];
+            foreach ($top as $nmstyle => $qty) {
+                $rows[] = [
+                    'style' => $nmstyle,
+                    'qty'   => $qty,
+                    'wft'   => $inspectQty > 0 ? round(($qty / $inspectQty) * 100, 2) : 0,
+                ];
+            }
+
+            $results[$i] = $rows;
         }
 
-        arsort($grouped);
-        $top = array_slice($grouped, 0, $limit, true);
-
-        $rows = [];
-        foreach ($top as $nmstyle => $qty) {
-            $rows[] = [
-                'style' => $nmstyle,
-                'qty'   => $qty,
-                'wft'   => $inspectQty > 0 ? round(($qty / $inspectQty) * 100, 2) : 0,
-            ];
-        }
-
-        return $rows;
+        return $results;
     }
-
-     private array $defectColors = [
-        '#1B4FE0',
-        '#F4977B',
-        '#36B37E',
-        '#FFAB00',
-        '#8777D9',
-        '#00B8D9',
-        '#F24C4C',
-        '#29B1AE',
-    ];
 
     private function getDefectColorMap(string $mode, int $limit = 5): array
     {
@@ -647,9 +763,9 @@ class EndlinePerformanceController extends Controller
             $headerQuery = SewingOutput::whereBetween('date', [$dta, $dtb]);
         }
 
-        $headerIds = $headerQuery->pluck('id');
-
-        $rankedCodes = SewingOutput::whereIn('id', $headerIds)
+        // Dulu: pluck('id') dulu lalu whereIn('id', $headerIds). Sekarang filter langsung
+        // dari $headerQuery -> hasil sama, tanpa query ekstra & tanpa IN(...) raksasa.
+        $rankedCodes = (clone $headerQuery)
             ->whereNotNull('defect_code')
             ->whereNotIn('defect_code', [800, 900])
             ->select('defect_code', DB::raw('COUNT(*) as total'))
@@ -720,39 +836,53 @@ class EndlinePerformanceController extends Controller
 
         $names = QCDefect::whereIn('kdcacat', $defectCodes)->pluck('deskripsi', 'kdcacat');
 
+        // Dulu: tiap bucket menjalankan 2 query (inspectQty + defectQtyPerCode) ditambah
+        // sampai 4 query lagi lewat getTopStyleForBucket() -> untuk mode "day" (17 bucket)
+        // bisa 100+ query. Sekarang: SATU query menarik id/is_qc/defect_code/barcode untuk
+        // seluruh id dari semua bucket, sisanya dihitung di memori per-bucket dengan
+        // filter & rumus yang persis sama seperti sebelumnya.
+        $allIds = collect($buckets)->pluck('ids')->flatten()->unique()->values();
+
+        $rowsMap = $allIds->isNotEmpty()
+            ? SewingOutput::whereIn('id', $allIds)
+                ->select('id', 'is_qc', 'defect_code', 'barcode')
+                ->get()
+                ->keyBy('id')
+            : collect();
+
+        $labels = [];
         $seriesData = [];
         foreach ($defectCodes as $c) {
             $seriesData[$c] = [];
         }
 
-        $labels = [];
-        $bucketMeta = [];
+        $inspectQtyPerBucket = [];
 
-        foreach ($buckets as $bucket) {
+        foreach ($buckets as $i => $bucket) {
             $labels[] = $bucket['label'];
 
-            $inspectQty = SewingOutput::whereIn('id', $bucket['ids'])
-                ->where('is_qc', 1)
-                ->count();
+            $bucketRows = $bucket['ids']->map(fn ($id) => $rowsMap->get($id))->filter();
 
-            $defectQtyPerCode = SewingOutput::whereIn('id', $bucket['ids'])
-                ->where('is_qc', 1)
-                ->whereIn('defect_code', $defectCodes)
-                ->select('defect_code', DB::raw('COUNT(*) as total'))
+            $inspectQty = $bucketRows->where('is_qc', 1)->count();
+            $inspectQtyPerBucket[$i] = $inspectQty;
+
+            $defectQtyPerCode = $bucketRows->where('is_qc', 1)
+                ->whereIn('defect_code', $defectCodes->toArray())
                 ->groupBy('defect_code')
-                ->pluck('total', 'defect_code');
+                ->map->count();
 
             foreach ($defectCodes as $code) {
                 $qty = $defectQtyPerCode[$code] ?? 0;
                 $wft = $inspectQty > 0 ? round(($qty / $inspectQty) * 100, 2) : 0;
                 $seriesData[$code][] = $wft;
             }
+        }
 
-            $bucketMeta[] = [
-                'topStyles' => $defectCodes->isNotEmpty()
-                    ? $this->getTopStyleForBucket($bucket['ids'], $defectCodes->toArray(), $inspectQty)
-                    : [],
-            ];
+        $topStylesPerBucket = $this->buildBucketTopStyles($rowsMap, $buckets, $defectCodes, $inspectQtyPerBucket);
+
+        $bucketMeta = [];
+        foreach ($buckets as $i => $bucket) {
+            $bucketMeta[] = ['topStyles' => $topStylesPerBucket[$i] ?? []];
         }
 
         $series = $defectCodes->values()->map(function ($code) use ($seriesData, $names, $colorMap) {
