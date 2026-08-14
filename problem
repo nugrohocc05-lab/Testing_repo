@@ -28,6 +28,7 @@
     .table-head {
         table-layout: fixed;
     }
+
     .table-foot {
         table-layout: fixed;
     }
@@ -52,26 +53,6 @@
             line-height: 1.2;
         }
 
-        .toggle-wrapper {
-            display: inline-flex;
-            background-color: #212B3E;
-            border-radius: 8px;
-            gap: 4px;
-        }
-
-        .toggle-btn {
-            min-width: 70px;
-            padding: 5px 10px;
-            text-align: center;
-            color: white;
-            background-color: transparent;
-            cursor: pointer;
-            font-weight: 400;
-            transition: all 0.2s ease;
-            margin: 0;
-        }
-
-        /* Aktif */
         .toggle-wrapper {
             display: inline-flex;
             background-color: #212B3E;
@@ -109,7 +90,6 @@
         font-size: 13px;
     }
 
-    /* filter */
     .defect-filter {
         gap: 8px;
     }
@@ -158,7 +138,6 @@
         flex-shrink: 0;
     }
 
-
     .add-filter-btn:hover {
         background-color: #242E3E;
     }
@@ -197,14 +176,10 @@
         transition: all 0.15s ease;
     }
 
-
-    /* Selected */
     .filter-option-pill.is-selected {
         background-color: var(--defect-color);
         color: #FFFFFF;
     }
-
-
 
     .filter-option-empty {
         font-size: 13px;
@@ -259,15 +234,6 @@
         display: inline-flex;
         background-color: #212B3E;
         border-radius: 8px;
-        gap: 4px;
-    }
-
-
-    /* Aktif */
-    .toggle-wrapper {
-        display: inline-flex;
-        background-color: #212B3E;
-        border-radius: 8px;
         gap: 0;
         overflow: hidden;
     }
@@ -284,14 +250,12 @@
         margin: 0;
     }
 
-    /* Weekly aktif - kiri */
     #weekly:checked + .toggle-btn {
         color: #fff;
         background-color: #4C8CF2;
         border-radius: 8px 0 0 8px;
     }
 
-    /* Day aktif - kanan */
     #day:checked + .toggle-btn {
         color: #fff;
         background-color: #4C8CF2;
@@ -310,7 +274,6 @@
         gap: 12px;
     }
 
-
     .defect-filter {
         display: flex;
         align-items: flex-start;
@@ -320,7 +283,6 @@
         min-width: 0;
         overflow: visible;
     }
-
 
     .filter-label {
         color: #FFFFFF;
@@ -351,7 +313,6 @@
         flex-shrink: 0;
     }
 
-
     .add-filter-btn {
         width: 28px;
         height: 28px;
@@ -368,7 +329,6 @@
         cursor: pointer;
         flex-shrink: 0;
     }
-
 
     .filter-dropdown {
         position: absolute;
@@ -403,19 +363,13 @@
         cursor: pointer;
     }
 
-
     .btn-find {
         flex-shrink: 0;
         white-space: nowrap;
     }
-
-
-
-
 </style>
 
 <div class="defect-card-body">
-    <!-- Header -->
     <div class="d-flex align-items-center wrapper-title justify-content-between">
         <div class="datatable-header-left">
             <img src="{{ _asset('svg/endlinePerformance/defect-monitor.svg') }}" style="width:25px;height:25px;" class="detailIcon" alt="">
@@ -423,37 +377,13 @@
                 DEFECT MONITORING (WFT%)
             </h5>
         </div>
-
         <div class="datatable-header-right gap-4" style="justify-content: end;">
             <div class="toggle-wrapper">
-                <input
-                    type="radio"
-                    name="schedule_type"
-                    id="weekly"
-                    value="weekly"
-                    class="btn-check"
-                    autocomplete="off"
-                    checked
-                >
-
-                <label class="toggle-btn" for="weekly">
-                    Weekly
-                </label>
-
-                <input
-                    type="radio"
-                    name="schedule_type"
-                    id="day"
-                    value="day"
-                    class="btn-check"
-                    autocomplete="off"
-                >
-
-                <label class="toggle-btn" for="day">
-                    Day
-                </label>
+                <input type="radio" name="schedule_type" id="weekly" value="weekly" class="btn-check" autocomplete="off" checked>
+                <label class="toggle-btn" for="weekly">Weekly</label>
+                <input type="radio" name="schedule_type" id="day" value="day" class="btn-check" autocomplete="off">
+                <label class="toggle-btn" for="day">Day</label>
             </div>
-
             <button class="export-btn bg-transparent border-0 p-0 d-flex align-items-center gap-1" id="export-datatable" aria-label="Export">
                 <img src="{{ _asset('svg/inlinePerformance/export.svg') }}" class="export-icon" style="width:27px; height:27px;" alt="Export">
                 <span class="custom-tooltip-bottom">Excel</span>
@@ -461,47 +391,25 @@
         </div>
     </div>
 
-    <!-- Filter Defect-->
     <div class="d-flex flex-column gap-3">
-        <!-- Section Filter -->
         <div class="defect-filter-container my-2">
             <div class="defect-filter">
-                <span class="filter-label">
-                    Filter Defect:
-                </span>
-
-                <div id="selectedChips" class="">
-                </div>
-
+                <span class="filter-label">Filter Defect:</span>
+                <div id="selectedChips" class=""></div>
                 <div class="position-relative">
-                    <button
-                        id="addFilterBtn"
-                        class="add-filter-btn"
-                        type="button"
-                        aria-label="Add filter"
-                    >
-                        +
-                    </button>
-
+                    <button id="addFilterBtn" class="add-filter-btn" type="button" aria-label="Add filter">+</button>
                     <div id="filterDropdown" class="filter-dropdown d-none">
                         <div id="filterOptionsList" class="filter-options-list"></div>
                     </div>
                 </div>
-
             </div>
-
             <button class="btn-find" id="findbtndefect">
-                <img
-                    src="{{ _asset('svg/inlinePerformance/search.svg') }}"
-                    style="width:20px;height:15px;"
-                    alt=""
-                >
+                <img src="{{ _asset('svg/inlinePerformance/search.svg') }}" style="width:20px;height:15px;" alt="">
                 Find
             </button>
         </div>
     </div>
 
-    <!-- Chart -->
     <div class="chart-wrapper">
         <div id="defectChart"></div>
     </div>
@@ -509,7 +417,7 @@
 
 @push('scripts')
 <script>
-   $(function () {
+$(function () {
     let allDefects = [];
     let selectedDefects = [];
     let currentMode = 'weekly';
@@ -525,557 +433,160 @@
     let chartSeries = [];
     let bucketMeta = [];
 
-    function styleRange(
-    worksheet,
-    startRow,
-    endRow,
-    startCol,
-    endCol,
-    style
-) {
-
-    for (
-        let row = startRow;
-        row <= endRow;
-        row++
-    ) {
-
-        for (
-            let col = startCol;
-            col <= endCol;
-            col++
-        ) {
-
-            const cell =
-                XLSX.utils.encode_cell({
-                    r: row,
-                    c: col
-                });
-
-            if (worksheet[cell]) {
-                worksheet[cell].s = style;
+    function styleRange(worksheet, startRow, endRow, startCol, endCol, style) {
+        for (let row = startRow; row <= endRow; row++) {
+            for (let col = startCol; col <= endCol; col++) {
+                const cell = XLSX.utils.encode_cell({ r: row, c: col });
+                if (worksheet[cell]) {
+                    worksheet[cell].s = style;
+                }
             }
         }
     }
-}
 
-
-    // Export
-    // ============================================================
-// EXPORT CHART DATA TO EXCEL
-// ============================================================
-function exportExcel() {
-
-    console.log('===== EXPORT DEFECT MONITORING =====');
-
-    // Cek SheetJS
-    if (typeof XLSX === 'undefined') {
-        console.error('SheetJS tidak tersedia.');
-        alert('Excel export library belum tersedia.');
-        return;
-    }
-
-    console.log('SheetJS version:', XLSX.version);
-
-    // Cek data
-    if (!xAxisLabels || xAxisLabels.length === 0) {
-        alert('Tidak ada data untuk diexport.');
-        return;
-    }
-
-    const workbook = XLSX.utils.book_new();
-
-    const exportData = [];
-
-    // ============================================================
-    // STYLE HELPER
-    // ============================================================
-
-    const borderBase = {
-        style: 'thin',
-        color: {
-            rgb: 'B7B7B7'
+    function exportExcel() {
+        console.log('===== EXPORT DEFECT MONITORING =====');
+        
+        if (typeof XLSX === 'undefined') {
+            console.error('SheetJS tidak tersedia.');
+            alert('Excel export library belum tersedia.');
+            return;
         }
-    };
 
-    const border = {
-        top: borderBase,
-        bottom: borderBase,
-        left: borderBase,
-        right: borderBase
-    };
+        if (!xAxisLabels || xAxisLabels.length === 0) {
+            alert('Tidak ada data untuk diexport.');
+            return;
+        }
 
-    const titleStyle = {
-        font: {
-            bold: true,
-            color: {
-                rgb: 'FFFFFF'
-            },
-            sz: 12
-        },
-        fill: {
-            fgColor: {
-                rgb: '1B2433'
-            }
-        },
-        alignment: {
-            horizontal: 'left',
-            vertical: 'center'
-        },
-        border: border
-    };
+        const workbook = XLSX.utils.book_new();
+        const exportData = [];
+        
+        const borderBase = { style: 'thin', color: { rgb: 'B7B7B7' } };
+        const border = { top: borderBase, bottom: borderBase, left: borderBase, right: borderBase };
 
-    const headerStyle = {
-        font: {
-            bold: true,
-            color: {
-                rgb: 'FFFFFF'
-            }
-        },
-        fill: {
-            fgColor: {
-                rgb: '242E3E'
-            }
-        },
-        alignment: {
-            horizontal: 'center',
-            vertical: 'center',
-            wrapText: true
-        },
-        border: border
-    };
+        const titleStyle = {
+            font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 12 },
+            fill: { fgColor: { rgb: '1B2433' } },
+            alignment: { horizontal: 'left', vertical: 'center' },
+            border: border
+        };
 
-    const bodyStyle = {
-        alignment: {
-            vertical: 'center'
-        },
-        border: border
-    };
+        const headerStyle = {
+            font: { bold: true, color: { rgb: 'FFFFFF' } },
+            fill: { fgColor: { rgb: '242E3E' } },
+            alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+            border: border
+        };
 
-    const centerStyle = {
-        alignment: {
-            horizontal: 'center',
-            vertical: 'center'
-        },
-        border: border
-    };
+        const bodyStyle = { alignment: { vertical: 'center' }, border: border };
+        const centerStyle = { alignment: { horizontal: 'center', vertical: 'center' }, border: border };
 
+        const titleRow = exportData.length;
+        let modeText = currentMode === 'weekly' ? 'WEEKLY' : 'DAILY';
+        exportData.push([`DEFECT MONITORING (WFT%) - ${modeText}`]);
 
-    // ============================================================
-    // TITLE
-    // ============================================================
+        const filterRow = exportData.length;
+        let filterText = 'All Defect';
 
-    const titleRow = exportData.length;
+        if (selectedDefects.length > 0) {
+            const selectedNames = selectedDefects.map(code => {
+                const defect = allDefects.find(o => String(o.code) === String(code));
+                return defect ? defect.name : code;
+            });
+            filterText = selectedNames.join(', ');
+        }
+        exportData.push(['Filter Defect:', filterText]);
 
-    let modeText =
-        currentMode === 'weekly'
-            ? 'WEEKLY'
-            : 'DAILY';
-
-    exportData.push([
-        `DEFECT MONITORING (WFT%) - ${modeText}`
-    ]);
-
-
-    // ============================================================
-    // FILTER
-    // ============================================================
-
-    const filterRow = exportData.length;
-
-    let filterText = 'All Defect';
-
-    if (selectedDefects.length > 0) {
-
-        const selectedNames = selectedDefects.map(code => {
-
-            const defect = allDefects.find(
-                o => String(o.code) === String(code)
-            );
-
-            return defect
-                ? defect.name
-                : code;
-
-        });
-
-        filterText = selectedNames.join(', ');
-    }
-
-    exportData.push([
-        'Filter Defect:',
-        filterText
-    ]);
-
-
-    // ============================================================
-    // HEADER
-    // ============================================================
-
-    const headerRow = exportData.length;
-
-    const header = [
-        currentMode === 'weekly'
-            ? 'Week / Periode'
-            : 'Date'
-    ];
-
-    chartSeries.forEach(series => {
-        header.push(series.name + ' WFT (%)');
-    });
-
-    exportData.push(header);
-
-
-    // ============================================================
-    // DATA CHART
-    // ============================================================
-
-    const dataStartRow = exportData.length;
-
-    xAxisLabels.forEach((label, index) => {
-
-        const row = [label];
-
+        const headerRow = exportData.length;
+        const header = [currentMode === 'weekly' ? 'Week / Periode' : 'Date'];
         chartSeries.forEach(series => {
-
-            const value =
-                series.data &&
-                series.data[index] !== undefined
-                    ? series.data[index]
-                    : 0;
-
-            row.push(value);
+            header.push(series.name + ' WFT (%)');
         });
+        exportData.push(header);
 
-        exportData.push(row);
-    });
-
-    const dataEndRow = exportData.length - 1;
-
-
-    // ============================================================
-    // SPACER
-    // ============================================================
-
-    exportData.push([]);
-
-
-    // ============================================================
-    // TOP STYLE SECTION
-    // ============================================================
-
-    const topStyleTitleRow = exportData.length;
-
-    exportData.push([
-        'TOP STYLE CONTRIBUTE'
-    ]);
-
-
-    const topStyleHeaderRow = exportData.length;
-
-    exportData.push([
-        currentMode === 'weekly'
-            ? 'Week / Periode'
-            : 'Date',
-        'Rank',
-        'Style',
-        'WFT (%)'
-    ]);
-
-
-    const topStyleStartRow = exportData.length;
-
-
-    xAxisLabels.forEach((label, index) => {
-
-        const styles =
-            bucketMeta[index]?.topStyles || [];
-
-        styles.forEach((style, styleIndex) => {
-
-            exportData.push([
-                label,
-                styleIndex + 1,
-                style.style,
-                style.wft
-            ]);
-
+        const dataStartRow = exportData.length;
+        xAxisLabels.forEach((label, index) => {
+            const row = [label];
+            chartSeries.forEach(series => {
+                const value = series.data && series.data[index] !== undefined ? series.data[index] : 0;
+                row.push(value);
+            });
+            exportData.push(row);
         });
-    });
+        const dataEndRow = exportData.length - 1;
 
+        exportData.push([]);
 
-    const topStyleEndRow = exportData.length - 1;
+        const topStyleTitleRow = exportData.length;
+        exportData.push(['TOP STYLE CONTRIBUTE']);
 
+        const topStyleHeaderRow = exportData.length;
+        exportData.push([
+            currentMode === 'weekly' ? 'Week / Periode' : 'Date',
+            'Rank',
+            'Style',
+            'WFT (%)'
+        ]);
 
-    // ============================================================
-    // CREATE WORKSHEET
-    // ============================================================
-
-    const worksheet =
-        XLSX.utils.aoa_to_sheet(exportData);
-
-
-    // ============================================================
-    // COLUMN WIDTH
-    // ============================================================
-
-    const totalColumns =
-        Math.max(
-            chartSeries.length + 1,
-            4
-        );
-
-    const cols = [];
-
-    for (let i = 0; i < totalColumns; i++) {
-
-        if (i === 0) {
-            cols.push({
-                wch: 25
+        const topStyleStartRow = exportData.length;
+        xAxisLabels.forEach((label, index) => {
+            const styles = bucketMeta[index]?.topStyles || [];
+            styles.forEach((style, styleIndex) => {
+                exportData.push([label, styleIndex + 1, style.style, style.wft]);
             });
-        } else {
-            cols.push({
-                wch: 20
-            });
+        });
+        const topStyleEndRow = exportData.length - 1;
+
+        const worksheet = XLSX.utils.aoa_to_sheet(exportData);
+        const totalColumns = Math.max(chartSeries.length + 1, 4);
+        const cols = [];
+
+        for (let i = 0; i < totalColumns; i++) {
+            cols.push({ wch: i === 0 ? 25 : 20 });
         }
-    }
+        worksheet['!cols'] = cols;
 
-    worksheet['!cols'] = cols;
+        worksheet['!merges'] = [
+            { s: { r: titleRow, c: 0 }, e: { r: titleRow, c: totalColumns - 1 } },
+            { s: { r: topStyleTitleRow, c: 0 }, e: { r: topStyleTitleRow, c: 3 } }
+        ];
 
+        styleRange(worksheet, titleRow, titleRow, 0, totalColumns - 1, titleStyle);
+        styleRange(worksheet, topStyleTitleRow, topStyleTitleRow, 0, 3, titleStyle);
+        styleRange(worksheet, headerRow, headerRow, 0, chartSeries.length, headerStyle);
+        styleRange(worksheet, topStyleHeaderRow, topStyleHeaderRow, 0, 3, headerStyle);
 
-    // ============================================================
-    // MERGE TITLE
-    // ============================================================
-
-    worksheet['!merges'] = [
-        {
-            s: {
-                r: titleRow,
-                c: 0
-            },
-            e: {
-                r: titleRow,
-                c: totalColumns - 1
-            }
-        },
-        {
-            s: {
-                r: topStyleTitleRow,
-                c: 0
-            },
-            e: {
-                r: topStyleTitleRow,
-                c: 3
+        if (dataEndRow >= dataStartRow) {
+            styleRange(worksheet, dataStartRow, dataEndRow, 0, chartSeries.length, bodyStyle);
+            styleRange(worksheet, dataStartRow, dataEndRow, 0, 0, centerStyle);
+            if (chartSeries.length > 0) {
+                styleRange(worksheet, dataStartRow, dataEndRow, 1, chartSeries.length, centerStyle);
             }
         }
-    ];
 
-
-    // ============================================================
-    // APPLY TITLE STYLE
-    // ============================================================
-
-    styleRange(
-        worksheet,
-        titleRow,
-        titleRow,
-        0,
-        totalColumns - 1,
-        titleStyle
-    );
-
-
-    styleRange(
-        worksheet,
-        topStyleTitleRow,
-        topStyleTitleRow,
-        0,
-        3,
-        titleStyle
-    );
-
-
-    // ============================================================
-    // APPLY HEADER STYLE
-    // ============================================================
-
-    styleRange(
-        worksheet,
-        headerRow,
-        headerRow,
-        0,
-        chartSeries.length,
-        headerStyle
-    );
-
-
-    styleRange(
-        worksheet,
-        topStyleHeaderRow,
-        topStyleHeaderRow,
-        0,
-        3,
-        headerStyle
-    );
-
-
-    // ============================================================
-    // BODY STYLE
-    // ============================================================
-
-    if (dataEndRow >= dataStartRow) {
-
-        styleRange(
-            worksheet,
-            dataStartRow,
-            dataEndRow,
-            0,
-            chartSeries.length,
-            bodyStyle
-        );
-
-        styleRange(
-            worksheet,
-            dataStartRow,
-            dataEndRow,
-            0,
-            0,
-            centerStyle
-        );
-
-        if (chartSeries.length > 0) {
-
-            styleRange(
-                worksheet,
-                dataStartRow,
-                dataEndRow,
-                1,
-                chartSeries.length,
-                centerStyle
-            );
+        if (topStyleEndRow >= topStyleStartRow) {
+            styleRange(worksheet, topStyleStartRow, topStyleEndRow, 0, 3, bodyStyle);
+            styleRange(worksheet, topStyleStartRow, topStyleEndRow, 0, 1, centerStyle);
+            styleRange(worksheet, topStyleStartRow, topStyleEndRow, 3, 3, centerStyle);
         }
+
+        worksheet['!rows'] = [];
+        worksheet['!rows'][titleRow] = { hpt: 24 };
+        worksheet['!rows'][headerRow] = { hpt: 28 };
+        worksheet['!rows'][topStyleTitleRow] = { hpt: 24 };
+        worksheet['!rows'][topStyleHeaderRow] = { hpt: 28 };
+
+        worksheet['!freeze'] = { xSplit: 0, ySplit: headerRow + 1 };
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Defect Monitoring');
+
+        const fileName = `Defect_Monitoring_${modeText}.xlsx`;
+        XLSX.writeFile(workbook, fileName);
+        console.log('Export berhasil:', fileName);
     }
-
-
-    // ============================================================
-    // TOP STYLE BODY
-    // ============================================================
-
-    if (topStyleEndRow >= topStyleStartRow) {
-
-        styleRange(
-            worksheet,
-            topStyleStartRow,
-            topStyleEndRow,
-            0,
-            3,
-            bodyStyle
-        );
-
-        styleRange(
-            worksheet,
-            topStyleStartRow,
-            topStyleEndRow,
-            0,
-            1,
-            centerStyle
-        );
-
-        styleRange(
-            worksheet,
-            topStyleStartRow,
-            topStyleEndRow,
-            3,
-            3,
-            centerStyle
-        );
-    }
-
-
-    // ============================================================
-    // ROW HEIGHT
-    // ============================================================
-
-    worksheet['!rows'] = [];
-
-    worksheet['!rows'][titleRow] = {
-        hpt: 24
-    };
-
-    worksheet['!rows'][headerRow] = {
-        hpt: 28
-    };
-
-    worksheet['!rows'][topStyleTitleRow] = {
-        hpt: 24
-    };
-
-    worksheet['!rows'][topStyleHeaderRow] = {
-        hpt: 28
-    };
-
-
-    // ============================================================
-    // FREEZE HEADER
-    // ============================================================
-
-    worksheet['!freeze'] = {
-        xSplit: 0,
-        ySplit: headerRow + 1
-    };
-
-
-    // ============================================================
-    // APPEND SHEET
-    // ============================================================
-
-    XLSX.utils.book_append_sheet(
-        workbook,
-        worksheet,
-        'Defect Monitoring'
-    );
-
-
-    // ============================================================
-    // FILE NAME
-    // ============================================================
-
-    const fileName =
-        `Defect_Monitoring_${modeText}.xlsx`;
-
-
-    // ============================================================
-    // DOWNLOAD
-    // ============================================================
-
-    XLSX.writeFile(
-        workbook,
-        fileName
-    );
-
-    console.log(
-        'Export berhasil:',
-        fileName
-    );
-}
-
-
-    function buildDummyBucketMeta(labels) {
-        return labels.map(() => ({
-            topStyles: [
-                { style: 'S25MTR110', wft: 3.12 },
-                { style: 'S24ABC220', wft: 2.87 },
-                { style: 'S23XYZ005', wft: 1.95 },
-            ]
-        }));
-    }
-    fetchChartData();
 
     function fetchDefectOptions() {
         return $.get("{{ route('monitoring_endlineperformance_defectoptions') }}", { mode: currentMode }, function (res) {
             allDefects = res.options;
-
             const validCodes = allDefects.map(o => o.code);
             selectedDefects = selectedDefects.filter(c => validCodes.includes(c));
         });
@@ -1093,7 +604,6 @@ function exportExcel() {
             bucketMeta = res.bucketMeta || [];
             renderChart();
             $('#loading').hide();
-
         });
     }
 
@@ -1140,12 +650,9 @@ function exportExcel() {
                 textStyle: { color: '#FFFFFF' },
                 formatter: function (params) {
                     if (!params || params.length === 0) return '';
-
                     const dataIndex = params[0].dataIndex;
                     const dateLabel = params[0].axisValueLabel || params[0].name;
-
                     const totalWft = params.reduce((sum, p) => sum + (p.data || 0), 0) / params.length;
-
                     const topStyles = bucketMeta[dataIndex]?.topStyles;
 
                     let html = `
@@ -1158,16 +665,16 @@ function exportExcel() {
                             <hr style="border-color:#3A4557;margin:6px 0;">
                             <div style="margin-bottom:4px;">Top Style Contribute</div>
                     `;
-
-                    topStyles.forEach((s, i) => {
-                        html += `
-                            <div style="display:flex;justify-content:space-between;margin-bottom:2px;">
-                                <span>${i + 1}. ${s.style}</span>
-                                <span>${s.wft.toFixed(2)}%</span>
-                            </div>
-                        `;
-                    });
-
+                    if (topStyles && topStyles.length) {
+                         topStyles.forEach((s, i) => {
+                            html += `
+                                <div style="display:flex;justify-content:space-between;margin-bottom:2px;">
+                                    <span>${i + 1}. ${s.style}</span>
+                                    <span>${s.wft.toFixed(2)}%</span>
+                                </div>
+                            `;
+                        });
+                    }
                     html += `</div>`;
                     return html;
                 }
@@ -1212,43 +719,25 @@ function exportExcel() {
 
     function renderChips() {
         $chips.empty();
-
         selectedDefects.forEach(code => {
             code = String(code);
-
             const opt = allDefects.find(o => String(o.code) === code);
             const name = opt ? opt.name : code;
             const color = opt ? opt.color : '#999';
 
             $chips.append(`
-                <span
-                    class="filter-chip"
-                    data-code="${code}"
-                    style="
-                        background-color: ${color};
-                        border-color: ${color};
-                        color: #fff;
-                    "
-                >
+                <span class="filter-chip" data-code="${code}" style="background-color: ${color}; border-color: ${color}; color: #fff;">
                     ${name}
-                    <button
-                        type="button"
-                        class="chip-remove"
-                        data-code="${code}"
-                    >✕</button>
+                    <button type="button" class="chip-remove" data-code="${code}">✕</button>
                 </span>
             `);
-
         });
     }
 
     function renderOptions() {
         $optionsList.empty();
-
         if (allDefects.length === 0) {
-            $optionsList.append(
-                '<span class="filter-option-empty">Tidak ada data defect</span>'
-            );
+            $optionsList.append('<span class="filter-option-empty">Tidak ada data defect</span>');
             return;
         }
 
@@ -1258,14 +747,7 @@ function exportExcel() {
             const color = opt.color || '#999';
 
             $optionsList.append(`
-                <span
-                    class="filter-option-pill ${isSelected ? 'is-selected' : ''}"
-                    data-code="${code}"
-                    data-color="${color}"
-                    style="
-                        --defect-color: ${color};
-                    "
-                >
+                <span class="filter-option-pill ${isSelected ? 'is-selected' : ''}" data-code="${code}" data-color="${color}" style="--defect-color: ${color};">
                     ${opt.name}
                 </span>
             `);
@@ -1280,26 +762,21 @@ function exportExcel() {
 
     $optionsList.on('click', '.filter-option-pill', function () {
         const code = String($(this).attr('data-code'));
-
         if (selectedDefects.includes(code)) {
             selectedDefects = selectedDefects.filter(c => c !== code);
         } else {
             selectedDefects.push(code);
         }
-
         renderChips();
         renderOptions();
     });
 
     $chips.on('click', '.chip-remove', function () {
         const code = String($(this).attr('data-code'));
-
         selectedDefects = selectedDefects.filter(c => c !== code);
-
         renderChips();
         renderOptions();
     });
-
 
     $(document).on('click', function (e) {
         if (!$(e.target).closest('.defect-filter').length) {
@@ -1316,16 +793,17 @@ function exportExcel() {
         renderChips();
         renderOptions();
     });
+    
+    // Initial fetch
+    fetchChartData();
 
     $('#export-datatable').on('click', function (e) {
-
-    e.preventDefault();
-
-    exportExcel();
-
-});
+        e.preventDefault();
+        exportExcel();
+    });
 
 });
 </script>
 @include('layouts.loading')
 @endpush
+
