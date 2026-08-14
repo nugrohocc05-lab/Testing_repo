@@ -1,72 +1,21 @@
-Berikut adalah kode yang sudah dirapikan dan direfaktor sesuai dengan best practice (HTML, CSS, dan JavaScript).
-Pembaruan Utama:
- * Pembersihan Whitespace Ekstrim: Menghapus jarak vertikal (enter) yang berlebihan pada JavaScript yang membuat kode sangat sulit dibaca.
- * Modern JavaScript (ES6): Menggunakan Template Literals (` `) untuk penggabungan string, dan Arrow Functions untuk callbacks (kecuali saat butuh konteks this).
- * Peningkatan Format Excel: Merapikan pembuatan style untuk SheetJS agar header, baris tabel, dan penyesuaian lebar kolom (!cols) lebih akurat dan terstruktur.
- * Kerapian HTML & CSS: Indentasi diseragamkan, pengelompokan CSS dirapikan agar lebih mudah maintainable.
 <style>
-    /* =========================================
-       1. Base Layout & Containers
-       ========================================= */
-    .weekly-card-body {
+    .defect-card-body {
         display: flex;
         flex-direction: column;
-        width: 100%;
         height: 100%;
         min-height: 0;
     }
 
-    .weekly-card-body .wrapper-title {
-        flex: 0 0 auto;
-    }
-
-    .weekly-card-body .defect-title {
-        flex: 0 0 auto;
-        margin-top: 8px;
-    }
-
-    /* =========================================
-       2. Tables & Scrolling
-       ========================================= */
-    .weekly-performance-table {
-        flex: 0 0 auto;
-        min-height: 0;
-        width: 100%;
-    }
-
-    .weekly-performance-table .table-scroll-wrapper {
-        width: 100%;
-        overflow-x: auto;
-        overflow-y: hidden;
-    }
-
-    .weekly-card-body .table-wrapper {
-        flex: 1 1 0;
-        min-height: 80px;
-        height: auto;
-        max-height: none;
-        width: 100%;
+    .table-wrapper {
+        max-height: 300px;
         overflow-y: auto;
         overflow-x: auto;
-        border: 1px solid #242E3E;
-        border-radius: 4px;
-    }
-
-    .table-res {
-        font-size: 13px;
-    }
-
-    .table-res th {
-        font-size: 13px !important;
-        line-height: 1.5 !important;
-        white-space: nowrap;
     }
 
     .table-wrapper thead th {
         position: sticky;
         top: 0;
         z-index: 10;
-        background: #1b2433;
     }
 
     .table-wrapper tfoot th,
@@ -74,514 +23,1309 @@ Pembaruan Utama:
         position: sticky;
         bottom: 0;
         z-index: 10;
-        background: #1b2433;
     }
 
-    /* =========================================
-       3. Skeleton Loading Animation
-       ========================================= */
-    @keyframes skeleton-pulse {
-        0%   { opacity: 0.35; }
-        50%  { opacity: 0.75; }
-        100% { opacity: 0.35; }
+    .table-head {
+        table-layout: fixed;
+    }
+    .table-foot {
+        table-layout: fixed;
     }
 
-    .skeleton-box {
-        display: inline-block;
-        width: 100%;
-        height: 12px;
-        border-radius: 4px;
-        background-color: rgba(255, 255, 255, 0.12);
-        animation: skeleton-pulse 1.2s ease-in-out infinite;
+    @media (min-width: 992px) and (max-width: 1400px) {
+        .table-wrapper {
+            max-height: 140px;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .table-res {
+            font-size: 10px !important;
+        }
+
+        .subheader {
+            font-size: 15px;
+        }
+
+        .datatable-header-left h5 {
+            font-size: 12px !important;
+            line-height: 1.2;
+        }
+
+        .toggle-wrapper {
+            display: inline-flex;
+            background-color: #212B3E;
+            border-radius: 8px;
+            gap: 4px;
+        }
+
+        .toggle-btn {
+            min-width: 70px;
+            padding: 5px 10px;
+            text-align: center;
+            color: white;
+            background-color: transparent;
+            cursor: pointer;
+            font-weight: 400;
+            transition: all 0.2s ease;
+            margin: 0;
+        }
+
+        /* Aktif */
+        .toggle-wrapper {
+            display: inline-flex;
+            background-color: #212B3E;
+            border-radius: 8px;
+            gap: 0;
+            overflow: hidden;
+        }
+
+        .toggle-btn {
+            min-width: 70px;
+            padding: 1px 10px;
+            text-align: center;
+            color: #fff;
+            background-color: transparent;
+            cursor: pointer;
+            font-weight: 400;
+            transition: all 0.2s ease;
+            margin: 0;
+        }
     }
 
-    .skeleton-circle {
-        display: inline-block;
-        width: 10px;
-        height: 10px;
+    @media (max-width: 768px) {
+        .table-wrapper {
+            max-height: 280px;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .table-res {
+            font-size: 10px !important;
+        }
+    }
+
+    .table-res {
+        font-size: 13px;
+    }
+
+    /* filter */
+    .defect-filter {
+        gap: 8px;
+    }
+
+    .filter-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background-color: #004FE0;
+        color: #FFFFFF;
+        font-size: 13px;
+        padding: 4px 10px;
+        border-radius: 20px;
+        white-space: nowrap;
+    }
+
+    .filter-chip .chip-remove {
+        cursor: pointer;
+        font-size: 12px;
+        line-height: 1;
+        opacity: 0.85;
+        border: none;
+        background: transparent;
+        color: inherit;
+        padding: 0;
+    }
+
+    .filter-chip .chip-remove:hover {
+        opacity: 1;
+    }
+
+    .add-filter-btn {
+        width: 28px;
+        height: 28px;
+        padding: 0;
         border-radius: 50%;
-        background-color: rgba(255, 255, 255, 0.12);
-        animation: skeleton-pulse 1.2s ease-in-out infinite;
+        border: 1px solid #3A4557;
+        background-color: #35476C;
+        color: #FFFFFF;
+        font-size: 16px;
+        line-height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
         flex-shrink: 0;
     }
 
-    .skeleton-row td {
-        padding-top: 10px;
-        padding-bottom: 10px;
+
+    .add-filter-btn:hover {
+        background-color: #242E3E;
     }
 
-    .skeleton-row .skeleton-box {
-        width: 70%;
-        margin: 0 auto;
+    .filter-dropdown {
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 0;
+        width: 280px;
+        max-height: 240px;
+        overflow-y: auto;
+        background-color: #1B2434;
+        border: 1px solid #3A4557;
+        border-radius: 10px;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.35);
+        z-index: 1000;
+        padding: 12px;
     }
 
-    .skeleton-row .skeleton-box.text-start-w {
-        width: 90%;
+    .filter-options-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .filter-option-pill {
+        display: inline-flex;
+        align-items: center;
+        background-color: #242E3E;
+        border: 1px solid var(--defect-color, #3A4557);
+        color: #FFFFFF;
+        font-size: 13px;
+        padding: 5px 12px;
+        border-radius: 20px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+
+
+    /* Selected */
+    .filter-option-pill.is-selected {
+        background-color: var(--defect-color);
+        color: #FFFFFF;
+    }
+
+
+
+    .filter-option-empty {
+        font-size: 13px;
+        color: #8A93A6;
+    }
+
+    .d-none {
+        display: none;
+    }
+
+    .chart-wrapper {
+        border-radius: 10px;
+        padding: 20px;
+        flex: 1 1 auto;
+        min-height: 200px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    #defectChart {
+        width: 100%;
+        height: 100%;
+        min-height: 200px;
+    }
+
+    @media (min-width: 992px) and (max-width: 1400px) {
+        .chart-wrapper {
+            min-height: 160px;
+        }
+
+        #defectChart {
+            min-height: 160px;
+        }
+
+        .filter-label {
+            font-size: 10px;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .chart-wrapper {
+            min-height: 220px;
+            padding: 12px;
+        }
+
+        #defectChart {
+            min-height: 220px;
+        }
+    }
+
+    .toggle-wrapper {
+        display: inline-flex;
+        background-color: #212B3E;
+        border-radius: 8px;
+        gap: 4px;
+    }
+
+
+    /* Aktif */
+    .toggle-wrapper {
+        display: inline-flex;
+        background-color: #212B3E;
+        border-radius: 8px;
+        gap: 0;
+        overflow: hidden;
+    }
+
+    .toggle-btn {
+        min-width: 70px;
+        padding: 5px 10px;
+        text-align: center;
+        color: #fff;
+        background-color: transparent;
+        cursor: pointer;
+        font-weight: 400;
+        transition: all 0.2s ease;
         margin: 0;
     }
 
-    /* =========================================
-       4. Select2 Overrides
-       ========================================= */
-    #selectWeek + .select2-container .select2-selection__rendered,
-    #selectWeek + .select2-container .select2-selection {
-        font-size: 14px !important;
+    /* Weekly aktif - kiri */
+    #weekly:checked + .toggle-btn {
+        color: #fff;
+        background-color: #4C8CF2;
+        border-radius: 8px 0 0 8px;
     }
 
-    .select2-container .select2-results__option {
-        font-size: 14px !important;
-        padding: 5px 8px !important;
+    /* Day aktif - kanan */
+    #day:checked + .toggle-btn {
+        color: #fff;
+        background-color: #4C8CF2;
+        border-radius: 0 8px 8px 0;
     }
 
-    .select2-container .select2-search__field {
-        font-size: 14px !important;
+    .btn-check:checked + .toggle-btn:hover {
+        color: #fff;
     }
 
-    /* =========================================
-       5. Media Queries
-       ========================================= */
-    @media (min-width: 992px) and (max-width: 1400px) {
-        .weekly-card-body { padding: 0; }
-        .weekly-card-body .wrapper-title { gap: 6px; margin-bottom: 2px; }
-        .datatable-header-left { gap: 6px !important; min-width: 0; }
-        .datatable-header-left img.detailIcon { width: 18px !important; height: 18px !important; }
-        .datatable-header-left h5 { font-size: 12px !important; line-height: 1.2; }
-        
-        .datatable-header-right { width: 230px !important; flex-shrink: 0; }
-
-        #selectWeek + .select2-container { width: 100% !important; }
-        #selectWeek + .select2-container .select2-selection--single { height: 28px !important; min-height: 28px !important; }
-        #selectWeek + .select2-container .select2-selection--single .select2-selection__rendered {
-            font-size: 10px !important;
-            line-height: 28px !important;
-            padding-left: 8px !important;
-            padding-right: 25px !important;
-        }
-        #selectWeek + .select2-container .select2-selection--single .select2-selection__arrow {
-            height: 28px !important;
-            width: 22px !important;
-        }
-
-        .select2-container .select2-results__option { font-size: 10px !important; padding: 4px 7px !important; line-height: 1.2 !important; }
-        .select2-container .select2-search__field { font-size: 10px !important; min-height: 24px !important; padding: 3px 5px !important; }
-
-        .export-icon { width: 18px !important; height: 18px !important; }
-        .export-btn { font-size: 10px; }
-
-        .table-res { font-size: 10px !important; line-height: 1.15 !important; margin-top: 5px; }
-        .table-res th { font-size: 9px !important; line-height: 1.15 !important; padding: 4px 3px !important; white-space: nowrap; }
-        .table-res td { font-size: 10px !important; line-height: 1.15 !important; padding: 4px 3px !important; }
-
-        #tableInlinePerformance th, #tableInlinePerformance td { padding: 3px 2px !important; }
-        #tableInlinePerformance thead th { line-height: 1.2 !important; }
-
-        .weekly-card-body .subheader { font-size: 11px !important; line-height: 1.2; margin-top: 4px !important; }
-        .weekly-card-body .defect-title { margin-top: 4px; }
-        .weekly-card-body .table-wrapper { margin-top: 4px !important; min-height: 50px; }
-
-        #tableInlineDefect th, #tableInlineDefect td { line-height: 1.20 !important; }
-        #tableInlineDefect thead th { font-size: 9px !important; line-height: 1.1 !important; }
-        #tableInlineDefect tbody td { font-size: 10px !important; }
-        #tableInlineDefect tfoot th, #tableInlineDefect tfoot td { font-size: 9px !important; padding: 3px !important; }
-
-        .defect-circle { width: 7px !important; height: 7px !important; }
-        .skeleton-box { height: 8px !important; border-radius: 3px; }
-        .skeleton-circle { width: 7px !important; height: 7px !important; }
-        .skeleton-row td { padding-top: 4px !important; padding-bottom: 4px !important; }
+    .defect-filter-container {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        min-width: 0;
+        gap: 12px;
     }
+
+
+    .defect-filter {
+        display: flex;
+        align-items: flex-start;
+        flex-wrap: nowrap;
+        gap: 8px;
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: visible;
+    }
+
+
+    .filter-label {
+        color: #FFFFFF;
+        font-size: 14px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    #selectedChips {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        min-width: 0;
+        flex: 1 1 auto;
+        overflow: visible;
+    }
+
+    .filter-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: #FFFFFF;
+        font-size: 13px;
+        padding: 4px 10px;
+        border-radius: 20px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+
+    .add-filter-btn {
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border-radius: 50%;
+        border: 1px solid #3A4557;
+        background-color: #35476C;
+        color: #FFFFFF;
+        font-size: 16px;
+        line-height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+
+
+    .filter-dropdown {
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 0;
+        width: 280px;
+        max-height: 240px;
+        overflow-y: auto;
+        background-color: #1B2434;
+        border: 1px solid #3A4557;
+        border-radius: 10px;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+        z-index: 9999;
+        padding: 12px;
+    }
+
+    .filter-options-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .filter-option-pill {
+        display: inline-flex;
+        align-items: center;
+        background-color: #242E3E;
+        border: 1px solid #3A4557;
+        color: #FFFFFF;
+        font-size: 13px;
+        padding: 5px 12px;
+        border-radius: 20px;
+        cursor: pointer;
+    }
+
+
+    .btn-find {
+        flex-shrink: 0;
+        white-space: nowrap;
+    }
+
+
+
+
 </style>
 
-<div class="weekly-card-body">
+<div class="defect-card-body">
     <!-- Header -->
     <div class="d-flex align-items-center wrapper-title justify-content-between">
-        <div class="datatable-header-left d-flex align-items-center gap-2">
-            <img src="{{ _asset('svg/inlinePerformance/calendar.svg') }}" class="detailIcon" alt="">
-            <h5 class="mb-0 fw-normal text-nowrap">WEEKLY ENDLINE PERFORMANCE</h5>
+        <div class="datatable-header-left">
+            <img src="{{ _asset('svg/endlinePerformance/defect-monitor.svg') }}" style="width:25px;height:25px;" class="detailIcon" alt="">
+            <h5 class="mb-0 fw-normal text-nowrap">
+                DEFECT MONITORING (WFT%)
+            </h5>
         </div>
 
-        <div class="datatable-header-right" style="width: 350px;">
-            <div class="w-100">
-                <select id="selectWeek" class="form-select select2 w-100">
-                    <option></option>
-                </select>
+        <div class="datatable-header-right gap-4" style="justify-content: end;">
+            <div class="toggle-wrapper">
+                <input
+                    type="radio"
+                    name="schedule_type"
+                    id="weekly"
+                    value="weekly"
+                    class="btn-check"
+                    autocomplete="off"
+                    checked
+                >
+
+                <label class="toggle-btn" for="weekly">
+                    Weekly
+                </label>
+
+                <input
+                    type="radio"
+                    name="schedule_type"
+                    id="day"
+                    value="day"
+                    class="btn-check"
+                    autocomplete="off"
+                >
+
+                <label class="toggle-btn" for="day">
+                    Day
+                </label>
             </div>
-            <button class="export-btn bg-transparent border-0 p-0 d-flex align-items-center gap-1" id="export-datatable-btn" aria-label="Export">
-                <img src="{{ _asset('svg/inlinePerformance/export.svg') }}" class="export-icon" alt="Export">
+
+            <button class="export-btn bg-transparent border-0 p-0 d-flex align-items-center gap-1" id="export-datatable" aria-label="Export">
+                <img src="{{ _asset('svg/inlinePerformance/export.svg') }}" class="export-icon" style="width:27px; height:27px;" alt="Export">
                 <span class="custom-tooltip-bottom">Excel</span>
             </button>
         </div>
     </div>
 
-    <!-- Table 1: Weekly Performance -->
-    <div class="table-scroll-wrapper" style="overflow-x:auto;">
-        <table id="tableInlinePerformance" class="table-res table-custom table table-borderless align-middle w-100 table-hover">
-            <thead>
-                <tr>
-                    <th class="text-center" style="width:10%;">Week</th>
-                    <th class="text-center" style="width:30%;">Periode Date</th>
-                    <th class="text-center" style="width:10%;">RFT QTY<br>(Pcs)</th>
-                    <th class="text-center" style="width:10%;">Inspect QTY<br>(Pcs)</th>
-                    <th class="text-center" style="width:10%;">Defect QTY<br>(Pcs)</th>
-                    <th class="text-center" style="width:10%;">RFT<br>(%)</th>
-                    <th class="text-center" style="width:10%;">WFT<br>(%)</th>
-                    <th class="text-center" style="width:10%;">Non Process<br>(%)</th>
-                    <th class="text-center" style="width:10%;">Process<br>(%)</th>
-                </tr>
-            </thead>
-            <tbody id="tableInlinePerformanceBody">
-                @include('monitoring::endlineperformance.performance.partials.weekly-row')
-            </tbody>
-        </table>
+    <!-- Filter Defect-->
+    <div class="d-flex flex-column gap-3">
+        <!-- Section Filter -->
+        <div class="defect-filter-container my-2">
+            <div class="defect-filter">
+                <span class="filter-label">
+                    Filter Defect:
+                </span>
+
+                <div id="selectedChips" class="">
+                </div>
+
+                <div class="position-relative">
+                    <button
+                        id="addFilterBtn"
+                        class="add-filter-btn"
+                        type="button"
+                        aria-label="Add filter"
+                    >
+                        +
+                    </button>
+
+                    <div id="filterDropdown" class="filter-dropdown d-none">
+                        <div id="filterOptionsList" class="filter-options-list"></div>
+                    </div>
+                </div>
+
+            </div>
+
+            <button class="btn-find" id="findbtndefect">
+                <img
+                    src="{{ _asset('svg/inlinePerformance/search.svg') }}"
+                    style="width:20px;height:15px;"
+                    alt=""
+                >
+                Find
+            </button>
+        </div>
     </div>
 
-    <!-- Table 2: Top Defect Detail -->
-    <div class="mt-2">
-        <h6 class="subheader mb-0 fw-normal text-nowrap">TOP 5 DEFECT DETAIL</h6>
-    </div>
-    
-    <div class="table-wrapper table-scroll-wrapper rounded mt-2">
-        <table id="tableInlineDefect" class="table-res table-custom table table-borderless align-middle w-100 table-hover">
-            <thead>
-                <tr>
-                    <th class="text-center" style="width:5%;">No.</th>
-                    <th class="text-center" style="width:10%;">Defect</th>
-                    <th class="text-center" style="width:5%;">Defect QTY</th>
-                    <th class="text-center" style="width:5%;">% of Total Defect</th>
-                    <th class="text-center" style="width:15%;">Top Style (Most Contribute)</th>
-                    <th class="text-center" style="width:5%;">QTY Defect (Pcs)</th>
-                    <th class="text-center" style="width:10%;">% of Defect</th>
-                </tr>
-            </thead>
-            <tbody id="tableInlineDefectBody" class="table-head text-center">
-                @php $top_defect = $top_defect ?? collect(); @endphp
-
-                @if ($top_defect->isEmpty())
-                    @for ($r = 0; $r < 5; $r++)
-                        <tr class="skeleton-row skeleton-defect-row">
-                            <td><span class="skeleton-box"></span></td>
-                            <td>
-                                <div class="d-flex justify-content-start align-items-center gap-2">
-                                    <span class="skeleton-circle"></span>
-                                    <span class="skeleton-box text-start-w"></span>
-                                </div>
-                            </td>
-                            <td><span class="skeleton-box"></span></td>
-                            <td><span class="skeleton-box"></span></td>
-                            <td><span class="skeleton-box"></span></td>
-                            <td><span class="skeleton-box"></span></td>
-                            <td><span class="skeleton-box"></span></td>
-                        </tr>
-                    @endfor
-                @else
-                    @foreach ($top_defect as $index => $defect)
-                        @php $styles = $defect['top_style'] ?? []; @endphp
-                        @foreach ($styles as $sIndex => $style)
-                            <tr>
-                                @if ($sIndex === 0)
-                                    <td rowspan="{{ count($styles) }}" class="text-center">{{ $index + 1 }}</td>
-                                    <td rowspan="{{ count($styles) }}">
-                                        <div class="d-flex justify-content-start align-items-center gap-2 text-truncate">
-                                            <span class="defect-circle rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="background-color: {{ $defect['color'] }};"></span>
-                                            {{ $defect['nmdefect'] }}
-                                        </div>
-                                    </td>
-                                    <td rowspan="{{ count($styles) }}" class="text-center">{{ $defect['defect_qty'] }}</td>
-                                    <td rowspan="{{ count($styles) }}" class="text-center">{{ $defect['percent'] }}%</td>
-                                @endif
-                                <td>{{ $style['style'] }}</td>
-                                <td>{{ $style['qty'] }}</td>
-                                <td>{{ $style['percent'] }}%</td>
-                            </tr>
-                        @endforeach
-                    @endforeach
-                @endif
-            </tbody>
-            <tfoot class="table-foot" id="tableInlineDefectFoot">
-                <tr>
-                    <th></th>
-                    <th class="text-start">TOTAL</th>
-                    <th>{{ $totTopDefect ?? 0 }}</th>
-                    <th>
-                        @php
-                            $totPercent = collect($top_defect ?? [])->sum(fn($d) => (float) $d['percent']);
-                        @endphp
-                        {{ number_format($totPercent, 2) }}%
-                    </th>
-                    <th></th>
-                    <th>
-                        @php
-                            $totStyleQty = collect($top_defect ?? [])
-                                ->flatMap(fn($d) => $d['top_style'] ?? [])
-                                ->sum(fn($s) => (int) $s['qty']);
-                        @endphp
-                        {{ $totStyleQty }}
-                    </th>
-                    <th>
-                        @php
-                            $totStylePercent = ($totTopDefect ?? 0) > 0 ? ($totStyleQty / $totTopDefect) * 100 : 0;
-                            $totStylePercent = min($totStylePercent, 100);
-                        @endphp
-                        {{ number_format($totStylePercent, 2) }}%
-                    </th>
-                </tr>
-            </tfoot>
-        </table>
+    <!-- Chart -->
+    <div class="chart-wrapper">
+        <div id="defectChart"></div>
     </div>
 </div>
 
 @push('scripts')
 <script>
-$(function () {
-    let weeklyDataTable = null;
-    let isTableLoading = false;
+   $(function () {
+    let allDefects = [];
+    let selectedDefects = [];
+    let currentMode = 'weekly';
 
-    /*
-    |--------------------------------------------------------------------------
-    | DataTables Initialization
-    |--------------------------------------------------------------------------
-    */
-    function destroyPerformanceDataTable() {
-        if ($.fn.DataTable.isDataTable('#tableInlinePerformance')) {
-            $('#tableInlinePerformance').DataTable().destroy();
+    const $chips = $('#selectedChips');
+    const $dropdown = $('#filterDropdown');
+    const $optionsList = $('#filterOptionsList');
+
+    const chartDom = document.getElementById('defectChart');
+    const myChart = echarts.init(chartDom);
+
+    let xAxisLabels = [];
+    let chartSeries = [];
+    let bucketMeta = [];
+
+    function styleRange(
+    worksheet,
+    startRow,
+    endRow,
+    startCol,
+    endCol,
+    style
+) {
+
+    for (
+        let row = startRow;
+        row <= endRow;
+        row++
+    ) {
+
+        for (
+            let col = startCol;
+            col <= endCol;
+            col++
+        ) {
+
+            const cell =
+                XLSX.utils.encode_cell({
+                    r: row,
+                    c: col
+                });
+
+            if (worksheet[cell]) {
+                worksheet[cell].s = style;
+            }
         }
-        weeklyDataTable = null;
+    }
+}
+
+
+    // Export
+    // ============================================================
+// EXPORT CHART DATA TO EXCEL
+// ============================================================
+function exportExcel() {
+
+    console.log('===== EXPORT DEFECT MONITORING =====');
+
+    // Cek SheetJS
+    if (typeof XLSX === 'undefined') {
+        console.error('SheetJS tidak tersedia.');
+        alert('Excel export library belum tersedia.');
+        return;
     }
 
-    function initPerformanceDataTable() {
-        if ($('#tableInlinePerformanceBody tr').length === 0) return;
-        
-        destroyPerformanceDataTable();
+    console.log('SheetJS version:', XLSX.version);
 
-        weeklyDataTable = $('#tableInlinePerformance').DataTable({
-            paging: false,
-            ordering: false,
-            searching: false,
-            info: false,
-            lengthChange: false,
-            autoWidth: false,
-            dom: ''
+    // Cek data
+    if (!xAxisLabels || xAxisLabels.length === 0) {
+        alert('Tidak ada data untuk diexport.');
+        return;
+    }
+
+    const workbook = XLSX.utils.book_new();
+
+    const exportData = [];
+
+    // ============================================================
+    // STYLE HELPER
+    // ============================================================
+
+    const borderBase = {
+        style: 'thin',
+        color: {
+            rgb: 'B7B7B7'
+        }
+    };
+
+    const border = {
+        top: borderBase,
+        bottom: borderBase,
+        left: borderBase,
+        right: borderBase
+    };
+
+    const titleStyle = {
+        font: {
+            bold: true,
+            color: {
+                rgb: 'FFFFFF'
+            },
+            sz: 12
+        },
+        fill: {
+            fgColor: {
+                rgb: '1B2433'
+            }
+        },
+        alignment: {
+            horizontal: 'left',
+            vertical: 'center'
+        },
+        border: border
+    };
+
+    const headerStyle = {
+        font: {
+            bold: true,
+            color: {
+                rgb: 'FFFFFF'
+            }
+        },
+        fill: {
+            fgColor: {
+                rgb: '242E3E'
+            }
+        },
+        alignment: {
+            horizontal: 'center',
+            vertical: 'center',
+            wrapText: true
+        },
+        border: border
+    };
+
+    const bodyStyle = {
+        alignment: {
+            vertical: 'center'
+        },
+        border: border
+    };
+
+    const centerStyle = {
+        alignment: {
+            horizontal: 'center',
+            vertical: 'center'
+        },
+        border: border
+    };
+
+
+    // ============================================================
+    // TITLE
+    // ============================================================
+
+    const titleRow = exportData.length;
+
+    let modeText =
+        currentMode === 'weekly'
+            ? 'WEEKLY'
+            : 'DAILY';
+
+    exportData.push([
+        `DEFECT MONITORING (WFT%) - ${modeText}`
+    ]);
+
+
+    // ============================================================
+    // FILTER
+    // ============================================================
+
+    const filterRow = exportData.length;
+
+    let filterText = 'All Defect';
+
+    if (selectedDefects.length > 0) {
+
+        const selectedNames = selectedDefects.map(code => {
+
+            const defect = allDefects.find(
+                o => String(o.code) === String(code)
+            );
+
+            return defect
+                ? defect.name
+                : code;
+
+        });
+
+        filterText = selectedNames.join(', ');
+    }
+
+    exportData.push([
+        'Filter Defect:',
+        filterText
+    ]);
+
+
+    // ============================================================
+    // HEADER
+    // ============================================================
+
+    const headerRow = exportData.length;
+
+    const header = [
+        currentMode === 'weekly'
+            ? 'Week / Periode'
+            : 'Date'
+    ];
+
+    chartSeries.forEach(series => {
+        header.push(series.name + ' WFT (%)');
+    });
+
+    exportData.push(header);
+
+
+    // ============================================================
+    // DATA CHART
+    // ============================================================
+
+    const dataStartRow = exportData.length;
+
+    xAxisLabels.forEach((label, index) => {
+
+        const row = [label];
+
+        chartSeries.forEach(series => {
+
+            const value =
+                series.data &&
+                series.data[index] !== undefined
+                    ? series.data[index]
+                    : 0;
+
+            row.push(value);
+        });
+
+        exportData.push(row);
+    });
+
+    const dataEndRow = exportData.length - 1;
+
+
+    // ============================================================
+    // SPACER
+    // ============================================================
+
+    exportData.push([]);
+
+
+    // ============================================================
+    // TOP STYLE SECTION
+    // ============================================================
+
+    const topStyleTitleRow = exportData.length;
+
+    exportData.push([
+        'TOP STYLE CONTRIBUTE'
+    ]);
+
+
+    const topStyleHeaderRow = exportData.length;
+
+    exportData.push([
+        currentMode === 'weekly'
+            ? 'Week / Periode'
+            : 'Date',
+        'Rank',
+        'Style',
+        'WFT (%)'
+    ]);
+
+
+    const topStyleStartRow = exportData.length;
+
+
+    xAxisLabels.forEach((label, index) => {
+
+        const styles =
+            bucketMeta[index]?.topStyles || [];
+
+        styles.forEach((style, styleIndex) => {
+
+            exportData.push([
+                label,
+                styleIndex + 1,
+                style.style,
+                style.wft
+            ]);
+
+        });
+    });
+
+
+    const topStyleEndRow = exportData.length - 1;
+
+
+    // ============================================================
+    // CREATE WORKSHEET
+    // ============================================================
+
+    const worksheet =
+        XLSX.utils.aoa_to_sheet(exportData);
+
+
+    // ============================================================
+    // COLUMN WIDTH
+    // ============================================================
+
+    const totalColumns =
+        Math.max(
+            chartSeries.length + 1,
+            4
+        );
+
+    const cols = [];
+
+    for (let i = 0; i < totalColumns; i++) {
+
+        if (i === 0) {
+            cols.push({
+                wch: 25
+            });
+        } else {
+            cols.push({
+                wch: 20
+            });
+        }
+    }
+
+    worksheet['!cols'] = cols;
+
+
+    // ============================================================
+    // MERGE TITLE
+    // ============================================================
+
+    worksheet['!merges'] = [
+        {
+            s: {
+                r: titleRow,
+                c: 0
+            },
+            e: {
+                r: titleRow,
+                c: totalColumns - 1
+            }
+        },
+        {
+            s: {
+                r: topStyleTitleRow,
+                c: 0
+            },
+            e: {
+                r: topStyleTitleRow,
+                c: 3
+            }
+        }
+    ];
+
+
+    // ============================================================
+    // APPLY TITLE STYLE
+    // ============================================================
+
+    styleRange(
+        worksheet,
+        titleRow,
+        titleRow,
+        0,
+        totalColumns - 1,
+        titleStyle
+    );
+
+
+    styleRange(
+        worksheet,
+        topStyleTitleRow,
+        topStyleTitleRow,
+        0,
+        3,
+        titleStyle
+    );
+
+
+    // ============================================================
+    // APPLY HEADER STYLE
+    // ============================================================
+
+    styleRange(
+        worksheet,
+        headerRow,
+        headerRow,
+        0,
+        chartSeries.length,
+        headerStyle
+    );
+
+
+    styleRange(
+        worksheet,
+        topStyleHeaderRow,
+        topStyleHeaderRow,
+        0,
+        3,
+        headerStyle
+    );
+
+
+    // ============================================================
+    // BODY STYLE
+    // ============================================================
+
+    if (dataEndRow >= dataStartRow) {
+
+        styleRange(
+            worksheet,
+            dataStartRow,
+            dataEndRow,
+            0,
+            chartSeries.length,
+            bodyStyle
+        );
+
+        styleRange(
+            worksheet,
+            dataStartRow,
+            dataEndRow,
+            0,
+            0,
+            centerStyle
+        );
+
+        if (chartSeries.length > 0) {
+
+            styleRange(
+                worksheet,
+                dataStartRow,
+                dataEndRow,
+                1,
+                chartSeries.length,
+                centerStyle
+            );
+        }
+    }
+
+
+    // ============================================================
+    // TOP STYLE BODY
+    // ============================================================
+
+    if (topStyleEndRow >= topStyleStartRow) {
+
+        styleRange(
+            worksheet,
+            topStyleStartRow,
+            topStyleEndRow,
+            0,
+            3,
+            bodyStyle
+        );
+
+        styleRange(
+            worksheet,
+            topStyleStartRow,
+            topStyleEndRow,
+            0,
+            1,
+            centerStyle
+        );
+
+        styleRange(
+            worksheet,
+            topStyleStartRow,
+            topStyleEndRow,
+            3,
+            3,
+            centerStyle
+        );
+    }
+
+
+    // ============================================================
+    // ROW HEIGHT
+    // ============================================================
+
+    worksheet['!rows'] = [];
+
+    worksheet['!rows'][titleRow] = {
+        hpt: 24
+    };
+
+    worksheet['!rows'][headerRow] = {
+        hpt: 28
+    };
+
+    worksheet['!rows'][topStyleTitleRow] = {
+        hpt: 24
+    };
+
+    worksheet['!rows'][topStyleHeaderRow] = {
+        hpt: 28
+    };
+
+
+    // ============================================================
+    // FREEZE HEADER
+    // ============================================================
+
+    worksheet['!freeze'] = {
+        xSplit: 0,
+        ySplit: headerRow + 1
+    };
+
+
+    // ============================================================
+    // APPEND SHEET
+    // ============================================================
+
+    XLSX.utils.book_append_sheet(
+        workbook,
+        worksheet,
+        'Defect Monitoring'
+    );
+
+
+    // ============================================================
+    // FILE NAME
+    // ============================================================
+
+    const fileName =
+        `Defect_Monitoring_${modeText}.xlsx`;
+
+
+    // ============================================================
+    // DOWNLOAD
+    // ============================================================
+
+    XLSX.writeFile(
+        workbook,
+        fileName
+    );
+
+    console.log(
+        'Export berhasil:',
+        fileName
+    );
+}
+
+
+    function buildDummyBucketMeta(labels) {
+        return labels.map(() => ({
+            topStyles: [
+                { style: 'S25MTR110', wft: 3.12 },
+                { style: 'S24ABC220', wft: 2.87 },
+                { style: 'S23XYZ005', wft: 1.95 },
+            ]
+        }));
+    }
+    fetchChartData();
+
+    function fetchDefectOptions() {
+        return $.get("{{ route('monitoring_endlineperformance_defectoptions') }}", { mode: currentMode }, function (res) {
+            allDefects = res.options;
+
+            const validCodes = allDefects.map(o => o.code);
+            selectedDefects = selectedDefects.filter(c => validCodes.includes(c));
         });
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Excel Export (SheetJS)
-    |--------------------------------------------------------------------------
-    */
-    function exportExcel() {
-        if (typeof XLSX === 'undefined') {
-            alert('Library SheetJS belum tersedia.');
-            return;
-        }
-
-        const workbook = XLSX.utils.book_new();
-        const exportData = [];
-
-        // --- Helper Functions ---
-        const styleRange = (worksheet, startRow, endRow, startCol, endCol, style) => {
-            for (let row = startRow; row <= endRow; row++) {
-                for (let col = startCol; col <= endCol; col++) {
-                    const cell = XLSX.utils.encode_cell({ r: row, c: col });
-                    if (worksheet[cell]) worksheet[cell].s = style;
-                }
-            }
+    function fetchChartData() {
+        const params = {
+            mode: currentMode,
+            defects: selectedDefects,
         };
 
-        // --- Style Definitions (requires xlsx-js-style library) ---
-        const borderBase = { style: 'thin', color: { rgb: 'B7B7B7' } };
-        const border = { top: borderBase, bottom: borderBase, left: borderBase, right: borderBase };
+        $.get("{{ route('monitoring_endlineperformance_defectdata') }}", params, function (res) {
+            xAxisLabels = res.labels;
+            chartSeries = res.series;
+            bucketMeta = res.bucketMeta || [];
+            renderChart();
+            $('#loading').hide();
 
-        const titleStyle = {
-            font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 14 },
-            fill: { fgColor: { rgb: '1B2433' } },
-            alignment: { horizontal: 'left', vertical: 'center' },
-            border: border
-        };
-
-        const headerStyle = {
-            font: { bold: true, color: { rgb: 'FFFFFF' } },
-            fill: { fgColor: { rgb: '242E3E' } },
-            alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
-            border: border
-        };
-
-        const bodyStyle = { alignment: { vertical: 'center' }, border: border };
-        const centerStyle = { alignment: { horizontal: 'center', vertical: 'center' }, border: border };
-
-        // --- TABLE 1: Weekly Performance ---
-        const performanceTitleRow = exportData.length;
-        exportData.push(['WEEKLY ENDLINE PERFORMANCE'], []);
-        
-        const performanceHeaderRow = exportData.length;
-        exportData.push([
-            'Week', 'Periode Date', 'RFT QTY (Pcs)', 'Inspect QTY (Pcs)', 
-            'Defect QTY (Pcs)', 'RFT (%)', 'WFT (%)', 'Non Process (%)', 'Process (%)'
-        ]);
-
-        const performanceStartRow = exportData.length;
-        if (weeklyDataTable && $.fn.DataTable.isDataTable('#tableInlinePerformance')) {
-            weeklyDataTable.rows().every(function () {
-                const row = this.data();
-                exportData.push(row.map(value => $('<div>').html(value).text().trim()));
-            });
-        } else {
-            const performanceTable = document.getElementById('tableInlinePerformance');
-            const sheet = XLSX.utils.table_to_sheet(performanceTable, { raw: true });
-            const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-            exportData.push(...data.slice(1));
-        }
-        const performanceEndRow = exportData.length - 1;
-
-        // Space Between Tables
-        exportData.push([], [], []);
-
-        // --- TABLE 2: Top 5 Defect Detail ---
-        const defectTitleRow = exportData.length;
-        exportData.push(['TOP 5 DEFECT DETAIL'], []);
-        
-        const defectHeaderRow = exportData.length;
-        exportData.push([
-            'No.', 'Defect', 'Defect QTY', '% of Total Defect', 
-            'Top Style (Most Contribute)', 'QTY Defect (Pcs)', '% of Defect'
-        ]);
-
-        const defectStartRow = exportData.length;
-        const defectTable = document.getElementById('tableInlineDefect');
-        const defectSheet = XLSX.utils.table_to_sheet(defectTable, { raw: true });
-        const defectData = XLSX.utils.sheet_to_json(defectSheet, { header: 1 });
-        exportData.push(...defectData.slice(1));
-        const defectEndRow = exportData.length - 1;
-
-        // --- Create & Format Worksheet ---
-        const worksheet = XLSX.utils.aoa_to_sheet(exportData);
-
-        // Adjust Column Widths
-        worksheet['!cols'] = [
-            { wch: 10 }, { wch: 30 }, { wch: 15 }, { wch: 20 },
-            { wch: 30 }, { wch: 18 }, { wch: 15 }, { wch: 18 }, { wch: 15 }
-        ];
-
-        // Merge Titles
-        worksheet['!merges'] = [
-            { s: { r: performanceTitleRow, c: 0 }, e: { r: performanceTitleRow, c: 8 } },
-            { s: { r: defectTitleRow, c: 0 }, e: { r: defectTitleRow, c: 6 } }
-        ];
-
-        // Apply Styles
-        styleRange(worksheet, performanceTitleRow, performanceTitleRow, 0, 8, titleStyle);
-        styleRange(worksheet, performanceHeaderRow, performanceHeaderRow, 0, 8, headerStyle);
-        
-        if (performanceEndRow >= performanceStartRow) {
-            styleRange(worksheet, performanceStartRow, performanceEndRow, 0, 8, bodyStyle);
-            styleRange(worksheet, performanceStartRow, performanceEndRow, 0, 0, centerStyle); // Week column
-            styleRange(worksheet, performanceStartRow, performanceEndRow, 2, 8, centerStyle); // Number columns
-        }
-
-        styleRange(worksheet, defectTitleRow, defectTitleRow, 0, 8, titleStyle);
-        styleRange(worksheet, defectHeaderRow, defectHeaderRow, 0, 6, headerStyle);
-        
-        if (defectEndRow >= defectStartRow) {
-            styleRange(worksheet, defectStartRow, defectEndRow, 0, 6, bodyStyle);
-            styleRange(worksheet, defectStartRow, defectEndRow, 0, 0, centerStyle);
-            styleRange(worksheet, defectStartRow, defectEndRow, 2, 3, centerStyle);
-            styleRange(worksheet, defectStartRow, defectEndRow, 5, 6, centerStyle);
-        }
-
-        // Adjust Row Heights & Freeze Panes
-        worksheet['!rows'] = [];
-        worksheet['!rows'][performanceTitleRow] = { hpt: 25 };
-        worksheet['!rows'][performanceHeaderRow] = { hpt: 35 };
-        worksheet['!rows'][defectTitleRow] = { hpt: 25 };
-        worksheet['!rows'][defectHeaderRow] = { hpt: 35 };
-        worksheet['!freeze'] = { xSplit: 0, ySplit: performanceHeaderRow + 1 };
-
-        // Construct & Download
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Weekly Report');
-        
-        let selectedWeek = $('#selectWeek option:selected').text() || 'Weekly Performance';
-        selectedWeek = selectedWeek.replace(/[\\/:*?"<>|]/g, '-').trim();
-        const fileName = `Weekly_Endline_Performance_${selectedWeek}.xlsx`;
-
-        XLSX.writeFile(workbook, fileName);
-        console.log(`Export berhasil: ${fileName}`);
+        });
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Select2 Initialization & Events
-    |--------------------------------------------------------------------------
-    */
-    $('#selectWeek').select2({
-        placeholder: 'Select Week',
-        width: '100%',
-        ajax: {
-            url: "{{ route('monitoring_endlineperformance_selectweek') }}",
-            type: "GET",
-            dataType: "json",
-            delay: 500,
-            data: params => ({ q: params.term, page: params.page || 1 }),
-            processResults: data => ({ results: data.results, pagination: data.pagination }),
-            cache: true
-        }
-    });
+    function changeSchedule(type) {
+        currentMode = type;
+        selectedDefects = [];
+        clearChart();
+        fetchDefectOptions().then(function () {
+            renderChips();
+            renderOptions();
+        });
+    }
 
-    // Fetch Current Week
-    $.get("{{ route('monitoring_endlineperformance_currentweek') }}")
-        .done(res => {
-            if (!res?.selected?.id) {
-                console.error('Current week tidak ditemukan.', res);
-                return;
-            }
-            const option = new Option(res.selected.text, res.selected.id, true, true);
-            $('#selectWeek').append(option).trigger('change');
-        })
-        .fail(xhr => console.error('Gagal mengambil current week.', xhr));
+    $('#weekly').on('change', function () { changeSchedule('weekly'); });
+    $('#day').on('change', function () { changeSchedule('day'); });
 
-    // Handle Week Change
-    $('#selectWeek').on('change', function () {
-        const weekId = $(this).val();
-        if (!weekId) return;
+    function clearChart() {
+        xAxisLabels = [];
+        chartSeries = [];
+        renderChart();
+    }
 
-        isTableLoading = true;
-        destroyPerformanceDataTable();
+    function buildChartOption() {
+        const series = chartSeries.map(s => ({
+            name: s.name,
+            type: 'line',
+            smooth: false,
+            symbol: 'circle',
+            symbolSize: 15,
+            data: s.data,
+            itemStyle: { color: s.color },
+            lineStyle: { width: 4, color: s.color }
+        }));
 
-        const week = weekId.split('-')[1];
-        $(document).trigger('week:changed', { week_id: weekId });
-        $('.subheader').text(`TOP 5 DEFECT DETAIL (WEEK ${week})`);
+        return {
+            backgroundColor: 'transparent',
+            textStyle: { color: '#8A93A6' },
+            tooltip: {
+                trigger: 'axis',
+                backgroundColor: '#1B2434',
+                borderColor: '#3A4557',
+                borderWidth: 1,
+                padding: 12,
+                textStyle: { color: '#FFFFFF' },
+                formatter: function (params) {
+                    if (!params || params.length === 0) return '';
 
-        $.get("{{ route('monitoring_endlineperformance_data') }}", { week_id: weekId })
-            .done(html => {
-                const $res = $(html);
-                
-                ['#tableInlinePerformanceBody', '#tableInlineDefectBody', '#tableInlineDefectFoot'].forEach(selector => {
-                    const content = $res.find(selector);
-                    if (content.length) $(selector).html(content.html());
-                });
+                    const dataIndex = params[0].dataIndex;
+                    const dateLabel = params[0].axisValueLabel || params[0].name;
 
-                initPerformanceDataTable();
-            })
-            .fail(xhr => console.error('Gagal mengambil data.', xhr))
-            .always(() => isTableLoading = false);
-    });
+                    const totalWft = params.reduce((sum, p) => sum + (p.data || 0), 0) / params.length;
 
-    /*
-    |--------------------------------------------------------------------------
-    | Export Action Handler
-    |--------------------------------------------------------------------------
-    */
-    $('#export-datatable-btn').off('click.exportExcel').on('click.exportExcel', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
+                    const topStyles = bucketMeta[dataIndex]?.topStyles;
 
-        if (isTableLoading) {
-            console.warn('Data masih loading, export dibatalkan.');
+                    let html = `
+                        <div style="min-width:180px;">
+                            <div style="font-weight:600;margin-bottom:6px;">${dateLabel}</div>
+                            <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+                                <span>WFT</span>
+                                <span>${totalWft.toFixed(2)}%</span>
+                            </div>
+                            <hr style="border-color:#3A4557;margin:6px 0;">
+                            <div style="margin-bottom:4px;">Top Style Contribute</div>
+                    `;
+
+                    topStyles.forEach((s, i) => {
+                        html += `
+                            <div style="display:flex;justify-content:space-between;margin-bottom:2px;">
+                                <span>${i + 1}. ${s.style}</span>
+                                <span>${s.wft.toFixed(2)}%</span>
+                            </div>
+                        `;
+                    });
+
+                    html += `</div>`;
+                    return html;
+                }
+            },
+            grid: { left: 55, right: 25, top: 45, bottom: 35, containLabel: false },
+            xAxis: {
+                type: 'category',
+                boundaryGap: true,
+                data: xAxisLabels,
+                axisLine: { lineStyle: { color: '#3A4557' } },
+                axisTick: { show: false },
+                axisLabel: { color: '#8A93A6', fontSize: 12 },
+                splitLine: { show: false }
+            },
+            yAxis: {
+                type: 'value',
+                name: 'WFT (%)',
+                nameLocation: 'end',
+                nameGap: 20,
+                nameTextStyle: { color: '#8A93A6', fontSize: 12, align: 'left' },
+                min: 0,
+                max: 100,
+                interval: 20,
+                axisLine: { show: false },
+                axisTick: { show: false },
+                axisLabel: { color: '#8A93A6', fontSize: 12, formatter: (val) => `${val.toFixed(2)}%` },
+                splitLine: { lineStyle: { color: '#2A3446', type: 'solid' } }
+            },
+            series: series
+        };
+    }
+
+    function renderChart() {
+        myChart.setOption(buildChartOption(), true);
+    }
+
+    window.addEventListener('resize', function () { myChart.resize(); });
+    if (window.ResizeObserver) {
+        const ro = new ResizeObserver(() => myChart.resize());
+        ro.observe(chartDom.parentElement);
+    }
+
+    function renderChips() {
+        $chips.empty();
+
+        selectedDefects.forEach(code => {
+            code = String(code);
+
+            const opt = allDefects.find(o => String(o.code) === code);
+            const name = opt ? opt.name : code;
+            const color = opt ? opt.color : '#999';
+
+            $chips.append(`
+                <span
+                    class="filter-chip"
+                    data-code="${code}"
+                    style="
+                        background-color: ${color};
+                        border-color: ${color};
+                        color: #fff;
+                    "
+                >
+                    ${name}
+                    <button
+                        type="button"
+                        class="chip-remove"
+                        data-code="${code}"
+                    >✕</button>
+                </span>
+            `);
+
+        });
+    }
+
+    function renderOptions() {
+        $optionsList.empty();
+
+        if (allDefects.length === 0) {
+            $optionsList.append(
+                '<span class="filter-option-empty">Tidak ada data defect</span>'
+            );
             return;
         }
-        exportExcel();
+
+        allDefects.forEach(opt => {
+            const code = String(opt.code);
+            const isSelected = selectedDefects.includes(code);
+            const color = opt.color || '#999';
+
+            $optionsList.append(`
+                <span
+                    class="filter-option-pill ${isSelected ? 'is-selected' : ''}"
+                    data-code="${code}"
+                    data-color="${color}"
+                    style="
+                        --defect-color: ${color};
+                    "
+                >
+                    ${opt.name}
+                </span>
+            `);
+        });
+    }
+
+    $('#addFilterBtn').on('click', function (e) {
+        e.stopPropagation();
+        renderOptions();
+        $dropdown.toggleClass('d-none');
     });
+
+    $optionsList.on('click', '.filter-option-pill', function () {
+        const code = String($(this).attr('data-code'));
+
+        if (selectedDefects.includes(code)) {
+            selectedDefects = selectedDefects.filter(c => c !== code);
+        } else {
+            selectedDefects.push(code);
+        }
+
+        renderChips();
+        renderOptions();
+    });
+
+    $chips.on('click', '.chip-remove', function () {
+        const code = String($(this).attr('data-code'));
+
+        selectedDefects = selectedDefects.filter(c => c !== code);
+
+        renderChips();
+        renderOptions();
+    });
+
+
+    $(document).on('click', function (e) {
+        if (!$(e.target).closest('.defect-filter').length) {
+            $dropdown.addClass('d-none');
+        }
+    });
+
+    $('#findbtndefect').on('click', function () {
+        fetchChartData();
+        $('#loading').show();
+    });
+
+    fetchDefectOptions().then(function () {
+        renderChips();
+        renderOptions();
+    });
+
+    $('#export-datatable').on('click', function (e) {
+
+    e.preventDefault();
+
+    exportExcel();
+
+});
+
 });
 </script>
-
 @include('layouts.loading')
 @endpush
-
