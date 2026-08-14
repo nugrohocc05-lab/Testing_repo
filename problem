@@ -1,919 +1,1551 @@
-<?php
+<style>
 
-namespace Modules\Monitoring\Http\Controllers;
-
-use DB;
-use Carbon\Carbon;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Collection;
-use Illuminate\Http\Request;
-use App\Http\Controllers\Controller;
-use App\Http\Models\Main\MasterEmployeeGroup;
-use App\Http\Models\Main\MasterEmployeeSection;
-use App\Http\Models\Main\MasterGroupBuyer;
-use App\Http\Models\PurchaseOrder;
-use App\Http\Models\Main\Buyer;
-use App\Http\Models\InlineDetail;
-use App\Http\Models\InlineHeader;
-use App\Http\Models\Main\Employee;
-use App\Http\Models\Main\Style;
-use App\Http\Models\Main\Param;
-use App\Http\Models\Main\QCDefect;
-use App\Http\Models\OutputDetail;
-use App\Http\Models\SewingOutput;
-
-class EndlinePerformanceController extends Controller
-{
-    protected $m_modul = 'report';
-
-    // Berapa lama data chart di-cache. Kecil karena dashboard auto-refresh,
-    // tapi cukup untuk meredam beban query saat banyak user buka bersamaan.
-    protected $chartCacheTtl = 30; // detik
-
-    function __construct()
-    {
-        $this->middleware('auth');
+    .weekly-card-body {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        min-height: 0;
     }
 
-    function index(Request $request)
-    {
-        if ($this->myaccess() == '0') {
-            return redirect()
-                ->back()
-                ->with('alert', [
-                    'title' => 'Unauthorized!',
-                    'message' => 'You Dont Have Any Access Here!',
-                    'status' => 'warning',
-                ]);
+    .weekly-card-body .wrapper-title {
+        flex: 0 0 auto;
+    }
+
+    .weekly-performance-table {
+        flex: 0 0 auto;
+        min-height: 0;
+        width: 100%;
+    }
+
+    .weekly-performance-table .table-scroll-wrapper {
+        width: 100%;
+        overflow-x: auto;
+        overflow-y: hidden;
+    }
+
+
+    .weekly-card-body .defect-title {
+        flex: 0 0 auto;
+        margin-top: 8px;
+    }
+
+    .weekly-card-body .table-wrapper {
+        flex: 1 1 0;
+        min-height: 80px;
+        height: auto;
+        max-height: none;
+        width: 100%;
+        overflow-y: auto;
+        overflow-x: auto;
+        border: 1px solid #242E3E;
+        border-radius: 4px;
+    }
+
+    .table-res {
+        font-size: 13px;
+    }
+
+    .table-res th {
+        font-size: 13px !important;
+        line-height: 1.5 !important;
+        white-space: nowrap;
+    }
+
+    .table-wrapper thead th {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: #1b2433;
+    }
+
+    .table-wrapper tfoot th,
+    .table-wrapper tfoot td {
+        position: sticky;
+        bottom: 0;
+        z-index: 10;
+        background: #1b2433;
+    }
+
+    @keyframes skeleton-pulse {
+        0% {
+            opacity: 0.35;
         }
 
-        preconnect(session('db'));
+        50% {
+            opacity: 0.75;
+        }
 
-        return view('monitoring::endlineperformance.performance.index');
+        100% {
+            opacity: 0.35;
+        }
     }
 
-    function selectline(Request $request)
-    {
-        preconnect(session('db'));
+    .skeleton-box {
+        display: inline-block;
+        width: 100%;
+        height: 12px;
+        border-radius: 4px;
+        background-color: rgba(255, 255, 255, 0.12);
+        animation: skeleton-pulse 1.2s ease-in-out infinite;
+    }
 
-        $g = (new MasterEmployeeGroup())->getTable();
-        $s = (new MasterEmployeeSection())->getTable();
+    .skeleton-circle {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background-color: rgba(255, 255, 255, 0.12);
+        animation: skeleton-pulse 1.2s ease-in-out infinite;
+        flex-shrink: 0;
+    }
 
-        $data = MasterEmployeeGroup::select(
-                "$g.id as kodegroup", "$g.section_id as kodebagian",
-                "$g.name as namagroup", "$s.name as namabagian"
+    .skeleton-row td {
+        padding-top: 10px;
+        padding-bottom: 10px;
+    }
+
+    .skeleton-row .skeleton-box {
+        width: 70%;
+        margin: 0 auto;
+    }
+
+    .skeleton-row .skeleton-box.text-start-w {
+        width: 90%;
+        margin: 0;
+    }
+
+    /* Select2 - ukuran font */
+    #selectWeek + .select2-container .select2-selection__rendered {
+        font-size: 14px !important;
+    }
+
+    #selectWeek + .select2-container .select2-selection {
+        font-size: 14px !important;
+    }
+
+    /* Dropdown option */
+    .select2-container .select2-results__option {
+        font-size: 14px !important;
+        padding: 5px 8px !important;
+    }
+
+    /* Search box di dropdown */
+    .select2-container .select2-search__field {
+        font-size: 14px !important;
+    }
+
+    @media (min-width: 992px) and (max-width: 1400px) {
+
+        .weekly-card-body {
+            padding: 0;
+        }
+
+        .weekly-card-body .wrapper-title {
+            gap: 6px;
+            margin-bottom: 2px;
+        }
+
+        .datatable-header-left {
+            gap: 6px !important;
+            min-width: 0;
+        }
+
+        .datatable-header-left img.detailIcon {
+            width: 18px !important;
+            height: 18px !important;
+        }
+
+        .datatable-header-left h5 {
+            font-size: 12px !important;
+            line-height: 1.2;
+        }
+
+        .datatable-header-right {
+            width: 230px !important;
+            flex-shrink: 0;
+        }
+
+        #selectWeek + .select2-container {
+            width: 100% !important;
+        }
+
+        #selectWeek + .select2-container .select2-selection--single {
+            height: 28px !important;
+            min-height: 28px !important;
+        }
+
+        #selectWeek + .select2-container
+        .select2-selection--single
+        .select2-selection__rendered {
+            font-size: 10px !important;
+            line-height: 28px !important;
+            padding-left: 8px !important;
+            padding-right: 25px !important;
+        }
+
+        #selectWeek + .select2-container
+        .select2-selection--single
+        .select2-selection__arrow {
+            height: 28px !important;
+            width: 22px !important;
+        }
+
+        /* Dropdown option */
+        .select2-container .select2-results__option {
+            font-size: 10px !important;
+            padding: 4px 7px !important;
+            line-height: 1.2 !important;
+        }
+
+        /* Search */
+        .select2-container .select2-search__field {
+            font-size: 10px !important;
+            min-height: 24px !important;
+            padding: 3px 5px !important;
+        }
+
+        .export-icon {
+            width: 18px !important;
+            height: 18px !important;
+        }
+
+        .export-btn {
+            font-size: 10px;
+        }
+
+        .table-res {
+            font-size: 10px !important;
+            line-height: 1.15 !important;
+            margin-top: 5px;
+        }
+
+        .table-res th {
+            font-size: 9px !important;
+            line-height: 1.15 !important;
+            padding: 4px 3px !important;
+            white-space: nowrap;
+        }
+
+        .table-res td {
+            font-size: 10px !important;
+            line-height: 1.15 !important;
+            padding: 4px 3px !important;
+        }
+
+        #tableInlinePerformance th,
+        #tableInlinePerformance td {
+            padding: 3px 2px !important;
+        }
+
+        #tableInlinePerformance thead th {
+            line-height: 1.2 !important;
+        }
+
+        .weekly-card-body .subheader {
+            font-size: 11px !important;
+            line-height: 1.2;
+            margin-top: 4px !important;
+        }
+
+        .weekly-card-body .defect-title {
+            margin-top: 4px;
+        }
+
+        .weekly-card-body .table-wrapper {
+            margin-top: 4px !important;
+            min-height: 50px;
+        }
+
+        #tableInlineDefect th,
+        #tableInlineDefect td {
+            line-height: 1.20 !important;
+        }
+
+        #tableInlineDefect thead th {
+            font-size: 9px !important;
+            line-height: 1.1 !important;
+        }
+
+        #tableInlineDefect tbody td {
+            font-size: 10px !important;
+        }
+
+        #tableInlineDefect tfoot th,
+        #tableInlineDefect tfoot td {
+            font-size: 9px !important;
+            padding: 3px !important;
+        }
+
+        .defect-circle {
+            width: 7px !important;
+            height: 7px !important;
+        }
+
+        .skeleton-box {
+            height: 8px !important;
+            border-radius: 3px;
+        }
+
+        .skeleton-circle {
+            width: 7px !important;
+            height: 7px !important;
+        }
+
+        .skeleton-row td {
+            padding-top: 4px !important;
+            padding-bottom: 4px !important;
+        }
+    }
+</style>
+
+<div class="weekly-card-body">
+    <!-- Header -->
+    <div class="d-flex align-items-center wrapper-title justify-content-between">
+        <div class="datatable-header-left d-flex align-items-center gap-2">
+            <img src="{{ _asset('svg/inlinePerformance/calendar.svg') }}" class="detailIcon" alt="">
+            <h5 class="mb-0 fw-normal text-nowrap">
+                WEEKLY ENDLINE PERFORMANCE
+            </h5>
+        </div>
+
+        <div class="datatable-header-right" style="width: 350px;">
+            <div class="w-100">
+                <select id="selectWeek" class="form-select select2 w-100">
+                    <option></option>
+                </select>
+            </div>
+            <button class="export-btn bg-transparent border-0 p-0 d-flex align-items-center gap-1" id="export-datatable-btn" aria-label="Export">
+                <img src="{{ _asset('svg/inlinePerformance/export.svg') }}" class="export-icon" alt="Export">
+                <span class="custom-tooltip-bottom">Excel</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Table 1: Weekly Performance -->
+    <div class="table-scroll-wrapper" style="overflow-x:auto;">
+        <table id="tableInlinePerformance" class="table-res table-custom table table-borderless align-middle w-100 table-hover">
+            <thead>
+                <tr>
+                    <th class="text-center" style="width:10%;">Week</th>
+                    <th class="text-center" style="width:30%">Periode Date</th>
+                    <th class="text-center" style="width:10%">RFT QTY<br>(Pcs)</th>
+                    <th class="text-center" style="width:10%">Inspect QTY<br>(Pcs)</th>
+                    <th class="text-center" style="width:10%">Defect QTY<br>(Pcs)</th>
+                    <th class="text-center" style="width:10%">RFT<br>(%)</th>
+                    <th class="text-center" style="width:10%">WFT<br>(%)</th>
+                    <th class="text-center" style="width:10%">Non Process<br>(%)</th>
+                    <th class="text-center" style="width:10%">Process<br>(%)</th>
+                </tr>
+            </thead>
+            <tbody id="tableInlinePerformanceBody">
+                @include('monitoring::endlineperformance.performance.partials.weekly-row')
+            </tbody>
+        </table>
+    </div>
+
+    <div class="">
+        <h6 class="subheader mb-0 fw-normal text-nowrap">
+            TOP 5 DEFECT DETAIL
+        </h6>
+    </div>
+    <div class="table-wrapper table-scroll-wrapper rounded mt-2" style="border:1px solid #242E3E">
+        <table id="tableInlineDefect" class="table-res table-custom table table-borderless align-middle w-100 table-hover">
+            <thead>
+                <tr>
+                    <th class="text-center" style="width:5%;">No.</th>
+                    <th class="text-center" style="width:10%">Defect</th>
+                    <th class="text-center" style="width:5%">Defect QTY</th>
+                    <th class="text-center" style="width:5%">% of Total Defect</th>
+                    <th class="text-center" style="width:15%">Top Style (Most Contribute)</th>
+                    <th class="text-center" style="width:5%">QTY Defect (Pcs)</th>
+                    <th class="text-center" style="width:10%">% of Defect</th>
+                </tr>
+            </thead>
+            <tbody id="tableInlineDefectBody" class="table-head text-center">
+                @php
+                    $top_defect = $top_defect ?? collect();
+                @endphp
+
+                @if ($top_defect->isEmpty())
+                    @for ($r = 0; $r < 5; $r++)
+                        <tr class="skeleton-row skeleton-defect-row">
+                            <td><span class="skeleton-box"></span></td>
+                            <td>
+                                <div class="d-flex justify-content-start align-items-center gap-2">
+                                    <span class="skeleton-circle"></span>
+                                    <span class="skeleton-box text-start-w"></span>
+                                </div>
+                            </td>
+                            <td><span class="skeleton-box"></span></td>
+                            <td><span class="skeleton-box"></span></td>
+                            <td><span class="skeleton-box"></span></td>
+                            <td><span class="skeleton-box"></span></td>
+                            <td><span class="skeleton-box"></span></td>
+                        </tr>
+                    @endfor
+                @else
+                    @foreach ($top_defect as $index => $defect)
+                        @php $styles = $defect['top_style'] ?? []; @endphp
+                        @foreach ($styles as $sIndex => $style)
+                            <tr>
+                                @if ($sIndex === 0)
+                                    <td rowspan="{{ count($styles) }}" class="text-center">{{ $index + 1 }}</td>
+                                    <td rowspan="{{ count($styles) }}">
+                                        <div class="d-flex justify-content-start align-items-center gap-2 text-truncate">
+                                            <span class="defect-circle rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+                                                style="background-color: {{ $defect['color'] }};"></span>
+                                            {{ $defect['nmdefect'] }}
+                                        </div>
+                                    </td>
+                                    <td rowspan="{{ count($styles) }}" class="text-center">{{ $defect['defect_qty'] }}</td>
+                                    <td rowspan="{{ count($styles) }}" class="text-center">{{ $defect['percent'] }}%</td>
+                                @endif
+                                <td>{{ $style['style'] }}</td>
+                                <td>{{ $style['qty'] }}</td>
+                                <td>{{ $style['percent'] }}%</td>
+                            </tr>
+                        @endforeach
+                    @endforeach
+                @endif
+            </tbody>
+
+            <tfoot class="table-foot" id="tableInlineDefectFoot">
+                <tr>
+                    <th></th>
+                    <th class="text-start">TOTAL</th>
+                    <th>{{ $totTopDefect ?? 0 }}</th>
+                    <th>
+                        @php
+                            $totPercent = collect($top_defect ?? [])->sum(fn($d) => (float) $d['percent']);
+                        @endphp
+                        {{ number_format($totPercent, 2) }}%
+                    </th>
+                    <th></th>
+                    <th>
+                        @php
+                            $totStyleQty = collect($top_defect ?? [])
+                                ->flatMap(fn($d) => $d['top_style'] ?? [])
+                                ->sum(fn($s) => (int) $s['qty']);
+                        @endphp
+                        {{ $totStyleQty }}
+                    </th>
+                    <th>
+                        @php
+                            $totStylePercent = ($totTopDefect ?? 0) > 0
+                                ? ($totStyleQty / $totTopDefect) * 100
+                                : 0;
+
+                            $totStylePercent = min($totStylePercent, 100);
+                        @endphp
+                        {{ number_format($totStylePercent, 2) }}%
+                    </th>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+@push('scripts')
+
+<script>
+$(function () {
+
+    let weeklyDataTable = null;
+
+    let isTableLoading = false;
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | DESTROY DATATABLE
+    |--------------------------------------------------------------------------
+    */
+    function destroyPerformanceDataTable() {
+
+        if (
+            $.fn.DataTable.isDataTable(
+                '#tableInlinePerformance'
             )
-            ->join($s, "$s.id", '=', "$g.section_id")
-            ->distinct()
-            ->whereHas('groupline', function($q){
-                $q->where('factory_id', session('db')->iddb)
-                    ->where('is_show', 1)
-                    ->where('is_line', 1);
-            });
-
-        if ($request->q) {
-            $data = $data->where(function ($q) use ($request, $g) {
-                $q->where("$g.name", 'like', "%$request->q%");
-            });
-        }
-        $data = $data->orderBy('kodegroup')->paginate(15, $request->page);
-
-        return response()->json($data);
-    }
-
-    function groupbuyer(Request $request)
-    {
-        preconnect(session('db'));
-
-        $q = $request->get('q');
-
-        $data = MasterGroupBuyer::select('id', 'group_name')
-            ->when($q, function ($query) use ($q) {
-                $query->where('group_name', 'like', '%' . $q . '%');
-            })
-            ->orderBy('group_name', 'asc')
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'id' => $item->id,
-                    'text' => $item->group_name
-                ];
-            });
-
-        return response()->json([
-            'results' => $data
-        ]);
-    }
-
-    function summaryFilter(Request $request)
-    {
-        $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
-        $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
-
-        $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
-        $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
-
-        // Tanggal
-        $headerQuery = SewingOutput::whereBetween('date', [$dta, $dtb]);
-
-        // Line
-        if ($request->line && $request->line != 'all') {
-            $headerQuery = $headerQuery->where('line', $request->line);
-        }
-
-        // Group Buyer -> idpo
-        if ($request->groupbuyer && $request->groupbuyer != 'all') {
-            $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
-            $poIds = PurchaseOrder::whereIn('idbuyer', $buyerIds)->pluck('idpo');
-            $outputId = OutputDetail::whereIn('idpo', $poIds)->pluck('barcode');
-            $headerQuery = $headerQuery->whereIn('barcode', $outputId)->where('is_qc', 1);
-        }
-
-        // Total Output — clone builder langsung, tidak materialize ID lalu whereIn ulang
-        $totOutput = (clone $headerQuery)
-            ->where('is_output', 1)
-            ->count();
-
-        // Qty Inspects
-        $totInspect = (clone $headerQuery)
-            ->where('is_qc', 1)
-            ->count();
-
-        // Qty Defects
-        $totDefect = (clone $headerQuery)
-            ->whereNotNull('defect_code')
-            ->count();
-
-        // RFT
-        $rft = $totInspect > 0
-            ? round((($totInspect - $totDefect) / $totInspect) * 100, 2)
-            : 0;
-
-        // WFT
-        $wft = $totInspect > 0
-            ? round(($totDefect / $totInspect) * 100, 2)
-            : 0;
-
-        // Kondisi warna target
-        $target = Param::where('header', 'qc')
-            ->where('key', 'rft_endline_target')
-            ->value('value');
-
-        $rftTarget = $rft <= $target ? true : false;
-
-        // Top 5 Defect
-        $topDefect = (clone $headerQuery)
-            ->whereNotNull('defect_code')
-            ->whereNotIn('defect_code', [800, 900])
-            ->select(
-                'defect_code',
-                DB::raw('COUNT(*) as total')
-            )
-            ->groupBy('defect_code')
-            ->orderByDesc('total')
-            ->orderBy('defect_code', 'asc')
-            ->limit(4)
-            ->get();
-
-        $defectIds = $topDefect->pluck('defect_code');
-
-        // Master defect untuk Top 4
-        $masterQcDefects = QCDefect::whereIn('kdcacat', $defectIds)
-            ->pluck('deskripsi', 'kdcacat');
-
-        $colors = [
-            '#004FE0',
-            '#3DAA25',
-            '#F4947E',
-            '#F24C4C',
-            '#29B1AE',
-        ];
-
-
-        // Mapping Top 4
-        $topDefect = $topDefect->values()->map(function ($item, $index) use (
-            $masterQcDefects,
-            $totDefect,
-            $colors
         ) {
-            $percent = $totDefect > 0
-                ? ($item->total / $totDefect) * 100
-                : 0;
 
-            return [
-                'defect_id' => $item->defect_code,
-                'nmdefect'  => $masterQcDefects[$item->defect_code] ?? '-',
-                'total'     => (int) $item->total,
-                'percent'   => number_format($percent, 2),
-                'color'     => $colors[$index] ?? '#BDBDBD',
-            ];
-        });
-
-        // Others
-        $top4Total = $topDefect->sum('total');
-
-        $othersTotal = $totDefect - $top4Total;
-
-        if ($othersTotal > 0) {
-            $othersPercent = $totDefect > 0
-                ? ($othersTotal / $totDefect) * 100
-                : 0;
-
-            $topDefect->push([
-                'defect_id' => 'others',
-                'nmdefect'  => 'Others',
-                'total'     => (int) $othersTotal,
-                'percent'   => number_format($othersPercent, 2),
-                'color'     => '#29B1AE',
-            ]);
+            $('#tableInlinePerformance')
+                .DataTable()
+                .destroy();
         }
 
-        return response()->json([
-            'tot_output'  =>  $totOutput,
-            'tot_inspect' => $totInspect,
-            'tot_defect'  => $totDefect,
-            'rft'         => $rft,
-            'wft'         => $wft,
-            'rft_target'  => $rftTarget,
-            'top_defect'  => $topDefect,
-        ]);
-    }
-
-    private function buildWeeks($year)
-    {
-        return Cache::remember("weeks_list_{$year}", now()->addDay(), function () use ($year) {
-            $startOfYear = Carbon::createFromDate($year, 1, 1)->startOfDay();
-            $endOfYear   = Carbon::createFromDate($year, 12, 31)->endOfDay();
-
-            $weeks = [];
-            $weekNumber = 1;
-            $current = $startOfYear->copy();
-
-            while ($current->lte($endOfYear)) {
-                $weekStart = $current->copy();
-                $weekEnd   = $current->copy()->addDays(6);
-
-                if ($weekEnd->gt($endOfYear)) {
-                    $weekEnd = $endOfYear->copy();
-                }
-
-                $weeks[] = [
-                    'id'    => $year . '-' . $weekNumber,
-                    'year'  => $year,
-                    'week'  => $weekNumber,
-                    'start' => $weekStart->format('Y-m-d'),
-                    'end'   => $weekEnd->format('Y-m-d'),
-                    'text'  => 'Week ' . $weekNumber . ' (' . $weekStart->format('d M') . ' - ' . $weekEnd->format('d M Y') . ')',
-                ];
-
-                $weekNumber++;
-                $current->addDays(7);
-            }
-
-            return $weeks;
-        });
+        weeklyDataTable = null;
     }
 
 
-    // Deteksi year + week number dari tanggal (default hari ini)
-    private function detectCurrentWeek($date = null)
-    {
-        $date = $date ? Carbon::parse($date) : Carbon::now();
-        $year = $date->year;
+    /*
+    |--------------------------------------------------------------------------
+    | INIT DATATABLE
+    |--------------------------------------------------------------------------
+    */
+    function initPerformanceDataTable() {
 
-        $startOfYear = Carbon::createFromDate($year, 1, 1)->startOfDay();
-        $dayOfYear   = $startOfYear->diffInDays($date->copy()->startOfDay()) + 1;
-        $weekNumber  = (int) ceil($dayOfYear / 7);
+        const rowCount =
+            $('#tableInlinePerformanceBody tr').length;
 
-        return [
-            'id'   => $year . '-' . $weekNumber,
-            'year' => $year,
-            'week' => $weekNumber,
-        ];
-    }
 
-    public function selectWeek(Request $request)
-    {
-        $year   = Carbon::now()->year;
-        $search = trim((string) $request->q);
-
-        $weeks = collect($this->buildWeeks($year));
-
-        // Batasi hanya sampai week yang mencakup hari ini
-        $currentWeek = $this->detectCurrentWeek();
-        $weeks = $weeks->filter(fn ($w) => $w['week'] <= $currentWeek['week'])->values();
-
-        if ($search !== '') {
-            $needle = mb_strtolower($search);
-            $weeks = $weeks->filter(fn ($w) => str_contains(mb_strtolower($w['text']), $needle))->values();
+        if (rowCount === 0) {
+            return;
         }
 
-        $perPage = 20;
-        $page    = (int) ($request->page ?? 1);
-        $paged   = $weeks->slice(($page - 1) * $perPage, $perPage)->values();
 
-        return response()->json([
-            'results'    => $paged->map(fn ($w) => ['id' => $w['id'], 'text' => $w['text']]),
-            'pagination' => ['more' => $weeks->count() > $page * $perPage],
-        ]);
-    }
+        destroyPerformanceDataTable();
 
-    public function currentWeek()
-    {
-        $current = $this->detectCurrentWeek();
 
-        $weeks = collect($this->buildWeeks($current['year']));
+        weeklyDataTable =
+            $('#tableInlinePerformance').DataTable({
 
-        $selectedWeek = $weeks->first(function ($week) use ($current) {
-            return $week['week'] === $current['week'];
-        });
+                paging: false,
 
-        return response()->json([
-            'selected' => [
-                'id'   => $selectedWeek['id'],
-                'text' => $selectedWeek['text'],
-            ],
-        ]);
+                ordering: false,
+
+                searching: false,
+
+                info: false,
+
+                lengthChange: false,
+
+                autoWidth: false,
+
+                dom: ''
+            });
     }
 
 
-    /**
-     * Hitung top-style untuk beberapa "grup defect code" sekaligus secara BULK.
-     * Menggantikan pola lama (getTopStyleForDefect dipanggil per defect code =
-     * N+1, tiap panggilan 4 query) dengan hanya ~4 query TETAP total,
-     * berapa pun jumlah grup/defect code yang diminta.
-     *
-     * $headerQuery: query builder dasar (mis. SewingOutput::whereBetween('date', [...]))
-     *               — di-clone di dalam, builder aslinya tidak berubah.
-     * $groupedDefectCodes: ['groupKey' => [defect_code, ...], ...]
-     *   contoh: ['101' => [101], '205' => [205], 'others' => [300, 410, ...]]
-     *
-     * Return: ['groupKey' => [ ['style'=>.., 'qty'=>.., 'percent'=>..], ... ], ...]
-     */
-    private function bulkTopStylesByDefectGroup($headerQuery, array $groupedDefectCodes, int $limit = 2): array
-    {
-        $allCodes = collect($groupedDefectCodes)->flatten()->unique()->values();
+    /*
+    |--------------------------------------------------------------------------
+    | EXPORT 2 TABLES TO 1 EXCEL FILE
+    |--------------------------------------------------------------------------
+    */
+function exportExcel() {
 
-        if ($allCodes->isEmpty()) {
-            return [];
+    if (typeof XLSX === 'undefined') {
+        alert('Library SheetJS belum tersedia.');
+        return;
+    }
+
+    const workbook = XLSX.utils.book_new();
+
+    /*
+    |--------------------------------------------------------------------------
+    | HELPER
+    |--------------------------------------------------------------------------
+    */
+
+    function addCellStyle(
+        worksheet,
+        cellAddress,
+        style
+    ) {
+
+        if (!worksheet[cellAddress]) {
+            return;
         }
 
-        // 1 query: ambil defect_code + barcode untuk seluruh grup sekaligus
-        $rows = (clone $headerQuery)
-            ->whereIn('defect_code', $allCodes)
-            ->select('defect_code', 'barcode')
-            ->get();
-
-        $rowsByCode = $rows->groupBy('defect_code');
-
-        $barcodesByGroup = [];
-        foreach ($groupedDefectCodes as $groupKey => $codes) {
-            $barcodesByGroup[$groupKey] = collect($codes)
-                ->flatMap(fn ($code) => $rowsByCode->get($code, collect())->pluck('barcode'))
-                ->filter()
-                ->values();
-        }
-
-        $allBarcodes = collect($barcodesByGroup)->flatten()->unique()->values();
-
-        if ($allBarcodes->isEmpty()) {
-            return [];
-        }
-
-        // 1 query: OutputDetail untuk semua barcode sekaligus
-        $outputDetailsByBarcode = OutputDetail::whereIn('barcode', $allBarcodes)
-            ->select('barcode', 'idpo')
-            ->get()
-            ->groupBy('barcode');
-
-        $allIdpo = $outputDetailsByBarcode->flatten()->pluck('idpo')->unique()->values();
-
-        // 1 query: PurchaseOrder -> idstyle
-        $poToStyle = PurchaseOrder::whereIn('idpo', $allIdpo)->pluck('idstyle', 'idpo');
-
-        // 1 query: Style -> nama style
-        $styleNames = Style::whereIn('idstyle', $poToStyle->values()->unique())
-            ->pluck('nmstyle', 'idstyle');
-
-        $result = [];
-
-        foreach ($barcodesByGroup as $groupKey => $barcodes) {
-            $grouped = [];
-
-            foreach ($barcodes as $barcode) {
-                foreach ($outputDetailsByBarcode->get($barcode, collect()) as $row) {
-                    $idstyle = $poToStyle[$row->idpo] ?? null;
-                    $nmstyle = $idstyle ? ($styleNames[$idstyle] ?? '-') : '-';
-                    $grouped[$nmstyle] = ($grouped[$nmstyle] ?? 0) + 1;
-                }
-            }
-
-            if (empty($grouped)) {
-                $result[$groupKey] = [];
-                continue;
-            }
-
-            $totalQty = array_sum($grouped);
-
-            arsort($grouped);
-            $top = array_slice($grouped, 0, $limit, true);
-            $othersQty = $totalQty - array_sum($top);
-
-            $rowsOut = [];
-            foreach ($top as $nmstyle => $qty) {
-                $rowsOut[] = [
-                    'style'   => $nmstyle,
-                    'qty'     => $qty,
-                    'percent' => $totalQty > 0 ? number_format(($qty / $totalQty) * 100, 2) : '0.00',
-                ];
-            }
-
-            if ($othersQty > 0) {
-                $rowsOut[] = [
-                    'style'   => 'Others',
-                    'qty'     => $othersQty,
-                    'percent' => $totalQty > 0 ? number_format(($othersQty / $totalQty) * 100, 2) : '0.00',
-                ];
-            }
-
-            $result[$groupKey] = $rowsOut;
-        }
-
-        return $result;
+        worksheet[cellAddress].s = style;
     }
 
 
+    function styleRange(
+        worksheet,
+        startRow,
+        endRow,
+        startCol,
+        endCol,
+        style
+    ) {
 
-    public function getWeeklyData(Request $request)
-    {
-        preconnect(session('db'));
-
-        $request->validate([
-            'week_id' => 'required|string',
-        ]);
-
-        [$year, $weekNumber] = explode('-', $request->week_id);
-        $weekNumber = (int) $weekNumber;
-
-        if ($weekNumber < 1 || $weekNumber > 53) {
-            abort(422, 'Week tidak valid');
-        }
-
-        $dta = Carbon::createFromDate($year, 1, 1)
-            ->startOfDay()
-            ->addDays(($weekNumber - 1) * 7);
-
-        $dtb = $dta->copy()
-            ->addDays(6)
-            ->endOfDay();
-
-        $endOfYear = Carbon::createFromDate($year, 12, 31)->endOfDay();
-
-        if ($dtb->gt($endOfYear)) {
-            $dtb = $endOfYear->copy();
-        }
-
-        $headerQuery = SewingOutput::whereBetween('date', [$dta, $dtb]);
-
-        // Clone builder langsung, tidak materialize ID lalu whereIn ulang
-        $totInspect = (clone $headerQuery)
-            ->where('is_qc', 1)
-            ->count();
-
-        $totDefect = (clone $headerQuery)
-            ->whereNotNull('defect_code')
-            ->count();
-
-        $rft_qty = $totInspect - $totDefect;
-
-        $rft = $totInspect > 0
-            ? round((($totInspect - $totDefect) / $totInspect) * 100, 2)
-            : 0;
-
-        $wft = $totInspect > 0
-            ? round(($totDefect / $totInspect) * 100, 2)
-            : 0;
-
-        $header = [
-            'week'   => 'Week ' . $weekNumber,
-            'period' => 'Week ' . $weekNumber . ' (' . $dta->format('d M') . ' - ' . $dtb->format('d M Y') . ')',
-        ];
-
-        $topDefect = (clone $headerQuery)
-            ->whereNotNull('defect_code')
-            ->whereNotIn('defect_code', [800, 900])
-            ->select(
-                'defect_code',
-                DB::raw('COUNT(*) as total')
-            )
-            ->groupBy('defect_code')
-            ->orderByDesc('total')
-            ->orderBy('defect_code', 'asc')
-            ->limit(4)
-            ->get();
-
-        $defectIds = $topDefect->pluck('defect_code');
-
-        $masterQcDefects = QCDefect::whereIn('kdcacat', $defectIds)
-            ->pluck('deskripsi', 'kdcacat');
-
-        $colors = [
-            '#004FE0',
-            '#3DAA25',
-            '#F4947E',
-            '#F24C4C',
-            '#29B1AE',
-        ];
-
-        $totTop4DefectQty = $topDefect->sum('total');
-
-        $othersQty = max(0, $totDefect - $totTop4DefectQty);
-
-        $othersPercent = $totDefect > 0
-            ? ($othersQty / $totDefect) * 100
-            : 0;
-
-        // Defect code lain di luar top4, digabung jadi grup "others"
-        $othersDefectCodes = (clone $headerQuery)
-            ->whereNotNull('defect_code')
-            ->whereNotIn('defect_code', $defectIds->toArray())
-            ->pluck('defect_code')
-            ->unique()
-            ->values()
-            ->toArray();
-
-        // Bangun grup: tiap defect code top4 jadi grup sendiri, plus grup "others"
-        $groupedDefectCodes = [];
-        foreach ($defectIds as $code) {
-            $groupedDefectCodes[(string) $code] = [$code];
-        }
-        if (!empty($othersDefectCodes)) {
-            $groupedDefectCodes['others'] = $othersDefectCodes;
-        }
-
-        // BULK: hitung top-style untuk SEMUA grup sekaligus (~4 query tetap,
-        // menggantikan N+1 lama yang bisa ~20 query per request)
-        $topStylesByGroup = $this->bulkTopStylesByDefectGroup($headerQuery, $groupedDefectCodes);
-
-        // Mapping Top 4 Defect + Top Style tiap defect
-        $topDefect = $topDefect->values()->map(function ($item, $index) use (
-            $masterQcDefects,
-            $totDefect,
-            $colors,
-            $topStylesByGroup
+        for (
+            let row = startRow;
+            row <= endRow;
+            row++
         ) {
-            $percent = $totDefect > 0 ? ($item->total / $totDefect) * 100 : 0;
 
-            return [
-                'defect_id'  => $item->defect_code,
-                'nmdefect'   => $masterQcDefects[$item->defect_code] ?? '-',
-                'defect_qty' => (int) $item->total,
-                'percent'    => number_format($percent, 2),
-                'color'      => $colors[$index] ?? '#29B1AE',
-                'top_style'  => $topStylesByGroup[(string) $item->defect_code] ?? [],
-            ];
-        });
+            for (
+                let col = startCol;
+                col <= endCol;
+                col++
+            ) {
 
-        $topDefect->push([
-            'defect_id'  => 'others',
-            'nmdefect'   => 'Others',
-            'defect_qty' => (int) $othersQty,
-            'percent'    => number_format($othersPercent, 2),
-            'color'      => '#29B1AE',
-            'top_style'  => $topStylesByGroup['others'] ?? [],
-        ]);
+                const cell =
+                    XLSX.utils.encode_cell({
+                        r: row,
+                        c: col
+                    });
 
-        $totTopDefect = $topDefect->sum('defect_qty');
-
-        return view('monitoring::endlineperformance.performance.partials.weekly', [
-            'header'       => $header,
-            'rft_qty'      => $rft_qty,
-            'inspect_qty'  => $totInspect,
-            'defect_qty'   => $totDefect,
-            'rft'          => $rft,
-            'wft'          => $wft,
-            'top_defect'   => $topDefect,
-            'totTopDefect' => $totTopDefect,
-        ]);
-    }
-
-    // Helper: hitung range tanggal dari week_id
-    private function weekRange($year, int $weekNumber): array
-    {
-        $dta = Carbon::createFromDate($year, 1, 1)->startOfDay()->addDays(($weekNumber - 1) * 7);
-        $dtb = $dta->copy()->addDays(6)->endOfDay();
-
-        $endOfYear = Carbon::createFromDate($year, 12, 31)->endOfDay();
-        if ($dtb->gt($endOfYear)) {
-            $dtb = $endOfYear->copy();
-        }
-
-        return [$dta, $dtb];
-    }
-
-    /**
-     * Menentukan window waktu + definisi bucket untuk chart defect.
-     * PENTING: kedua mode sekarang konsisten pakai kolom `date` (bukan created_at),
-     * karena `date` sudah dipastikan DATETIME (simpan tanggal + jam).
-     *
-     * Return: [Carbon $dta, Carbon $dtb, array $buckets, string $bucketSqlExpr]
-     * - $buckets: list ['key' => ..., 'label' => ...]
-     * - $bucketSqlExpr: ekspresi SQL RAW untuk menghasilkan bucket_key per row
-     */
-    private function resolveChartBuckets(string $mode): array
-    {
-        if ($mode === 'day') {
-            $dta = Carbon::now()->startOfDay();
-            $dtb = Carbon::now()->endOfDay();
-
-            $buckets = [];
-            foreach (range(7, 23) as $h) {
-                $buckets[] = ['key' => (string) $h, 'label' => sprintf('%02d:00', $h)];
-            }
-
-            $bucketSqlExpr = 'HOUR(date)';
-        } else {
-            $dta = Carbon::now()->subDays(6)->startOfDay();
-            $dtb = Carbon::now()->endOfDay();
-
-            $buckets = [];
-            $cursor = $dta->copy();
-            while ($cursor->lte($dtb)) {
-                $buckets[] = ['key' => $cursor->format('Y-m-d'), 'label' => $cursor->format('d M')];
-                $cursor->addDay();
-            }
-
-            $bucketSqlExpr = 'DATE(date)';
-        }
-
-        return [$dta, $dtb, $buckets, $bucketSqlExpr];
-    }
-
-    /**
-     * Hitung top style per (bucket, defect_code) secara BULK.
-     * Hanya menjalankan 3 query total (OutputDetail, PurchaseOrder, Style)
-     * berapa pun jumlah bucket & defect code yang diminta — menggantikan
-     * pola lama yang query per-bucket (bisa puluhan query per request).
-     *
-     * $barcodeGroups: [bucketKey => [defectCode => Collection barcode]]
-     * $inspectQtyByBucket: [bucketKey => int]
-     */
-    private function bulkTopStylesByBucketDefect(
-        array $barcodeGroups,
-        array $inspectQtyByBucket,
-        int $limit = 3
-    ): array {
-        $allBarcodes = collect($barcodeGroups)
-            ->flatMap(fn ($byDefect) => collect($byDefect)->flatMap(fn ($b) => $b))
-            ->filter()
-            ->unique()
-            ->values();
-
-        if ($allBarcodes->isEmpty()) {
-            return [];
-        }
-
-        // 1 query: ambil semua OutputDetail relevan sekaligus, lalu group per barcode di PHP
-        $outputDetailsByBarcode = OutputDetail::whereIn('barcode', $allBarcodes)
-            ->select('barcode', 'idpo')
-            ->get()
-            ->groupBy('barcode');
-
-        $allIdpo = $outputDetailsByBarcode->flatten()->pluck('idpo')->unique()->values();
-
-        // 1 query: PurchaseOrder -> idstyle
-        $poToStyle = PurchaseOrder::whereIn('idpo', $allIdpo)->pluck('idstyle', 'idpo');
-
-        // 1 query: Style -> nama style
-        $styleNames = Style::whereIn('idstyle', $poToStyle->values()->unique())
-            ->pluck('nmstyle', 'idstyle');
-
-        $result = [];
-
-        foreach ($barcodeGroups as $bucketKey => $byDefect) {
-            foreach ($byDefect as $defectCode => $barcodes) {
-                $grouped = [];
-
-                foreach ($barcodes as $barcode) {
-                    $rows = $outputDetailsByBarcode->get($barcode, collect());
-
-                    foreach ($rows as $row) {
-                        $idstyle = $poToStyle[$row->idpo] ?? null;
-                        $nmstyle = $idstyle ? ($styleNames[$idstyle] ?? '-') : '-';
-                        $grouped[$nmstyle] = ($grouped[$nmstyle] ?? 0) + 1;
-                    }
-                }
-
-                if (empty($grouped)) {
+                if (!worksheet[cell]) {
                     continue;
                 }
 
-                arsort($grouped);
-                $top = array_slice($grouped, 0, $limit, true);
-                $inspectQty = $inspectQtyByBucket[$bucketKey] ?? 0;
-
-                $rows = [];
-                foreach ($top as $nmstyle => $qty) {
-                    $rows[] = [
-                        'style' => $nmstyle,
-                        'qty'   => $qty,
-                        'wft'   => $inspectQty > 0 ? round(($qty / $inspectQty) * 100, 2) : 0,
-                    ];
-                }
-
-                $result[$bucketKey][$defectCode] = $rows;
+                worksheet[cell].s = style;
             }
         }
-
-        return $result;
     }
 
-    /**
-     * Bangun payload chart (labels, series, bucketMeta) untuk 1 mode + 1 set defect code.
-     * Hanya menjalankan query dalam jumlah TETAP (~5 query total), tidak peduli
-     * berapa banyak bucket atau defect code yang diminta.
-     */
-    private function buildDefectChartPayload(string $mode, Collection $defectCodes): array
-    {
-        [$dta, $dtb, $buckets, $bucketSqlExpr] = $this->resolveChartBuckets($mode);
 
-        // 1 query besar untuk seluruh rentang waktu, bukan per-bucket
-        $rows = SewingOutput::whereBetween('date', [$dta, $dtb])
-            ->select('id', 'barcode', 'is_qc', 'defect_code', DB::raw("$bucketSqlExpr as bucket_key"))
-            ->get();
+    /*
+    |--------------------------------------------------------------------------
+    | STYLE
+    |--------------------------------------------------------------------------
+    */
 
-        $rowsByBucket = $rows->groupBy(fn ($r) => (string) $r->bucket_key);
-
-        $names = QCDefect::whereIn('kdcacat', $defectCodes)->pluck('deskripsi', 'kdcacat');
-
-        $colors = ['#1B4FE0', '#F4977B', '#36B37E', '#FFAB00', '#8777D9', '#00B8D9', '#F24C4C', '#29B1AE'];
-
-        $labels = [];
-        $seriesData = [];
-        foreach ($defectCodes as $c) {
-            $seriesData[$c] = [];
-        }
-
-        $barcodeGroups = [];       // [bucketKey][defectCode] = Collection barcode
-        $inspectQtyByBucket = [];  // [bucketKey] = int
-
-        foreach ($buckets as $bucket) {
-            $key = $bucket['key'];
-            $labels[] = $bucket['label'];
-
-            $bucketRows = $rowsByBucket->get($key, collect());
-            $inspectRows = $bucketRows->where('is_qc', 1);
-
-            $inspectQty = $inspectRows->count();
-            $inspectQtyByBucket[$key] = $inspectQty;
-
-            $defectRowsGrouped = $inspectRows
-                ->whereIn('defect_code', $defectCodes->all())
-                ->groupBy('defect_code');
-
-            foreach ($defectCodes as $code) {
-                $codeRows = $defectRowsGrouped->get($code, collect());
-                $qty = $codeRows->count();
-
-                $wft = $inspectQty > 0 ? round(($qty / $inspectQty) * 100, 2) : 0;
-                $seriesData[$code][] = $wft;
-
-                if ($qty > 0) {
-                    $barcodeGroups[$key][$code] = $codeRows->pluck('barcode')->filter()->values();
-                }
+    const border = {
+        top: {
+            style: 'thin',
+            color: {
+                rgb: 'B7B7B7'
+            }
+        },
+        bottom: {
+            style: 'thin',
+            color: {
+                rgb: 'B7B7B7'
+            }
+        },
+        left: {
+            style: 'thin',
+            color: {
+                rgb: 'B7B7B7'
+            }
+        },
+        right: {
+            style: 'thin',
+            color: {
+                rgb: 'B7B7B7'
             }
         }
+    };
 
-        // Top style per bucket per defect code, dihitung sekaligus (bulk)
-        $topStylesByBucketDefect = $this->bulkTopStylesByBucketDefect($barcodeGroups, $inspectQtyByBucket);
 
-        $bucketMeta = [];
-        foreach ($buckets as $bucket) {
-            $key = $bucket['key'];
-            $topStylesByDefect = [];
+    const titleStyle = {
 
-            foreach ($defectCodes as $code) {
-                $topStylesByDefect[(string) $code] = $topStylesByBucketDefect[$key][$code] ?? [];
+        font: {
+            bold: true,
+            color: {
+                rgb: 'FFFFFF'
+            },
+            sz: 14
+        },
+
+        fill: {
+            fgColor: {
+                rgb: '1B2433'
             }
+        },
 
-            $bucketMeta[] = [
-                'topStylesByDefect' => $topStylesByDefect,
-            ];
-        }
+        alignment: {
+            horizontal: 'left',
+            vertical: 'center'
+        },
 
-        $series = $defectCodes->values()->map(function ($code, $i) use ($seriesData, $names, $colors) {
-            return [
-                'code'  => (string) $code,
-                'name'  => $names[$code] ?? '-',
-                'color' => $colors[$i % count($colors)],
-                'data'  => $seriesData[$code],
-            ];
-        });
+        border: border
+    };
 
-        return [
-            'labels'     => $labels,
-            'series'     => $series,
-            'bucketMeta' => $bucketMeta,
-        ];
-    }
 
-    public function getDefectChartData(Request $request)
-    {
-        preconnect(session('db'));
+    const headerStyle = {
 
-        $request->validate([
-            'mode' => 'required|in:weekly,day',
-        ]);
+        font: {
+            bold: true,
+            color: {
+                rgb: 'FFFFFF'
+            }
+        },
 
-        $mode = $request->mode;
-        $defectCodes = collect($request->input('defects', []))
-            ->map(fn ($c) => (int) $c)
-            ->unique()
-            ->sort()
-            ->values();
+        fill: {
+            fgColor: {
+                rgb: '242E3E'
+            }
+        },
 
-        $cacheKey = sprintf(
-            'endline_defect_chart:%s:%s:%s',
-            session('db')->iddb,
-            $mode,
-            $defectCodes->implode('-')
-        );
+        alignment: {
+            horizontal: 'center',
+            vertical: 'center',
+            wrapText: true
+        },
 
-        $payload = Cache::remember($cacheKey, now()->addSeconds($this->chartCacheTtl), function () use ($mode, $defectCodes) {
-            return $this->buildDefectChartPayload($mode, $defectCodes);
-        });
+        border: border
+    };
 
-        return response()->json($payload);
-    }
 
-    private function buildDefectChartOptionsPayload(string $mode): array
-    {
-        if ($mode === 'day') {
-            // Hari ini saja
-            $headerQuery = SewingOutput::whereDate('date', Carbon::now());
-        } else {
-            // Rolling 7 hari terakhir, termasuk hari ini
-            $dta = Carbon::now()->subDays(6)->startOfDay();
-            $dtb = Carbon::now()->endOfDay();
+    const bodyStyle = {
 
-            $headerQuery = SewingOutput::whereBetween('date', [$dta, $dtb]);
-        }
+        alignment: {
+            vertical: 'center'
+        },
 
-        $headerIds = $headerQuery->pluck('id');
+        border: border
+    };
 
-        $defectCodes = SewingOutput::whereIn('id', $headerIds)
-            ->whereNotNull('defect_code')
-            ->whereNotIn('defect_code', [800, 900])
-            ->select('defect_code', DB::raw('COUNT(*) as total'))
-            ->groupBy('defect_code')
-            ->orderByDesc('total')
-            ->limit(5)
-            ->pluck('total', 'defect_code');
 
-        $names = QCDefect::whereIn('kdcacat', $defectCodes->keys())
-            ->pluck('deskripsi', 'kdcacat');
+    const centerStyle = {
 
-        $colors = [
-            '#1B4FE0',
-            '#F4977B',
-            '#36B37E',
-            '#FFAB00',
-            '#8777D9',
-            '#00B8D9',
-            '#F24C4C',
-            '#29B1AE',
-        ];
+        alignment: {
+            horizontal: 'center',
+            vertical: 'center'
+        },
 
-        $options = $defectCodes->keys()
-            ->values()
-            ->map(function ($code, $index) use ($names, $colors) {
-                return [
-                    'code'  => (string) $code,
-                    'name'  => $names[$code] ?? '-',
-                    'color' => $colors[$index % count($colors)],
-                ];
+        border: border
+    };
+
+
+    const totalStyle = {
+
+        font: {
+            bold: true,
+            color: {
+                rgb: 'FFFFFF'
+            }
+        },
+
+        fill: {
+            fgColor: {
+                rgb: '1B2433'
+            }
+        },
+
+        alignment: {
+            vertical: 'center'
+        },
+
+        border: border
+    };
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | EXPORT DATA
+    |--------------------------------------------------------------------------
+    */
+
+    const exportData = [];
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | TABLE 1 TITLE
+    |--------------------------------------------------------------------------
+    */
+
+    const performanceTitleRow =
+        exportData.length;
+
+    exportData.push([
+        'WEEKLY ENDLINE PERFORMANCE'
+    ]);
+
+    exportData.push([]);
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | TABLE 1 HEADER
+    |--------------------------------------------------------------------------
+    */
+
+    const performanceHeaderRow =
+        exportData.length;
+
+    exportData.push([
+        'Week',
+        'Periode Date',
+        'RFT QTY (Pcs)',
+        'Inspect QTY (Pcs)',
+        'Defect QTY (Pcs)',
+        'RFT (%)',
+        'WFT (%)',
+        'Non Process (%)',
+        'Process (%)'
+    ]);
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | TABLE 1 DATA
+    |--------------------------------------------------------------------------
+    */
+
+    const performanceStartRow =
+        exportData.length;
+
+
+    if (
+        weeklyDataTable &&
+        $.fn.DataTable.isDataTable(
+            '#tableInlinePerformance'
+        )
+    ) {
+
+        weeklyDataTable
+            .rows()
+            .every(function () {
+
+                const row = this.data();
+
+                exportData.push(
+                    row.map(function (value) {
+
+                        return $('<div>')
+                            .html(value)
+                            .text()
+                            .trim();
+
+                    })
+                );
             });
 
-        return ['options' => $options];
+    } else {
+
+        const performanceTable =
+            document.getElementById(
+                'tableInlinePerformance'
+            );
+
+        const sheet =
+            XLSX.utils.table_to_sheet(
+                performanceTable,
+                {
+                    raw: true
+                }
+            );
+
+        const data =
+            XLSX.utils.sheet_to_json(
+                sheet,
+                {
+                    header: 1
+                }
+            );
+
+        data
+            .slice(1)
+            .forEach(function (row) {
+
+                exportData.push(row);
+
+            });
     }
 
-    public function getDefectChartOptions(Request $request)
-    {
-        preconnect(session('db'));
 
-        $request->validate([
-            'mode' => 'required|in:weekly,day',
-        ]);
+    const performanceEndRow =
+        exportData.length - 1;
 
-        $mode = $request->mode;
 
-        $cacheKey = sprintf('endline_defect_chart_options:%s:%s', session('db')->iddb, $mode);
+    /*
+    |--------------------------------------------------------------------------
+    | SPACE
+    |--------------------------------------------------------------------------
+    */
 
-        $payload = Cache::remember($cacheKey, now()->addSeconds($this->chartCacheTtl), function () use ($mode) {
-            return $this->buildDefectChartOptionsPayload($mode);
+    exportData.push([]);
+    exportData.push([]);
+    exportData.push([]);
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | TABLE 2 TITLE
+    |--------------------------------------------------------------------------
+    */
+
+    const defectTitleRow =
+        exportData.length;
+
+    exportData.push([
+        'TOP 5 DEFECT DETAIL'
+    ]);
+
+    exportData.push([]);
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | TABLE 2 HEADER
+    |--------------------------------------------------------------------------
+    */
+
+    const defectHeaderRow =
+        exportData.length;
+
+    exportData.push([
+        'No.',
+        'Defect',
+        'Defect QTY',
+        '% of Total Defect',
+        'Top Style (Most Contribute)',
+        'QTY Defect (Pcs)',
+        '% of Defect'
+    ]);
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | TABLE 2 DATA
+    |--------------------------------------------------------------------------
+    */
+
+    const defectStartRow =
+        exportData.length;
+
+
+    const defectTable =
+        document.getElementById(
+            'tableInlineDefect'
+        );
+
+
+    const defectSheet =
+        XLSX.utils.table_to_sheet(
+            defectTable,
+            {
+                raw: true
+            }
+        );
+
+
+    const defectData =
+        XLSX.utils.sheet_to_json(
+            defectSheet,
+            {
+                header: 1
+            }
+        );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Remove HTML Header
+    |--------------------------------------------------------------------------
+    */
+
+    defectData
+        .slice(1)
+        .forEach(function (row) {
+
+            exportData.push(row);
+
         });
 
-        return response()->json($payload);
+
+    const defectEndRow =
+        exportData.length - 1;
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | CREATE WORKSHEET
+    |--------------------------------------------------------------------------
+    */
+
+    const worksheet =
+        XLSX.utils.aoa_to_sheet(
+            exportData
+        );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | COLUMN WIDTH
+    |--------------------------------------------------------------------------
+    */
+
+    worksheet['!cols'] = [
+
+        { wch: 8 },
+        { wch: 30 },
+        { wch: 18 },
+        { wch: 20 },
+        { wch: 32 },
+        { wch: 20 },
+        { wch: 18 },
+        { wch: 17 },
+        { wch: 15 }
+
+    ];
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | MERGE TITLE 1
+    |--------------------------------------------------------------------------
+    */
+
+    worksheet['!merges'] = [
+
+        {
+            s: {
+                r: performanceTitleRow,
+                c: 0
+            },
+
+            e: {
+                r: performanceTitleRow,
+                c: 8
+            }
+        },
+
+        {
+            s: {
+                r: defectTitleRow,
+                c: 0
+            },
+
+            e: {
+                r: defectTitleRow,
+                c: 8
+            }
+        }
+
+    ];
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | TITLE STYLE 1
+    |--------------------------------------------------------------------------
+    */
+
+    styleRange(
+        worksheet,
+        performanceTitleRow,
+        performanceTitleRow,
+        0,
+        8,
+        titleStyle
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | HEADER STYLE 1
+    |--------------------------------------------------------------------------
+    */
+
+    styleRange(
+        worksheet,
+        performanceHeaderRow,
+        performanceHeaderRow,
+        0,
+        8,
+        headerStyle
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | BODY STYLE 1
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        performanceEndRow >= performanceStartRow
+    ) {
+
+        styleRange(
+            worksheet,
+            performanceStartRow,
+            performanceEndRow,
+            0,
+            8,
+            bodyStyle
+        );
+
+        styleRange(
+            worksheet,
+            performanceStartRow,
+            performanceEndRow,
+            0,
+            0,
+            centerStyle
+        );
+
+        styleRange(
+            worksheet,
+            performanceStartRow,
+            performanceEndRow,
+            2,
+            8,
+            centerStyle
+        );
     }
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | TITLE STYLE 2
+    |--------------------------------------------------------------------------
+    */
+
+    styleRange(
+        worksheet,
+        defectTitleRow,
+        defectTitleRow,
+        0,
+        8,
+        titleStyle
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | HEADER STYLE 2
+    |--------------------------------------------------------------------------
+    */
+
+    styleRange(
+        worksheet,
+        defectHeaderRow,
+        defectHeaderRow,
+        0,
+        6,
+        headerStyle
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | BODY STYLE 2
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        defectEndRow >= defectStartRow
+    ) {
+
+        styleRange(
+            worksheet,
+            defectStartRow,
+            defectEndRow,
+            0,
+            6,
+            bodyStyle
+        );
+
+        styleRange(
+            worksheet,
+            defectStartRow,
+            defectEndRow,
+            0,
+            0,
+            centerStyle
+        );
+
+        styleRange(
+            worksheet,
+            defectStartRow,
+            defectEndRow,
+            2,
+            3,
+            centerStyle
+        );
+
+        styleRange(
+            worksheet,
+            defectStartRow,
+            defectEndRow,
+            5,
+            6,
+            centerStyle
+        );
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | ROW HEIGHT
+    |--------------------------------------------------------------------------
+    */
+
+    worksheet['!rows'] = [];
+
+    worksheet['!rows'][performanceTitleRow] = {
+        hpt: 25
+    };
+
+    worksheet['!rows'][performanceHeaderRow] = {
+        hpt: 35
+    };
+
+    worksheet['!rows'][defectTitleRow] = {
+        hpt: 25
+    };
+
+    worksheet['!rows'][defectHeaderRow] = {
+        hpt: 35
+    };
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | FREEZE
+    |--------------------------------------------------------------------------
+    */
+
+    worksheet['!freeze'] = {
+        xSplit: 0,
+        ySplit: performanceHeaderRow + 1
+    };
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | ADD SHEET
+    |--------------------------------------------------------------------------
+    */
+
+    XLSX.utils.book_append_sheet(
+        workbook,
+        worksheet,
+        'Weekly Report'
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | FILE NAME
+    |--------------------------------------------------------------------------
+    */
+
+    let selectedWeek =
+        $('#selectWeek option:selected').text();
+
+
+    if (!selectedWeek) {
+        selectedWeek = 'Weekly Performance';
+    }
+
+
+    selectedWeek =
+        selectedWeek
+            .replace(/[\\/:*?"<>|]/g, '-')
+            .trim();
+
+
+    const fileName =
+        'Weekly_Endline_Performance_' +
+        selectedWeek +
+        '.xlsx';
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | DOWNLOAD
+    |--------------------------------------------------------------------------
+    */
+
+    XLSX.writeFile(
+        workbook,
+        fileName
+    );
+
+    console.log(
+        'Export berhasil:',
+        fileName
+    );
 }
+
+
+
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | SELECT WEEK
+    |--------------------------------------------------------------------------
+    */
+    $('#selectWeek').select2({
+
+        placeholder: 'Select Week',
+
+        width: '100%',
+
+        ajax: {
+
+            url: "{{ route('monitoring_endlineperformance_selectweek') }}",
+
+            type: "GET",
+
+            dataType: "json",
+
+            delay: 500,
+
+            data: function (params) {
+
+                return {
+                    q: params.term,
+                    page: params.page || 1
+                };
+            },
+
+            processResults: function (data) {
+
+                return {
+
+                    results: data.results,
+
+                    pagination: data.pagination
+                };
+            },
+
+            cache: true
+        }
+    });
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | CURRENT WEEK
+    |--------------------------------------------------------------------------
+    */
+    $.get(
+        "{{ route('monitoring_endlineperformance_currentweek') }}"
+    )
+
+    .done(function (res) {
+
+        if (
+            !res ||
+            !res.selected ||
+            !res.selected.id
+        ) {
+
+            console.error(
+                'Current week tidak ditemukan.',
+                res
+            );
+
+            return;
+        }
+
+
+        const option =
+            new Option(
+                res.selected.text,
+                res.selected.id,
+                true,
+                true
+            );
+
+
+        $('#selectWeek')
+            .append(option)
+            .trigger('change');
+    })
+
+    .fail(function (xhr) {
+
+        console.error(
+            'Gagal mengambil current week.',
+            xhr
+        );
+    });
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | WEEK CHANGED
+    |--------------------------------------------------------------------------
+    */
+    $('#selectWeek').on(
+        'change',
+        function () {
+
+            const weekId =
+                $(this).val();
+
+
+            if (!weekId) {
+                return;
+            }
+
+
+            isTableLoading = true;
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Destroy old DataTable
+            |--------------------------------------------------------------------------
+            */
+            destroyPerformanceDataTable();
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Week Number
+            |--------------------------------------------------------------------------
+            */
+            const weekParts =
+                weekId.split('-');
+
+
+            const week =
+                weekParts[1];
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Event
+            |--------------------------------------------------------------------------
+            */
+            $(document).trigger(
+                'week:changed',
+                {
+                    week_id: weekId
+                }
+            );
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Header
+            |--------------------------------------------------------------------------
+            */
+            $('.subheader').text(
+                'TOP 5 DEFECT DETAIL (WEEK ' +
+                week +
+                ')'
+            );
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Load Data
+            |--------------------------------------------------------------------------
+            */
+            $.get(
+                "{{ route('monitoring_endlineperformance_data') }}",
+                {
+                    week_id: weekId
+                }
+            )
+
+            .done(function (html) {
+
+                const $res =
+                    $(html);
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | Performance
+                |--------------------------------------------------------------------------
+                */
+                const performanceBody =
+                    $res.find(
+                        '#tableInlinePerformanceBody'
+                    );
+
+
+                if (performanceBody.length) {
+
+                    $('#tableInlinePerformanceBody')
+                        .html(
+                            performanceBody.html()
+                        );
+                }
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | Defect
+                |--------------------------------------------------------------------------
+                */
+                const defectBody =
+                    $res.find(
+                        '#tableInlineDefectBody'
+                    );
+
+
+                if (defectBody.length) {
+
+                    $('#tableInlineDefectBody')
+                        .html(
+                            defectBody.html()
+                        );
+                }
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | Defect Footer
+                |--------------------------------------------------------------------------
+                */
+                const defectFoot =
+                    $res.find(
+                        '#tableInlineDefectFoot'
+                    );
+
+
+                if (defectFoot.length) {
+
+                    $('#tableInlineDefectFoot')
+                        .html(
+                            defectFoot.html()
+                        );
+                }
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | Reinitialize DataTable
+                |--------------------------------------------------------------------------
+                */
+                initPerformanceDataTable();
+
+
+                isTableLoading = false;
+            })
+
+            .fail(function (xhr) {
+
+                console.error(
+                    'Gagal mengambil data.',
+                    xhr
+                );
+
+                isTableLoading = false;
+            });
+        }
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | EXPORT BUTTON
+    |--------------------------------------------------------------------------
+    */
+    $('#export-datatable-btn')
+    .off('click.exportExcel')
+    .on('click.exportExcel', function (e) {
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        console.log('EXPORT BUTTON CLICKED');
+
+        if (isTableLoading) {
+
+            console.warn(
+                'Data masih loading, export dibatalkan.'
+            );
+
+            return;
+        }
+
+        exportExcel();
+    });
+
+
+
+});
+</script>
+
+@include('layouts.loading')
+
+@endpush
+
+
