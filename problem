@@ -293,6 +293,63 @@
         align-items: center;
         gap: 8px;
     }
+
+    /* Layout: header tetap di atas, footer tetap di bawah,
+       area data di tengah yang membatasi tinggi & bisa di-scroll */
+    .dashboard-wrap {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+    }
+
+    .dashboard-header {
+        flex: 0 0 auto;
+    }
+
+    .qp-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .qp-col {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+    }
+
+    .qp-col-header {
+        flex: 0 0 auto;
+    }
+
+    .qp-list {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        padding-right: 6px;
+    }
+
+    .qp-list::-webkit-scrollbar {
+        width: 4px;
+    }
+
+    .qp-list::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .qp-list::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.25);
+        border-radius: 4px;
+    }
+
+    .footer-title {
+        flex: 0 0 auto;
+        padding-top: 0.75rem;
+    }
 </style>
 @endsection
 
@@ -334,11 +391,11 @@
         $qpColumns = [$qpLeft, $qpRight];
     @endphp
 
-    <div class="d-flex justify-content-between row">
+    <div class="qp-body d-flex justify-content-between row">
         @foreach ($qpColumns as $qpColumn)
-            <div class="col-6">
+            <div class="col-6 qp-col">
                 <!-- Header -->
-                <div class="qp-grid p-4">
+                <div class="qp-grid p-4 qp-col-header">
                     <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">Location</span>
                     <span class="bg-card rounded-3 d-flex justify-content-center align-items-center text-center">INSPECT QTY</span>
                     <span class="bg-card-rft rounded-3 d-flex justify-content-center align-items-center">RFT %</span>
@@ -346,32 +403,35 @@
                     <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">TLS</span>
                 </div>
 
-                @foreach ($qpColumn as $d)
-                    <div class="qp-grid px-4">
-                        <span class="bg-card-line rounded-3 d-flex justify-content-center align-items-center">
-                            {{ $d->namagroup }}
-                        </span>
+                <!-- List data: dibatasi tinggi oleh parent (.qp-col), auto-scroll kalau overflow -->
+                <div class="qp-list">
+                    @foreach ($qpColumn as $d)
+                        <div class="qp-grid px-4">
+                            <span class="bg-card-line rounded-3 d-flex justify-content-center align-items-center">
+                                {{ $d->namagroup }}
+                            </span>
 
-                        <span class="bg-card-line rounded-3 d-flex justify-content-center align-items-center text-center">
-                            234
-                        </span>
+                            <span class="bg-card-line rounded-3 d-flex justify-content-center align-items-center text-center">
+                                234
+                            </span>
 
-                        <span class="bg-card-line rounded-3 d-flex justify-content-center align-items-center">
-                            98.21
-                        </span>
+                            <span class="bg-card-line rounded-3 d-flex justify-content-center align-items-center">
+                                98.21
+                            </span>
 
-                        <span class="bg-card-line rounded-3 d-flex justify-content-center align-items-center">
-                            1.79
-                        </span>
+                            <span class="bg-card-line rounded-3 d-flex justify-content-center align-items-center">
+                                1.79
+                            </span>
 
-                        <div class="bg-card-line rounded-3 d-flex justify-content-center align-items-center gap-2">
-                            <span class="number-circle" style="background-color: #BD3F3F3D;"></span>
-                            <span class="number-circle" style="background-color: #F9A51D40;"></span>
-                            <span class="number-circle" style="background-color: #1D9A5C;"></span>
-                            <span class="number-circle" style="background-color: #1744B740;"></span>
+                            <div class="bg-card-line rounded-3 d-flex justify-content-center align-items-center gap-2">
+                                <span class="number-circle" style="background-color: #BD3F3F3D;"></span>
+                                <span class="number-circle" style="background-color: #F9A51D40;"></span>
+                                <span class="number-circle" style="background-color: #1D9A5C;"></span>
+                                <span class="number-circle" style="background-color: #1744B740;"></span>
+                            </div>
                         </div>
-                    </div>
-                @endforeach
+                    @endforeach
+                </div>
             </div>
         @endforeach
     </div>
