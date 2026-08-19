@@ -328,10 +328,19 @@
     .qp-list {
         flex: 1 1 auto;
         min-height: 0;
-        overflow-y: auto;
         overflow-x: hidden;
         -webkit-overflow-scrolling: touch;
         padding-right: 6px;
+    }
+
+    /* Kiri: pas sejumlah yang muat, tidak pernah scroll */
+    .qp-list-left {
+        overflow-y: hidden;
+    }
+
+    /* Kanan: nampung sisa data, scroll kalau kelebihan */
+    .qp-list-right {
+        overflow-y: auto;
     }
 
     .qp-list::-webkit-scrollbar {
@@ -382,60 +391,41 @@
     </div>
 
     @php
-        // Bagi $data jadi 2 kolom: separuh pertama ke kiri, sisanya ke kanan.
-        // Kalau total ganjil, kolom kiri dapat 1 row lebih banyak.
-        $qpData   = collect($data)->values();
-        $qpTotal  = $qpData->count();
-        $qpHalf   = (int) ceil($qpTotal / 2);
-        $qpLeft   = $qpData->slice(0, $qpHalf)->values();
-        $qpRight  = $qpData->slice($qpHalf)->values();
-        $qpColumns = [$qpLeft, $qpRight];
+        $qpData = collect($data)->values();
     @endphp
 
     <div class="qp-body d-flex justify-content-between row">
-        @foreach ($qpColumns as $qpColumn)
-            <div class="col-6 qp-col">
-                <!-- Header -->
-                <div class="qp-grid p-4 qp-col-header">
-                    <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">Location</span>
-                    <span class="bg-card rounded-3 d-flex justify-content-center align-items-center text-center">INSPECT QTY</span>
-                    <span class="bg-card-rft rounded-3 d-flex justify-content-center align-items-center">RFT %</span>
-                    <span class="bg-card-wft rounded-3 d-flex justify-content-center align-items-center">WFT %</span>
-                    <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">TLS</span>
-                </div>
-
-                <!-- List data: dibatasi tinggi oleh parent (.qp-col), auto-scroll kalau overflow -->
-                <div class="qp-list">
-                    @foreach ($qpColumn as $d)
-                        <div class="qp-grid px-4">
-                            <span class="bg-card-line rounded-3 d-flex justify-content-center align-items-center">
-                                {{ $d->namagroup }}
-                            </span>
-
-                            <span class="bg-card-line rounded-3 d-flex justify-content-center align-items-center text-center">
-                                234
-                            </span>
-
-                            <span class="bg-card-line rounded-3 d-flex justify-content-center align-items-center">
-                                98.21
-                            </span>
-
-                            <span class="bg-card-line rounded-3 d-flex justify-content-center align-items-center">
-                                1.79
-                            </span>
-
-                            <div class="bg-card-line rounded-3 d-flex justify-content-center align-items-center gap-2">
-                                <span class="number-circle" style="background-color: #BD3F3F3D;"></span>
-                                <span class="number-circle" style="background-color: #F9A51D40;"></span>
-                                <span class="number-circle" style="background-color: #1D9A5C;"></span>
-                                <span class="number-circle" style="background-color: #1744B740;"></span>
-                            </div>
-                        </div>
-                    @endforeach
-                </div>
+        <div class="col-6 qp-col">
+            <!-- Header -->
+            <div class="qp-grid p-4 qp-col-header">
+                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">Location</span>
+                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center text-center">INSPECT QTY</span>
+                <span class="bg-card-rft rounded-3 d-flex justify-content-center align-items-center">RFT %</span>
+                <span class="bg-card-wft rounded-3 d-flex justify-content-center align-items-center">WFT %</span>
+                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">TLS</span>
             </div>
-        @endforeach
+
+            <!-- Diisi JS: persis sejumlah baris yang muat, tidak scroll -->
+            <div class="qp-list qp-list-left" id="qpListLeft"></div>
+        </div>
+
+        <div class="col-6 qp-col">
+            <!-- Header -->
+            <div class="qp-grid p-4 qp-col-header">
+                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">Location</span>
+                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center text-center">INSPECT QTY</span>
+                <span class="bg-card-rft rounded-3 d-flex justify-content-center align-items-center">RFT %</span>
+                <span class="bg-card-wft rounded-3 d-flex justify-content-center align-items-center">WFT %</span>
+                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">TLS</span>
+            </div>
+
+            <!-- Diisi JS: sisa data setelah kiri penuh, boleh scroll -->
+            <div class="qp-list qp-list-right" id="qpListRight"></div>
+        </div>
     </div>
+
+    <!-- Data mentah untuk dipecah JS (kiri: sepenuh muatnya, kanan: sisanya) -->
+    <script type="application/json" id="qpRowData">{!! $qpData->map(fn ($d) => ['namagroup' => $d->namagroup])->toJson() !!}</script>
 
     <div class="footer-title text-white d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0">
         <div class="d-flex align-items-center gap-2">
@@ -452,6 +442,8 @@
 
 @section('extrascript')
 <script>
+    var QP_ROW_HEIGHT = 50; // px — samakan dengan height .bg-card-line
+
     function qpAdjustDashboardHeight() {
         var wrap = document.querySelector('.dashboard-wrap');
         if (!wrap) return;
@@ -467,9 +459,66 @@
         wrap.style.height = Math.max(available - 8, 300) + 'px';
     }
 
-    window.addEventListener('load', qpAdjustDashboardHeight);
-    window.addEventListener('resize', qpAdjustDashboardHeight);
-    document.addEventListener('DOMContentLoaded', qpAdjustDashboardHeight);
+    function qpEscapeHtml(str) {
+        return String(str).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+
+    function qpBuildRowHtml(name) {
+        return '' +
+            '<div class="qp-grid px-4">' +
+                '<span class="bg-card-line rounded-3 d-flex justify-content-center align-items-center">' + name + '</span>' +
+                '<span class="bg-card-line rounded-3 d-flex justify-content-center align-items-center text-center">234</span>' +
+                '<span class="bg-card-line rounded-3 d-flex justify-content-center align-items-center">98.21</span>' +
+                '<span class="bg-card-line rounded-3 d-flex justify-content-center align-items-center">1.79</span>' +
+                '<div class="bg-card-line rounded-3 d-flex justify-content-center align-items-center gap-2">' +
+                    '<span class="number-circle" style="background-color: #BD3F3F3D;"></span>' +
+                    '<span class="number-circle" style="background-color: #F9A51D40;"></span>' +
+                    '<span class="number-circle" style="background-color: #1D9A5C;"></span>' +
+                    '<span class="number-circle" style="background-color: #1744B740;"></span>' +
+                '</div>' +
+            '</div>';
+    }
+
+    function qpRenderRows() {
+        var dataEl   = document.getElementById('qpRowData');
+        var leftList = document.getElementById('qpListLeft');
+        var rightList = document.getElementById('qpListRight');
+        if (!dataEl || !leftList || !rightList) return;
+
+        var rows = [];
+        try {
+            rows = JSON.parse(dataEl.textContent || '[]');
+        } catch (e) {
+            rows = [];
+        }
+
+        // kosongkan dulu supaya clientHeight yang diukur adalah tinggi
+        // container murni (bukan terpengaruh isi lama)
+        leftList.innerHTML = '';
+        rightList.innerHTML = '';
+
+        // berapa baris yang MUAT PAS di kiri berdasar tinggi asli kolom
+        var availableHeight = leftList.clientHeight;
+        var capacity = Math.max(1, Math.floor(availableHeight / QP_ROW_HEIGHT));
+
+        var leftRows  = rows.slice(0, capacity);
+        var rightRows = rows.slice(capacity);
+
+        leftList.innerHTML  = leftRows.map(function (r) { return qpBuildRowHtml(qpEscapeHtml(r.namagroup)); }).join('');
+        rightList.innerHTML = rightRows.map(function (r) { return qpBuildRowHtml(qpEscapeHtml(r.namagroup)); }).join('');
+    }
+
+    function qpRefreshLayout() {
+        qpAdjustDashboardHeight();
+        // tunggu 1 frame supaya tinggi baru sudah ke-apply sebelum diukur
+        requestAnimationFrame(qpRenderRows);
+    }
+
+    window.addEventListener('load', qpRefreshLayout);
+    window.addEventListener('resize', qpRefreshLayout);
+    document.addEventListener('DOMContentLoaded', qpRefreshLayout);
 </script>
 @endsection
 
