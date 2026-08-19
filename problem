@@ -182,6 +182,62 @@
             margin-top: 10px !important;
             padding: 6px 0 !important;
         }
+
+        /* Desktop 992–1400: perkecil kartu & teks quality performance */
+        .bg-card,
+        .bg-card-line,
+        .bg-card-rft,
+        .bg-card-wft {
+            height: 42px;
+            font-size: 15px;
+        }
+
+        .number-circle {
+            width: 28px;
+            height: 28px;
+            font-size: 12px;
+        }
+
+        .qp-grid {
+            gap: 0.4rem;
+        }
+
+        .header-title h3 {
+            font-size: 1.4rem;
+        }
+
+        .header-clock {
+            font-size: 0.9rem;
+        }
+    }
+
+    /* Tablet: 768px - 991.98px — tetap 2 kolom, ukuran diperkecil */
+    @media (min-width: 768px) and (max-width: 991.98px) {
+        .bg-card,
+        .bg-card-line,
+        .bg-card-rft,
+        .bg-card-wft {
+            height: 38px;
+            font-size: 13px;
+        }
+
+        .number-circle {
+            width: 24px;
+            height: 24px;
+            font-size: 11px;
+        }
+
+        .qp-grid {
+            gap: 0.35rem;
+        }
+
+        .header-title h3 {
+            font-size: 1.2rem;
+        }
+
+        .header-clock {
+            font-size: 0.85rem;
+        }
     }
 
     @media (max-width: 768px) {
@@ -192,6 +248,41 @@
         .defect-header {
             flex-direction: column;
             gap: 0.5rem !important;
+        }
+
+        /* Mobile: 1 kolom penuh, data lebih ringkas */
+        .bg-card,
+        .bg-card-line,
+        .bg-card-rft,
+        .bg-card-wft {
+            height: 34px;
+            font-size: 11px;
+        }
+
+        .number-circle {
+            width: 20px;
+            height: 20px;
+            font-size: 9px;
+        }
+
+        .qp-grid {
+            gap: 0.3rem;
+        }
+
+        .header-title h3 {
+            font-size: 1rem;
+        }
+
+        .header-clock {
+            font-size: 0.75rem;
+        }
+
+        .header-back span {
+            display: none; /* sisakan ikon back saja, hemat ruang */
+        }
+
+        .footer-title {
+            font-size: 12px;
         }
     }
 
@@ -343,6 +434,21 @@
         overflow-y: auto;
     }
 
+    /* Mobile: satu list penuh, boleh scroll */
+    .qp-list-mobile {
+        overflow-y: auto;
+    }
+
+    .bg-card,
+    .bg-card-line,
+    .bg-card-rft,
+    .bg-card-wft {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        padding: 0 6px;
+    }
+
     .qp-list::-webkit-scrollbar {
         width: 4px;
     }
@@ -394,8 +500,23 @@
         $qpData = collect($data)->values();
     @endphp
 
-    <div class="qp-body d-flex justify-content-between row">
-        <div class="col-6 qp-col">
+    <div class="qp-body d-flex flex-wrap justify-content-between row">
+        <!-- MOBILE (<768px): satu kolom penuh -->
+        <div class="col-12 qp-col d-flex d-md-none">
+            <div class="qp-grid p-4 qp-col-header">
+                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">Location</span>
+                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center text-center">INSPECT QTY</span>
+                <span class="bg-card-rft rounded-3 d-flex justify-content-center align-items-center">RFT %</span>
+                <span class="bg-card-wft rounded-3 d-flex justify-content-center align-items-center">WFT %</span>
+                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">TLS</span>
+            </div>
+
+            <!-- Diisi JS: semua data, boleh scroll -->
+            <div class="qp-list qp-list-mobile" id="qpListMobile"></div>
+        </div>
+
+        <!-- TABLET/DESKTOP (≥768px): dua kolom -->
+        <div class="col-6 qp-col d-none d-md-flex">
             <!-- Header -->
             <div class="qp-grid p-4 qp-col-header">
                 <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">Location</span>
@@ -409,7 +530,7 @@
             <div class="qp-list qp-list-left" id="qpListLeft"></div>
         </div>
 
-        <div class="col-6 qp-col">
+        <div class="col-6 qp-col d-none d-md-flex">
             <!-- Header -->
             <div class="qp-grid p-4 qp-col-header">
                 <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">Location</span>
@@ -442,7 +563,8 @@
 
 @section('extrascript')
 <script>
-    var QP_ROW_HEIGHT = 50; // px — samakan dengan height .bg-card-line
+    // breakpoint sama dengan Bootstrap md (768px) — dipakai untuk switch mode kolom
+    var QP_DESKTOP_QUERY = '(min-width: 768px)';
 
     function qpAdjustDashboardHeight() {
         var wrap = document.querySelector('.dashboard-wrap');
@@ -481,11 +603,23 @@
             '</div>';
     }
 
+    // Ukur tinggi baris SESUNGGUHNYA dari DOM (bukan angka tetap), supaya
+    // otomatis akurat di breakpoint manapun (mobile/tablet/desktop/desktop besar)
+    function qpMeasureRowHeight(container) {
+        var probe = document.createElement('div');
+        probe.style.visibility = 'hidden';
+        probe.style.position = 'absolute';
+        probe.style.pointerEvents = 'none';
+        probe.innerHTML = qpBuildRowHtml('Probe');
+        container.appendChild(probe);
+        var height = probe.firstElementChild.getBoundingClientRect().height;
+        container.removeChild(probe);
+        return height > 0 ? height : 50; // fallback aman kalau gagal ukur
+    }
+
     function qpRenderRows() {
-        var dataEl   = document.getElementById('qpRowData');
-        var leftList = document.getElementById('qpListLeft');
-        var rightList = document.getElementById('qpListRight');
-        if (!dataEl || !leftList || !rightList) return;
+        var dataEl = document.getElementById('qpRowData');
+        if (!dataEl) return;
 
         var rows = [];
         try {
@@ -494,20 +628,37 @@
             rows = [];
         }
 
-        // kosongkan dulu supaya clientHeight yang diukur adalah tinggi
-        // container murni (bukan terpengaruh isi lama)
-        leftList.innerHTML = '';
-        rightList.innerHTML = '';
+        var isTabletDesktop = window.matchMedia(QP_DESKTOP_QUERY).matches;
 
-        // berapa baris yang MUAT PAS di kiri berdasar tinggi asli kolom
-        var availableHeight = leftList.clientHeight;
-        var capacity = Math.max(1, Math.floor(availableHeight / QP_ROW_HEIGHT));
+        var mobileList = document.getElementById('qpListMobile');
+        var leftList   = document.getElementById('qpListLeft');
+        var rightList  = document.getElementById('qpListRight');
 
-        var leftRows  = rows.slice(0, capacity);
-        var rightRows = rows.slice(capacity);
+        if (isTabletDesktop) {
+            // Mode 2 kolom: kiri diisi PAS sejumlah yang muat, kanan sisanya (scroll)
+            if (mobileList) mobileList.innerHTML = '';
+            if (!leftList || !rightList) return;
 
-        leftList.innerHTML  = leftRows.map(function (r) { return qpBuildRowHtml(qpEscapeHtml(r.namagroup)); }).join('');
-        rightList.innerHTML = rightRows.map(function (r) { return qpBuildRowHtml(qpEscapeHtml(r.namagroup)); }).join('');
+            leftList.innerHTML = '';
+            rightList.innerHTML = '';
+
+            var rowHeight = qpMeasureRowHeight(leftList);
+            var availableHeight = leftList.clientHeight;
+            var capacity = Math.max(1, Math.floor(availableHeight / rowHeight));
+
+            var leftRows  = rows.slice(0, capacity);
+            var rightRows = rows.slice(capacity);
+
+            leftList.innerHTML  = leftRows.map(function (r) { return qpBuildRowHtml(qpEscapeHtml(r.namagroup)); }).join('');
+            rightList.innerHTML = rightRows.map(function (r) { return qpBuildRowHtml(qpEscapeHtml(r.namagroup)); }).join('');
+        } else {
+            // Mode mobile: satu kolom penuh, semua data, boleh scroll
+            if (leftList) leftList.innerHTML = '';
+            if (rightList) rightList.innerHTML = '';
+            if (!mobileList) return;
+
+            mobileList.innerHTML = rows.map(function (r) { return qpBuildRowHtml(qpEscapeHtml(r.namagroup)); }).join('');
+        }
     }
 
     function qpRefreshLayout() {
