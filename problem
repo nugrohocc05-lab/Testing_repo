@@ -299,7 +299,8 @@
     .dashboard-wrap {
         display: flex;
         flex-direction: column;
-        height: 100vh;
+        height: 100vh; /* fallback, di-override presisi oleh JS */
+        box-sizing: border-box;
         overflow: hidden;
     }
 
@@ -451,7 +452,24 @@
 
 @section('extrascript')
 <script>
+    function qpAdjustDashboardHeight() {
+        var wrap = document.querySelector('.dashboard-wrap');
+        if (!wrap) return;
 
+        // reset dulu supaya perhitungan posisi (offsetTop) akurat,
+        // tidak terpengaruh tinggi lama yang sudah di-set
+        wrap.style.height = 'auto';
+
+        var top = wrap.getBoundingClientRect().top;
+        var available = window.innerHeight - top;
+
+        // beri sedikit buffer bawah biar tidak mepet ke tepi layar
+        wrap.style.height = Math.max(available - 8, 300) + 'px';
+    }
+
+    window.addEventListener('load', qpAdjustDashboardHeight);
+    window.addEventListener('resize', qpAdjustDashboardHeight);
+    document.addEventListener('DOMContentLoaded', qpAdjustDashboardHeight);
 </script>
 @endsection
 
