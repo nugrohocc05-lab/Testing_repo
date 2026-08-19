@@ -2,11 +2,6 @@
 
 @section('extracss')
 <style>
-    /* ============================================================
-       BASE (mobile-first). Semua ukuran di bawah ini adalah default
-       untuk layar sempit, lalu di-override membesar lewat media query.
-       ============================================================ */
-
     .stat-card {
         height: 160px !important;
         min-height: 160px !important;
@@ -198,8 +193,6 @@
         font-weight: 600;
     }
 
-    /* Grid data: mobile pakai lebar kolom tidak rata supaya Location & TLS
-       (kolom paling "berat" isinya) tidak gepeng. Desktop baru rata 5x1fr. */
     .qp-grid {
         display: grid;
         grid-template-columns: 1.3fr 0.9fr 0.8fr 0.8fr 1.2fr;
@@ -222,12 +215,6 @@
         text-align: center;
     }
 
-    /* ============================================================
-       WRAPPER
-       - Mobile/tablet (<992px): perilaku halaman NORMAL, boleh scroll.
-       - Desktop (>=992px): mode kiosk fixed-height, no page scroll
-         (di-set eksplisit oleh JS lewat class .is-kiosk).
-       ============================================================ */
     .dashboard-wrap {
         display: flex;
         flex-direction: column;
@@ -264,12 +251,6 @@
         height: 100%;
     }
 
-    /* .qp-col-header dan .qp-list HARUS punya padding-right yang sama
-       persis (6px), supaya lebar konten grid header & grid data selalu
-       identik — kalau tidak, kolom paling kanan (TLS) akan geser sedikit
-       karena .qp-list mereservasi ruang untuk scrollbar sementara header
-       tidak. Nilai ini didefinisikan sekali lewat variable biar tidak
-       bisa keduanya kebetulan berbeda. */
     :root {
         --qp-scrollbar-reserve: 6px;
     }
@@ -292,7 +273,6 @@
         gap: 6px;
     }
 
-    /* Mode non-kiosk: list boleh setinggi kontennya, halaman yang scroll */
     .qp-list {
         overflow-y: visible;
     }
@@ -323,13 +303,10 @@
         padding-top: 0.75rem;
     }
 
-    /* Label pendek khusus mobile, disembunyikan di tablet ke atas */
     .label-short { display: inline; }
     .label-full  { display: none; }
 
-    /* ============================================================
-       TABLET (>=768px): masih 1 kolom (lega), tapi ruang lebih longgar
-       ============================================================ */
+     // Tablet
     @media (min-width: 768px) {
         .label-short { display: none; }
         .label-full  { display: inline; }
@@ -357,9 +334,7 @@
         }
     }
 
-    /* ============================================================
-       DESKTOP KECIL (992px - 1400px): 2 kolom, kiosk mode, padat
-       ============================================================ */
+    // Laptop mas doni
     @media (min-width: 992px) and (max-width: 1400px) {
         #topDefectList {
             max-height: 83px;
@@ -438,9 +413,7 @@
         }
     }
 
-    /* ============================================================
-       DESKTOP BESAR (>1400px): 2 kolom, kiosk mode, ukuran penuh
-       ============================================================ */
+    // Desktop besar
     @media (min-width: 1401px) {
         .bg-card,
         .bg-card-line,
@@ -579,10 +552,8 @@
         }
     });
 
-    // Breakpoint tempat mode "kiosk" (2 kolom, fixed-height, no page-scroll)
-    // mulai aktif. Di bawah ini: 1 kolom, halaman scroll biasa.
     var QP_DESKTOP_BREAKPOINT = 992;
-    var QP_ROW_HEIGHT = 50; // fallback perkiraan tinggi row (px), dipakai untuk hitung kapasitas kolom kiri saat mode kiosk
+    var QP_ROW_HEIGHT = 50; 
 
     function qpIsDesktop() {
         return window.innerWidth >= QP_DESKTOP_BREAKPOINT;
@@ -593,14 +564,11 @@
         if (!wrap) return;
 
         if (!qpIsDesktop()) {
-            // Mobile & tablet: bukan kiosk, biarkan tinggi mengikuti konten,
-            // halaman boleh discroll normal.
             wrap.classList.remove('is-kiosk');
             wrap.style.height = 'auto';
             return;
         }
 
-        // Desktop: kiosk mode, paksa tinggi = viewport tersisa, no scroll.
         wrap.classList.add('is-kiosk');
         wrap.style.height = 'auto';
 
@@ -649,16 +617,12 @@
         rightList.innerHTML = '';
 
         if (!qpIsDesktop()) {
-            // Mobile/tablet: 1 kolom, semua data masuk ke list kiri,
-            // tidak perlu hitung kapasitas karena halaman yang scroll.
             leftList.innerHTML = rows.map(function (r) {
                 return qpBuildRowHtml(qpEscapeHtml(r.namagroup));
             }).join('');
             return;
         }
 
-        // Desktop (kiosk): split data ke 2 kolom berdasar kapasitas
-        // tinggi kolom kiri, supaya tidak overflow / tidak perlu scroll.
         var availableHeight = leftList.clientHeight;
         var capacity = Math.max(1, Math.floor(availableHeight / QP_ROW_HEIGHT));
 
