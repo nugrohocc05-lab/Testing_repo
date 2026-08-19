@@ -1,949 +1,436 @@
 @extends('layouts.masternonavbar')
 
 @section('extracss')
-    <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
+<style>
+    .stat-card {
+        height: 160px !important;
+        min-height: 160px !important;
+    }
 
-    <style>
-        html, body {
-            margin: 0;
-            background-color: #242E3E;
+    .stat-card img {
+        width: 40px !important;
+        height: 40px !important;
+        margin-bottom: .45rem !important;
+    }
+
+    .stat-card h6 {
+        font-size: 1rem;
+        margin-bottom: .25rem !important;
+    }
+
+    .stat-card h2 {
+        font-size: 1.5rem;
+        line-height: 1;
+    }
+
+    .stat-card small {
+        font-size: 1rem;
+    }
+
+    .stat-card-defect {
+        height: auto;
+    }
+
+    .stat-card-defect > div {
+        width: 100%;
+    }
+
+    .defect-header {
+        width: 100%;
+    }
+
+    .defect-list {
+        width: 100%;
+        font-size: 13px;
+        gap: 2px;
+    }
+
+    #topDefectList {
+        max-height: 110px;
+        width: 100%;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #topDefectList::-webkit-scrollbar {
+        width: 3px;
+    }
+
+    #topDefectList::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 4px;
+    }
+
+    #topDefectList .defect-item {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        margin-bottom: 1px;
+    }
+
+    #topDefectList .defect-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .defect-circle {
+        width: 12px;
+        height: 12px;
+    }
+
+    .defect-name {
+        flex: 1;
+        min-width: 0;
+        margin-left: 8px;
+        text-align: left;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .defect-total {
+        flex: 0 0 auto;
+        margin-left: 8px;
+        white-space: nowrap;
+    }
+
+    .defect-percent {
+        flex: 0 0 55px;
+        margin-left: 8px;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .icon-summary {
+        width: 25px;
+        height: 25px;
+    }
+
+    .dashboard-header {
+        width: 100%;
+    }
+
+    .header-left {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+        width: 100%;
+    }
+
+    .header-back {
+        justify-self: start;
+    }
+
+    .header-title {
+        justify-self: center;
+        text-align: center;
+    }
+
+    .header-clock {
+        justify-self: end;
+        text-align: right;
+    }
+
+    .header-title h3 {
+        margin: 0;
+    }
+
+    .dashboard-wrap {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        box-sizing: border-box;
+        overflow: hidden;
+    }
+
+    .dashboard-header {
+        flex: 0 0 auto;
+    }
+
+    .qp-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .qp-col {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+    }
+
+    .qp-col-header {
+        flex: 0 0 auto;
+    }
+
+    .qp-list {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        padding-right: 6px;
+    }
+
+    .qp-list-left { overflow-y: hidden; }
+    .qp-list-right { overflow-y: auto; }
+
+    .qp-list::-webkit-scrollbar { width: 4px; }
+    .qp-list::-webkit-scrollbar-track { background: transparent; }
+    .qp-list::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.25);
+        border-radius: 4px;
+    }
+
+    .qp-grid {
+        display: grid;
+        grid-template-columns: 2fr 1.5fr 1fr 1fr 1.5fr; 
+        gap: 0.5rem;
+        width: 100%;
+        margin-bottom: 0.5rem;
+    }
+
+    .bg-card, .bg-card-line, .bg-card-rft, .bg-card-wft {
+        min-height: 50px; 
+        padding: 0.25rem;
+        font-size: 16px; 
+        font-weight: 700;
+        border-radius: 5px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+    }
+
+    .bg-card { background-color: #292F40; color: white; border: 1px solid #D0D0D0; }
+    .bg-card-line { background-color: #292F40; color: white; border: none; }
+    .bg-card-rft { background-color: #1A3B45; border: 1px solid #4CF299; color: #4CF299; }
+    .bg-card-wft { background-color: #23304E; border: 1px solid #3F5588; color: #4C8CF2; }
+
+    .number-circle {
+        width: 35px;
+        height: 35px;
+        border-radius: 50%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        color: white;
+        font-size: 14px;
+        font-weight: 600;
+    }
+
+    .footer-title {
+        flex: 0 0 auto;
+        padding-top: 0.75rem;
+    }
+
+    @media (min-width: 992px) and (max-width: 1400px) {
+        #topDefectList { max-height: 83px; }
+        .stat-card { height: 120px !important; min-height: 120px !important; }
+        .stat-card img { width: 24px !important; height: 24px !important; margin-bottom: .35rem !important; }
+        .stat-card h6 { font-size: 13px; margin-bottom: .25rem !important; }
+        .stat-card h2 { font-size: 15px; }
+        .stat-card small { font-size: 10px; }
+        .defect-list { font-size: 10px; }
+        .text-title { font-size: 12px; }
+
+        .bg-card, .bg-card-line, .bg-card-rft, .bg-card-wft {
+            min-height: 40px;
+            font-size: 13px;
         }
-
-        body {
-            padding: 1rem;
+        .number-circle {
+            width: 25px; height: 25px; font-size: 11px;
         }
+    }
 
+    @media (max-width: 991px) {
         .dashboard-wrap {
-            width: 100%;
+            height: auto !important; 
+            min-height: 100vh;
+            overflow-y: auto; 
         }
-
-        .dashboard-header {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
+        .qp-body, .qp-list, .qp-list-left {
+            overflow: visible !important;
+            height: auto;
         }
-
-        .header-left {
-            display: flex;
-            align-items: center;
+        .bg-card, .bg-card-line, .bg-card-rft, .bg-card-wft {
+            min-height: 40px;
+            font-size: 10px;
+            padding: 2px;
         }
-
-        .header-right {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            color: #ffffff;
-            font-size: 1.1rem;
-            font-weight: 600;
+        .number-circle {
+            width: 20px; height: 20px; font-size: 9px;
         }
-
-        .back-btn {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
-        /* Text Color */
-        .text-yellow { color: #F2C94C; }
-        .text-red    { color: #F24C4C; }
-        .text-blue   { color: #4C8CF2; }
-        .text-green  { color: #4CF299; }
-
-        /* Card Box */
-        .color-box-yellow {
-            background-color: #363633;
-            border: 1px solid #F2C94C;
-            border-radius: 5px;
-            color: #F2C94C;
-        }
-        .color-box-red {
-            background-color: #352837;
-            border: 1px solid #F24C4C;
-            border-radius: 5px;
-        }
-        .color-box-blue {
-            background-color: #23304E;
-            border: 1px solid #3F5588;
-            border-radius: 5px;
-        }
-        .color-box-green {
-            background-color: #1A3B45;
-            border: 1px solid #4CF299;
-            border-radius: 5px;
-        }
-
-        .metrics-wrap {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-            gap: 0.75rem;
-            margin-top: 0.75rem;
-        }
-
-        .location-box,
-        .metric-card {
-            min-height: 130px;
-            padding: 1rem;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-            gap: 0.5rem;
-            font-size: 25px;
-        }
-
-        .metric-card .metric-value {
-            display: flex;
-            align-items: baseline;
-            justify-content: start;
+        .qp-grid {
             gap: 0.25rem;
         }
-
-        .metric-icon {
-            flex-shrink: 0;
-            width: 36px;
-            height: 36px;
-        }
-
-        .metric-card h6 {
-            font-size: 0.75rem;
-            margin: 0;
-        }
-
-        .metric-card h2 {
-            font-size: 1.25rem;
-            margin: 0;
-        }
-
-        .datatable-wrap {
-            display: flex;
-            flex-direction: column;
-            min-height: 0;
-            min-width: 0;
-            margin-top: 1rem;
-        }
-
-        .datatable-wrap .col-md-12 {
-            flex: 1 1 auto;
-            display: flex;
-            min-width: 0;
-            overflow: hidden;
-        }
-
-        #datatable-container {
-            flex: 1 1 auto;
-            min-width: 0;
-            width: 100%;
-            overflow: hidden;
-            transition: opacity 0.15s ease;
-        }
-
-        .table-scroll-wrapper {
-            overflow-x: auto;
-            overflow-y: hidden;
-            max-width: 100%;
-            -webkit-overflow-scrolling: touch;
-            width: 100%;
-            height: 380px;
-        }
-
-        .export-btn {
-            position: relative;
-        }
-
-        .custom-tooltip {
-            position: absolute;
-            top: 100%;
-            right: 0;
-            left: auto;
-            transform: translateY(4px);
-            margin-top: 8px;
-            background-color: #000000;
-            color: white;
-            padding: 6px 18px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 500;
-            white-space: nowrap;
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.2s ease;
-            z-index: 10;
-        }
-
-        .custom-tooltip::after {
-            content: "";
-            position: absolute;
-            bottom: 100%;
-            right: 12px;
-            border-width: 5px;
-            border-style: solid;
-            border-color: transparent transparent #000000 transparent;
-        }
-
-        .export-btn:hover .custom-tooltip {
-            opacity: 1;
-            visibility: visible;
-            transform: translateY(0);
-        }
-
-        /* Select2 (Location Filter) */
-        .select2-container {
-            width: 100% !important;
-        }
-
-        .select2-container--default .select2-selection--single {
-            background: #372E39;
-            border: none;
-            display: flex;
-            align-items: center;
-        }
-
-        .select2-container--default .select2-selection--single .select2-selection__rendered {
-            color: white;
-            line-height: 38px;
-            padding-left: 0.75rem;
-        }
-
-        .select2-container--default .select2-selection--single .select2-selection__arrow {
-            height: 38px;
-        }
-
-        .select2-container--default .select2-selection--single .select2-selection__placeholder {
-            color: #ffffff !important;
-        }
-
-        .select2-container--default .select2-results__option--highlighted[aria-selected] {
-            background-color: transparent !important;
-            color: white !important;
-        }
-
-        .select2-container--default .select2-results__option[aria-selected="true"] {
-            background-color: transparent !important;
-            color: white !important;
-        }
-
-        .select2-dropdown {
-            background: #372E39;
-            color: white;
-        }
-
-        .select2-results__option {
-            color: white;
-        }
-
-        .select2-search__field {
-            background: #372E39;
-            color: white;
-            border: none;
-        }
-
-        .round-status-table {
-            --bs-table-bg: transparent;
-            --bs-table-color: #ffffff;
-            --bs-table-striped-bg: transparent;
-            --bs-table-border-color: #576376;
-            color: #ffffff;
-        }
-
-        .round-status-table th,
-        .round-status-table td {
-            vertical-align: middle;
-            background-color: transparent;
-            border-color: #576376;
-            padding: 6px;
-        }
-
-        .round-status-table .round-label {
-            font-weight: bold;
-            padding: 1px;
-        }
-
-        .round-status-table .btn-detail {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-            min-width: 64px;
-            height: 100%;
-            margin: 0 auto;
-            cursor: default;
-        }
-
-        .round-status-table .btn-detail img {
-            width: 16px;
-            height: 16px;
-        }
-
-        .status-none   { background-color: #219653; }
-        .status-one    { background-color: #F24C4C; }
-        .status-multi  { background-color: #F24C4C; }
-        .status-cap    { background-color: #F9E21D; }
-
-        /* Legend */
-        .legend-box {
-            width: 22px;
-            height: 22px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .legend-text {
-            font-size: 1rem;
-        }
-
-        .legend-wrap {
-            row-gap: 10px;
-        }
-
-        #datalist {
-            table-layout: auto;
-            height: 100%;
-        }
-
-        #datalist th,
-        #datalist td {
-            min-width: 75px;
-            white-space: nowrap;
-            font-size: 0.8rem;
-        }
-
-        .footer-title {
-            justify-content: center;
-            text-align: center;
-            gap: 10px;
-        }
-
-        /* Export Preview Modal */
-        #exportPreviewModal .modal-content {
-            background-color: #242E3E;
-            color: #ffffff;
-        }
-
-        #exportPreviewModal .modal-header,
-        #exportPreviewModal .modal-footer {
-            border-color: #576376;
-        }
-
-        #exportPreviewModal .btn-close {
-            filter: invert(1);
-        }
-
-        #exportTable {
-            color: #ffffff;
-        }
-
-        #exportTable th,
-        #exportTable td {
-            border-color: #576376;
-            white-space: nowrap;
-        }
-
-        .dt-buttons .btn {
-            margin-bottom: 8px;
-        }
-
-        @media (min-width: 400px) {
-            .metric-icon {
-                width: 40px;
-                height: 40px;
-            }
-
-            .location-text {
-                font-size: 13px;
-            }
-        }
-
-        @media (min-width: 576px) {
-            .metric-icon {
-                width: 48px;
-                height: 48px;
-            }
-            .metric-card h6 {
-                font-size: 0.85rem;
-            }
-            .metric-card h2 {
-                font-size: 1.5rem;
-            }
-            .table-scroll-wrapper {
-                height: 420px;
-            }
-            #datalist th:first-child,
-            #datalist td:first-child {
-                min-width: 110px;
-            }
-            .round-status-table .btn-detail img {
-                width: 18px;
-                height: 18px;
-            }
-        }
-
-        @media (min-width: 768px) {
-            .metrics-wrap {
-                gap: 1rem;
-            }
-
-            .metric-icon {
-                width: 56px;
-                height: 56px;
-            }
-            .header-right {
-                font-size: 1.25rem;
-            }
-            .footer-title {
-                justify-content: space-between;
-                text-align: left;
-                padding-top: 30px;
-            }
-            .title-system {
-                display: none;
-            }
-            .table-scroll-wrapper {
-                height: 480px;
-            }
-            #datalist th,
-            #datalist td {
-                min-width: 90px;
-                font-size: 0.85rem;
-            }
-
-            html, body {
-                height: 100%;
-            }
-            body {
-                overflow: hidden;
-                display: flex;
-                flex-direction: column;
-            }
-            .dashboard-wrap {
-                height: 100%;
-                display: flex;
-                flex-direction: column;
-            }
-            .datatable-wrap {
-                flex: 1 1 auto;
-                min-height: 0;
-                overflow: hidden;
-            }
-            .table-scroll-wrapper {
-                height: 100%;
-            }
-
-            .location-text {
-                font-size: medium;
-            }
-        }
-
-        @media (min-width: 992px) {
-            html, body {
-                height: 100%;
-            }
-            body {
-                overflow: hidden;
-                display: flex;
-                flex-direction: column;
-            }
-            .dashboard-wrap {
-                height: 100%;
-                display: flex;
-                flex-direction: column;
-            }
-            .datatable-wrap {
-                flex: 1 1 auto;
-                min-height: 0;
-                overflow: hidden;
-            }
-            .table-scroll-wrapper {
-                height: 100%;
-            }
-            .metric-icon {
-                width: 60px;
-                height: 60px;
-            }
-            #datalist th:first-child,
-            #datalist td:first-child {
-                min-width: 130px;
-            }
-
-            .location-text {
-                font-size: 23px;
-            }
-
-        }
-
-        @media (max-width: 767.98px) {
-            .metrics-wrap {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        /* Tablet: 768px - 991.98px — location sendiri di baris 1, 4 card sejajar di baris 2 */
-        @media (min-width: 768px) and (max-width: 991.98px) {
-            .metrics-wrap {
-                grid-template-columns: repeat(4, 1fr);
-            }
-
-            .metrics-wrap .location-box {
-                grid-column: 1 / -1;
-            }
-        }
-    </style>
+        #topDefectList { max-height: 70px; }
+        .defect-header { flex-direction: column; gap: 0.5rem !important; }
+        .header-title h3 { font-size: 18px; }
+    }
+</style>
 @endsection
 
 @section('content')
-    <div class="container-fluid dashboard-wrap">
-        <!-- Header -->
-        <div class="dashboard-header">
-            <div class="header-left">
+<div class="container-fluid dashboard-wrap">
+    <div class="dashboard-header">
+        <div class="header-left pb-2">
+            <div class="header-item header-back">
                 <button
                     type="button"
                     onclick="history.back()"
-                    class="back-btn border-0 bg-transparent text-white p-0">
-                    <img src="{{ _asset('svg/inlinePerformance/back.svg') }}" width="15" height="15">
+                    class="back-btn border-0 bg-transparent text-white p-0 d-flex align-items-center gap-3">
+                    <img src="{{ _asset('svg/inlinePerformance/back.svg') }}"
+                        width="15"
+                        height="15"
+                        alt="Back">
                     <span>Back</span>
                 </button>
             </div>
 
-            <div class="header-right">
-                <span id="liveClock"></span>
-                <button type="button"
-                    class="export-btn bg-transparent border-0 p-0 d-flex align-items-center"
-                    data-bs-toggle="modal" data-bs-target="#exportPreviewModal">
-                    <img src="{{ _asset('svg/inlinePerformance/export.svg') }}" style="width:27px; height:27px;">
-                    <span class="custom-tooltip">Export</span>
-                </button>
-            </div>
-        </div>
-
-        <div class="metrics-wrap">
-            <div class="location-box d-flex flex-column color-box-red">
-                <h4 class="fw-bold text-red mb-0">LOCATION</h4>
-                <span class="location-text fw-bold mb-0" style="color: white;">{{$namaline}}</span>
+            <div class="header-item header-title text-white">
+                <h3 class="mb-0">Quality Performance (Endline)</h3>
             </div>
 
-            <!-- QTY INSPECT -->
-            <div class="color-box-yellow metric-card ">
-                <img src="{{ _asset('svg/inlinePerformance/qty-inspect.svg') }}" class="metric-icon img-fluid">
-                <div class="justify-content-start">
-                    <h6 class="fw-bold text-yellow">INSPECT QTY</h6>
-                    <div class="metric-value text-white justify-content-start">
-                        <h2 class="fw-bold" id="tot_inspect">{{ $tot_inspect ?? 0 }}</h2>
-                        <small>pcs</small>
-                    </div>
-                </div>
-            </div>
-
-            <!-- QTY DEFECT -->
-            <div class="color-box-red metric-card">
-                <img src="{{ _asset('svg/inlinePerformance/qty-defect.svg') }}" class="metric-icon img-fluid">
-                <div class="justify-content-start">
-                    <h6 class="fw-bold text-red">DEFECT QTY</h6 >
-                    <div class="metric-value text-white justify-content-start">
-                        <h2 class="fw-bold" id="tot_defect">{{ $tot_defect ?? 0 }}</h2>
-                        <small>pcs</small>
-                    </div>
-                </div>
-            </div>
-
-            <!-- RFT -->
-            <div class="color-box-green metric-card">
-                <img src="{{ _asset('svg/inlinePerformance/rft.svg') }}" class="metric-icon img-fluid">
-                <div class="justify-content-start">
-                    <h6 class="fw-bold text-green text-start">RFT</h6>
-                    <div class="metric-value text-white justify-content-start">
-                        <h2 class="fw-bold"><span id="rft">{{ $rft ?? '0.00' }}%</span></h2>
-                    </div>
-                </div>
-            </div>
-
-            <!-- WFT -->
-            <div class="color-box-blue metric-card">
-                <img src="{{ _asset('svg/inlinePerformance/wft.svg') }}" class="metric-icon img-fluid">
-                <div>
-                    <h6 class="fw-bold text-blue text-start">WFT</h6>
-                    <div class="metric-value text-white">
-                        <h2 class="fw-bold"><span id="wft">{{ $wft ?? '0.00' }}%</span></h2>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Round Status Table -->
-        <div class="rounded text-white datatable-wrap">
-            <div class="col-md-12 m-0">
-                <div id="datatable-container" class="w-100">
-                    @include('monitoring::inlineperformance.inlineLts.datatable', [
-                        'operators' => $operators ?? [],
-                        'rounds'    => $rounds ?? [],
-                    ])
-                </div>
-            </div>
-        </div>
-
-        <!-- Legend -->
-        <div class="d-flex justify-content-center mt-2">
-            <div class="legend-wrap d-flex flex-wrap text-white py-1 gap-3 fs-6">
-                <div class="d-flex gap-3 align-items-center">
-                    <div class="legend-box" style="background-color: #219653;"></div>
-                    <p class="legend-text mb-0">No Defect Data</p>
-                </div>
-
-                <div class="d-flex gap-3 align-items-center">
-                    <div class="legend-box" style="background-color: #F24C4C;"></div>
-                    <p class="legend-text mb-0">Found One Defect Data</p>
-                </div>
-
-                <div class="d-flex gap-3 align-items-center">
-                    <div class="legend-box" style="background-color: #F24C4C;">
-                        <img class="legend-icon" style="width: 12px; height:12px" src="{{ _asset('svg/inlinePerformance/defect2.svg') }}">
-                    </div>
-                    <p class="legend-text mb-0">Found Two or More Defect Data</p>
-                </div>
-
-                <div class="d-flex gap-3 align-items-center">
-                    <div class="legend-box" style="background-color: #F9E21D;">
-                        <img class="legend-icon" style="width: 12px; height:12px" src="{{ _asset('svg/inlinePerformance/pencil.svg') }}">
-                    </div>
-                    <p class="legend-text mb-0">CAP Already Filled In</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Footer -->
-         <div class="footer-title mt-2 text-white d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <div class="d-flex align-items-center gap-2">
-                <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" style="width: 18px; height: 18px;">
-                Data Update
-                <span id="liveClock2"></span>
+            <div class="header-item header-clock text-white">
+                <span id="liveClock">08.00 WIB</span>
             </div>
         </div>
     </div>
 
-    <!-- Export Preview Modal -->
-    <div class="modal fade" id="exportPreviewModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-xl modal-dialog-scrollable">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Preview Export Data</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div id="exportLoading" class="text-center text-white py-4">
-                        Memuat data...
-                    </div>
+    @php
+        $qpData = collect($data)->values();
+    @endphp
 
-                    <div id="exportContent" class="d-none">
-                        <!-- Summary: Location, Inspect Qty, Defect Qty, RFT, WFT -->
-                        <table id="exportSummaryTable" class="table table-bordered table-sm w-auto mb-3">
-                            <tbody>
-                                <tr>
-                                    <th class="text-nowrap">Location</th>
-                                    <td id="sum_location" colspan="3"></td>
-                                </tr>
-                                <tr>
-                                    <th class="text-nowrap">Inspect Qty</th>
-                                    <td id="sum_inspect"></td>
-                                    <th class="text-nowrap">Defect Qty</th>
-                                    <td id="sum_defect"></td>
-                                </tr>
-                                <tr>
-                                    <th class="text-nowrap">RFT (%)</th>
-                                    <td id="sum_rft"></td>
-                                    <th class="text-nowrap">WFT (%)</th>
-                                    <td id="sum_wft"></td>
-                                </tr>
-                            </tbody>
-                        </table>
-
-                        <!-- Tabel Round x Operator -->
-                        <div class="table-responsive">
-                            <table id="exportTable" class="table table-bordered table-sm w-100">
-                                <thead id="exportTableHead"></thead>
-                                <tbody id="exportTableBody"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-success btn-sm" id="btnDownloadExcel" disabled>Download Excel</button>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
-                </div>
+    <div class="qp-body d-flex flex-wrap row mx-0 w-100">
+        <div class="col-12 col-lg-6 qp-col px-1 px-lg-3 mb-3 mb-lg-0">
+            <div class="qp-grid p-2 p-lg-4 qp-col-header">
+                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">Location</span>
+                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center text-center">INSPECT QTY</span>
+                <span class="bg-card-rft rounded-3 d-flex justify-content-center align-items-center">RFT %</span>
+                <span class="bg-card-wft rounded-3 d-flex justify-content-center align-items-center">WFT %</span>
+                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">TLS</span>
             </div>
+
+            <div class="qp-list qp-list-left pb-4 pb-lg-0" id="qpListLeft"></div>
+        </div>
+
+        <div class="col-12 col-lg-6 qp-col px-3 d-none d-lg-flex">
+            <div class="qp-grid p-4 qp-col-header">
+                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">Location</span>
+                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center text-center">INSPECT QTY</span>
+                <span class="bg-card-rft rounded-3 d-flex justify-content-center align-items-center">RFT %</span>
+                <span class="bg-card-wft rounded-3 d-flex justify-content-center align-items-center">WFT %</span>
+                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">TLS</span>
+            </div>
+
+            <div class="qp-list qp-list-right" id="qpListRight"></div>
         </div>
     </div>
-@endsection
+
+    <script type="application/json" id="qpRowData">{!! $qpData->map(fn ($d) => ['namagroup' => $d->namagroup])->toJson() !!}</script>
+
+    <div class="footer-title text-white d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0">
+        <div class="d-flex align-items-center gap-2">
+            <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" class="img-foot" alt="">
+            Data Update
+            <span id="liveClock2"></span>
+        </div>
+        <div class="d-flex gap-3">
+            <span>LINE OFF = Worktime not setting yet</span>
+            <span>MPS OFF = MPS not setting yet</span>
+        </div>
+    </div>
+</div>
 
 @section('extrascript')
-    <!-- SheetJS: dipakai untuk generate file Excel dengan summary + tabel dalam satu file -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+    $(document).ready(function () {
+        let savedTime = localStorage.getItem('lastDataUpdate');
+        if (savedTime) {
+            $('#liveClock2').html(savedTime);
+        }
+    });
 
-    <script>
-        $(document).ready(function () {
+    function qpAdjustDashboardHeight() {
+        var wrap = document.querySelector('.dashboard-wrap');
+        if (!wrap) return;
 
-           $(document).ready(function () {
-                let savedTime = localStorage.getItem('lastDataUpdate');
-                if (savedTime) {
-                    $('#liveClock2').html(savedTime);
-                }
-            });
+        if (window.innerWidth < 992) {
+            wrap.style.height = 'auto';
+            return;
+        }
 
-            let currentLine      = @json($kodegroup ?? null);
-            let currentLineLabel = @json($namaline ?? null);
-            let currentDate       = @json($date);
-            let skipInitialChange = true;
+        var top = wrap.getBoundingClientRect().top;
+        var available = window.innerHeight - top;
+        wrap.style.height = Math.max(available - 8, 300) + 'px';
+    }
 
-            console.log(currentDate);
-
-            const formattedDate = new Date(currentDate).toLocaleDateString('en-GB', {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric'
-            });
-
-           function formatDate(date) {
-                const d = new Date(date);
-
-                const months = [
-                    'January', 'February', 'March', 'April', 'May', 'June',
-                    'July', 'August', 'September', 'October', 'November', 'December'
-                ];
-
-                const day = d.getDate();
-                const monthName = months[d.getMonth()];
-                const year = d.getFullYear();
-
-                const hours = String(d.getHours()).padStart(2, '0');
-                const minutes = String(d.getMinutes()).padStart(2, '0');
-                const seconds = String(d.getSeconds()).padStart(2, '0');
-
-                return `${day} ${monthName} ${year}`;
-            }
-
-            function updateLiveClock() {
-                const now = new Date();
-
-                const formatted = formatDate(now);
-
-                let currentDate = @json($date);
-
-                const dateTime = currentDate ? formatDate(currentDate) : formatted;
-
-                $('#liveClock').text(dateTime);
-            }
-
-
-            updateLiveClock();
-
-
-            function updateClock() {
-                const now = new Date();
-                const hour = String(now.getHours()).padStart(2, '0');
-                const minute = String(now.getMinutes()).padStart(2, '0');
-                const second = String(now.getSeconds()).padStart(2, '0');
-
-                const formatted = `${day} ${month[now.getMonth()]} ${year} - ${hour} : ${minute} : ${second}`;
-
-                const addDate = `${formattedDate} - ${hour} : ${minute} : ${second}`;
-                document.getElementById('liveClock').innerHTML = addDate;
-            }
-
-            $('#line').select2({
-                placeholder: 'Select Line',
-                width: '100%',
-                ajax: {
-                    url: "{{ route('monitoring_inlineperformanceselectline') }}",
-                    type: "GET",
-                    dataType: "json",
-                    delay: 500,
-                    data: function (params) {
-                        return {
-                            q: params.term,
-                            page: params.page || 1
-                        };
-                    },
-                    processResults: function (data) {
-                        return {
-                            results: $.map(data.data, function (item) {
-                                return {
-                                    id: item.kodegroup,
-                                    text: item.namabagian + ' - ' + item.namagroup
-                                };
-                            }),
-                            pagination: {
-                                more: data.to < data.total
-                            }
-                        };
-                    },
-                    cache: true
-                }
-            });
-
-            if (currentLine) {
-                const preOption = new Option(currentLineLabel, currentLine, true, true);
-                $('#line').append(preOption).trigger('change');
-            }
-
-            function fetchInlineLts() {
-                if (!currentLine) return;
-
-                $('#datatable-container').css('opacity', 0.5);
-
-                $.ajax({
-                    url: "{{ route('monitoring_inlineperformance_filterInlineLts') }}",
-                    type: "GET",
-                    data: { line: currentLine, date: currentDate },
-                    success: function (res) {
-                        $('#tot_inspect').text(res.tot_inspect);
-                        $('#tot_defect').text(res.tot_defect);
-                        $('#rft').text(res.rft);
-                        $('#wft').text(res.wft);
-                        $('#datatable-container').html(res.html);
-                    },
-                    error: function (xhr) {
-                        console.log(xhr.responseJSON ? xhr.responseJSON.message : 'Request failed');
-                    },
-                    complete: function () {
-                        $('#datatable-container').css('opacity', 1);
-                    }
-                });
-            }
-
-            $('#line').on('change', function () {
-                if (skipInitialChange) {
-                    skipInitialChange = false;
-                    return;
-                }
-                currentLine = $(this).val();
-                fetchInlineLts();
-            });
-
-            /* ============================
-               EXPORT PREVIEW MODAL LOGIC
-               ============================ */
-
-            // Menyimpan data terakhir yang di-load, dipakai saat tombol Download Excel diklik
-            let lastExportData = null;
-
-            function resetExportModal() {
-                $('#exportTableHead').empty();
-                $('#exportTableBody').empty();
-                $('#sum_location, #sum_inspect, #sum_defect, #sum_rft, #sum_wft').text('');
-                $('#exportContent').addClass('d-none');
-                $('#exportLoading').removeClass('d-none').text('Memuat data...');
-                $('#btnDownloadExcel').prop('disabled', true);
-                lastExportData = null;
-            }
-
-            function loadExportPreview() {
-                resetExportModal();
-
-                $.ajax({
-                    url: "{{ route('monitoring_inlineperformance_exportData') }}",
-                    type: "GET",
-                    data: { line: currentLine, date: currentDate },
-                    dataType: "json",
-                    success: function (res) {
-                        // res diharapkan berbentuk:
-                        // {
-                        //   summary: { location, tot_inspect, tot_defect, rft, wft },
-                        //   headers: ['Round','Op1','Op2', ...],
-                        //   rows: [ [v1,v2,...], ... ]
-                        // }
-                        if (!res || !res.headers || !res.rows) {
-                            $('#exportLoading').text('Data export tidak tersedia.');
-                            return;
-                        }
-
-                        lastExportData = res;
-
-                        // Render blok summary
-                        let sum = res.summary || {};
-                        $('#sum_location').text(sum.location ?? '-');
-                        $('#sum_inspect').text(sum.tot_inspect ?? 0);
-                        $('#sum_defect').text(sum.tot_defect ?? 0);
-                        $('#sum_rft').text((sum.rft ?? '0.00') + '%');
-                        $('#sum_wft').text((sum.wft ?? '0.00') + '%');
-
-                        // Render tabel Round x Operator
-                        let theadHtml = '<tr>' + res.headers.map(function (h) {
-                            return '<th>' + h + '</th>';
-                        }).join('') + '</tr>';
-                        $('#exportTableHead').html(theadHtml);
-
-                        let tbodyHtml = res.rows.map(function (row) {
-                            return '<tr>' + row.map(function (cell) {
-                                return '<td>' + (cell ?? '') + '</td>';
-                            }).join('') + '</tr>';
-                        }).join('');
-                        $('#exportTableBody').html(tbodyHtml);
-
-                        $('#exportLoading').addClass('d-none');
-                        $('#exportContent').removeClass('d-none');
-                        $('#btnDownloadExcel').prop('disabled', false);
-                    },
-                    error: function (xhr) {
-                        $('#exportLoading').text('Gagal memuat data export.');
-                        console.log(xhr.responseJSON ? xhr.responseJSON.message : 'Request failed');
-                    }
-                });
-            }
-
-            // Download Excel: summary di atas, tabel Round x Operator di bawah, dalam satu file
-            $('#btnDownloadExcel').on('click', function () {
-                if (!lastExportData) return;
-
-                let sum = lastExportData.summary || {};
-
-                let sheetData = [];
-
-                // Section 1: Summary
-                sheetData.push(['Location', sum.location ?? '-']);
-                sheetData.push(['Inspect Qty', sum.tot_inspect ?? 0]);
-                sheetData.push(['Defect Qty', sum.tot_defect ?? 0]);
-                sheetData.push(['RFT (%)', sum.rft ?? '0.00']);
-                sheetData.push(['WFT (%)', sum.wft ?? '0.00']);
-
-                // Baris kosong sebagai pemisah
-                sheetData.push([]);
-
-                // Section 2: Tabel Round x Operator
-                sheetData.push(lastExportData.headers);
-                lastExportData.rows.forEach(function (row) {
-                    sheetData.push(row);
-                });
-
-                let ws = XLSX.utils.aoa_to_sheet(sheetData);
-                let wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, 'Export');
-
-                let filename = 'InlinePerformance_' + (currentLine || '') + '_' + (currentDate || '') + '.xlsx';
-                XLSX.writeFile(wb, filename);
-            });
-
-            $('.export-btn').on('click', function () {
-                if (!currentLine) {
-                    alert('Pilih line terlebih dahulu sebelum export.');
-                    return false;
-                }
-                // modal akan terbuka via data-bs-toggle, data di-load saat event shown
-            });
-
-            $('#exportPreviewModal').on('show.bs.modal', function (e) {
-                if (!currentLine) {
-                    e.preventDefault();
-                    alert('Pilih line terlebih dahulu sebelum export.');
-                    return;
-                }
-                loadExportPreview();
-            });
-
-            $('#exportPreviewModal').on('hidden.bs.modal', function () {
-                resetExportModal();
-            });
-
+    function qpEscapeHtml(str) {
+        return String(str).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
         });
-    </script>
+    }
+
+    function qpBuildRowHtml(name) {
+        return '' +
+            '<div class="qp-grid">' +
+                '<span class="bg-card-line rounded-3">' + name + '</span>' +
+                '<span class="bg-card-line rounded-3">20</span>' +
+                '<span class="bg-card-line rounded-3" style="color:#4CF299;">98.21</span>' +
+                '<span class="bg-card-line rounded-3" style="color:#4C8CF2;">1.79</span>' +
+                '<div class="bg-card-line rounded-3 gap-1 gap-lg-2">' +
+                    '<span class="number-circle" style="background-color: #BD3F3F3D;"></span>' +
+                    '<span class="number-circle" style="background-color: #F9A51D40;"></span>' +
+                    '<span class="number-circle" style="background-color: #1D9A5C;"></span>' +
+                    '<span class="number-circle" style="background-color: #1744B740;"></span>' +
+                '</div>' +
+            '</div>';
+    }
+
+    function qpRenderRows() {
+        var dataEl   = document.getElementById('qpRowData');
+        var leftList = document.getElementById('qpListLeft');
+        var rightList = document.getElementById('qpListRight');
+        if (!dataEl || !leftList || !rightList) return;
+
+        var rows = [];
+        try {
+            rows = JSON.parse(dataEl.textContent || '[]');
+        } catch (e) {
+            rows = [];
+        }
+
+        leftList.innerHTML = '';
+        rightList.innerHTML = '';
+
+        var isDesktop = window.innerWidth >= 992;
+
+        if (isDesktop) {
+            var approxRowHeight = (window.innerWidth <= 1400) ? 45 : 58;
+            var availableHeight = leftList.clientHeight;
+            var capacity = Math.max(1, Math.floor(availableHeight / approxRowHeight));
+
+            var leftRows  = rows.slice(0, capacity);
+            var rightRows = rows.slice(capacity);
+
+            leftList.innerHTML  = leftRows.map(function (r) { return qpBuildRowHtml(qpEscapeHtml(r.namagroup)); }).join('');
+            rightList.innerHTML = rightRows.map(function (r) { return qpBuildRowHtml(qpEscapeHtml(r.namagroup)); }).join('');
+        } else {
+            leftList.innerHTML = rows.map(function (r) { return qpBuildRowHtml(qpEscapeHtml(r.namagroup)); }).join('');
+        }
+    }
+
+    function qpRefreshLayout() {
+        qpAdjustDashboardHeight();
+        requestAnimationFrame(qpRenderRows);
+    }
+
+    window.addEventListener('load', qpRefreshLayout);
+    window.addEventListener('resize', qpRefreshLayout);
+    document.addEventListener('DOMContentLoaded', qpRefreshLayout);
+</script>
+@endsection
+
+@include('layouts.loading')
 @endsection
