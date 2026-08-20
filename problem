@@ -706,11 +706,10 @@
             '</div>';
     }
 
-    // Ukur tinggi baris SESUNGGUHNYA dari DOM (termasuk gap antar baris),
-    // bukan angka tetap — supaya kapasitas kolom kiri selalu akurat di
-    // breakpoint manapun (mobile/tablet/laptop/desktop besar), walau
-    // tinggi baris (42/46/50px) berubah-ubah lewat CSS media query.
-    function qpMeasureRowHeight(container) {
+    // Ukur tinggi baris SESUNGGUHNYA dari DOM, dan gap antar baris secara
+    // terpisah — supaya rumus kapasitas bisa dihitung dengan benar
+    // (baris terakhir tidak butuh gap tambahan di bawahnya).
+    function qpMeasureRowMetrics(container) {
         var probe = document.createElement('div');
         probe.style.visibility = 'hidden';
         probe.style.position = 'absolute';
@@ -721,13 +720,16 @@
         var rowEl = probe.firstElementChild;
         var rowHeight = rowEl.getBoundingClientRect().height;
 
-        // ikut hitung gap (flex column gap) antar baris di .qp-list
-        var gapValue = parseFloat(getComputedStyle(container).rowGap || getComputedStyle(container).gap || '0');
+        var computed = getComputedStyle(container);
+        var gapValue = parseFloat(computed.rowGap || computed.gap || '0');
+        if (isNaN(gapValue)) gapValue = 0;
 
         container.removeChild(probe);
 
-        var total = rowHeight + (isNaN(gapValue) ? 0 : gapValue);
-        return total > 0 ? total : 50; // fallback aman kalau gagal ukur
+        return {
+            rowHeight: rowHeight > 0 ? rowHeight : 50,
+            gap: gapValue
+        };
     }
 
     function qpRenderRows() {
@@ -759,11 +761,15 @@
             return;
         }
 
-        var rowHeight = qpMeasureRowHeight(leftList);
+        var metrics = qpMeasureRowMetrics(leftList);
         var availableHeight = leftList.clientHeight;
+
+        // +gap di pembilang: kompensasi karena baris TERAKHIR tidak butuh
+        // gap tambahan di bawahnya, jadi rumus polos (tanpa +gap) selalu
+        // kehitung kurang 1 baris dari kapasitas sebenarnya.
         var capacity = Math.max(
             1,
-            Math.floor(availableHeight / rowHeight)
+            Math.floor((availableHeight + metrics.gap) / (metrics.rowHeight + metrics.gap))
         );
 
         var leftRows  = rows.slice(0, capacity);
