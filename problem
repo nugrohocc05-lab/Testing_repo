@@ -306,7 +306,7 @@
     .label-short { display: inline; }
     .label-full  { display: none; }
 
-     // Tablet
+    /* Tablet */
     @media (min-width: 768px) {
         .label-short { display: none; }
         .label-full  { display: inline; }
@@ -334,7 +334,7 @@
         }
     }
 
-    // Laptop mas doni
+    /* Laptop mas doni */
     @media (min-width: 992px) and (max-width: 1400px) {
         #topDefectList {
             max-height: 83px;
@@ -413,7 +413,7 @@
         }
     }
 
-    // Desktop besar
+    /* Desktop besar */
     @media (min-width: 1401px) {
         .bg-card,
         .bg-card-line,
@@ -598,7 +598,6 @@
     });
 
     var QP_DESKTOP_BREAKPOINT = 992;
-    var QP_ROW_HEIGHT = 50;
 
     function qpIsDesktop() {
         return window.innerWidth >= QP_DESKTOP_BREAKPOINT;
@@ -707,6 +706,30 @@
             '</div>';
     }
 
+    // Ukur tinggi baris SESUNGGUHNYA dari DOM (termasuk gap antar baris),
+    // bukan angka tetap — supaya kapasitas kolom kiri selalu akurat di
+    // breakpoint manapun (mobile/tablet/laptop/desktop besar), walau
+    // tinggi baris (42/46/50px) berubah-ubah lewat CSS media query.
+    function qpMeasureRowHeight(container) {
+        var probe = document.createElement('div');
+        probe.style.visibility = 'hidden';
+        probe.style.position = 'absolute';
+        probe.style.pointerEvents = 'none';
+        probe.innerHTML = qpBuildRowHtml('Probe', 0, 0, 0, 0, false);
+        container.appendChild(probe);
+
+        var rowEl = probe.firstElementChild;
+        var rowHeight = rowEl.getBoundingClientRect().height;
+
+        // ikut hitung gap (flex column gap) antar baris di .qp-list
+        var gapValue = parseFloat(getComputedStyle(container).rowGap || getComputedStyle(container).gap || '0');
+
+        container.removeChild(probe);
+
+        var total = rowHeight + (isNaN(gapValue) ? 0 : gapValue);
+        return total > 0 ? total : 50; // fallback aman kalau gagal ukur
+    }
+
     function qpRenderRows() {
         var dataEl    = document.getElementById('qpRowData');
         var leftList  = document.getElementById('qpListLeft');
@@ -736,10 +759,11 @@
             return;
         }
 
+        var rowHeight = qpMeasureRowHeight(leftList);
         var availableHeight = leftList.clientHeight;
         var capacity = Math.max(
             1,
-            Math.floor(availableHeight / QP_ROW_HEIGHT)
+            Math.floor(availableHeight / rowHeight)
         );
 
         var leftRows  = rows.slice(0, capacity);
