@@ -1,874 +1,781 @@
 @extends('layouts.masternonavbar')
 
 @section('extracss')
-    <style>
-        html, body {
-            margin: 0;
-            background-color: #242E3E;
-            height: 100%;
+<style>
+    .stat-card {
+        height: 160px !important;
+        min-height: 160px !important;
+    }
+
+    .stat-card img {
+        width: 40px !important;
+        height: 40px !important;
+        margin-bottom: .45rem !important;
+    }
+
+    .stat-card h6 {
+        font-size: 1rem;
+        margin-bottom: .25rem !important;
+    }
+
+    .stat-card h2 {
+        font-size: 1.5rem;
+        line-height: 1;
+    }
+
+    .stat-card small {
+        font-size: 1rem;
+    }
+
+    .stat-card-defect {
+        height: auto;
+    }
+
+    .stat-card-defect > div {
+        width: 100%;
+    }
+
+    .defect-header {
+        width: 100%;
+    }
+
+    .defect-list {
+        width: 100%;
+        font-size: 13px;
+        gap: 2px;
+    }
+
+    #topDefectList {
+        max-height: 110px;
+        width: 100%;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #topDefectList::-webkit-scrollbar {
+        width: 3px;
+    }
+
+    #topDefectList::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 4px;
+    }
+
+    #topDefectList .defect-item {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        margin-bottom: 1px;
+    }
+
+    #topDefectList .defect-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .defect-circle {
+        width: 12px;
+        height: 12px;
+    }
+
+    .defect-name {
+        flex: 1;
+        min-width: 0;
+        margin-left: 8px;
+        text-align: left;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .defect-total {
+        flex: 0 0 auto;
+        margin-left: 8px;
+        white-space: nowrap;
+    }
+
+    .defect-percent {
+        flex: 0 0 55px;
+        margin-left: 8px;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .icon-summary {
+        width: 25px;
+        height: 25px;
+    }
+
+    .dashboard-header {
+        width: 100%;
+    }
+
+    .header-left {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        column-gap: 0.75rem;
+        width: 100%;
+    }
+
+    .header-back {
+        justify-self: start;
+    }
+
+    .header-title {
+        justify-self: center;
+        text-align: center;
+        min-width: 0;
+    }
+
+    .header-clock {
+        justify-self: end;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .header-title h3 {
+        margin: 0;
+        font-size: 2rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .bg-card,
+    .bg-card-line {
+        background-color: #292F40;
+        color: white;
+        font-size: 14px;
+        font-weight: 700;
+        border-radius: 5px;
+        height: 42px;
+    }
+
+    .bg-card {
+        border: 1px solid #D0D0D0;
+    }
+
+    .bg-card-rft {
+        background-color: #1A3B45;
+        border: 1px solid #4CF299;
+        color: #4CF299;
+        font-size: 14px;
+        font-weight: 700;
+        height: 42px;
+    }
+
+    .bg-card-wft {
+        background-color: #23304E;
+        border: 1px solid #3F5588;
+        color: #4C8CF2;
+        font-size: 14px;
+        font-weight: 700;
+        height: 42px;
+    }
+
+    .card-line {
+        background-color: #292F40;
+        color: white;
+        font-size: 14px;
+        height: 42px;
+    }
+
+    .number-circle {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        color: white;
+        font-size: 11px;
+        font-weight: 600;
+    }
+
+    .qp-grid {
+        display: grid;
+        grid-template-columns: 1.3fr 0.9fr 0.8fr 0.8fr 1.2fr;
+        gap: 0.35rem;
+        width: 100%;
+    }
+
+    .qp-grid .tls-cell {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 4px;
+        flex-wrap: wrap;
+        padding: 2px;
+    }
+
+    .qp-grid span {
+        padding: 2px 4px;
+        line-height: 1.15;
+        text-align: center;
+    }
+
+    .dashboard-wrap {
+        display: flex;
+        flex-direction: column;
+        box-sizing: border-box;
+        height: auto;
+        overflow: visible;
+    }
+
+    .dashboard-wrap.is-kiosk {
+        height: 100vh;
+        overflow: hidden;
+    }
+
+    .dashboard-header {
+        flex: 0 0 auto;
+    }
+
+    .qp-body {
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+
+    .dashboard-wrap.is-kiosk .qp-body {
+        overflow: hidden;
+    }
+
+    .qp-col {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+
+    .dashboard-wrap.is-kiosk .qp-col {
+        height: 100%;
+    }
+
+    :root {
+        --qp-scrollbar-reserve: 6px;
+    }
+
+    .qp-col-header {
+        flex: 0 0 auto;
+        padding-right: var(--qp-scrollbar-reserve);
+        box-sizing: border-box;
+    }
+
+    .qp-list {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        padding-right: var(--qp-scrollbar-reserve);
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .qp-list {
+        overflow-y: visible;
+    }
+
+    .dashboard-wrap.is-kiosk .qp-list-left {
+        overflow-y: hidden;
+    }
+
+    .dashboard-wrap.is-kiosk .qp-list-right {
+        overflow-y: auto;
+    }
+
+    .qp-list::-webkit-scrollbar {
+        width: 4px;
+    }
+
+    .qp-list::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .qp-list::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.25);
+        border-radius: 4px;
+    }
+
+    .footer-title {
+        flex: 0 0 auto;
+        padding-top: 0.75rem;
+    }
+
+    .label-short { display: inline; }
+    .label-full  { display: none; }
+
+     // Tablet
+    @media (min-width: 768px) {
+        .label-short { display: none; }
+        .label-full  { display: inline; }
+
+        .qp-grid {
+            grid-template-columns: repeat(5, 1fr);
+            gap: 0.5rem;
         }
 
-        body {
-            padding: 1rem;
-            height: 100vh;
-            min-height: 0;
-            display: flex;
-            flex-direction: column;
-            box-sizing: border-box;
-        }
-
-        .dashboard-wrap {
-            width: 100%;
-            flex: 1 1 auto;
-            min-height: 0;
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* ---------- Header ---------- */
-        .dashboard-header {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-        }
-
-        .header-left {
-            display: flex;
-            align-items: center;
-        }
-
-        .header-right {
-            display: flex;
-            align-items: center;
-            color: #ffffff;
-            font-size: 1.25rem;
-            font-weight: 700;
-        }
-
-        .back-btn {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            font-size: 18px;
-        }
-
-        /* Text Color */
-        .text-yellow { color: #F2C94C; }
-        .text-red    { color: #F24C4C; }
-        .text-blue   { color: #4C8CF2; }
-        .text-green  { color: #4CF299; }
-
-        /* Card Box */
-        .color-box-yellow {
-            background-color: #363633;
-            border: 1px solid #F2C94C;
-            border-radius: 5px;
-            color: #F2C94C;
-        }
-        .color-box-red {
-            background-color: #352837;
-            border: 1px solid #F24C4C;
-            border-radius: 5px;
-        }
-        .color-box-blue {
-            background-color: #23304E;
-            border: 1px solid #3F5588;
-            border-radius: 5px;
-        }
-        .color-box-green {
-            background-color: #1A3B45;
-            border: 1px solid #4CF299;
-            border-radius: 5px;
-        }
-
-        .metric-card img {
-            flex-shrink: 0;
-        }
-
-        /* ---------- Table area ---------- */
-        .datatable-wrap {
-            display: flex;
-            flex-direction: column;
-            min-height: 0;
-            min-width: 0;
-            margin-top: 1rem;
-        }
-
-        .datatable-wrap .col-md-12 {
-            flex: 1 1 auto;
-            display: flex;
-            min-width: 0;
-            overflow: hidden;
-        }
-
-        #datatable-container {
-            flex: 1 1 auto;
-            min-width: 0;
-            width: 100%;
-            overflow: hidden;
-            transition: opacity 0.15s ease;
-        }
-
-        .table-scroll-wrapper {
-            overflow-x: auto;
-            overflow-y: hidden;
-            max-width: 100%;
-            -webkit-overflow-scrolling: touch;
-            width: 100%;
-            height: 100%;
-        }
-
-        .export-btn {
-            position: relative;
-        }
-
-        .custom-tooltip {
-            position: absolute;
-            top: 100%;
-            right: 0;
-            left: auto;
-            transform: translateY(4px);
-            margin-top: 8px;
-            background-color: #000000;
-            color: white;
-            padding: 6px 18px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 500;
-            white-space: nowrap;
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.2s ease;
-            z-index: 10;
-        }
-
-        .custom-tooltip::after {
-            content: "";
-            position: absolute;
-            bottom: 100%;
-            right: 12px;
-            border-width: 5px;
-            border-style: solid;
-            border-color: transparent transparent #000000 transparent;
-        }
-
-        .export-btn:hover .custom-tooltip {
-            opacity: 1;
-            visibility: visible;
-            transform: translateY(0);
-        }
-
-        /* Select2 (Location Filter) */
-        .select2-container {
-            width: 100% !important;
-        }
-
-        .select2-container--default .select2-selection--single {
-            background: #372E39;
-            border: none;
-            display: flex;
-            align-items: center;
-        }
-
-        .select2-container--default .select2-selection--single .select2-selection__rendered {
-            color: white;
-            line-height: 38px;
-            padding-left: 0.75rem;
-        }
-
-        .select2-container--default .select2-selection--single .select2-selection__arrow {
-            height: 38px;
-        }
-
-        .select2-container--default .select2-selection--single .select2-selection__placeholder {
-            color: #ffffff !important;
-        }
-
-        .select2-container--default .select2-results__option--highlighted[aria-selected] {
-            background-color: transparent !important;
-            color: white !important;
-        }
-
-        .select2-container--default .select2-results__option[aria-selected="true"] {
-            background-color: transparent !important;
-            color: white !important;
-        }
-
-        .select2-dropdown {
-            background: #372E39;
-            color: white;
-        }
-
-        .select2-results__option {
-            color: white;
-        }
-
-        .select2-search__field {
-            background: #372E39;
-            color: white;
-            border: none;
-        }
-
-        .round-status-table {
-            --bs-table-bg: transparent;
-            --bs-table-color: #ffffff;
-            --bs-table-striped-bg: transparent;
-            --bs-table-border-color: #576376;
-            color: #ffffff;
-        }
-
-        .round-status-table th,
-        .round-status-table td {
-            vertical-align: middle;
-            background-color: transparent;
-            border-color: #576376;
-            padding: 6px;
-        }
-
-        .round-status-table .round-label {
-            font-weight: bold;
-            padding: 1px;
-        }
-
-        .round-status-table .btn-detail {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-            min-width: 64px;
-            height: 100%;
-            margin: 0 auto;
-            cursor: default;
-        }
-
-        .round-status-table .btn-detail img {
-            width: 22px;
-            height: 22px;
-        }
-
-        .status-none   { background-color: #219653; }
-        .status-one    { background-color: #F24C4C; }
-        .status-multi  { background-color: #F24C4C; }
-        .status-cap    { background-color: #F9E21D; }
-
-        /* Legend */
-        .legend-box {
-            width: 24px;
-            height: 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .legend-wrap {
-            row-gap: 10px;
-        }
-
-        #datalist {
-            table-layout: auto;
-            height: 100%;
-        }
-
-        #datalist th,
-        #datalist td {
-            min-width: 90px;
-            white-space: nowrap;
-        }
-
-        .line-select-wrap {
-            flex: 1 1 auto;
-            min-height: 0;
-            padding: 0 1rem;
-            box-sizing: border-box;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .line-select-body {
-            flex: 1 1 auto;
-            min-height: 0;
-            overflow-y: auto;
-            overflow-x: hidden;
-            padding: 0 0.25rem 1.5rem;
-        }
-
-        .line-select-grid {
-            display: grid;
-            grid-template-columns: repeat(1, minmax(0, 1fr));
-            gap: 1rem;
-        }
-
-        .card-line,
-        .card-line-noactive {
-            width: 100%;
-            min-height: 90px;
-            border-radius: 25px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            padding: 1rem 1.25rem;
-            box-sizing: border-box;
-            text-decoration: none;
-        }
-
+        .bg-card,
+        .bg-card-line,
+        .bg-card-rft,
+        .bg-card-wft,
         .card-line {
-            background: #0069E1;
-            border: 1px solid #7DA6FF;
-            transition: transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+            height: 46px;
+            font-size: 16px;
         }
 
-        .card-line:hover,
-        .card-line:focus-visible {
-            background-color: #2EBFFD;
-            border-color: #0073A4;
-            box-shadow: 0px 8px 24px 0px rgba(46, 191, 253, 0.4);
-        }
-
-        .card-line-noactive {
-            background: #383B41;
-            border: 1px solid #6F6E6D;
-            cursor: not-allowed;
-        }
-
-        .card-line span,
-        .card-line-noactive span {
-            color: #ffffff;
+        .header-title h3 {
             font-size: 1.4rem;
-            line-height: 1.2;
+        }
+
+        #topDefectList {
+            max-height: 90px;
+        }
+    }
+
+    // Laptop mas doni
+    @media (min-width: 992px) and (max-width: 1400px) {
+        #topDefectList {
+            max-height: 83px;
+        }
+
+        .stat-card {
+            height: 120px !important;
+            min-height: 120px !important;
+        }
+
+        .stat-card img {
+            width: 24px !important;
+            height: 24px !important;
+            margin-bottom: .35rem !important;
+        }
+
+        .stat-card h6 {
+            font-size: 13px;
+            margin-bottom: .25rem !important;
+        }
+
+        .stat-card h2 {
+            font-size: 15px;
+            line-height: 1;
+        }
+
+        .stat-card small {
+            font-size: 10px;
+        }
+
+        .defect-list {
+            font-size: 10px;
+        }
+
+        .flatpickr-calendar {
+            max-width: 315px;
+            padding: 4px;
+            border-radius: 4px;
+        }
+
+        .flatpickr-day {
+            width: 30px;
+            height: 30px;
+            line-height: 30px;
+            font-size: 0.68rem;
+        }
+
+        .flatpickr-current-month {
+            font-size: 0.95rem;
+        }
+
+        span.flatpickr-weekday {
+            font-size: 0.75rem;
+        }
+
+        .text-title {
+            font-size: 12px;
+        }
+
+        .margin-cstm {
+            margin-top: 10px !important;
+            padding: 6px 0 !important;
+        }
+
+        .bg-card,
+        .bg-card-line,
+        .bg-card-rft,
+        .bg-card-wft,
+        .card-line {
+            height: 42px;
+            font-size: 14px;
+        }
+
+        .header-title h3 {
+            font-size: 1.15rem;
+        }
+    }
+
+    // Desktop besar
+    @media (min-width: 1401px) {
+        .bg-card,
+        .bg-card-line,
+        .bg-card-rft,
+        .bg-card-wft,
+        .card-line {
+            height: 50px;
+            font-size: 20px;
+        }
+
+        .header-title h3 {
+            font-size: 1.75rem;
+        }
+    }
+
+    @media (max-width: 575.98px) {
+        .header-left {
+            column-gap: 0.4rem;
+        }
+
+        .header-title h3 {
+            font-size: 0.95rem;
+        }
+
+        .header-clock {
+            font-size: 0.8rem;
+        }
+
+        .defect-header {
+            flex-direction: column;
+            gap: 0.5rem !important;
         }
 
         .footer-title {
-            flex-shrink: 0;
-            font-size: 16px;
+            flex-direction: column;
+            align-items: flex-start !important;
         }
 
-        @media (min-width: 400px) {
-            .card-line span,
-            .card-line-noactive span {
-                font-size: 1.5rem;
-            }
+        .footer-title > div {
+            flex-wrap: wrap;
         }
+    }
 
-        @media (min-width: 576px) {
-            .line-select-wrap {
-                padding: 0 1.5rem;
-            }
-            .line-select-grid {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-                gap: 1.25rem;
-            }
-            .footer-title {
-                flex-wrap: nowrap;
-            }
-        }
+    .footer-logo {
+        width: 15px;
+    }
 
-        @media (min-width: 768px) {
-            .line-select-wrap {
-                margin-top: 20px;
-                padding: 0 2rem;
-            }
-            .line-select-grid {
-                grid-template-columns: repeat(3, minmax(0, 1fr));
-            }
-            .header-right {
-                font-size: 1.1rem;
-            }
-            #datalist th,
-            #datalist td {
-                min-width: 75px;
-                font-size: 0.8rem;
-            }
-        }
+    @keyframes blink-active {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.3; }
+    }
 
-        @media (min-width: 992px) {
-            html {
-                overflow: hidden;
-            }
-            body {
-                overflow: hidden;
-            }
-            .dashboard-wrap {
-                height: 100%;
-                overflow: hidden;
-            }
-            .line-select-wrap {
-                padding: 0 2.5rem;
-            }
-            .line-select-grid {
-                grid-template-columns: repeat(4, minmax(0, 1fr));
-                gap: 1.5rem;
-                height: 100%;
-            }
-
-             .footer-title {
-                font-size: 12px;
-            }
-
-            .header-left {
-                font-size: 15px;
-            }
-        }
-
-        @media (min-width: 1200px) {
-            .line-select-grid {
-                grid-template-columns: repeat(5, minmax(0, 1fr));
-            }
-        }
-
-        @media (min-width: 1400px) {
-            .line-select-wrap {
-                padding: 0 3rem;
-            }
-            .line-select-grid {
-                grid-template-columns: repeat(6, minmax(0, 1fr));
-            }
-        }
-
-        /* Desktop kecil */
-        @media (min-width: 992px) and (max-height: 800px) {
-            body {
-                padding: 0.5rem 1rem;
-            }
-            .line-select-wrap {
-                margin-top: 0;
-            }
-            .line-select-wrap h1 {
-                font-size: 1.5rem;
-                margin-bottom: 0;
-            }
-            .line-select-body {
-                margin-top: 1rem !important;
-                padding: 2rem ;
-            }
-            .line-select-grid {
-                gap: 0.75rem;
-            }
-            .card-line,
-            .card-line-noactive {
-                min-height: 70px;
-                padding: 0.6rem 1rem;
-                border-radius: 16px;
-            }
-            .card-line span,
-            .card-line-noactive span {
-                font-size: 1.1rem;
-            }
-            .dashboard-wrap.gap-5 {
-                gap: 0.75rem !important;
-            }
-
-        }
-
-        @media (min-width: 992px) and (max-height: 650px) {
-            .line-select-wrap h1 {
-                font-size: 1.25rem;
-            }
-            .card-line,
-            .card-line-noactive {
-                min-height: 48px;
-                padding: 0.4rem 0.75rem;
-                border-radius: 12px;
-            }
-            .card-line span,
-            .card-line-noactive span {
-                font-size: 0.95rem;
-            }
-            .line-select-grid {
-                gap: 0.5rem;
-            }
-        }
-
-        @media (max-width: 400px) {
-            .metric-card {
-                gap: 0.75rem !important;
-            }
-            .metric-card img {
-                width: 36px !important;
-                height: 36px !important;
-            }
-            .metric-card h2 {
-                font-size: 1.25rem;
-            }
-            .metric-card h6 {
-                font-size: 0.8rem;
-            }
-        }
-
-        @media (max-width: 575.98px) {
-            .footer-title {
-                justify-content: center !important;
-                text-align: center;
-                gap: 10px;
-                font-size: 0.85rem;
-            }
-            .legend-wrap {
-                font-size: 0.8rem;
-                gap: 10px !important;
-            }
-            .legend-box {
-                width: 20px;
-                height: 20px;
-            }
-            .back-btn span {
-                font-size: 0.9rem;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .metric-card img {
-                width: 44px !important;
-                height: 44px !important;
-            }
-            .metric-card h2 {
-                font-size: 1.5rem;
-            }
-            .legend-box {
-                font-size: 10px;
-            }
-            .legend-wrap {
-                align-items: start;
-                margin: 0;
-                padding: 0;
-            }
-            .title-system {
-                display: none;
-            }
-        }
-
-        .table-scroll-wrapper::-webkit-scrollbar {
-            height: 8px;
-            width: 8px;
-        }
-
-        .table-scroll-wrapper::-webkit-scrollbar-track {
-            background: #242E3E;
-            border-radius: 4px;
-        }
-
-        .table-scroll-wrapper::-webkit-scrollbar-thumb {
-            background: #D9D9D9;
-            border-radius: 4px;
-        }
-
-        .table-scroll-wrapper::-webkit-scrollbar-thumb:hover {
-            background: #D9D9D9;
-        }
-
-        .table-scroll-wrapper {
-            scrollbar-width: thin;
-            scrollbar-color: #D9D9D9 #242E3E;
-        }
-
-        .footer-update {
-            font-size: 16px;
-        }
-    </style>
+    .number-circle.is-active {
+        animation: blink-active 3s ease-in-out infinite;
+    }
+</style>
 @endsection
 
 @section('content')
-    <div class="container-fluid table-scroll-wrapper dashboard-wrap d-flex flex-column justify-content-between gap-5 pt-1">
-        <div class="d-flex flex-column flex-grow-1" style="min-height: 0;">
-            <div class="dashboard-header">
-                <div class="header-left d-flex align-items-center">
-                    <button
-                        type="button"
-                        onclick="history.back()"
-                        class="back-btn border-0 bg-transparent text-white p-0">
-                        <img src="{{ _asset('svg/inlinePerformance/back.svg') }}" width="15" height="15">
-                        <span>Back</span>
-                    </button>
-                </div>
-
-                <div class="header-right">
-                    <span id="liveClock"></span>
-                </div>
+<div class="container-fluid dashboard-wrap" id="dashboardWrap">
+    <div class="dashboard-header">
+        <div class="header-left">
+            <div class="header-item header-back">
+                <button
+                    type="button"
+                    onclick="history.back()"
+                    class="back-btn border-0 bg-transparent text-white p-0 d-flex align-items-center gap-3">
+                    <img src="{{ _asset('svg/inlinePerformance/back.svg') }}"
+                        width="15"
+                        height="15"
+                        alt="Back">
+                    <span class="d-none d-sm-inline">Back</span>
+                </button>
             </div>
 
-            <div class="line-select-wrap">
-                <div class="d-flex justify-content-center" style="color: white;">
-                    <h1 class="fw-bold">Select Line</h1>
-                </div>
-                @php
-                    $lines = $data->keyBy(function ($item) {
-
-                        preg_match('/Line\s+(\d+)(B?)/i', $item->namagroup, $match);
-
-                        $group = empty($match[2]) ? 'A' : 'B';
-                        $number = $match[1];
-
-                        return $group.'-'.$number;
-                    });
-
-                    $maxLineA = $data
-                        ->filter(fn($item) => !str_ends_with($item->namagroup, 'B'))
-                        ->max(function ($item) {
-                            preg_match('/(\d+)/', $item->namagroup, $match);
-                            return (int) $match[1];
-                        });
-
-                    $maxLineB = $data
-                        ->filter(fn($item) => str_ends_with($item->namagroup, 'B'))
-                        ->max(function ($item) {
-                            preg_match('/(\d+)/', $item->namagroup, $match);
-                            return (int) $match[1];
-                        });
-
-                @endphp
-
-                <div class="line-select-body mt-5 pb-4 px-3">
-                    <div class="line-select-grid">
-
-                        {{-- Line A --}}
-                        @for($i = 1; $i <= $maxLineA; $i++)
-
-                            @php
-                                $line = $lines->get('A-'.$i);
-                            @endphp
-
-                            @if($line)
-                                <a href="{{ route('monitoring_inlineperformanceinlinetls', [
-                                    'line' => $line->namagroup,
-                                    'kodegroup' => $line->kodegroup
-                                ]) }}"
-                                class="card-line">
-                                    <span>{{ $line->namagroup }}</span>
-                                </a>
-                            @else
-                                <button
-                                    type="button"
-                                    class="card-line-noactive border-0"
-                                    disabled>
-                                    <span>Line {{ $i }}</span>
-                                </button>
-                            @endif
-
-                        @endfor
-
-                        @for($i = 1; $i <= $maxLineB; $i++)
-
-                            @php
-                                $line = $lines->get('B-'.$i);
-                            @endphp
-
-                            @if($line)
-                                <a href="{{ route('monitoring_inlineperformanceinlinetls', [
-                                    'line' => $line->namagroup,
-                                    'kodegroup' => $line->kodegroup
-                                ]) }}"
-                                class="card-line">
-                                    <span>{{ $line->namagroup }}</span>
-                                </a>
-                            @else
-                                <button
-                                    type="button"
-                                    class="card-line-noactive border-0"
-                                    disabled>
-                                    <span>Line {{ $i }}B</span>
-                                </button>
-                            @endif
-
-                        @endfor
-
-                    </div>
-                </div>
-
+            <div class="header-item header-title text-white">
+                <h3 class="mb-0">Quality Performance (Endline)</h3>
             </div>
-        </div>
 
-        <!-- Footer -->
-        <div class="footer-title mt-2 text-white d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <div class="footer-update d-flex align-items-center gap-2">
-                <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" style="width: 18px; height: 18px;">
-                Data Update
-                <span id="liveClock2"></span>
+            <div class="header-item header-clock text-white">
+                <span id="liveClock">08.00 WIB</span>
             </div>
         </div>
     </div>
-@endsection
+
+    @php
+        $qpData = collect($line)->values();
+    @endphp
+
+    <div class="qp-body d-flex justify-content-between row gx-2 gx-lg-3">
+        <div class="col-12 col-lg-6 qp-col">
+            <!-- Header -->
+            <div class="qp-col-header">
+                <div class="qp-grid p-2 p-lg-4">
+                    <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">Location</span>
+                    <span class="bg-card rounded-3 d-flex justify-content-center align-items-center text-center">
+                        <span class="label-short">INSPECT QTY</span><span class="label-full">INSPECT QTY</span>
+                    </span>
+                    <span class="bg-card-rft rounded-3 d-flex justify-content-center align-items-center">RFT %</span>
+                    <span class="bg-card-wft rounded-3 d-flex justify-content-center align-items-center">WFT %</span>
+                    <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">TLS</span>
+                </div>
+            </div>
+
+            <!-- Data 1-->
+            <div class="qp-list qp-list-left" id="qpListLeft"></div>
+        </div>
+
+        <div class="col-12 col-lg-6 qp-col d-none d-lg-flex" id="qpColRight">
+            <!-- Header -->
+            <div class="qp-col-header">
+                <div class="qp-grid p-2 p-lg-4">
+                    <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">Location</span>
+                    <span class="bg-card rounded-3 d-flex justify-content-center align-items-center text-center">
+                        <span class="label-short">INSPECT QTY</span><span class="label-full">INSPECT QTY</span>
+                    </span>
+                    <span class="bg-card-rft rounded-3 d-flex justify-content-center align-items-center">RFT %</span>
+                    <span class="bg-card-wft rounded-3 d-flex justify-content-center align-items-center">WFT %</span>
+                    <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">TLS</span>
+                </div>
+            </div>
+
+            <!-- Data 2 -->
+            <div class="qp-list qp-list-right" id="qpListRight"></div>
+        </div>
+    </div>
+
+    <script type="application/json" id="qpRowData">{!! $qpData->map(fn ($d) => ['namagroup' => $d['namagroup'], 'tot_inspect' => $d['tot_inspect'], 'rft' => $d['rft'], 'wft' => $d['wft'], 'tot_defect' => $d['tot_defect'], 'oil_defect' => $d['oil_defect'] ])->toJson() !!}</script>
+
+    <div class="d-flex justify-content-center align-items-center text-white gap-3 mt-3">
+        <span class="number-circle" style="background-color: #BD3F3F;"></span>
+        <div class="d-flex align-items-center gap-2">
+            <img src="{{ _asset('svg/endlinePerformance/more-than.svg') }}" class="footer-logo">
+            <p class="mb-0">
+                3 Defect
+            </p>
+        </div>
+        <span class="number-circle" style="background-color: #F9A51D;"></span>
+        <div class="d-flex align-items-center gap-2">
+            <p class="mb-0">
+                1
+            </p>
+            <img src="{{ _asset('svg/endlinePerformance/less-than.svg') }}" class="footer-logo">
+            <p class="mb-0">
+                Defect < 3
+            </p>
+        </div>
+        <span class="number-circle" style="background-color: #1D9A5C;"></span>
+        <div class="d-flex align-items-center gap-2">
+            <p class="mb-0">
+                No Defect/Already Improved
+            </p>
+        </div>
+        <span class="number-circle" style="background-color: #1744B7;"></span>
+        <div class="d-flex align-items-center gap-2">
+            <p class="mb-0">
+                Oil Defect
+            </p>
+        </div>
+    </div>
+
+    <div class="footer-title text-white d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0">
+        <div class="d-flex align-items-center gap-2">
+            <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" class="img-foot" alt="">
+            Data Update
+            <span id="liveClock2"></span>
+        </div>
+        <div class="d-flex gap-3">
+            <span>LINE OFF = Worktime not setting yet</span>
+            <span>MPS OFF = MPS not setting yet</span>
+        </div>
+    </div>
+</div>
 
 @section('extrascript')
-    <script>
-        $(document).ready(function () {
-            $(document).ready(function () {
-                let savedTime = localStorage.getItem('lastDataUpdate');
-                if (savedTime) {
-                    $('#liveClock2').html(savedTime);
-                }
-            });
+<script>
+    $(document).ready(function () {
+        let savedTime = localStorage.getItem('lastDataUpdate');
+        if (savedTime) {
+            $('#liveClock2').html(savedTime);
+        }
+    });
 
-            $(document).on('click', '.card-line', function (e) {
-                e.preventDefault();
+    var QP_DESKTOP_BREAKPOINT = 992;
+    var QP_ROW_HEIGHT = 50;
 
-                const targetUrl = $(this).attr('href');
+    function qpIsDesktop() {
+        return window.innerWidth >= QP_DESKTOP_BREAKPOINT;
+    }
 
-                $('#loading').show();
+    function qpAdjustDashboardHeight() {
+        var wrap = document.getElementById('dashboardWrap');
+        if (!wrap) return;
 
-                setTimeout(function () {
-                    window.location.href = targetUrl;
-                }, 100);
-            });
+        if (!qpIsDesktop()) {
+            wrap.classList.remove('is-kiosk');
+            wrap.style.height = 'auto';
+            return;
+        }
 
-            window.addEventListener('pageshow', function (event) {
-                if (event.persisted) {
-                    $('#loading').hide();
-                }
-            });
+        wrap.classList.add('is-kiosk');
+        wrap.style.height = 'auto';
 
-            $('#line').select2({
-                placeholder: 'Select Line',
-                width: '100%',
-                ajax: {
-                    url: "{{ route('monitoring_inlineperformance_selectlinelts') }}",
-                    type: "GET",
-                    dataType: "json",
-                    delay: 500,
-                    data: function (params) {
-                        return {
-                            q: params.term,
-                            page: params.page || 1
-                        };
-                         updateDataTime()
-                    },
-                    processResults: function (data) {
-                        return {
-                            results: $.map(data.data, function (item) {
-                                return {
-                                    id: item.kodegroup,
-                                    text: item.namabagian + ' - ' + item.namagroup
-                                };
-                            }),
-                            pagination: {
-                                more: data.to < data.total
-                            }
-                        };
-                    },
-                    cache: true
-                }
-            });
+        var top = wrap.getBoundingClientRect().top;
+        var available = window.innerHeight - top;
 
+        wrap.style.height = Math.max(available - 8, 300) + 'px';
+    }
+
+    function qpEscapeHtml(str) {
+        return String(str).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
         });
-    </script>
+    }
+
+    function qpBuildRowHtml(name, totInspect, rft, wft, totDefect, oilDefect) {
+
+        var more3DefectColor = '#BD3F3F3D';
+        var defectColor      = '#F9A51D40';
+        var noDefectColor    = '#1D9A5C3B';
+        var oilDefectColor   = '#1744B740';
+
+        // class kosong default, nanti diisi 'is-active' sesuai kondisi
+        var more3Class = '';
+        var defectClass = '';
+        var noDefectClass = '';
+        var oilClass = '';
+
+        if (oilDefect && totDefect > 3) {
+            more3DefectColor = '#BD3F3F';
+            oilDefectColor   = '#1744B7';
+            more3Class = 'is-active';
+            oilClass   = 'is-active';
+        } else if (oilDefect) {
+            oilDefectColor = '#1744B7';
+            oilClass = 'is-active';
+        } else if (totDefect >= 3) {
+            more3DefectColor = '#BD3F3F';
+            more3Class = 'is-active';
+        } else if (totDefect > 0) {
+            defectColor = '#F9A51D';
+            defectClass = 'is-active';
+        } else {
+            noDefectColor = '#1D9A5C';
+            noDefectClass = 'is-active';
+        }
+
+        return '' +
+            '<div class="qp-grid px-2 px-lg-4">' +
+
+                '<span class="bg-card-line rounded-3 d-flex justify-content-center align-items-center">' +
+                    name +
+                '</span>' +
+
+                '<span class="bg-card-line rounded-3 d-flex justify-content-center align-items-center text-center">' +
+                    totInspect +
+                '</span>' +
+
+                '<span class="bg-card-line rounded-3 d-flex justify-content-center align-items-center">' +
+                    rft +
+                '</span>' +
+
+                '<span class="bg-card-line rounded-3 d-flex justify-content-center align-items-center">' +
+                    wft +
+                '</span>' +
+
+                '<div class="bg-card-line rounded-3 tls-cell">' +
+
+                    // More 3 Defect
+                    '<span class="number-circle ' + more3Class + '" style="background-color: ' +
+                        more3DefectColor +
+                    ';"></span>' +
+
+                    // 1-2 Defect
+                    '<span class="number-circle ' + defectClass + '" style="background-color: ' +
+                        defectColor +
+                    ';"></span>' +
+
+                    // No Defect
+                    '<span class="number-circle ' + noDefectClass + '" style="background-color: ' +
+                        noDefectColor +
+                    ';"></span>' +
+
+                    // Oil Defect
+                    '<span class="number-circle ' + oilClass + '" style="background-color: ' +
+                        oilDefectColor +
+                    ';"></span>' +
+
+                '</div>' +
+
+            '</div>';
+    }
+
+    function qpRenderRows() {
+        var dataEl    = document.getElementById('qpRowData');
+        var leftList  = document.getElementById('qpListLeft');
+        var rightList = document.getElementById('qpListRight');
+
+        if (!dataEl || !leftList || !rightList) return;
+
+        var rows = [];
+
+        try {
+            rows = JSON.parse(dataEl.textContent || '[]');
+        } catch (e) {
+            rows = [];
+        }
+
+        leftList.innerHTML  = '';
+        rightList.innerHTML = '';
+
+        if (!qpIsDesktop()) {
+            leftList.innerHTML = rows.map(function (r) {
+                return qpBuildRowHtml(
+                    qpEscapeHtml(r.namagroup),
+                    r.tot_inspect, r.rft, r.wft, r.tot_defect, r.oil_defect
+                );
+            }).join('');
+
+            return;
+        }
+
+        var availableHeight = leftList.clientHeight;
+        var capacity = Math.max(
+            1,
+            Math.floor(availableHeight / QP_ROW_HEIGHT)
+        );
+
+        var leftRows  = rows.slice(0, capacity);
+        var rightRows = rows.slice(capacity);
+
+        leftList.innerHTML = leftRows.map(function (r) {
+            return qpBuildRowHtml(
+                qpEscapeHtml(r.namagroup),
+                r.tot_inspect, r.rft, r.wft, r.tot_defect, r.oil_defect
+            );
+        }).join('');
+
+        rightList.innerHTML = rightRows.map(function (r) {
+            return qpBuildRowHtml(
+                qpEscapeHtml(r.namagroup),
+                r.tot_inspect, r.rft, r.wft, r.tot_defect, r.oil_defect
+            );
+        }).join('');
+    }
+
+    var qpResizeTimer = null;
+    function qpRefreshLayout() {
+        qpAdjustDashboardHeight();
+        requestAnimationFrame(qpRenderRows);
+    }
+
+    function qpRefreshLayoutDebounced() {
+        clearTimeout(qpResizeTimer);
+        qpResizeTimer = setTimeout(qpRefreshLayout, 120);
+    }
+
+    window.addEventListener('load', qpRefreshLayout);
+    window.addEventListener('resize', qpRefreshLayoutDebounced);
+    document.addEventListener('DOMContentLoaded', qpRefreshLayout);
+</script>
 @endsection
 
-
-controller 
-   function filterInlineLts(Request $request)
-    {
-        if (!$request->line) {
-            return response()->json(['message' => 'Line belum dipilih'], 422);
-        }
-
-        preconnect(session('db'));
-
-        $result = $this->buildInlineLtsData($request->line, $request->date);
-
-        $html = view('monitoring::inlineperformance.inlineLts.datatable', [
-            'operators' => $result['operators'],
-            'rounds'    => $result['rounds'],
-        ])->render();
-
-        return response()->json([
-            'date'        => $request->date ?? Carbon::now()->format('Y-m-d'),
-            'tot_inspect' => $result['tot_inspect'],
-            'tot_defect'  => $result['tot_defect'],
-            'rft'         => $result['rft'],
-            'wft'         => $result['wft'],
-            'html'        => $html,
-        ]);
-    }
-
-    function selectLineLts (Request $request)
-    {
-        preconnect(session('db'));
-
-        $g = (new MasterEmployeeGroup())->getTable();
-        $s = (new MasterEmployeeSection())->getTable();
-
-        $data = MasterEmployeeGroup::select(
-                "$g.id as kodegroup",
-                "$g.name as namagroup",
-            )
-            ->join($s, "$s.id", '=', "$g.section_id")
-            ->distinct()
-            ->whereHas('groupline', function($q){
-                $q->where('factory_id', session('db')->iddb)
-                    ->where('is_show', 1)
-                    ->where('is_line', 1);
-            });
-
-        if ($request->q) {
-            $data = $data->where(function ($q) use ($request, $g) {
-                $q->where("$g.name", 'like', "%$request->q%");
-            });
-        }
-        $data = $data->orderBy('kodegroup')->get();
-
-        return view('monitoring::inlineperformance.inlineLts.selectlinelts', [
-            'data' => $data,
-        ]);
-    }
-
-    // Export Inline Lts
-    function fetchInlineLtsRaw($line, $date = null)
-    {
-        preconnect(session('db'));
-
-        $date = $date ? Carbon::parse($date) : Carbon::now();
-        $dta = $date->copy()->startOfDay();
-        $dtb = $date->copy()->endOfDay();
-
-        $headers = InlineHeader::whereBetween('date', [$dta, $dtb])
-            ->where('group_id', $line)
-            ->get(['id', 'round', 'sequence_process', 'userid_operator']);
-
-        $headerIds = $headers->pluck('id');
-        $headerCount = $headerIds->count();
-
-        $totInspect = $headerCount * 5;
-        $totDefect = InlineDetail::whereIn('inline_header_id', $headerIds)->count();
-
-        $rft = $totInspect > 0 ? (($totInspect - $totDefect) / $totInspect) * 100 : 0;
-        $wft = $totInspect > 0 ? ($totDefect / $totInspect) * 100 : 0;
-
-        $detailsByHeader = InlineDetail::whereIn('inline_header_id', $headerIds)
-            ->get(['inline_header_id', 'problem', 'action', 'rootcause', 'defect_id'])
-            ->groupBy('inline_header_id');
-
-        $operatorsMeta = $headers
-            ->groupBy('userid_operator')
-            ->map(fn($rows) => $rows->sortBy('round')->first())
-            ->sortBy('sequence_process')
-            ->values();
-
-        $niks = $operatorsMeta->pluck('userid_operator')->unique()->values();
-        $employeeNames = Employee::whereIn('nik', $niks)->pluck('name', 'nik');
-
-        $operators = $operatorsMeta->map(function ($h) use ($employeeNames) {
-            return [
-                'nik'              => $h->userid_operator,
-                'nama'             => $employeeNames[$h->userid_operator] ?? null,
-                'sequence_process' => $h->sequence_process,
-            ];
-        })->values();
-
-        $headersByOperatorRound = $headers->groupBy(function ($h) {
-            return $h->userid_operator . '-' . $h->round;
-        });
-
-        return [
-            'date'                   => $date,
-            'detailsByHeader'        => $detailsByHeader,
-            'operators'              => $operators,
-            'headersByOperatorRound' => $headersByOperatorRound,
-            'tot_inspect'            => $totInspect,
-            'tot_defect'             => $totDefect,
-            'rft'                    => number_format($rft, 2),
-            'wft'                    => number_format($wft, 2),
-            'max_round'              => 5,
-            'max_round_actual'       => $headers->max('round') ?? 0,
-        ];
-    }
+@include('layouts.loading')
+@endsection
