@@ -1,55 +1,874 @@
-function endlinetls(Request $request)
+@extends('layouts.masternonavbar')
+
+@section('extracss')
+    <style>
+        html, body {
+            margin: 0;
+            background-color: #242E3E;
+            height: 100%;
+        }
+
+        body {
+            padding: 1rem;
+            height: 100vh;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+        }
+
+        .dashboard-wrap {
+            width: 100%;
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ---------- Header ---------- */
+        .dashboard-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            color: #ffffff;
+            font-size: 1.25rem;
+            font-weight: 700;
+        }
+
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 18px;
+        }
+
+        /* Text Color */
+        .text-yellow { color: #F2C94C; }
+        .text-red    { color: #F24C4C; }
+        .text-blue   { color: #4C8CF2; }
+        .text-green  { color: #4CF299; }
+
+        /* Card Box */
+        .color-box-yellow {
+            background-color: #363633;
+            border: 1px solid #F2C94C;
+            border-radius: 5px;
+            color: #F2C94C;
+        }
+        .color-box-red {
+            background-color: #352837;
+            border: 1px solid #F24C4C;
+            border-radius: 5px;
+        }
+        .color-box-blue {
+            background-color: #23304E;
+            border: 1px solid #3F5588;
+            border-radius: 5px;
+        }
+        .color-box-green {
+            background-color: #1A3B45;
+            border: 1px solid #4CF299;
+            border-radius: 5px;
+        }
+
+        .metric-card img {
+            flex-shrink: 0;
+        }
+
+        /* ---------- Table area ---------- */
+        .datatable-wrap {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            min-width: 0;
+            margin-top: 1rem;
+        }
+
+        .datatable-wrap .col-md-12 {
+            flex: 1 1 auto;
+            display: flex;
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        #datatable-container {
+            flex: 1 1 auto;
+            min-width: 0;
+            width: 100%;
+            overflow: hidden;
+            transition: opacity 0.15s ease;
+        }
+
+        .table-scroll-wrapper {
+            overflow-x: auto;
+            overflow-y: hidden;
+            max-width: 100%;
+            -webkit-overflow-scrolling: touch;
+            width: 100%;
+            height: 100%;
+        }
+
+        .export-btn {
+            position: relative;
+        }
+
+        .custom-tooltip {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            left: auto;
+            transform: translateY(4px);
+            margin-top: 8px;
+            background-color: #000000;
+            color: white;
+            padding: 6px 18px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.2s ease;
+            z-index: 10;
+        }
+
+        .custom-tooltip::after {
+            content: "";
+            position: absolute;
+            bottom: 100%;
+            right: 12px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: transparent transparent #000000 transparent;
+        }
+
+        .export-btn:hover .custom-tooltip {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        /* Select2 (Location Filter) */
+        .select2-container {
+            width: 100% !important;
+        }
+
+        .select2-container--default .select2-selection--single {
+            background: #372E39;
+            border: none;
+            display: flex;
+            align-items: center;
+        }
+
+        .select2-container--default .select2-selection--single .select2-selection__rendered {
+            color: white;
+            line-height: 38px;
+            padding-left: 0.75rem;
+        }
+
+        .select2-container--default .select2-selection--single .select2-selection__arrow {
+            height: 38px;
+        }
+
+        .select2-container--default .select2-selection--single .select2-selection__placeholder {
+            color: #ffffff !important;
+        }
+
+        .select2-container--default .select2-results__option--highlighted[aria-selected] {
+            background-color: transparent !important;
+            color: white !important;
+        }
+
+        .select2-container--default .select2-results__option[aria-selected="true"] {
+            background-color: transparent !important;
+            color: white !important;
+        }
+
+        .select2-dropdown {
+            background: #372E39;
+            color: white;
+        }
+
+        .select2-results__option {
+            color: white;
+        }
+
+        .select2-search__field {
+            background: #372E39;
+            color: white;
+            border: none;
+        }
+
+        .round-status-table {
+            --bs-table-bg: transparent;
+            --bs-table-color: #ffffff;
+            --bs-table-striped-bg: transparent;
+            --bs-table-border-color: #576376;
+            color: #ffffff;
+        }
+
+        .round-status-table th,
+        .round-status-table td {
+            vertical-align: middle;
+            background-color: transparent;
+            border-color: #576376;
+            padding: 6px;
+        }
+
+        .round-status-table .round-label {
+            font-weight: bold;
+            padding: 1px;
+        }
+
+        .round-status-table .btn-detail {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            min-width: 64px;
+            height: 100%;
+            margin: 0 auto;
+            cursor: default;
+        }
+
+        .round-status-table .btn-detail img {
+            width: 22px;
+            height: 22px;
+        }
+
+        .status-none   { background-color: #219653; }
+        .status-one    { background-color: #F24C4C; }
+        .status-multi  { background-color: #F24C4C; }
+        .status-cap    { background-color: #F9E21D; }
+
+        /* Legend */
+        .legend-box {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .legend-wrap {
+            row-gap: 10px;
+        }
+
+        #datalist {
+            table-layout: auto;
+            height: 100%;
+        }
+
+        #datalist th,
+        #datalist td {
+            min-width: 90px;
+            white-space: nowrap;
+        }
+
+        .line-select-wrap {
+            flex: 1 1 auto;
+            min-height: 0;
+            padding: 0 1rem;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .line-select-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 0 0.25rem 1.5rem;
+        }
+
+        .line-select-grid {
+            display: grid;
+            grid-template-columns: repeat(1, minmax(0, 1fr));
+            gap: 1rem;
+        }
+
+        .card-line,
+        .card-line-noactive {
+            width: 100%;
+            min-height: 90px;
+            border-radius: 25px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 1rem 1.25rem;
+            box-sizing: border-box;
+            text-decoration: none;
+        }
+
+        .card-line {
+            background: #0069E1;
+            border: 1px solid #7DA6FF;
+            transition: transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .card-line:hover,
+        .card-line:focus-visible {
+            background-color: #2EBFFD;
+            border-color: #0073A4;
+            box-shadow: 0px 8px 24px 0px rgba(46, 191, 253, 0.4);
+        }
+
+        .card-line-noactive {
+            background: #383B41;
+            border: 1px solid #6F6E6D;
+            cursor: not-allowed;
+        }
+
+        .card-line span,
+        .card-line-noactive span {
+            color: #ffffff;
+            font-size: 1.4rem;
+            line-height: 1.2;
+        }
+
+        .footer-title {
+            flex-shrink: 0;
+            font-size: 16px;
+        }
+
+        @media (min-width: 400px) {
+            .card-line span,
+            .card-line-noactive span {
+                font-size: 1.5rem;
+            }
+        }
+
+        @media (min-width: 576px) {
+            .line-select-wrap {
+                padding: 0 1.5rem;
+            }
+            .line-select-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 1.25rem;
+            }
+            .footer-title {
+                flex-wrap: nowrap;
+            }
+        }
+
+        @media (min-width: 768px) {
+            .line-select-wrap {
+                margin-top: 20px;
+                padding: 0 2rem;
+            }
+            .line-select-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+            .header-right {
+                font-size: 1.1rem;
+            }
+            #datalist th,
+            #datalist td {
+                min-width: 75px;
+                font-size: 0.8rem;
+            }
+        }
+
+        @media (min-width: 992px) {
+            html {
+                overflow: hidden;
+            }
+            body {
+                overflow: hidden;
+            }
+            .dashboard-wrap {
+                height: 100%;
+                overflow: hidden;
+            }
+            .line-select-wrap {
+                padding: 0 2.5rem;
+            }
+            .line-select-grid {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 1.5rem;
+                height: 100%;
+            }
+
+             .footer-title {
+                font-size: 12px;
+            }
+
+            .header-left {
+                font-size: 15px;
+            }
+        }
+
+        @media (min-width: 1200px) {
+            .line-select-grid {
+                grid-template-columns: repeat(5, minmax(0, 1fr));
+            }
+        }
+
+        @media (min-width: 1400px) {
+            .line-select-wrap {
+                padding: 0 3rem;
+            }
+            .line-select-grid {
+                grid-template-columns: repeat(6, minmax(0, 1fr));
+            }
+        }
+
+        /* Desktop kecil */
+        @media (min-width: 992px) and (max-height: 800px) {
+            body {
+                padding: 0.5rem 1rem;
+            }
+            .line-select-wrap {
+                margin-top: 0;
+            }
+            .line-select-wrap h1 {
+                font-size: 1.5rem;
+                margin-bottom: 0;
+            }
+            .line-select-body {
+                margin-top: 1rem !important;
+                padding: 2rem ;
+            }
+            .line-select-grid {
+                gap: 0.75rem;
+            }
+            .card-line,
+            .card-line-noactive {
+                min-height: 70px;
+                padding: 0.6rem 1rem;
+                border-radius: 16px;
+            }
+            .card-line span,
+            .card-line-noactive span {
+                font-size: 1.1rem;
+            }
+            .dashboard-wrap.gap-5 {
+                gap: 0.75rem !important;
+            }
+
+        }
+
+        @media (min-width: 992px) and (max-height: 650px) {
+            .line-select-wrap h1 {
+                font-size: 1.25rem;
+            }
+            .card-line,
+            .card-line-noactive {
+                min-height: 48px;
+                padding: 0.4rem 0.75rem;
+                border-radius: 12px;
+            }
+            .card-line span,
+            .card-line-noactive span {
+                font-size: 0.95rem;
+            }
+            .line-select-grid {
+                gap: 0.5rem;
+            }
+        }
+
+        @media (max-width: 400px) {
+            .metric-card {
+                gap: 0.75rem !important;
+            }
+            .metric-card img {
+                width: 36px !important;
+                height: 36px !important;
+            }
+            .metric-card h2 {
+                font-size: 1.25rem;
+            }
+            .metric-card h6 {
+                font-size: 0.8rem;
+            }
+        }
+
+        @media (max-width: 575.98px) {
+            .footer-title {
+                justify-content: center !important;
+                text-align: center;
+                gap: 10px;
+                font-size: 0.85rem;
+            }
+            .legend-wrap {
+                font-size: 0.8rem;
+                gap: 10px !important;
+            }
+            .legend-box {
+                width: 20px;
+                height: 20px;
+            }
+            .back-btn span {
+                font-size: 0.9rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .metric-card img {
+                width: 44px !important;
+                height: 44px !important;
+            }
+            .metric-card h2 {
+                font-size: 1.5rem;
+            }
+            .legend-box {
+                font-size: 10px;
+            }
+            .legend-wrap {
+                align-items: start;
+                margin: 0;
+                padding: 0;
+            }
+            .title-system {
+                display: none;
+            }
+        }
+
+        .table-scroll-wrapper::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+
+        .table-scroll-wrapper::-webkit-scrollbar-track {
+            background: #242E3E;
+            border-radius: 4px;
+        }
+
+        .table-scroll-wrapper::-webkit-scrollbar-thumb {
+            background: #D9D9D9;
+            border-radius: 4px;
+        }
+
+        .table-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+            background: #D9D9D9;
+        }
+
+        .table-scroll-wrapper {
+            scrollbar-width: thin;
+            scrollbar-color: #D9D9D9 #242E3E;
+        }
+
+        .footer-update {
+            font-size: 16px;
+        }
+    </style>
+@endsection
+
+@section('content')
+    <div class="container-fluid table-scroll-wrapper dashboard-wrap d-flex flex-column justify-content-between gap-5 pt-1">
+        <div class="d-flex flex-column flex-grow-1" style="min-height: 0;">
+            <div class="dashboard-header">
+                <div class="header-left d-flex align-items-center">
+                    <button
+                        type="button"
+                        onclick="history.back()"
+                        class="back-btn border-0 bg-transparent text-white p-0">
+                        <img src="{{ _asset('svg/inlinePerformance/back.svg') }}" width="15" height="15">
+                        <span>Back</span>
+                    </button>
+                </div>
+
+                <div class="header-right">
+                    <span id="liveClock"></span>
+                </div>
+            </div>
+
+            <div class="line-select-wrap">
+                <div class="d-flex justify-content-center" style="color: white;">
+                    <h1 class="fw-bold">Select Line</h1>
+                </div>
+                @php
+                    $lines = $data->keyBy(function ($item) {
+
+                        preg_match('/Line\s+(\d+)(B?)/i', $item->namagroup, $match);
+
+                        $group = empty($match[2]) ? 'A' : 'B';
+                        $number = $match[1];
+
+                        return $group.'-'.$number;
+                    });
+
+                    $maxLineA = $data
+                        ->filter(fn($item) => !str_ends_with($item->namagroup, 'B'))
+                        ->max(function ($item) {
+                            preg_match('/(\d+)/', $item->namagroup, $match);
+                            return (int) $match[1];
+                        });
+
+                    $maxLineB = $data
+                        ->filter(fn($item) => str_ends_with($item->namagroup, 'B'))
+                        ->max(function ($item) {
+                            preg_match('/(\d+)/', $item->namagroup, $match);
+                            return (int) $match[1];
+                        });
+
+                @endphp
+
+                <div class="line-select-body mt-5 pb-4 px-3">
+                    <div class="line-select-grid">
+
+                        {{-- Line A --}}
+                        @for($i = 1; $i <= $maxLineA; $i++)
+
+                            @php
+                                $line = $lines->get('A-'.$i);
+                            @endphp
+
+                            @if($line)
+                                <a href="{{ route('monitoring_inlineperformanceinlinetls', [
+                                    'line' => $line->namagroup,
+                                    'kodegroup' => $line->kodegroup
+                                ]) }}"
+                                class="card-line">
+                                    <span>{{ $line->namagroup }}</span>
+                                </a>
+                            @else
+                                <button
+                                    type="button"
+                                    class="card-line-noactive border-0"
+                                    disabled>
+                                    <span>Line {{ $i }}</span>
+                                </button>
+                            @endif
+
+                        @endfor
+
+                        @for($i = 1; $i <= $maxLineB; $i++)
+
+                            @php
+                                $line = $lines->get('B-'.$i);
+                            @endphp
+
+                            @if($line)
+                                <a href="{{ route('monitoring_inlineperformanceinlinetls', [
+                                    'line' => $line->namagroup,
+                                    'kodegroup' => $line->kodegroup
+                                ]) }}"
+                                class="card-line">
+                                    <span>{{ $line->namagroup }}</span>
+                                </a>
+                            @else
+                                <button
+                                    type="button"
+                                    class="card-line-noactive border-0"
+                                    disabled>
+                                    <span>Line {{ $i }}B</span>
+                                </button>
+                            @endif
+
+                        @endfor
+
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer-title mt-2 text-white d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div class="footer-update d-flex align-items-center gap-2">
+                <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" style="width: 18px; height: 18px;">
+                Data Update
+                <span id="liveClock2"></span>
+            </div>
+        </div>
+    </div>
+@endsection
+
+@section('extrascript')
+    <script>
+        $(document).ready(function () {
+            $(document).ready(function () {
+                let savedTime = localStorage.getItem('lastDataUpdate');
+                if (savedTime) {
+                    $('#liveClock2').html(savedTime);
+                }
+            });
+
+            $(document).on('click', '.card-line', function (e) {
+                e.preventDefault();
+
+                const targetUrl = $(this).attr('href');
+
+                $('#loading').show();
+
+                setTimeout(function () {
+                    window.location.href = targetUrl;
+                }, 100);
+            });
+
+            window.addEventListener('pageshow', function (event) {
+                if (event.persisted) {
+                    $('#loading').hide();
+                }
+            });
+
+            $('#line').select2({
+                placeholder: 'Select Line',
+                width: '100%',
+                ajax: {
+                    url: "{{ route('monitoring_inlineperformance_selectlinelts') }}",
+                    type: "GET",
+                    dataType: "json",
+                    delay: 500,
+                    data: function (params) {
+                        return {
+                            q: params.term,
+                            page: params.page || 1
+                        };
+                         updateDataTime()
+                    },
+                    processResults: function (data) {
+                        return {
+                            results: $.map(data.data, function (item) {
+                                return {
+                                    id: item.kodegroup,
+                                    text: item.namabagian + ' - ' + item.namagroup
+                                };
+                            }),
+                            pagination: {
+                                more: data.to < data.total
+                            }
+                        };
+                    },
+                    cache: true
+                }
+            });
+
+        });
+    </script>
+@endsection
+
+
+controller 
+   function filterInlineLts(Request $request)
+    {
+        if (!$request->line) {
+            return response()->json(['message' => 'Line belum dipilih'], 422);
+        }
+
+        preconnect(session('db'));
+
+        $result = $this->buildInlineLtsData($request->line, $request->date);
+
+        $html = view('monitoring::inlineperformance.inlineLts.datatable', [
+            'operators' => $result['operators'],
+            'rounds'    => $result['rounds'],
+        ])->render();
+
+        return response()->json([
+            'date'        => $request->date ?? Carbon::now()->format('Y-m-d'),
+            'tot_inspect' => $result['tot_inspect'],
+            'tot_defect'  => $result['tot_defect'],
+            'rft'         => $result['rft'],
+            'wft'         => $result['wft'],
+            'html'        => $html,
+        ]);
+    }
+
+    function selectLineLts (Request $request)
     {
         preconnect(session('db'));
 
-        $date = Carbon::today();
-
-        // Line
         $g = (new MasterEmployeeGroup())->getTable();
         $s = (new MasterEmployeeSection())->getTable();
 
-        $lines = MasterEmployeeGroup::select(
+        $data = MasterEmployeeGroup::select(
                 "$g.id as kodegroup",
                 "$g.name as namagroup",
             )
             ->join($s, "$s.id", '=', "$g.section_id")
             ->distinct()
-            ->whereHas('groupline', function ($q) {
+            ->whereHas('groupline', function($q){
                 $q->where('factory_id', session('db')->iddb)
                     ->where('is_show', 1)
                     ->where('is_line', 1);
             });
 
         if ($request->q) {
-            $lines->where(function ($q) use ($request, $g) {
+            $data = $data->where(function ($q) use ($request, $g) {
                 $q->where("$g.name", 'like', "%$request->q%");
             });
         }
+        $data = $data->orderBy('kodegroup')->get();
 
-        $lines = $lines
-            ->orderBy('kodegroup')
-            ->get();
+        return view('monitoring::inlineperformance.inlineLts.selectlinelts', [
+            'data' => $data,
+        ]);
+    }
 
+    // Export Inline Lts
+    function fetchInlineLtsRaw($line, $date = null)
+    {
+        preconnect(session('db'));
 
-        // Data masing-masing line
-        $lines = $lines->map(function ($line) use ($date) {
+        $date = $date ? Carbon::parse($date) : Carbon::now();
+        $dta = $date->copy()->startOfDay();
+        $dtb = $date->copy()->endOfDay();
 
-            $lineId = $line->kodegroup;
+        $headers = InlineHeader::whereBetween('date', [$dta, $dtb])
+            ->where('group_id', $line)
+            ->get(['id', 'round', 'sequence_process', 'userid_operator']);
 
-            $totInspect = SewingOutput::whereDate('date', $date)
-                ->where('line', $lineId)
-                ->where('is_qc', 1)
-                ->count();
+        $headerIds = $headers->pluck('id');
+        $headerCount = $headerIds->count();
 
+        $totInspect = $headerCount * 5;
+        $totDefect = InlineDetail::whereIn('inline_header_id', $headerIds)->count();
+
+        $rft = $totInspect > 0 ? (($totInspect - $totDefect) / $totInspect) * 100 : 0;
+        $wft = $totInspect > 0 ? ($totDefect / $totInspect) * 100 : 0;
+
+        $detailsByHeader = InlineDetail::whereIn('inline_header_id', $headerIds)
+            ->get(['inline_header_id', 'problem', 'action', 'rootcause', 'defect_id'])
+            ->groupBy('inline_header_id');
+
+        $operatorsMeta = $headers
+            ->groupBy('userid_operator')
+            ->map(fn($rows) => $rows->sortBy('round')->first())
+            ->sortBy('sequence_process')
+            ->values();
+
+        $niks = $operatorsMeta->pluck('userid_operator')->unique()->values();
+        $employeeNames = Employee::whereIn('nik', $niks)->pluck('name', 'nik');
+
+        $operators = $operatorsMeta->map(function ($h) use ($employeeNames) {
             return [
-                'kodegroup'   => $line->kodegroup,
-                'namagroup'   => $line->namagroup,
-                'line_id'     => $lineId,
-                'tot_inspect' => $totInspect,
+                'nik'              => $h->userid_operator,
+                'nama'             => $employeeNames[$h->userid_operator] ?? null,
+                'sequence_process' => $h->sequence_process,
             ];
+        })->values();
+
+        $headersByOperatorRound = $headers->groupBy(function ($h) {
+            return $h->userid_operator . '-' . $h->round;
         });
 
-        return view('monitoring::endlineperformance.tls.index', [
-            'line' => $lines,
-        ]);
+        return [
+            'date'                   => $date,
+            'detailsByHeader'        => $detailsByHeader,
+            'operators'              => $operators,
+            'headersByOperatorRound' => $headersByOperatorRound,
+            'tot_inspect'            => $totInspect,
+            'tot_defect'             => $totDefect,
+            'rft'                    => number_format($rft, 2),
+            'wft'                    => number_format($wft, 2),
+            'max_round'              => 5,
+            'max_round_actual'       => $headers->max('round') ?? 0,
+        ];
     }
