@@ -1,156 +1,58 @@
- public function getWeeklyData(Request $request)
-    {
-        preconnect(session('db'));
+// Process dan Non Process
+// 1. Ambil data defect yang ada pada rentang minggu yang dipilih
+// 2. Cek apakah defect itu termasuk kategori 1 (Process) atau 0 (Non Process)
+//    dari masterqcdefect (kolom `category`)
 
-        $request->validate([
-            'week_id' => 'required|string',
-        ]);
+$defectCodesInRange = (clone $headerQuery)
+    ->whereNotNull('defect_code')
+    ->pluck('defect_code')
+    ->unique()
+    ->values();
 
-        [$year, $weekNumber] = explode('-', $request->week_id);
-        $weekNumber = (int) $weekNumber;
+// Ambil peta kdcacat => category dari master, sekali query saja
+$categoryMap = QCDefect::whereIn('kdcacat', $defectCodesInRange)
+    ->pluck('category', 'kdcacat');
 
-        if ($weekNumber < 1 || $weekNumber > 53) {
-            abort(422, 'Week tidak valid');
-        }
+$processDefectCodes = $defectCodesInRange
+    ->filter(fn ($code) => (int) ($categoryMap[$code] ?? 0) === 1)
+    ->values();
 
-        $dta = Carbon::createFromDate($year, 1, 1)
-            ->startOfDay()
-            ->addDays(($weekNumber - 1) * 7);
+$nonProcessDefectCodes = $defectCodesInRange
+    ->filter(fn ($code) => (int) ($categoryMap[$code] ?? 0) === 0)
+    ->values();
 
-        $dtb = $dta->copy()
-            ->addDays(6)
-            ->endOfDay();
+$processQty = $processDefectCodes->isEmpty()
+    ? 0
+    : (clone $headerQuery)->whereIn('defect_code', $processDefectCodes)->count();
 
-        $endOfYear = Carbon::createFromDate($year, 12, 31)->endOfDay();
+$nonProcessQty = $nonProcessDefectCodes->isEmpty()
+    ? 0
+    : (clone $headerQuery)->whereIn('defect_code', $nonProcessDefectCodes)->count();
 
-        if ($dtb->gt($endOfYear)) {
-            $dtb = $endOfYear->copy();
-        }
+$processPercent = $totDefect > 0
+    ? round(($processQty / $totDefect) * 100, 2)
+    : 0;
 
-        $headerQuery = SewingOutput::whereBetween('date', [$dta, $dtb]);
+$nonProcessPercent = $totDefect > 0
+    ? round(($nonProcessQty / $totDefect) * 100, 2)
+    : 0;
 
-        $totInspect = (clone $headerQuery)->where('is_qc', 1)->count();
-        $totDefect  = (clone $headerQuery)->whereNotNull('defect_code')->count();
-
-        $totRft = (clone $headerQuery)->where('is_qc', 1)
-            ->where('is_output', 1)
-            ->where('qc_seq', 0)
-            ->where('defect_code', '=', null)
-            ->count();
-
-        $rft = $totInspect > 0 ? round(($totRft /  $totInspect) * 100, 2) : 0;
-
-        $rft_qty = $totInspect - $totDefect;
-        $wft = $totInspect > 0
-            ? round(($totDefect / $totInspect) * 100, 2)
-            : 0;
-
-        // Process dan Non Process
-        // 1. Ambil data defect yang ada pada rentang minggu yang dipilih
-        // 2. Cek apakah defect itu termasuk 1 atau 0 dari masterqcdefect dengan kolom category 
-        $hasDefect = (clone $headerQuery)
-            ->whereNotNull('defect_code')
-            ->exists();
-
-        if ($hasDefect) {
-            $process = true;
-        } else {
-            $process = false;
-        }
+// Flag ringkas: true kalau ada minimal 1 defect kategori Process
+$process = $processQty > 0;
 
 
-        $header = [
-            'week'   => 'Week ' . $weekNumber,
-            'period' => 'Week ' . $weekNumber . ' (' . $dta->format('d M') . ' - ' . $dtb->format('d M Y') . ')',
-        ];
-
-        $topDefect = (clone $headerQuery)
-            ->whereNotNull('defect_code')
-            ->whereNotIn('defect_code', [800, 900])
-            ->select(
-                'defect_code',
-                DB::raw('COUNT(*) as total')
-            )
-            ->groupBy('defect_code')
-            ->orderByDesc('total')
-            ->orderBy('defect_code', 'asc')
-            ->limit(4)
-            ->get();
-
-        $defectIds = $topDefect->pluck('defect_code');
-
-        $masterQcDefects = QCDefect::whereIn('kdcacat', $defectIds)
-            ->pluck('deskripsi', 'kdcacat');
-
-        $colors = [
-            '#004FE0',
-            '#3DAA25',
-            '#F4947E',
-            '#F24C4C',
-            '#29B1AE',
-        ];
-
-        $totTop4DefectQty = $topDefect->sum('total');
-
-        $othersQty = max(0, $totDefect - $totTop4DefectQty);
-
-        $othersPercent = $totDefect > 0
-            ? ($othersQty / $totDefect) * 100
-            : 0;
-
-        $othersDefectCodes = (clone $headerQuery)
-            ->whereNotNull('defect_code')
-            ->whereNotIn('defect_code', $defectIds->toArray())
-            ->pluck('defect_code')
-            ->unique()
-            ->values()
-            ->toArray();
-
-        $topStyleGroups = ['others' => $othersDefectCodes];
-        foreach ($defectIds as $code) {
-            $topStyleGroups[(string) $code] = [$code];
-        }
-
-        $topStyles = $this->getTopStylesForGroups($headerQuery, $topStyleGroups);
-
-        // Mapping Top 4 Defect + Top Style tiap defect
-        $topDefect = $topDefect->values()->map(function ($item, $index) use (
-            $masterQcDefects,
-            $totDefect,
-            $colors,
-            $topStyles
-        ) {
-            $percent = $totDefect > 0 ? ($item->total / $totDefect) * 100 : 0;
-
-            return [
-                'defect_id'  => $item->defect_code,
-                'nmdefect'   => $masterQcDefects[$item->defect_code] ?? '-',
-                'defect_qty' => (int) $item->total,
-                'percent'    => number_format($percent, 2),
-                'color'      => $colors[$index] ?? '#29B1AE',
-                'top_style'  => $topStyles[(string) $item->defect_code]['rows'] ?? [],
-            ];
-        });
-
-        $topDefect->push([
-            'defect_id'  => 'others',
-            'nmdefect'   => 'Others',
-            'defect_qty' => (int) $othersQty,
-            'percent'    => number_format($othersPercent, 2),
-            'color'      => '#29B1AE',
-            'top_style'  => $topStyles['others']['rows'] ?? [],
-        ]);
-
-        $totTopDefect = $topDefect->sum('defect_qty');
-
-        return view('monitoring::endlineperformance.performance.partials.weekly', [
-            'header'       => $header,
-            'rft_qty'      => $rft_qty,
-            'inspect_qty'  => $totInspect,
-            'defect_qty'   => $totDefect,
-            'rft'          => $rft,
-            'wft'          => $wft,
-            'top_defect'   => $topDefect,
-            'totTopDefect' => $totTopDefect,
-        ]);
-    }
+return view('monitoring::endlineperformance.performance.partials.weekly', [
+    'header'             => $header,
+    'rft_qty'            => $rft_qty,
+    'inspect_qty'        => $totInspect,
+    'defect_qty'         => $totDefect,
+    'rft'                => $rft,
+    'wft'                => $wft,
+    'top_defect'         => $topDefect,
+    'totTopDefect'       => $totTopDefect,
+    'process'            => $process,
+    'process_qty'        => $processQty,
+    'non_process_qty'    => $nonProcessQty,
+    'process_percent'    => $processPercent,
+    'non_process_percent'=> $nonProcessPercent,
+]);
