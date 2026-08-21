@@ -1,39 +1,963 @@
-.header-left {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    min-height: 32px;
-}
+@extends('layouts.masternonavbar')
 
-.header-back {
-    position: relative;
-    z-index: 2;
-    flex: 0 0 auto;
-}
+@section('extracss')
+<style>
+    .stat-card {
+        height: 160px !important;
+        min-height: 160px !important;
+    }
 
-.header-clock {
-    position: relative;
-    z-index: 2;
-    flex: 0 0 auto;
-    text-align: right;
-    white-space: nowrap;
-    font-size: 20px;
-    font-weight: 700;
-}
+    .stat-card img {
+        width: 40px !important;
+        height: 40px !important;
+        margin-bottom: .45rem !important;
+    }
 
-/* Title diposisikan absolute supaya benar-benar center
-   terhadap container, tidak terpengaruh lebar tombol back
-   atau jam di kiri-kanannya */
-.header-title {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    width: 70%;
-    max-width: 70%;
-    text-align: center;
-    z-index: 1;
-    pointer-events: none;
-}
+    .stat-card h6 {
+        font-size: 1rem;
+        margin-bottom: .25rem !important;
+    }
+
+    .stat-card h2 {
+        font-size: 1.5rem;
+        line-height: 1;
+    }
+
+    .stat-card small {
+        font-size: 1rem;
+    }
+
+    .stat-card-defect {
+        height: auto;
+    }
+
+    .stat-card-defect > div {
+        width: 100%;
+    }
+
+    .defect-header {
+        width: 100%;
+    }
+
+    .defect-list {
+        width: 100%;
+        font-size: 13px;
+        gap: 2px;
+    }
+
+    #topDefectList {
+        max-height: 110px;
+        width: 100%;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #topDefectList::-webkit-scrollbar {
+        width: 3px;
+    }
+
+    #topDefectList::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 4px;
+    }
+
+    #topDefectList .defect-item {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        margin-bottom: 1px;
+    }
+
+    #topDefectList .defect-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .defect-circle {
+        width: 12px;
+        height: 12px;
+    }
+
+    .defect-name {
+        flex: 1;
+        min-width: 0;
+        margin-left: 8px;
+        text-align: left;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .defect-total {
+        flex: 0 0 auto;
+        margin-left: 8px;
+        white-space: nowrap;
+    }
+
+    .defect-percent {
+        flex: 0 0 55px;
+        margin-left: 8px;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .icon-summary {
+        width: 25px;
+        height: 25px;
+    }
+
+    .dashboard-header {
+        width: 100%;
+    }
+
+    /* ===== Header (Back / Title / Clock) ===== */
+    .header-left {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        min-height: 32px;
+    }
+
+    .header-back {
+        position: relative;
+        z-index: 2;
+        flex: 0 0 auto;
+    }
+
+    .header-clock {
+        position: relative;
+        z-index: 2;
+        flex: 0 0 auto;
+        text-align: right;
+        white-space: nowrap;
+        font-size: 20px;
+        font-weight: 700;
+    }
+
+    /* Title diposisikan absolute supaya benar-benar center
+       terhadap container, tidak terpengaruh lebar tombol back
+       atau jam di kiri-kanannya */
+    .header-title {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 70%;
+        max-width: 70%;
+        text-align: center;
+        z-index: 1;
+        pointer-events: none;
+    }
+
+    .header-title h3 {
+        margin: 0;
+        font-size: 2rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .bg-card,
+    .bg-card-line {
+        background-color: #292F40;
+        color: white;
+        font-size: 14px;
+        font-weight: 700;
+        border-radius: 5px;
+        height: 42px;
+    }
+
+    .bg-card {
+        border: 1px solid #D0D0D0;
+    }
+
+    .bg-card-rft {
+        background-color: #1A3B45;
+        border: 1px solid #4CF299;
+        color: #4CF299;
+        font-size: 14px;
+        font-weight: 700;
+        height: 42px;
+    }
+
+    .bg-card-wft {
+        background-color: #23304E;
+        border: 1px solid #3F5588;
+        color: #4C8CF2;
+        font-size: 14px;
+        font-weight: 700;
+        height: 42px;
+    }
+
+    .card-line {
+        background-color: #292F40;
+        color: white;
+        font-size: 14px;
+        height: 42px;
+    }
+
+    .number-circle {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        color: white;
+        font-size: 11px;
+        font-weight: 600;
+        flex: 0 0 auto;
+    }
+
+    .qp-grid {
+        display: grid;
+        grid-template-columns: 1.3fr 0.9fr 0.8fr 0.8fr 1.2fr;
+        gap: 0.35rem;
+        width: 100%;
+    }
+
+    .qp-grid .tls-cell {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 4px;
+        flex-wrap: wrap;
+        padding: 2px;
+    }
+
+    .qp-grid span {
+        padding: 2px 4px;
+        line-height: 1.15;
+        text-align: center;
+    }
+
+    .dashboard-wrap {
+        display: flex;
+        flex-direction: column;
+        box-sizing: border-box;
+        height: auto;
+        overflow: visible;
+    }
+
+    .dashboard-wrap.is-kiosk {
+        height: 100vh;
+        overflow: hidden;
+    }
+
+    .dashboard-header {
+        flex: 0 0 auto;
+    }
+
+    .qp-body {
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+
+    .dashboard-wrap.is-kiosk .qp-body {
+        overflow: hidden;
+    }
+
+    .qp-col {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+
+    .dashboard-wrap.is-kiosk .qp-col {
+        height: 100%;
+    }
+
+    :root {
+        --qp-scrollbar-reserve: 6px;
+    }
+
+    .qp-col-header {
+        flex: 0 0 auto;
+        padding-right: var(--qp-scrollbar-reserve);
+        box-sizing: border-box;
+    }
+
+    .qp-list {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        padding-right: var(--qp-scrollbar-reserve);
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .qp-list {
+        overflow-y: visible;
+    }
+
+    .dashboard-wrap.is-kiosk .qp-list-left {
+        overflow-y: hidden;
+    }
+
+    .dashboard-wrap.is-kiosk .qp-list-right {
+        overflow-y: auto;
+    }
+
+    .qp-list::-webkit-scrollbar {
+        width: 4px;
+    }
+
+    .qp-list::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .qp-list::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.25);
+        border-radius: 4px;
+    }
+
+    .footer-title {
+        flex: 0 0 auto;
+        padding: 0.75rem 0;
+    }
+
+    .label-short { display: inline; }
+    .label-full  { display: none; }
+
+    /* ===== Legend ===== */
+    .legend {
+        margin-top: 33px;
+        margin-bottom: 11px;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: center;
+        row-gap: 10px;
+        column-gap: 22px;
+    }
+
+    .legend-item {
+        display: flex;
+        align-items: center;
+        flex-wrap: nowrap;
+        gap: 6px;
+        white-space: nowrap;
+    }
+
+    .legend-item .footer-logo {
+        flex: 0 0 auto;
+        width: 15px;
+        height: auto;
+    }
+
+    .legend-item span.legend-text {
+        line-height: 1.2;
+    }
+
+    /* Tablet */
+    @media (min-width: 768px) {
+        .label-short { display: none; }
+        .label-full  { display: inline; }
+
+        .qp-grid {
+            grid-template-columns: repeat(5, 1fr);
+            gap: 0.5rem;
+        }
+
+        .bg-card,
+        .bg-card-line,
+        .bg-card-rft,
+        .bg-card-wft,
+        .card-line {
+            height: 46px;
+            font-size: 16px;
+        }
+
+        .header-title h3 {
+            font-size: 1.4rem;
+        }
+
+        #topDefectList {
+            max-height: 90px;
+        }
+    }
+
+    @media (max-width: 768px) {
+         .number-circle {
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .legend {
+            font-size: 13px;
+            row-gap: 8px;
+            column-gap: 16px;
+        }
+
+        .qp-col-header {
+            margin-top: 30px;
+        }
+
+        .header-title h3 {
+            margin: 0;
+            font-size: 1.5rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        #liveClock {
+            display: none;
+        }
+    }
+
+    /* Laptop mas doni */
+    @media (min-width: 992px) and (max-width: 1400px) {
+        #topDefectList {
+            max-height: 83px;
+        }
+
+        .stat-card {
+            height: 120px !important;
+            min-height: 120px !important;
+        }
+
+        .stat-card img {
+            width: 24px !important;
+            height: 24px !important;
+            margin-bottom: .35rem !important;
+        }
+
+        .stat-card h6 {
+            font-size: 13px;
+            margin-bottom: .25rem !important;
+        }
+
+        .stat-card h2 {
+            font-size: 15px;
+            line-height: 1;
+        }
+
+        .stat-card small {
+            font-size: 10px;
+        }
+
+        .defect-list {
+            font-size: 10px;
+        }
+
+        .flatpickr-calendar {
+            max-width: 315px;
+            padding: 4px;
+            border-radius: 4px;
+        }
+
+        .flatpickr-day {
+            width: 30px;
+            height: 30px;
+            line-height: 30px;
+            font-size: 0.68rem;
+        }
+
+        .flatpickr-current-month {
+            font-size: 0.95rem;
+        }
+
+        span.flatpickr-weekday {
+            font-size: 0.75rem;
+        }
+
+        .text-title {
+            font-size: 12px;
+        }
+
+        .margin-cstm {
+            margin-top: 10px !important;
+            padding: 6px 0 !important;
+        }
+
+        .bg-card,
+        .bg-card-line,
+        .bg-card-rft,
+        .bg-card-wft,
+        .card-line {
+            height: 42px;
+            font-size: 14px;
+        }
+
+        .header-title h3 {
+            font-size: 1.15rem;
+        }
+
+        .header-clock {
+            text-align: right;
+            white-space: nowrap;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .number-circle {
+            width: 23px;
+            height: 23px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .legend {
+            font-size: 12px;
+            column-gap: 18px;
+        }
+    }
+
+    /* Desktop besar */
+    @media (min-width: 1401px) {
+        .bg-card,
+        .bg-card-line,
+        .bg-card-rft,
+        .bg-card-wft,
+        .card-line {
+            height: 50px;
+            font-size: 20px;
+        }
+
+        .header-title h3 {
+            font-size: 1.75rem;
+        }
+    }
+
+    @media (max-width: 575.98px) {
+        .header-left {
+            column-gap: 0.4rem;
+        }
+
+        .header-title h3 {
+            font-size: 0.95rem;
+        }
+
+        .header-clock {
+            font-size: 0.8rem;
+        }
+
+        .defect-header {
+            flex-direction: column;
+            gap: 0.5rem !important;
+        }
+
+        .legend {
+            font-size: 11px;
+            row-gap: 6px;
+            column-gap: 10px;
+        }
+
+        .number-circle {
+            width: 18px;
+            height: 18px;
+        }
+
+        .legend-item .footer-logo {
+            width: 12px;
+        }
+
+        .footer-title {
+            flex-direction: column;
+            align-items: flex-start !important;
+        }
+
+        .footer-title > div {
+            flex-wrap: wrap;
+        }
+    }
+
+    .footer-logo {
+        width: 15px;
+    }
+
+    @keyframes blink-active {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.3; }
+    }
+
+    .number-circle.is-active {
+        animation: blink-active 3s ease-in-out infinite;
+    }
+</style>
+@endsection
+
+@section('content')
+<div class="container-fluid dashboard-wrap" id="dashboardWrap">
+    <div class="dashboard-header">
+        <div class="header-left">
+            <div class="header-item header-back">
+                <button
+                    type="button"
+                    onclick="history.back()"
+                    class="back-btn border-0 bg-transparent text-white p-0 d-flex align-items-center gap-3">
+                    <img src="{{ _asset('svg/inlinePerformance/back.svg') }}"
+                        width="15"
+                        height="15"
+                        alt="Back">
+                    <span class="d-none d-sm-inline">Back</span>
+                </button>
+            </div>
+
+            <div class="header-item header-title text-white">
+                <h3 class="mb-0">Quality Performance (Endline)</h3>
+            </div>
+
+            <div class="header-item header-clock text-white">
+                <span id="liveClock"></span>
+            </div>
+        </div>
+    </div>
+
+    @php
+        $qpData = collect($line)->values();
+    @endphp
+
+    <div class="qp-body d-flex justify-content-between row gx-2 gx-lg-3">
+        <div class="col-12 col-lg-6 qp-col">
+            <!-- Header -->
+            <div class="qp-col-header">
+                <div class="qp-grid p-2 p-lg-4">
+                    <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">Location</span>
+                    <span class="bg-card rounded-3 d-flex justify-content-center align-items-center text-center">
+                        <span class="label-short">INSPECT QTY</span><span class="label-full">INSPECT QTY</span>
+                    </span>
+                    <span class="bg-card-rft rounded-3 d-flex justify-content-center align-items-center">RFT %</span>
+                    <span class="bg-card-wft rounded-3 d-flex justify-content-center align-items-center">WFT %</span>
+                    <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">TLS</span>
+                </div>
+            </div>
+
+            <!-- Data 1-->
+            <div class="qp-list qp-list-left" id="qpListLeft"></div>
+        </div>
+
+        <div class="col-12 col-lg-6 qp-col d-none d-lg-flex" id="qpColRight">
+            <!-- Header -->
+            <div class="qp-col-header">
+                <div class="qp-grid p-2 p-lg-4">
+                    <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">Location</span>
+                    <span class="bg-card rounded-3 d-flex justify-content-center align-items-center text-center">
+                        <span class="label-short">INSPECT QTY</span><span class="label-full">INSPECT QTY</span>
+                    </span>
+                    <span class="bg-card-rft rounded-3 d-flex justify-content-center align-items-center">RFT %</span>
+                    <span class="bg-card-wft rounded-3 d-flex justify-content-center align-items-center">WFT %</span>
+                    <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">TLS</span>
+                </div>
+            </div>
+
+            <!-- Data 2 -->
+            <div class="qp-list qp-list-right" id="qpListRight"></div>
+        </div>
+    </div>
+
+    <script type="application/json" id="qpRowData">
+        {!! $qpData->map(fn ($d) => [
+            'namagroup'   => $d['namagroup'],
+            'tot_inspect' => $d['tot_inspect'],
+            'rft'         => $d['rft'],
+            'wft'         => $d['wft'],
+            'tot_defect'  => $d['tot_defect'],
+            'oil_defect'  => $d['oil_defect'],
+            'defect_not_oil' => $d['defect_not_oil'],
+            'line_off'    => $d['line_off'] ?? false,
+            'mps_off'     => $d['mps_off'] ?? false,
+            'cap_filled'  => $d['cap_filled'] ?? false,
+        ])->toJson() !!}
+    </script>
+
+    <div class="legend text-white">
+        <div class="legend-item">
+            <span class="number-circle" style="background-color: #ff0404;"></span>
+            <img src="{{ _asset('svg/endlinePerformance/more-than.svg') }}" class="footer-logo">
+            <span class="legend-text">3 Defect</span>
+        </div>
+
+        <div class="legend-item">
+            <span class="number-circle" style="background-color: #fff133;"></span>
+            <span class="legend-text">1</span>
+            <img src="{{ _asset('svg/endlinePerformance/less-than.svg') }}" class="footer-logo">
+            <span class="legend-text">Defect &lt; 3</span>
+        </div>
+
+        <div class="legend-item">
+            <span class="number-circle" style="background-color: #3dff2c;"></span>
+            <span class="legend-text">No Defect/Already Improved</span>
+        </div>
+
+        <div class="legend-item">
+            <span class="number-circle" style="background-color: #0000FF;"></span>
+            <span class="legend-text">Oil Defect</span>
+        </div>
+    </div>
+
+    <div class="footer-title text-white d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0">
+        <div class="d-flex align-items-center gap-2">
+            <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" class="img-foot" alt="">
+            Data Update
+            <span id="liveClock2"></span>
+        </div>
+        <div class="d-flex gap-3">
+            <span>LINE OFF = Worktime not setting yet</span>
+            <span>MPS OFF = MPS not setting yet</span>
+        </div>
+    </div>
+</div>
+
+@section('extrascript')
+<script>
+    function qpFormatDateTime(date) {
+        var pad = function (n) { return n < 10 ? '0' + n : n; };
+
+        var months = [
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+
+        var day    = pad(date.getDate());
+        var month  = months[date.getMonth()];
+        var year   = date.getFullYear();
+        var hour   = pad(date.getHours());
+        var minute = pad(date.getMinutes());
+        var second = pad(date.getSeconds());
+
+        return day + ' ' + month + ' ' + year + ' - ' +
+            hour + ' : ' + minute + ' : ' + second;
+    }
+
+
+    $(document).ready(function () {
+        $('#liveClock').html(qpFormatDateTime(new Date()));
+
+        let savedTime = localStorage.getItem('lastDataUpdate');
+        if (savedTime) {
+            $('#liveClock2').html(savedTime);
+        }
+    });
+
+    var QP_DESKTOP_BREAKPOINT = 992;
+
+    function qpIsDesktop() {
+        return window.innerWidth >= QP_DESKTOP_BREAKPOINT;
+    }
+
+    function qpAdjustDashboardHeight() {
+        var wrap = document.getElementById('dashboardWrap');
+        if (!wrap) return;
+
+        if (!qpIsDesktop()) {
+            wrap.classList.remove('is-kiosk');
+            wrap.style.height = 'auto';
+            return;
+        }
+
+        wrap.classList.add('is-kiosk');
+        wrap.style.height = 'auto';
+
+        var top = wrap.getBoundingClientRect().top;
+        var available = window.innerHeight - top;
+
+        wrap.style.height = Math.max(available - 8, 300) + 'px';
+    }
+
+    function qpEscapeHtml(str) {
+        return String(str).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+
+    function qpBuildRowHtml(name, totInspect, rft, wft, totDefect, oilDefect, lineOff, mpsOff, capFilled, defectNotOil) {
+
+        var isOff = lineOff || mpsOff;
+
+        var more3DefectColor = '#BD3F3F3D';
+        var defectColor      = '#F9A51D40';
+        var noDefectColor    = '#1D9A5C3B';
+        var oilDefectColor   = '#1744B740';
+
+        var more3Class = '';
+        var defectClass = '';
+        var noDefectClass = '';
+        var oilClass = '';
+
+        if (!isOff) {
+            if (capFilled) {
+                noDefectColor = '#3dff2c';
+                noDefectClass = 'is-active';
+            }
+
+            else if (oilDefect >= 10) {
+
+                more3DefectColor = '#ff0404';
+                more3Class = 'is-active';
+                oilDefectColor = '#0000FF';
+                oilClass = 'is-active';
+            }
+
+            else if (totDefect >= 3) {
+                more3DefectColor = '#ff0404';
+                more3Class = 'is-active';
+
+            }
+
+            else if (totDefect >= 1 && totDefect < 3) {
+                defectColor = '#fff133';
+                defectClass = 'is-active';
+
+            }
+
+            else {
+                noDefectColor = '#3dff2c';
+                noDefectClass = 'is-active';
+            }
+        }
+
+
+        var statusLabel = lineOff ? 'LINE OFF' : (mpsOff ? 'MPS OFF' : null);
+        var statusClass = lineOff && 'text-white';
+
+        // Gabung 3 kolom jadi 1
+        var middleCols = isOff
+            ? '<span class="bg-card-line rounded-3 d-flex justify-content-center align-items-center text-center ' + statusClass + '" style="grid-column: span 3;">' +
+                statusLabel +
+            '</span>'
+            : '' +
+                '<span class="bg-card-line rounded-3 d-flex justify-content-center align-items-center text-center">' + totInspect + '</span>' +
+                '<span class="bg-card-line rounded-3 d-flex justify-content-center align-items-center">' + rft + '</span>' +
+                '<span class="bg-card-line rounded-3 d-flex justify-content-center align-items-center">' + wft + '</span>';
+
+        return '' +
+            '<div class="qp-grid px-2 px-lg-4">' +
+
+                '<span class="bg-card-line rounded-3 d-flex justify-content-center align-items-center">' +
+                    name +
+                '</span>' +
+
+                middleCols +
+
+                '<div class="bg-card-line rounded-3 tls-cell">' +
+                    '<span class="number-circle ' + more3Class + '" style="background-color: ' + more3DefectColor + ';"></span>' +
+                    '<span class="number-circle ' + defectClass + '" style="background-color: ' + defectColor + ';"></span>' +
+                    '<span class="number-circle ' + noDefectClass + '" style="background-color: ' + noDefectColor + ';"></span>' +
+                    '<span class="number-circle ' + oilClass + '" style="background-color: ' + oilDefectColor + ';"></span>' +
+                '</div>' +
+
+            '</div>';
+    }
+
+    function qpMeasureRowMetrics(container) {
+        var probe = document.createElement('div');
+        probe.style.visibility = 'hidden';
+        probe.style.position = 'absolute';
+        probe.style.pointerEvents = 'none';
+        probe.innerHTML = qpBuildRowHtml('Probe', 0, 0, 0, 0, false, false, false, false );
+        container.appendChild(probe);
+
+        var rowEl = probe.firstElementChild;
+        var rowHeight = rowEl.getBoundingClientRect().height;
+
+        var computed = getComputedStyle(container);
+        var gapValue = parseFloat(computed.rowGap || computed.gap || '0');
+        if (isNaN(gapValue)) gapValue = 0;
+
+        container.removeChild(probe);
+
+        return {
+            rowHeight: rowHeight > 0 ? rowHeight : 50,
+            gap: gapValue
+        };
+    }
+
+    function qpRenderRows() {
+        var dataEl    = document.getElementById('qpRowData');
+        var leftList  = document.getElementById('qpListLeft');
+        var rightList = document.getElementById('qpListRight');
+
+        if (!dataEl || !leftList || !rightList) return;
+
+        var rows = [];
+
+        try {
+            rows = JSON.parse(dataEl.textContent || '[]');
+        } catch (e) {
+            rows = [];
+        }
+
+        leftList.innerHTML  = '';
+        rightList.innerHTML = '';
+
+        if (!qpIsDesktop()) {
+            leftList.innerHTML = rows.map(function (r) {
+                return qpBuildRowHtml(
+                    qpEscapeHtml(r.namagroup),
+                    r.tot_inspect, r.rft, r.wft, r.tot_defect, r.oil_defect,  r.line_off, r.mps_off, r.cap_filled, r.defect_not_oil
+                );
+            }).join('');
+
+            return;
+        }
+
+        var metrics = qpMeasureRowMetrics(leftList);
+        var availableHeight = leftList.clientHeight;
+
+        var capacity = Math.max(
+            1,
+            Math.floor((availableHeight + metrics.gap) / (metrics.rowHeight + metrics.gap))
+        );
+
+        var leftRows  = rows.slice(0, capacity);
+        var rightRows = rows.slice(capacity);
+
+        leftList.innerHTML = leftRows.map(function (r) {
+            return qpBuildRowHtml(
+                qpEscapeHtml(r.namagroup),
+                r.tot_inspect, r.rft, r.wft, r.tot_defect, r.oil_defect,  r.line_off, r.mps_off, r.cap_filled, r.defect_not_oil
+            );
+        }).join('');
+
+        rightList.innerHTML = rightRows.map(function (r) {
+            return qpBuildRowHtml(
+                qpEscapeHtml(r.namagroup),
+                r.tot_inspect, r.rft, r.wft, r.tot_defect, r.oil_defect,  r.line_off, r.mps_off, r.cap_filled, r.defect_not_oil
+            );
+        }).join('');
+    }
+
+    var qpResizeTimer = null;
+    function qpRefreshLayoutDebounced() {
+        clearTimeout(qpResizeTimer);
+        qpResizeTimer = setTimeout(qpRefreshLayout, 120);
+    }
+    function qpRefreshLayout() {
+        qpAdjustDashboardHeight();
+        requestAnimationFrame(function () {
+            requestAnimationFrame(qpRenderRows);
+        });
+    }
+
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(qpRefreshLayout);
+    }
+
+    window.addEventListener('load', qpRefreshLayout);
+    window.addEventListener('resize', qpRefreshLayoutDebounced);
+    document.addEventListener('DOMContentLoaded', qpRefreshLayout);
+
+</script>
+@endsection
+
+@include('layouts.loading')
+@endsection
