@@ -155,11 +155,6 @@
         white-space: nowrap;
     }
 
-    .bg-card {
-        background-color: red !important;
-        width: 80px;
-    }
-
     .bg-card,
     .bg-card-line {
         background-color: #292F40;
@@ -214,9 +209,14 @@
 
     .qp-grid {
         display: grid;
-        grid-template-columns: 0.7fr 0.9fr 0.9fr 0.9fr 1.4fr !important;
+        grid-template-columns: 0.5fr 0.6fr 0.6fr 0.6fr 1.3fr !important;
         gap: var(--qp-grid-gap);
         width: 100%;
+    }
+
+
+    .qp-grid > * {
+        min-width: 0;
     }
 
     .qp-grid .tls-cell {
@@ -402,11 +402,6 @@
         .label-short { display: none; }
         .label-full  { display: inline; }
 
-        .qp-grid {
-            grid-template-columns: repeat(5, 1fr);
-            gap: 0.5rem;
-        }
-
         .bg-card,
         .bg-card-line,
         .bg-card-rft,
@@ -422,6 +417,38 @@
 
         #topDefectList {
             max-height: 90px;
+        }
+    }
+
+    /* ===== NEW: Mobile & Tablet — stack ke bawah, bukan scroll ke samping =====
+       Rentang ini (max-width: 991.98px) sengaja dibuat SETELAH breakpoint tablet 768px
+       di atas, supaya override menang lewat urutan cascade (bukan lewat !important),
+       dan TIDAK menyentuh breakpoint desktop (min-width: 992px ke atas) di bawah ini. */
+    @media (max-width: 991.98px) {
+        .qp-columns-outer {
+            overflow-x: hidden;
+            overflow-y: visible;
+            scroll-snap-type: none;
+        }
+
+        .qp-columns-track {
+            flex-direction: column;
+            height: auto;
+            min-height: 0;
+            gap: 1rem;
+            padding-bottom: 0;
+        }
+
+        .qp-column {
+            flex: 1 1 auto;
+            width: 100%;
+        }
+
+        .qp-list {
+            flex: 0 0 auto;
+            overflow-y: visible;
+            max-height: none;
+            padding-right: 0;
         }
     }
 
@@ -588,8 +615,8 @@
         }
 
         .number-circle {
-            width: 35px;
-            height: 35px;
+            width: 36px;
+            height: 36px;
             font-size: 10px;
         }
     }
@@ -727,11 +754,11 @@
                         <div class="qp-col-header">
                             <div class="qp-grid p-2 px-lg-1 py-lg-4 ">
                                 <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">Line</span>
-                                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center text-center w-75">
-                                    <span class="label-short">INSPECT QTY</span><span class="label-full">INSPECT QTY</span>
+                                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center text-center">
+                                    <span class="label-full">INSPECT QTY</span>
                                 </span>
-                                <span class="bg-card-rft rounded-3 d-flex justify-content-center align-items-center">RFT %</span>
-                                <span class="bg-card-wft rounded-3 d-flex justify-content-center align-items-center">WFT %</span>
+                                <span class="bg-card-rft rounded-3 d-flex justify-content-center align-items-center">RFT <br> %</span>
+                                <span class="bg-card-wft rounded-3 d-flex justify-content-center align-items-center">WFT <br> %</span>
                                 <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">TLS</span>
                             </div>
                         </div>
