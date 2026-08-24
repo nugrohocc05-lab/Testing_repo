@@ -1,914 +1,256 @@
-@extends('layouts.masternonavbar')
+coba cek kodenya, cek alur dari pennentuan warna ini
 
-@section('extracss')
-<style>
-    .stat-card {
-        height: 160px !important;
-        min-height: 160px !important;
-    }
+  function endlinetls(Request $request)
+    {
+        preconnect(session('db'));
 
-    .stat-card img {
-        width: 40px !important;
-        height: 40px !important;
-        margin-bottom: .45rem !important;
-    }
+        $date = Carbon::today();
 
-    .stat-card h6 {
-        font-size: 1rem;
-        margin-bottom: .25rem !important;
-    }
+        // Line
+        $g = (new MasterEmployeeGroup())->getTable();
+        $s = (new MasterEmployeeSection())->getTable();
 
-    .stat-card h2 {
-        font-size: 1.5rem;
-        line-height: 1;
-    }
+        $lines = MasterEmployeeGroup::select(
+                "$g.id as kodegroup",
+                "$g.name as namagroup",
+            )
+            ->join($s, "$s.id", '=', "$g.section_id")
+            ->distinct()
+            ->whereHas('groupline', function ($q) {
+                $q->where('factory_id', session('db')->iddb)
+                    ->where('is_show', 1)
+                    ->where('is_line', 1);
+            });
 
-    .stat-card small {
-        font-size: 1rem;
-    }
-
-    .stat-card-defect {
-        height: auto;
-    }
-
-    .stat-card-defect > div {
-        width: 100%;
-    }
-
-    .defect-header {
-        width: 100%;
-    }
-
-    .defect-list {
-        width: 100%;
-        font-size: 13px;
-        gap: 2px;
-    }
-
-    #topDefectList {
-        max-height: 110px;
-        width: 100%;
-        overflow-y: auto;
-        overflow-x: hidden;
-        -webkit-overflow-scrolling: touch;
-    }
-
-    #topDefectList::-webkit-scrollbar {
-        width: 3px;
-    }
-
-    #topDefectList::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.3);
-        border-radius: 4px;
-    }
-
-    #topDefectList .defect-item {
-        display: flex;
-        align-items: center;
-        width: 100%;
-        margin-bottom: 1px;
-    }
-
-    #topDefectList .defect-item:last-child {
-        margin-bottom: 0;
-    }
-
-    .defect-circle {
-        width: 12px;
-        height: 12px;
-    }
-
-    .defect-name {
-        flex: 1;
-        min-width: 0;
-        margin-left: 8px;
-        text-align: left;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .defect-total {
-        flex: 0 0 auto;
-        margin-left: 8px;
-        white-space: nowrap;
-    }
-
-    .defect-percent {
-        flex: 0 0 55px;
-        margin-left: 8px;
-        text-align: right;
-        white-space: nowrap;
-    }
-
-    .icon-summary {
-        width: 25px;
-        height: 25px;
-    }
-
-    .dashboard-header {
-        width: 100%;
-    }
-
-    .header-left {
-        position: relative;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        width: 100%;
-        min-height: 32px;
-    }
-
-    .header-back {
-        position: relative;
-        z-index: 2;
-        flex: 0 0 auto;
-    }
-
-    .header-clock {
-        position: relative;
-        z-index: 2;
-        flex: 0 0 auto;
-        text-align: right;
-        white-space: nowrap;
-        font-size: 20px;
-        font-weight: 700;
-    }
-
-    .header-title {
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        transform: translate(-50%, -50%);
-        width: 70%;
-        max-width: 70%;
-        text-align: center;
-        z-index: 1;
-        pointer-events: none;
-    }
-
-    .header-title h3 {
-        margin: 0;
-        font-size: 2rem;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    .bg-card,
-    .bg-card-line {
-        background-color: #292F40;
-        color: white;
-        font-size: 16px !important;
-        font-weight: 700;
-        border-radius: 5px;
-        height: 42px;
-    }
-
-    .bg-card {
-        border: 1px solid #D0D0D0;
-    }
-
-    .bg-card-rft {
-        background-color: #1A3B45;
-        border: 1px solid #4CF299;
-        color: #4CF299;
-        font-size: 14px;
-        font-weight: 700;
-        height: 42px;
-    }
-
-    .bg-card-wft {
-        background-color: #23304E;
-        border: 1px solid #3F5588;
-        color: #4C8CF2;
-        font-size: 14px;
-        font-weight: 700;
-        height: 42px;
-    }
-
-    .card-line {
-        background-color: #292F40;
-        color: white;
-        font-size: 14px;
-        height: 42px;
-    }
-
-    .number-circle {
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        color: white;
-        font-size: 11px;
-        font-weight: 600;
-        flex: 0 0 auto;
-    }
-
-    .qp-grid {
-        display: grid;
-        grid-template-columns: 0.5fr 0.6fr 0.6fr 0.6fr 1.3fr !important;
-        gap: var(--qp-grid-gap);
-        width: 100%;
-    }
-
-
-    .qp-grid > * {
-        min-width: 0;
-    }
-
-    .qp-grid .tls-cell {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 4px;
-        flex-wrap: nowrap;
-        padding: 2px;
-    }
-
-    .qp-grid span {
-        padding: 2px 4px;
-        line-height: 1.15;
-        text-align: center;
-        font-size: 17px;
-    }
-
-    .qp-row {
-        width: 100%;
-        overflow: hidden;
-        flex-shrink: 0;
-    }
-
-    .qp-row .qp-grid {
-        gap: var(--qp-grid-gap);
-        height: 100%;
-    }
-
-    /* ===== Layout wrapper ===== */
-    .dashboard-wrap {
-        display: flex;
-        flex-direction: column;
-        box-sizing: border-box;
-        height: auto;
-        overflow: visible;
-    }
-
-    .dashboard-wrap.is-kiosk {
-        height: 100vh;
-        overflow: hidden;
-    }
-
-    .dashboard-header {
-        flex: 0 0 auto;
-    }
-
-    .qp-body {
-        flex: 1 1 auto;
-        min-height: 0;
-        display: flex;
-        flex-direction: column;
-    }
-
-    .dashboard-wrap.is-kiosk .qp-body {
-        overflow: hidden;
-    }
-
-    :root {
-        --qp-col-width: 100%;
-        --qp-scrollbar-reserve: 6px;
-        --qp-grid-gap: 0.35rem;
-    }
-
-    /* ===== Multi-column horizontal-scroll layout ===== */
-    .qp-columns-outer {
-        flex: 1 1 auto;
-        min-height: 0;
-        width: 100%;
-        overflow-x: auto;
-        overflow-y: hidden;
-        -webkit-overflow-scrolling: touch;
-        scroll-snap-type: x proximity;
-    }
-
-    .qp-columns-outer::-webkit-scrollbar {
-        height: 6px;
-    }
-
-    .qp-columns-outer::-webkit-scrollbar-track {
-        background: transparent;
-    }
-
-    .qp-columns-outer::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.25);
-        border-radius: 4px;
-    }
-
-    .qp-columns-track {
-        display: flex;
-        align-items: stretch;
-        gap: 0.6rem;
-        height: 100%;
-        min-height: 100%;
-        padding-bottom: 4px;
-    }
-
-    .qp-column {
-        flex: 0 0 var(--qp-col-width);
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
-        scroll-snap-align: start;
-    }
-
-    .qp-col-header {
-        flex: 0 0 auto;
-        padding-right: var(--qp-scrollbar-reserve);
-        box-sizing: border-box;
-    }
-
-    .qp-list {
-        flex: 1 1 auto;
-        min-height: 0;
-        overflow-x: hidden;
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-        padding-right: var(--qp-scrollbar-reserve);
-        box-sizing: border-box;
-        display: flex;
-        flex-direction: column;
-        justify-content: flex-start;
-        gap: 6px;
-    }
-
-    .qp-list::-webkit-scrollbar {
-        width: 4px;
-    }
-
-    .qp-list::-webkit-scrollbar-track {
-        background: transparent;
-    }
-
-    .qp-list::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.25);
-        border-radius: 4px;
-    }
-
-    .footer-title {
-        flex: 0 0 auto;
-        padding: 0.75rem 0;
-    }
-
-    .label-short { display: inline; }
-    .label-full  { display: none; }
-
-    /* ===== Legend ===== */
-    .legend {
-        margin-top: 33px;
-        margin-bottom: 11px;
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        align-items: center;
-        row-gap: 10px;
-        column-gap: 22px;
-    }
-
-    .legend-item {
-        display: flex;
-        align-items: center;
-        flex-wrap: nowrap;
-        gap: 6px;
-        white-space: nowrap;
-    }
-
-    .legend-item .footer-logo {
-        flex: 0 0 auto;
-        width: 15px;
-        height: auto;
-    }
-
-    .legend-item span.legend-text {
-        line-height: 1.2;
-    }
-
-    /* Tablet: 2 kolom */
-    @media (min-width: 768px) {
-        :root {
-            --qp-col-width: calc(50% - 0.3rem);
+        if ($request->q) {
+            $lines->where(function ($q) use ($request, $g) {
+                $q->where("$g.name", 'like', "%$request->q%");
+            });
         }
 
-        .label-short { display: none; }
-        .label-full  { display: inline; }
+        $lines = $lines->orderBy('kodegroup')->get();
 
-        .bg-card,
-        .bg-card-line,
-        .bg-card-rft,
-        .bg-card-wft,
-        .card-line {
-            height: 46px;
-            font-size: 16px;
+        $lineIds = $lines->pluck('kodegroup');
+
+        try {
+            $mpLineParam = ($lp = FactoryParameter::find('line_mapping_tolerance'))
+                ? $lp->value * 1
+                : 30;
+        } catch (\Exception $e) {
+            $mpLineParam = 30;
         }
 
-        .header-title h3 {
-            font-size: 1.4rem;
+        try {
+            $mpMinusParam = FactoryParameter::where('key', 'line_mpminus')->first();
+            $mpMinusParam = $mpMinusParam ? $mpMinusParam->value : -3;
+        } catch (\Exception $e) {
+            $mpMinusParam = -3;
         }
 
-        #topDefectList {
-            max-height: 90px;
-        }
-    }
+        // totInspect per line
+        $totInspectMap = SewingOutput::whereDate('date', $date)
+            ->whereIn('line', $lineIds)
+            ->where('is_qc', 1)
+            ->groupBy('line')
+            ->selectRaw('line, COUNT(*) as total')
+            ->pluck('total', 'line');
 
-    /* ===== NEW: Mobile & Tablet — stack ke bawah, bukan scroll ke samping =====
-       Rentang ini (max-width: 991.98px) sengaja dibuat SETELAH breakpoint tablet 768px
-       di atas, supaya override menang lewat urutan cascade (bukan lewat !important),
-       dan TIDAK menyentuh breakpoint desktop (min-width: 992px ke atas) di bawah ini. */
-    @media (max-width: 991.98px) {
-        .qp-columns-outer {
-            overflow-x: hidden;
-            overflow-y: visible;
-            scroll-snap-type: none;
-        }
+        // totDefect per line
+        $totDefectMap = SewingOutput::whereDate('date', $date)
+            ->whereIn('line', $lineIds)
+            ->whereNotNull('defect_code')
+            ->groupBy('line')
+            ->selectRaw('line, COUNT(*) as total')
+            ->pluck('total', 'line');
 
-        .qp-columns-track {
-            flex-direction: column;
-            height: auto;
-            min-height: 0;
-            gap: 1rem;
-            padding-bottom: 0;
-        }
+        // defectNotOil per line
+        $defectNotOilMap = SewingOutput::whereDate('date', $date)
+            ->whereIn('line', $lineIds)
+            ->whereNotNull('defect_code')
+            ->whereNotIn('defect_code', [602])
+            ->groupBy('line')
+            ->selectRaw('line, COUNT(*) as total')
+            ->pluck('total', 'line');
 
-        .qp-column {
-            flex: 1 1 auto;
-            width: 100%;
-        }
+        // oilDefect per line
+        $oilDefectMap = SewingOutput::whereDate('date', $date)
+            ->whereIn('line', $lineIds)
+            ->where('is_qc', 1)
+            ->whereIn('defect_code', [602])
+            ->groupBy('line')
+            ->selectRaw('line, COUNT(*) as total')
+            ->pluck('total', 'line');
 
-        .qp-list {
-            flex: 0 0 auto;
-            overflow-y: visible;
-            max-height: none;
-            padding-right: 0;
-        }
-    }
+        // totRft per line
+        $totRftMap = SewingOutput::whereDate('date', $date)
+            ->whereIn('line', $lineIds)
+            ->where('is_output', 1)
+            ->where('qc_seq', 0)
+            ->whereNull('defect_code')
+            ->groupBy('line')
+            ->selectRaw('line, COUNT(*) as total')
+            ->pluck('total', 'line');
 
-    @media (max-width: 768px) {
-         .number-circle {
-            width: 25px;
-            height: 25px;
-            border-radius: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            color: white;
-            font-size: 11px;
-            font-weight: 600;
-        }
+        $incompleteCapLines = SewingOutput::whereDate('date', $date)
+            ->whereIn('line', $lineIds)
+            ->whereNotNull('defect_code')
+            ->where(function ($q) {
+                $q->whereNull('problem')
+                ->orWhereNull('nik_pic')
+                ->orWhereNull('action')
+                ->orWhereNull('root_cause');
+            })
+            ->distinct()
+            ->pluck('line')
+            ->flip();
 
-        .legend {
-            font-size: 13px;
-            row-gap: 8px;
-            column-gap: 16px;
-        }
+        $lines = $lines->map(function ($line) use (
+            $mpLineParam,
+            $mpMinusParam,
+            $totInspectMap,
+            $totDefectMap,
+            $defectNotOilMap,
+            $oilDefectMap,
+            $totRftMap,
+            $incompleteCapLines
+        ) {
+            $lineId = $line->kodegroup;
 
-        .qp-col-header {
-            margin-top: 30px;
-        }
+            $totInspect    = $totInspectMap[$lineId] ?? 0;
+            $totDefect     = $totDefectMap[$lineId] ?? 0;
+            $defectNotOil  = $defectNotOilMap[$lineId] ?? 0;
+            $oilDefect     = $oilDefectMap[$lineId] ?? 0;
+            $totRft        = $totRftMap[$lineId] ?? 0;
+            $capFilled     = !isset($incompleteCapLines[$lineId]);
 
-        .header-title h3 {
-            margin: 0;
-            font-size: 1.5rem;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
+            $rft = $totInspect > 0 ? round(($totRft / $totInspect) * 100, 2) : 0;
+            $wft = $totInspect > 0 ? round(($totDefect / $totInspect) * 100, 2) : 0;
 
-        #liveClock {
-            display: none;
-        }
-    }
+            // ==== Penentuan Line off & MPS off (berdasarkan worktime) ====
+            $lineOff = true;
+            $mpsOff  = true;
+            $mp      = 0;
 
-    /* Laptop kecil-menengah: 3 kolom */
-    @media (min-width: 992px) and (max-width: 1400px) {
-        :root {
-            --qp-col-width: calc(33.333% - 0.4rem);
-        }
+            if (session('monitoring')) {
+                $wtDate       = Carbon::now();
+                $isToday      = true;
+                $worktimeline = WorktimeSettingController::getLineWorkingTime($line, $wtDate);
+            } else {
+                $wtDate       = Carbon::parse(session('endline.date'));
+                $isToday      = $wtDate->format('Y-m-d') == Carbon::now()->format('Y-m-d');
+                $worktimeline = WorktimeSettingController::getLineWorkingTimeShift($line, $wtDate, session('endline.shift'));
+            }
 
-        #topDefectList {
-            max-height: 83px;
-        }
+            if ($worktimeline) {
+                $lineOff = false;
 
-        .stat-card {
-            height: 120px !important;
-            min-height: 120px !important;
-        }
+                $worktime = $worktimeline->workingtime;
+                $range    = WorktimeSettingController::get_worktime_range($worktimeline, $worktime);
+                $swt      = $range->startworktime;
+                $fwt      = $range->finishworktime;
 
-        .stat-card img {
-            width: 24px !important;
-            height: 24px !important;
-            margin-bottom: .35rem !important;
-        }
-
-        .stat-card h6 {
-            font-size: 13px;
-            margin-bottom: .25rem !important;
-        }
-
-        .stat-card h2 {
-            font-size: 15px;
-            line-height: 1;
-        }
-
-        .stat-card small {
-            font-size: 10px;
-        }
-
-        .defect-list {
-            font-size: 10px;
-        }
-
-        .flatpickr-calendar {
-            max-width: 315px;
-            padding: 4px;
-            border-radius: 4px;
-        }
-
-        .flatpickr-day {
-            width: 30px;
-            height: 30px;
-            line-height: 30px;
-            font-size: 0.68rem;
-        }
-
-        .flatpickr-current-month {
-            font-size: 0.95rem;
-        }
-
-        span.flatpickr-weekday {
-            font-size: 0.75rem;
-        }
-
-        .text-title {
-            font-size: 12px;
-        }
-
-        .margin-cstm {
-            margin-top: 10px !important;
-            padding: 6px 0 !important;
-        }
-
-        .bg-card,
-        .bg-card-line,
-        .bg-card-rft,
-        .bg-card-wft,
-        .card-line {
-            height: 42px;
-            font-size: 14px;
-        }
-
-        .header-title h3 {
-            font-size: 1.15rem;
-        }
-
-        .header-clock {
-            text-align: right;
-            white-space: nowrap;
-            font-size: 12px;
-            font-weight: 700;
-        }
-
-        .number-circle {
-            width: 23px;
-            height: 23px;
-            border-radius: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            color: white;
-            font-size: 11px;
-            font-weight: 600;
-        }
-
-        .legend {
-            font-size: 12px;
-            column-gap: 18px;
-        }
-    }
-
-    /* Desktop besar: 4 kolom */
-    @media (min-width: 1401px) {
-        :root {
-            --qp-col-width: calc(25% - 0.45rem);
-        }
-
-        .bg-card,
-        .bg-card-line,
-        .bg-card-rft,
-        .bg-card-wft,
-        .card-line {
-            height: 60px;
-            font-size: 20px;
-        }
-
-        .header-title h3 {
-            font-size: 1.75rem;
-        }
-
-        .number-circle {
-            width: 36px;
-            height: 36px;
-            font-size: 10px;
-        }
-    }
-
-    @media (max-width: 575.98px) {
-        .header-left {
-            column-gap: 0.4rem;
-        }
-
-        .header-title h3 {
-            font-size: 0.95rem;
-        }
-
-        .header-clock {
-            font-size: 0.8rem;
-        }
-
-        .defect-header {
-            flex-direction: column;
-            gap: 0.5rem !important;
-        }
-
-        .legend {
-            font-size: 11px;
-            row-gap: 6px;
-            column-gap: 10px;
-        }
-
-        .number-circle {
-            width: 18px;
-            height: 18px;
-        }
-
-        .legend-item .footer-logo {
-            width: 12px;
-        }
-
-        .footer-title {
-            flex-direction: column;
-            align-items: flex-start !important;
-        }
-
-        .footer-title > div {
-            flex-wrap: wrap;
-        }
-    }
-
-    .footer-logo {
-        width: 15px;
-    }
-
-    @keyframes blink-active {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.3; }
-    }
-
-    .number-circle.is-active {
-        animation: blink-active 3s ease-in-out infinite;
-    }
-</style>
-@endsection
-
-@section('content')
-<div class="container-fluid dashboard-wrap" id="dashboardWrap">
-    <div class="dashboard-header">
-        <div class="header-left">
-            <div class="header-item header-back">
-                <button
-                    type="button"
-                    onclick="history.back()"
-                    class="back-btn border-0 bg-transparent text-white p-0 d-flex align-items-center gap-3">
-                    <img src="{{ _asset('svg/inlinePerformance/back.svg') }}"
-                        width="15"
-                        height="15"
-                        alt="Back">
-                    <span class="d-none d-sm-inline">Back</span>
-                </button>
-            </div>
-
-            <div class="header-item header-title text-white">
-                <h3 class="mb-0">Quality Performance (Endline)</h3>
-            </div>
-
-            <div class="header-item header-clock text-white">
-                <span id="liveClock"></span>
-            </div>
-        </div>
-    </div>
-
-    @php
-        $qpRowsPerColumn = 10;
-        $qpChunks = collect($line)->values()->chunk($qpRowsPerColumn);
-
-        $qpRowVisual = function (array $d) {
-            $isOff = ($d['line_off'] ?? false) || ($d['mps_off'] ?? false);
-
-            $more3Color = '#BD3F3F3D'; $more3Class = '';
-            $defectColor = '#F9A51D40'; $defectClass = '';
-            $noDefectColor = '#1D9A5C3B'; $noDefectClass = '';
-            $oilColor = '#1744B740'; $oilClass = '';
-
-            if (!$isOff) {
-                $totDefect = $d['tot_defect'] ?? 0;
-                $oilDefect = $d['oil_defect'] ?? 0;
-
-                if ($d['cap_filled'] ?? false) {
-                    $noDefectColor = '#3dff2c'; $noDefectClass = 'is-active';
-                } elseif ($oilDefect >= 10) {
-                    $more3Color = '#ff0404'; $more3Class = 'is-active';
-                    $oilColor = '#0000FF'; $oilClass = 'is-active';
-                } elseif ($totDefect >= 3) {
-                    $more3Color = '#ff0404'; $more3Class = 'is-active';
-                } elseif ($totDefect >= 1 && $totDefect < 3) {
-                    $defectColor = '#fff133'; $defectClass = 'is-active';
-                } else {
-                    $noDefectColor = '#3dff2c'; $noDefectClass = 'is-active';
+                if ($swt->greaterThan($fwt)) {
+                    $fwt->addDay();
                 }
+
+                $startTime = Carbon::parse($swt)->subMinute($mpLineParam);
+                $endTime   = $isToday
+                    ? Carbon::now()->addMinute($mpLineParam)
+                    : Carbon::parse($startTime)->addHour();
+
+                try {
+                    $attendance = EmployeeAttendance::where('factory_id', session('db')->iddb)
+                        ->where('group_id', $lineId)
+                        ->whereBetween('time', [$startTime, $endTime])
+                        ->where('is_efficiency', 1)
+                        ->where('shift', $worktime->shift)
+                        ->selectRaw("status, COUNT(*) as total")
+                        ->groupBy('status')
+                        ->pluck('total', 'status');
+
+                    $inCount  = $attendance['IN'] ?? 0;
+                    $outCount = $attendance['OUT'] ?? 0;
+                    $allCount = $attendance->sum();
+
+                    if ($isToday) {
+                        $mp = max(0, $inCount - $outCount + $mpMinusParam);
+                    } else {
+                        $mp = max(0, $inCount - ($allCount - $inCount) + $mpMinusParam);
+                    }
+                } catch (\Exception $e) {
+                    $mp = 0;
+                }
+
+                $mpsOff = $mp <= 0;
             }
 
             return [
-                'isOff' => $isOff,
-                'statusLabel' => ($d['line_off'] ?? false) ? 'LINE OFF' : (($d['mps_off'] ?? false) ? 'MPS OFF' : null),
-                'more3Color' => $more3Color, 'more3Class' => $more3Class,
-                'defectColor' => $defectColor, 'defectClass' => $defectClass,
-                'noDefectColor' => $noDefectColor, 'noDefectClass' => $noDefectClass,
-                'oilColor' => $oilColor, 'oilClass' => $oilClass,
+                'kodegroup'      => $line->kodegroup,
+                'namagroup'      => $line->namagroup,
+                'line_id'        => $lineId,
+                'tot_inspect'    => $totInspect,
+                'tot_defect'     => $totDefect,
+                'oil_defect'     => $oilDefect,
+                'defect_not_oil' => $defectNotOil,
+                'rft'            => $rft,
+                'wft'            => $wft,
+                'mp'             => $mp,
+                'line_off'       => $lineOff,
+                'mps_off'        => $mpsOff,
+                'cap_filled'     => $capFilled,
             ];
-        };
-    @endphp
-    <div class="qp-body">
-        <div class="qp-columns-outer" id="qpColumnsOuter">
-            <div class="qp-columns-track" id="qpColumnsTrack">
-                @foreach ($qpChunks as $qpChunk)
-                    <div class="qp-column">
-                        <div class="qp-col-header">
-                            <div class="qp-grid p-2 px-lg-1 py-lg-4 ">
-                                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">Line</span>
-                                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center text-center">
-                                    <span class="label-full">INSPECT QTY</span>
-                                </span>
-                                <span class="bg-card-rft rounded-3 d-flex justify-content-center align-items-center">RFT <br> %</span>
-                                <span class="bg-card-wft rounded-3 d-flex justify-content-center align-items-center">WFT <br> %</span>
-                                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">TLS</span>
-                            </div>
-                        </div>
+        });
 
-                        <div class="qp-list">
-                            @foreach ($qpChunk as $d)
-                                @php $v = $qpRowVisual($d); @endphp
-                                <div class="qp-row bg-card-line rounded-3">
-                                    <div class="qp-grid px-2 px-lg-1">
-                                        <span class="d-flex justify-content-center align-items-center" style="border-right: 1px solid rgba(255,255,255,.08)">{{ $d['line_id'] }}</span>
-
-                                        @if ($v['isOff'])
-                                            <span class="d-flex justify-content-center align-items-center text-center {{ ($d['line_off'] ?? false) ? 'text-white' : '' }}" style="grid-column: span 3;border-right: 1px solid rgba(255,255,255,.08)">
-                                                {{ $v['statusLabel'] }}
-                                            </span>
-                                        @else
-                                            <span class="d-flex justify-content-center align-items-center text-center " style="border-right: 1px solid rgba(255,255,255,.08)">{{ $d['tot_inspect'] }}</span>
-                                            <span class="d-flex justify-content-center align-items-center" style="border-right: 1px solid rgba(255,255,255,.08)">{{ $d['rft'] }}</span>
-                                            <span class="d-flex justify-content-center align-items-center" style="border-right: 1px solid rgba(255,255,255,.08)">{{ $d['wft'] }}</span>
-                                        @endif
-
-                                        <div class="tls-cell">
-                                            <span class="number-circle {{ $v['more3Class'] }}" style="background-color: {{ $v['more3Color'] }};"></span>
-                                            <span class="number-circle {{ $v['defectClass'] }}" style="background-color: {{ $v['defectColor'] }};"></span>
-                                            <span class="number-circle {{ $v['noDefectClass'] }}" style="background-color: {{ $v['noDefectColor'] }};"></span>
-                                            <span class="number-circle {{ $v['oilClass'] }}" style="background-color: {{ $v['oilColor'] }};"></span>
-                                        </div>
-                                    </div>
-                                </div>
-                            @endforeach
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        </div>
-    </div>
-
-    <div class="legend text-white">
-        <div class="legend-item">
-            <span class="number-circle" style="background-color: #ff0404;"></span>
-            <img src="{{ _asset('svg/endlinePerformance/more-than.svg') }}" class="footer-logo">
-            <span class="legend-text">3 Defect</span>
-        </div>
-
-        <div class="legend-item">
-            <span class="number-circle" style="background-color: #fff133;"></span>
-            <span class="legend-text">1</span>
-            <img src="{{ _asset('svg/endlinePerformance/less-than.svg') }}" class="footer-logo">
-            <span class="legend-text">Defect &lt; 3</span>
-        </div>
-
-        <div class="legend-item">
-            <span class="number-circle" style="background-color: #3dff2c;"></span>
-            <span class="legend-text">No Defect/Already Improved</span>
-        </div>
-
-        <div class="legend-item">
-            <span class="number-circle" style="background-color: #0000FF;"></span>
-            <span class="legend-text">Oil Defect</span>
-        </div>
-    </div>
-
-    <div class="footer-title text-white d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0">
-        <div class="d-flex align-items-center gap-2">
-            <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" class="img-foot" alt="">
-            Data Update
-            <span id="liveClock2"></span>
-        </div>
-        <div class="d-flex gap-3">
-            <span>LINE OFF = Worktime not setting yet</span>
-            <span>MPS OFF = MPS not setting yet</span>
-        </div>
-    </div>
-</div>
-
-@section('extrascript')
-<script>
-    function qpFormatDateTime(date) {
-        var pad = function (n) { return n < 10 ? '0' + n : n; };
-
-        var months = [
-            'January', 'February', 'March', 'April', 'May', 'June',
-            'July', 'August', 'September', 'October', 'November', 'December'
-        ];
-
-        var day    = pad(date.getDate());
-        var month  = months[date.getMonth()];
-        var year   = date.getFullYear();
-        var hour   = pad(date.getHours());
-        var minute = pad(date.getMinutes());
-        var second = pad(date.getSeconds());
-
-        return day + ' ' + month + ' ' + year + ' - ' +
-            hour + ' : ' + minute + ' : ' + second;
+        return view('monitoring::endlineperformance.tls.index', [
+            'line' => $lines,
+        ]);
     }
 
+          if (!$isOff) {
+    $totDefect = $d['tot_defect'] ?? 0;
+    $oilDefect = $d['oil_defect'] ?? 0;
+    $capFilled = $d['cap_filled'] ?? false;
 
-    $(document).ready(function () {
-        $('#liveClock').html(qpFormatDateTime(new Date()));
+    // CAP sudah diisi -> reset TLS menjadi Hijau.
+    // History defect sebelumnya tidak diperhitungkan lagi.
+    if ($capFilled) {
+        $noDefectColor = '#3dff2c';
+        $noDefectClass = 'is-active';
 
-        let savedTime = localStorage.getItem('lastDataUpdate');
-        if (savedTime) {
-            $('#liveClock2').html(savedTime);
-        }
-    });
+    // Belum CAP + Oil spots >= 10
+    } elseif ($oilDefect >= 10) {
+        $more3Color = '#ff0404';
+        $more3Class = 'is-active';
 
-    var QP_DESKTOP_BREAKPOINT = 992;
+        $oilColor = '#0000FF';
+        $oilClass = 'is-active';
 
-    function qpIsDesktop() {
-        return window.innerWidth >= QP_DESKTOP_BREAKPOINT;
+    // Belum CAP + defect > 3
+    } elseif ($totDefect > 3) {
+        $more3Color = '#ff0404';
+        $more3Class = 'is-active';
+
+    // Belum CAP + defect 1-3
+    } elseif ($totDefect >= 1) {
+        $defectColor = '#fff133';
+        $defectClass = 'is-active';
+
+    // Tidak ada defect
+    } else {
+        $noDefectColor = '#3dff2c';
+        $noDefectClass = 'is-active';
     }
+}
 
-    function qpAdjustDashboardHeight() {
-        var wrap = document.getElementById('dashboardWrap');
-        if (!wrap) return;
 
-        if (!qpIsDesktop()) {
-            wrap.classList.remove('is-kiosk');
-            wrap.style.height = 'auto';
-            return;
-        }
+Kondisi Warna : 
+1. No defect hijau 
+2. Defect lebih dari satu dan kurang dari 3 warna kuning
+3. Defect lebih dari 3 warna merah 
+4. Defect oil lebih dari sama dengan 10 warna biru 
+5. Warna merah dan biru aktif semisal defect oil lebih dari sama dengan 10
+6. Warna berubah jadi hijau semisal cap sudah terisi
 
-        wrap.classList.add('is-kiosk');
-        wrap.style.height = 'auto';
 
-        var top = wrap.getBoundingClientRect().top;
-        var available = window.innerHeight - top;
+nah masalahnya adalah saat setelah diisi cap kan hijau, setelah itu ada defect lagi, harusnya semisal defect nya 1 akan kuning, dua defect kuning, 3 defect hijau, dan oil defect lebih dari 10 biru, tapi setelah isi cap itu, kode nya tidak bisa deteksi itu isi cap lama atau setelah cap ada defect baru, menurutmu gimana ?
 
-        wrap.style.height = Math.max(available - 8, 300) + 'px';
-    }
-
-    var qpResizeTimer = null;
-    function qpRefreshLayoutDebounced() {
-        clearTimeout(qpResizeTimer);
-        qpResizeTimer = setTimeout(qpRefreshLayout, 120);
-    }
-    function qpRefreshLayout() {
-        qpAdjustDashboardHeight();
-    }
-
-    if (document.fonts && document.fonts.ready) {
-        document.fonts.ready.then(qpRefreshLayout);
-    }
-
-    window.addEventListener('load', qpRefreshLayout);
-    window.addEventListener('resize', qpRefreshLayoutDebounced);
-    document.addEventListener('DOMContentLoaded', qpRefreshLayout);
-
-</script>
-@endsection
-
-@include('layouts.loading')
-@endsection
