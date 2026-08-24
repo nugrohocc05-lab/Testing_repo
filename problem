@@ -235,66 +235,12 @@
         flex-shrink: 0;
     }
 
-    /*  Skeleton loading */
-    @keyframes qp-skeleton-shimmer {
-        0% { background-position: 200% 0; }
-        100% { background-position: -200% 0; }
-    }
-
-    .qp-row.qp-skeleton {
-        background-color: #232838;
-        pointer-events: none;
-    }
-
-    .skeleton-block,
-    .skeleton-circle {
-        background: rgba(255, 255, 255, 0.12);
-        background-size: 400% 100%;
-        animation: qp-skeleton-shimmer 1.4s ease infinite;
-        border-radius: 4px;
-        display: block;
-    }
-
-    .qp-grid .skeleton-block {
-        justify-self: center;
-        align-self: center;
-        width: 55%;
-        height: 12px;
-    }
-
-    .skeleton-circle {
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        flex: 0 0 auto;
-    }
-
-    @media (max-width: 768px) {
-        .skeleton-circle {
-            width: 25px;
-            height: 25px;
-        }
-    }
-
-    @media (min-width: 992px) and (max-width: 1400px) {
-        .skeleton-circle {
-            width: 23px;
-            height: 23px;
-        }
-    }
-
-    @media (max-width: 575.98px) {
-        .skeleton-circle {
-            width: 18px;
-            height: 18px;
-        }
-    }
-
     .qp-row .qp-grid {
         gap: 0;
         height: 100%;
     }
 
+    /* ===== Layout wrapper ===== */
     .dashboard-wrap {
         display: flex;
         flex-direction: column;
@@ -315,24 +261,58 @@
     .qp-body {
         flex: 1 1 auto;
         min-height: 0;
+        display: flex;
+        flex-direction: column;
     }
 
     .dashboard-wrap.is-kiosk .qp-body {
         overflow: hidden;
     }
 
-    .qp-col {
+    :root {
+        --qp-col-width: 100%;
+        --qp-scrollbar-reserve: 6px;
+    }
+
+    /* ===== Multi-column horizontal-scroll layout ===== */
+    .qp-columns-outer {
+        flex: 1 1 auto;
+        min-height: 0;
+        width: 100%;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        scroll-snap-type: x proximity;
+    }
+
+    .qp-columns-outer::-webkit-scrollbar {
+        height: 6px;
+    }
+
+    .qp-columns-outer::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .qp-columns-outer::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.25);
+        border-radius: 4px;
+    }
+
+    .qp-columns-track {
+        display: flex;
+        align-items: stretch;
+        gap: 0.6rem;
+        height: 100%;
+        min-height: 100%;
+        padding-bottom: 4px;
+    }
+
+    .qp-column {
+        flex: 0 0 var(--qp-col-width);
+        min-width: 0;
         display: flex;
         flex-direction: column;
-        min-height: 0;
-    }
-
-    .dashboard-wrap.is-kiosk .qp-col {
-        height: 100%;
-    }
-
-    :root {
-        --qp-scrollbar-reserve: 6px;
+        scroll-snap-align: start;
     }
 
     .qp-col-header {
@@ -352,10 +332,6 @@
         display: flex;
         flex-direction: column;
         gap: 6px;
-    }
-
-    .dashboard-wrap.is-kiosk .qp-list-left {
-        overflow-y: hidden;
     }
 
     .qp-list::-webkit-scrollbar {
@@ -409,8 +385,12 @@
         line-height: 1.2;
     }
 
-    /* Tablet */
+    /* Tablet: 2 kolom */
     @media (min-width: 768px) {
+        :root {
+            --qp-col-width: calc(50% - 0.3rem);
+        }
+
         .label-short { display: none; }
         .label-full  { display: inline; }
 
@@ -473,8 +453,12 @@
         }
     }
 
-    /* Laptop mas doni */
+    /* Laptop kecil-menengah: 3 kolom */
     @media (min-width: 992px) and (max-width: 1400px) {
+        :root {
+            --qp-col-width: calc(33.333% - 0.4rem);
+        }
+
         #topDefectList {
             max-height: 83px;
         }
@@ -576,8 +560,12 @@
         }
     }
 
-    /* Desktop besar */
+    /* Desktop besar: 4 kolom */
     @media (min-width: 1401px) {
+        :root {
+            --qp-col-width: calc(25% - 0.45rem);
+        }
+
         .bg-card,
         .bg-card-line,
         .bg-card-rft,
@@ -678,95 +666,101 @@
     </div>
 
     @php
-        $qpData = collect($line)->values();
+        // Data sudah tersedia sepenuhnya dari server saat halaman dibuka
+        // (tidak ada auto-refresh), jadi kolom & baris dirender langsung
+        // di Blade — tidak perlu kirim JSON lalu dibangun ulang via JS.
+        $qpRowsPerColumn = 10;
+        $qpChunks = collect($line)->values()->chunk($qpRowsPerColumn);
+
+        // Hitung warna & status satu baris (setara logic qpBuildRowHtml versi lama).
+        $qpRowVisual = function (array $d) {
+            $isOff = ($d['line_off'] ?? false) || ($d['mps_off'] ?? false);
+
+            $more3Color = '#BD3F3F3D'; $more3Class = '';
+            $defectColor = '#F9A51D40'; $defectClass = '';
+            $noDefectColor = '#1D9A5C3B'; $noDefectClass = '';
+            $oilColor = '#1744B740'; $oilClass = '';
+
+            if (!$isOff) {
+                $totDefect = $d['tot_defect'] ?? 0;
+                $oilDefect = $d['oil_defect'] ?? 0;
+
+                if ($d['cap_filled'] ?? false) {
+                    $noDefectColor = '#3dff2c'; $noDefectClass = 'is-active';
+                } elseif ($oilDefect >= 10) {
+                    $more3Color = '#ff0404'; $more3Class = 'is-active';
+                    $oilColor = '#0000FF'; $oilClass = 'is-active';
+                } elseif ($totDefect >= 3) {
+                    $more3Color = '#ff0404'; $more3Class = 'is-active';
+                } elseif ($totDefect >= 1 && $totDefect < 3) {
+                    $defectColor = '#fff133'; $defectClass = 'is-active';
+                } else {
+                    $noDefectColor = '#3dff2c'; $noDefectClass = 'is-active';
+                }
+            }
+
+            return [
+                'isOff' => $isOff,
+                'statusLabel' => ($d['line_off'] ?? false) ? 'LINE OFF' : (($d['mps_off'] ?? false) ? 'MPS OFF' : null),
+                'more3Color' => $more3Color, 'more3Class' => $more3Class,
+                'defectColor' => $defectColor, 'defectClass' => $defectClass,
+                'noDefectColor' => $noDefectColor, 'noDefectClass' => $noDefectClass,
+                'oilColor' => $oilColor, 'oilClass' => $oilClass,
+            ];
+        };
     @endphp
 
-    <div class="qp-body d-flex justify-content-between row gx-2 gx-lg-3">
-        <div class="col-12 col-lg-6 qp-col">
-            <!-- Header -->
-            <div class="qp-col-header">
-                <div class="qp-grid p-2 p-lg-4">
-                    <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">Location</span>
-                    <span class="bg-card rounded-3 d-flex justify-content-center align-items-center text-center">
-                        <span class="label-short">INSPECT QTY</span><span class="label-full">INSPECT QTY</span>
-                    </span>
-                    <span class="bg-card-rft rounded-3 d-flex justify-content-center align-items-center">RFT %</span>
-                    <span class="bg-card-wft rounded-3 d-flex justify-content-center align-items-center">WFT %</span>
-                    <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">TLS</span>
-                </div>
-            </div>
-
-            <!-- Data 1-->
-            <div class="qp-list qp-list-left" id="qpListLeft">
-                @for ($i = 0; $i < 6; $i++)
-                    <div class="qp-row bg-card-line qp-skeleton">
-                        <div class="qp-grid px-2 px-lg-4">
-                            <span class="skeleton-block"></span>
-                            <span class="skeleton-block"></span>
-                            <span class="skeleton-block"></span>
-                            <span class="skeleton-block"></span>
-                            <div class="tls-cell">
-                                <span class="skeleton-circle"></span>
-                                <span class="skeleton-circle"></span>
-                                <span class="skeleton-circle"></span>
-                                <span class="skeleton-circle"></span>
+    <!-- Baris per kolom: {{ $qpRowsPerColumn }}. Jumlah kolom mengikuti jumlah data
+         (dibulatkan ke atas), kolom yang melebihi lebar layar bisa di-scroll ke kanan. -->
+    <div class="qp-body">
+        <div class="qp-columns-outer" id="qpColumnsOuter">
+            <div class="qp-columns-track" id="qpColumnsTrack">
+                @foreach ($qpChunks as $qpChunk)
+                    <div class="qp-column">
+                        <div class="qp-col-header">
+                            <div class="qp-grid p-2 p-lg-4">
+                                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">Location</span>
+                                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center text-center">
+                                    <span class="label-short">INSPECT QTY</span><span class="label-full">INSPECT QTY</span>
+                                </span>
+                                <span class="bg-card-rft rounded-3 d-flex justify-content-center align-items-center">RFT %</span>
+                                <span class="bg-card-wft rounded-3 d-flex justify-content-center align-items-center">WFT %</span>
+                                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">TLS</span>
                             </div>
                         </div>
-                    </div>
-                @endfor
-            </div>
-        </div>
 
-        <div class="col-12 col-lg-6 qp-col d-none d-lg-flex" id="qpColRight">
-            <!-- Header -->
-            <div class="qp-col-header">
-                <div class="qp-grid p-2 p-lg-4">
-                    <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">Location</span>
-                    <span class="bg-card rounded-3 d-flex justify-content-center align-items-center text-center">
-                        <span class="label-short">INSPECT QTY</span><span class="label-full">INSPECT QTY</span>
-                    </span>
-                    <span class="bg-card-rft rounded-3 d-flex justify-content-center align-items-center">RFT %</span>
-                    <span class="bg-card-wft rounded-3 d-flex justify-content-center align-items-center">WFT %</span>
-                    <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">TLS</span>
-                </div>
-            </div>
+                        <div class="qp-list">
+                            @foreach ($qpChunk as $d)
+                                @php $v = $qpRowVisual($d); @endphp
+                                <div class="qp-row bg-card-line rounded-3">
+                                    <div class="qp-grid px-2 px-lg-4">
+                                        <span class="d-flex justify-content-center align-items-center">{{ $d['namagroup'] }}</span>
 
-            <!-- Data 2 -->
-            <div class="qp-list qp-list-right" id="qpListRight">
-                @for ($i = 0; $i < 6; $i++)
-                    <div class="qp-row bg-card-line qp-skeleton">
-                        <div class="qp-grid px-2 px-lg-4">
-                            <span class="skeleton-block"></span>
-                            <span class="skeleton-block"></span>
-                            <span class="skeleton-block"></span>
-                            <span class="skeleton-block"></span>
-                            <div class="tls-cell">
-                                <span class="skeleton-circle"></span>
-                                <span class="skeleton-circle"></span>
-                                <span class="skeleton-circle"></span>
-                                <span class="skeleton-circle"></span>
-                            </div>
+                                        @if ($v['isOff'])
+                                            <span class="d-flex justify-content-center align-items-center text-center {{ ($d['line_off'] ?? false) ? 'text-white' : '' }}" style="grid-column: span 3;">
+                                                {{ $v['statusLabel'] }}
+                                            </span>
+                                        @else
+                                            <span class="d-flex justify-content-center align-items-center text-center">{{ $d['tot_inspect'] }}</span>
+                                            <span class="d-flex justify-content-center align-items-center">{{ $d['rft'] }}</span>
+                                            <span class="d-flex justify-content-center align-items-center">{{ $d['wft'] }}</span>
+                                        @endif
+
+                                        <div class="tls-cell">
+                                            <span class="number-circle {{ $v['more3Class'] }}" style="background-color: {{ $v['more3Color'] }};"></span>
+                                            <span class="number-circle {{ $v['defectClass'] }}" style="background-color: {{ $v['defectColor'] }};"></span>
+                                            <span class="number-circle {{ $v['noDefectClass'] }}" style="background-color: {{ $v['noDefectColor'] }};"></span>
+                                            <span class="number-circle {{ $v['oilClass'] }}" style="background-color: {{ $v['oilColor'] }};"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            @endforeach
                         </div>
                     </div>
-                @endfor
+                @endforeach
             </div>
         </div>
     </div>
-
-    <script type="application/json" id="qpRowData">
-        {!! $qpData->map(fn ($d) => [
-            'namagroup'   => $d['namagroup'],
-            'tot_inspect' => $d['tot_inspect'],
-            'rft'         => $d['rft'],
-            'wft'         => $d['wft'],
-            'tot_defect'  => $d['tot_defect'],
-            'oil_defect'  => $d['oil_defect'],
-            'defect_not_oil' => $d['defect_not_oil'],
-            'line_off'    => $d['line_off'] ?? false,
-            'mps_off'     => $d['mps_off'] ?? false,
-            'cap_filled'  => $d['cap_filled'] ?? false,
-        ])->toJson() !!}
-    </script>
 
     <div class="legend text-white">
         <div class="legend-item">
@@ -862,171 +856,6 @@
         wrap.style.height = Math.max(available - 8, 300) + 'px';
     }
 
-    function qpEscapeHtml(str) {
-        return String(str).replace(/[&<>"']/g, function (c) {
-            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-        });
-    }
-
-    function qpBuildRowHtml(name, totInspect, rft, wft, totDefect, oilDefect, lineOff, mpsOff, capFilled, defectNotOil) {
-
-        var isOff = lineOff || mpsOff;
-
-        var more3DefectColor = '#BD3F3F3D';
-        var defectColor      = '#F9A51D40';
-        var noDefectColor    = '#1D9A5C3B';
-        var oilDefectColor   = '#1744B740';
-
-        var more3Class = '';
-        var defectClass = '';
-        var noDefectClass = '';
-        var oilClass = '';
-
-        if (!isOff) {
-            if (capFilled) {
-                noDefectColor = '#3dff2c';
-                noDefectClass = 'is-active';
-            }
-
-            else if (oilDefect >= 10) {
-
-                more3DefectColor = '#ff0404';
-                more3Class = 'is-active';
-                oilDefectColor = '#0000FF';
-                oilClass = 'is-active';
-            }
-
-            else if (totDefect >= 3) {
-                more3DefectColor = '#ff0404';
-                more3Class = 'is-active';
-
-            }
-
-            else if (totDefect >= 1 && totDefect < 3) {
-                defectColor = '#fff133';
-                defectClass = 'is-active';
-
-            }
-
-            else {
-                noDefectColor = '#3dff2c';
-                noDefectClass = 'is-active';
-            }
-        }
-
-
-        var statusLabel = lineOff ? 'LINE OFF' : (mpsOff ? 'MPS OFF' : null);
-        var statusClass = lineOff && 'text-white';
-
-        // Gabung 3 kolom jadi 1
-        var middleCols = isOff
-            ? '<span class="d-flex justify-content-center align-items-center text-center ' + statusClass + '" style="grid-column: span 3;">' +
-                statusLabel +
-            '</span>'
-            : '' +
-                '<span class="d-flex justify-content-center align-items-center text-center">' + totInspect + '</span>' +
-                '<span class="d-flex justify-content-center align-items-center">' + rft + '</span>' +
-                '<span class="d-flex justify-content-center align-items-center">' + wft + '</span>';
-
-        return '' +
-            '<div class="qp-row bg-card-line rounded-3">' +
-                '<div class="qp-grid px-2 px-lg-4">' +
-
-                    '<span class="d-flex justify-content-center align-items-center">' +
-                        name +
-                    '</span>' +
-
-                    middleCols +
-
-                    '<div class="tls-cell">' +
-                        '<span class="number-circle ' + more3Class + '" style="background-color: ' + more3DefectColor + ';"></span>' +
-                        '<span class="number-circle ' + defectClass + '" style="background-color: ' + defectColor + ';"></span>' +
-                        '<span class="number-circle ' + noDefectClass + '" style="background-color: ' + noDefectColor + ';"></span>' +
-                        '<span class="number-circle ' + oilClass + '" style="background-color: ' + oilDefectColor + ';"></span>' +
-                    '</div>' +
-
-                '</div>' +
-            '</div>';
-    }
-
-    function qpMeasureRowMetrics(container) {
-        var probe = document.createElement('div');
-        probe.style.visibility = 'hidden';
-        probe.style.position = 'absolute';
-        probe.style.pointerEvents = 'none';
-        probe.innerHTML = qpBuildRowHtml('Probe', 0, 0, 0, 0, false, false, false, false );
-        container.appendChild(probe);
-
-        var rowEl = probe.firstElementChild;
-        var rowHeight = rowEl.getBoundingClientRect().height;
-
-        var computed = getComputedStyle(container);
-        var gapValue = parseFloat(computed.rowGap || computed.gap || '0');
-        if (isNaN(gapValue)) gapValue = 0;
-
-        container.removeChild(probe);
-
-        return {
-            rowHeight: rowHeight > 0 ? rowHeight : 50,
-            gap: gapValue
-        };
-    }
-
-    function qpRenderRows() {
-        var dataEl    = document.getElementById('qpRowData');
-        var leftList  = document.getElementById('qpListLeft');
-        var rightList = document.getElementById('qpListRight');
-
-        if (!dataEl || !leftList || !rightList) return;
-
-        var rows = [];
-
-        try {
-            rows = JSON.parse(dataEl.textContent || '[]');
-        } catch (e) {
-            rows = [];
-        }
-
-        leftList.innerHTML  = '';
-        rightList.innerHTML = '';
-
-        if (!qpIsDesktop()) {
-            leftList.innerHTML = rows.map(function (r) {
-                return qpBuildRowHtml(
-                    qpEscapeHtml(r.namagroup),
-                    r.tot_inspect, r.rft, r.wft, r.tot_defect, r.oil_defect,  r.line_off, r.mps_off, r.cap_filled, r.defect_not_oil
-                );
-            }).join('');
-
-            return;
-        }
-
-        var metrics = qpMeasureRowMetrics(leftList);
-        var availableHeight = leftList.clientHeight;
-
-        var capacity = Math.max(
-            1,
-            Math.floor((availableHeight + metrics.gap) / (metrics.rowHeight + metrics.gap))
-        );
-
-        var leftRows  = rows.slice(0, capacity);
-        var rightRows = rows.slice(capacity);
-
-        leftList.innerHTML = leftRows.map(function (r) {
-            return qpBuildRowHtml(
-                qpEscapeHtml(r.namagroup),
-                r.tot_inspect, r.rft, r.wft, r.tot_defect, r.oil_defect,  r.line_off, r.mps_off, r.cap_filled, r.defect_not_oil
-            );
-        }).join('');
-
-        rightList.innerHTML = rightRows.map(function (r) {
-            return qpBuildRowHtml(
-                qpEscapeHtml(r.namagroup),
-                r.tot_inspect, r.rft, r.wft, r.tot_defect, r.oil_defect,  r.line_off, r.mps_off, r.cap_filled, r.defect_not_oil
-            );
-        }).join('');
-    }
-
     var qpResizeTimer = null;
     function qpRefreshLayoutDebounced() {
         clearTimeout(qpResizeTimer);
@@ -1034,9 +863,6 @@
     }
     function qpRefreshLayout() {
         qpAdjustDashboardHeight();
-        requestAnimationFrame(function () {
-            requestAnimationFrame(qpRenderRows);
-        });
     }
 
     if (document.fonts && document.fonts.ready) {
