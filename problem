@@ -155,11 +155,16 @@
         white-space: nowrap;
     }
 
+    .bg-card {
+        background-color: red !important;
+        width: 80px;
+    }
+
     .bg-card,
     .bg-card-line {
         background-color: #292F40;
         color: white;
-        font-size: 19px !important;
+        font-size: 16px !important;
         font-weight: 700;
         border-radius: 5px;
         height: 42px;
@@ -209,8 +214,8 @@
 
     .qp-grid {
         display: grid;
-        grid-template-columns: 1.3fr 0.9fr 0.8fr 0.8fr 1.2fr;
-        gap: 0.35rem;
+        grid-template-columns: 0.7fr 0.9fr 0.9fr 0.9fr 1.4fr !important;
+        gap: var(--qp-grid-gap);
         width: 100%;
     }
 
@@ -227,6 +232,7 @@
         padding: 2px 4px;
         line-height: 1.15;
         text-align: center;
+        font-size: 17px;
     }
 
     .qp-row {
@@ -236,7 +242,7 @@
     }
 
     .qp-row .qp-grid {
-        gap: 0;
+        gap: var(--qp-grid-gap);
         height: 100%;
     }
 
@@ -272,6 +278,7 @@
     :root {
         --qp-col-width: 100%;
         --qp-scrollbar-reserve: 6px;
+        --qp-grid-gap: 0.35rem;
     }
 
     /* ===== Multi-column horizontal-scroll layout ===== */
@@ -581,8 +588,8 @@
         }
 
         .number-circle {
-            width: 29px;
-            height: 29px;
+            width: 35px;
+            height: 35px;
             font-size: 10px;
         }
     }
@@ -718,9 +725,9 @@
                 @foreach ($qpChunks as $qpChunk)
                     <div class="qp-column">
                         <div class="qp-col-header">
-                            <div class="qp-grid p-2 p-lg-4">
-                                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">Location</span>
-                                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center text-center">
+                            <div class="qp-grid p-2 px-lg-1 py-lg-4 ">
+                                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">Line</span>
+                                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center text-center w-75">
                                     <span class="label-short">INSPECT QTY</span><span class="label-full">INSPECT QTY</span>
                                 </span>
                                 <span class="bg-card-rft rounded-3 d-flex justify-content-center align-items-center">RFT %</span>
@@ -733,17 +740,17 @@
                             @foreach ($qpChunk as $d)
                                 @php $v = $qpRowVisual($d); @endphp
                                 <div class="qp-row bg-card-line rounded-3">
-                                    <div class="qp-grid p-2 p-lg-4">
-                                        <span class="d-flex justify-content-center align-items-center">{{ $d['namagroup'] }}</span>
+                                    <div class="qp-grid px-2 px-lg-1">
+                                        <span class="d-flex justify-content-center align-items-center" style="border-right: 1px solid rgba(255,255,255,.08)">{{ $d['line_id'] }}</span>
 
                                         @if ($v['isOff'])
-                                            <span class="d-flex justify-content-center align-items-center text-center {{ ($d['line_off'] ?? false) ? 'text-white' : '' }}" style="grid-column: span 3;">
+                                            <span class="d-flex justify-content-center align-items-center text-center {{ ($d['line_off'] ?? false) ? 'text-white' : '' }}" style="grid-column: span 3;border-right: 1px solid rgba(255,255,255,.08)">
                                                 {{ $v['statusLabel'] }}
                                             </span>
                                         @else
-                                            <span class="d-flex justify-content-center align-items-center text-center">{{ $d['tot_inspect'] }}</span>
-                                            <span class="d-flex justify-content-center align-items-center">{{ $d['rft'] }}</span>
-                                            <span class="d-flex justify-content-center align-items-center">{{ $d['wft'] }}</span>
+                                            <span class="d-flex justify-content-center align-items-center text-center " style="border-right: 1px solid rgba(255,255,255,.08)">{{ $d['tot_inspect'] }}</span>
+                                            <span class="d-flex justify-content-center align-items-center" style="border-right: 1px solid rgba(255,255,255,.08)">{{ $d['rft'] }}</span>
+                                            <span class="d-flex justify-content-center align-items-center" style="border-right: 1px solid rgba(255,255,255,.08)">{{ $d['wft'] }}</span>
                                         @endif
 
                                         <div class="tls-cell">
