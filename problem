@@ -159,7 +159,7 @@
     .bg-card-line {
         background-color: #292F40;
         color: white;
-        font-size: 14px;
+        font-size: 19px !important;
         font-weight: 700;
         border-radius: 5px;
         height: 42px;
@@ -219,7 +219,7 @@
         justify-content: center;
         align-items: center;
         gap: 4px;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         padding: 2px;
     }
 
@@ -331,7 +331,7 @@
         box-sizing: border-box;
         display: flex;
         flex-direction: column;
-        justify-content: flex-end;
+        justify-content: flex-start;
         gap: 6px;
     }
 
@@ -572,7 +572,7 @@
         .bg-card-rft,
         .bg-card-wft,
         .card-line {
-            height: 50px;
+            height: 60px;
             font-size: 20px;
         }
 
@@ -581,8 +581,8 @@
         }
 
         .number-circle {
-            width: 22px;
-            height: 22px;
+            width: 29px;
+            height: 29px;
             font-size: 10px;
         }
     }
@@ -673,13 +673,9 @@
     </div>
 
     @php
-        // Data sudah tersedia sepenuhnya dari server saat halaman dibuka
-        // (tidak ada auto-refresh), jadi kolom & baris dirender langsung
-        // di Blade — tidak perlu kirim JSON lalu dibangun ulang via JS.
         $qpRowsPerColumn = 10;
         $qpChunks = collect($line)->values()->chunk($qpRowsPerColumn);
 
-        // Hitung warna & status satu baris (setara logic qpBuildRowHtml versi lama).
         $qpRowVisual = function (array $d) {
             $isOff = ($d['line_off'] ?? false) || ($d['mps_off'] ?? false);
 
@@ -716,15 +712,12 @@
             ];
         };
     @endphp
-
-    <!-- Baris per kolom: {{ $qpRowsPerColumn }}. Jumlah kolom mengikuti jumlah data
-         (dibulatkan ke atas), kolom yang melebihi lebar layar bisa di-scroll ke kanan. -->
     <div class="qp-body">
         <div class="qp-columns-outer" id="qpColumnsOuter">
             <div class="qp-columns-track" id="qpColumnsTrack">
                 @foreach ($qpChunks as $qpChunk)
                     <div class="qp-column">
-                        <div class="qp-col-header">
+                        <div class="qp-col-header   ">
                             <div class="qp-grid p-2 p-lg-4">
                                 <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">Location</span>
                                 <span class="bg-card rounded-3 d-flex justify-content-center align-items-center text-center">
@@ -740,7 +733,7 @@
                             @foreach ($qpChunk as $d)
                                 @php $v = $qpRowVisual($d); @endphp
                                 <div class="qp-row bg-card-line rounded-3">
-                                    <div class="qp-grid px-2 px-lg-4">
+                                    <div class="qp-grid px-2 px-lg-1">
                                         <span class="d-flex justify-content-center align-items-center">{{ $d['namagroup'] }}</span>
 
                                         @if ($v['isOff'])
