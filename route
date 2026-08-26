@@ -1,2 +1,626 @@
-Route::get('endlineperformance/defect-chart-options', [EndlinePerformanceController::class, 'getDefectChartOptions'])->name('monitoring_endlineperformance_defectoptions');
-Route::get('endlineperformance/defect-chart-data', [EndlinePerformanceController::class, 'getDefectChartData'])->name('monitoring_endlineperformance_defectdata');
+
+<style>
+    .weekly-card-body {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+    }
+
+    .weekly-card-body .wrapper-title {
+        flex: 0 0 auto;
+    }
+
+    .weekly-card-body .defect-title {
+        flex: 0 0 auto;
+        margin-top: 8px;
+    }
+
+    /* Table scrolling */
+    .weekly-performance-table {
+        flex: 0 0 auto;
+        min-height: 0;
+        width: 100%;
+    }
+
+    .weekly-performance-table .table-scroll-wrapper {
+        width: 100%;
+        overflow-x: auto;
+        overflow-y: hidden;
+    }
+
+    .weekly-card-body .table-wrapper {
+        flex: 1 1 0;
+        min-height: 80px;
+        height: auto;
+        max-height: none;
+        width: 100%;
+        overflow-y: auto;
+        overflow-x: auto;
+        border: 1px solid #242E3E;
+        border-radius: 4px;
+    }
+
+    .table-res {
+        font-size: 13px;
+    }
+
+    .table-res th {
+        font-size: 13px !important;
+        line-height: 1 !important;
+    }
+
+    .table-wrapper thead th {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: #1b2433;
+    }
+
+    .table-wrapper tfoot th,
+    .table-wrapper tfoot td {
+        position: sticky;
+        bottom: 0;
+        z-index: 10;
+        background: #1b2433;
+    }
+
+    /* Skeleton */
+    @keyframes skeleton-pulse {
+        0%   { opacity: 0.35; }
+        50%  { opacity: 0.75; }
+        100% { opacity: 0.35; }
+    }
+
+    .skeleton-box {
+        display: inline-block;
+        width: 100%;
+        height: 12px;
+        border-radius: 4px;
+        background-color: rgba(255, 255, 255, 0.12);
+        animation: skeleton-pulse 1.2s ease-in-out infinite;
+    }
+
+    .skeleton-circle {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background-color: rgba(255, 255, 255, 0.12);
+        animation: skeleton-pulse 1.2s ease-in-out infinite;
+        flex-shrink: 0;
+    }
+
+    .skeleton-row td {
+        padding-top: 10px;
+        padding-bottom: 10px;
+    }
+
+    .skeleton-row .skeleton-box {
+        width: 70%;
+        margin: 0 auto;
+    }
+
+    .skeleton-row .skeleton-box.text-start-w {
+        width: 90%;
+        margin: 0;
+    }
+
+    #selectWeek + .select2-container .select2-selection__rendered,
+    #selectWeek + .select2-container .select2-selection {
+        font-size: 14px !important;
+    }
+
+    .select2-container .select2-results__option {
+        font-size: 14px !important;
+        padding: 5px 8px !important;
+    }
+
+    .select2-container .select2-search__field {
+        font-size: 14px !important;
+    }
+
+    #tableInlineDefect {
+        table-layout: fixed;
+    }
+
+    @media (min-width: 992px) and (max-width: 1400px) {
+        .weekly-card-body { padding: 0; }
+        .weekly-card-body .wrapper-title { gap: 6px; margin-bottom: 2px; }
+        .datatable-header-left { gap: 6px !important; min-width: 0; }
+        .datatable-header-left img.detailIcon { width: 18px !important; height: 18px !important; }
+        .datatable-header-left h5 { font-size: 12px !important; line-height: 1.2; }
+
+        .datatable-header-right { width: 230px !important; flex-shrink: 0; }
+
+        #selectWeek + .select2-container { width: 100% !important; }
+        #selectWeek + .select2-container .select2-selection--single { height: 28px !important; min-height: 28px !important; }
+        #selectWeek + .select2-container .select2-selection--single .select2-selection__rendered {
+            font-size: 10px !important;
+            line-height: 28px !important;
+            padding-left: 8px !important;
+            padding-right: 25px !important;
+        }
+        #selectWeek + .select2-container .select2-selection--single .select2-selection__arrow {
+            height: 28px !important;
+            width: 22px !important;
+        }
+
+        .select2-container .select2-results__option { font-size: 10px !important; padding: 4px 7px !important; line-height: 1.2 !important; }
+        .select2-container .select2-search__field { font-size: 10px !important; min-height: 24px !important; padding: 3px 5px !important; }
+
+        .export-icon { width: 18px !important; height: 18px !important; }
+        .export-btn { font-size: 10px; }
+
+        .table-res { font-size: 10px !important; line-height: 1.15 !important; margin-top: 5px; }
+        .table-res th { font-size: 9px !important; line-height: 1.15 !important; padding: 4px 3px !important; }
+        .table-res td { font-size: 10px !important; line-height: 1.15 !important; padding: 4px 3px !important; }
+
+        #tableInlinePerformance th, #tableInlinePerformance td { padding: 3px 2px !important; }
+        #tableInlinePerformance thead th { line-height: 1.2 !important; }
+
+        .weekly-card-body .subheader { font-size: 11px !important; line-height: 1.2; margin-top: 4px !important;}
+        .weekly-card-body .defect-title { margin-top: 4px;}
+        .weekly-card-body .table-wrapper { margin-top: 4px !important; min-height: 50px; }
+
+        #tableInlineDefect th, #tableInlineDefect td { line-height: 1.20 !important; }
+        #tableInlineDefect thead th { font-size: 9px !important; line-height: 1.1 !important; }
+        #tableInlineDefect tbody td { font-size: 10px !important; }
+        #tableInlineDefect tfoot th, #tableInlineDefect tfoot td { font-size: 9px !important; padding: 3px !important; }
+
+
+        .defect-circle { width: 7px !important; height: 7px !important; }
+        .skeleton-box { height: 8px !important; border-radius: 3px; }
+        .skeleton-circle { width: 7px !important; height: 7px !important; }
+        .skeleton-row td { padding-top: 4px !important; padding-bottom: 4px !important; }
+    }
+
+    @media (max-width: 991.98px) {
+        .weekly-card-body {
+            height: auto;
+        }
+        .weekly-card-body .table-wrapper {
+            flex: none;
+            height: auto;
+            min-height: 200px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .wrapper-title {
+            flex-wrap: nowrap;
+            gap: 15px;
+        }
+
+        .datatable-header-left {
+            min-width: 0;
+        }
+
+        .datatable-header-left h5 {
+            font-size: 14px;
+        }
+
+        .wrapper-title > .d-flex:last-child {
+            width: auto !important;
+            flex-shrink: 0;
+        }
+
+        .wrapper-title > .d-flex:last-child > div {
+            width: 180px !important;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .title-wrapper {
+            flex-wrap: nowrap !important;
+            background-color: red;
+        }
+    }
+</style>
+
+<div class="weekly-card-body">
+    <!-- Header -->
+    <div class="title-wrapper d-flex align-items-center justify-content-between wrapper-title gap-3">
+        <div class="datatable-header-left d-flex align-items-center gap-2 flex-shrink-1">
+            <img src="{{ _asset('svg/inlinePerformance/calendar.svg') }}"
+                class="detailIcon"
+                alt="">
+            <h5 class="mb-0 fw-normal text-nowrap">
+                WEEKLY ENDLINE PERFORMANCE
+            </h5>
+        </div>
+        <div class="d-flex align-items-center gap-3 flex-shrink-0">
+            <div class="wrapper-select">
+                <select id="selectWeek" class="form-select select2 w-100">
+                    <option></option>
+                </select>
+            </div>
+            <button
+                class="export-btn bg-transparent border-0 p-0 d-flex align-items-center gap-1"
+                id="export-datatable-btn"
+                aria-label="Export">
+                <img
+                    src="{{ _asset('svg/inlinePerformance/export.svg') }}"
+                    class="export-icon"
+                    alt="Export">
+
+                <span class="custom-tooltip-bottom">Excel</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Table 1: Weekly Performance -->
+    <div class="table-scroll-wrapper" style="overflow-x:auto;">
+        <table id="tableInlinePerformance" class="table-res table-custom table table-borderless align-middle w-100 table-hover">
+            <thead>
+                <tr>
+                    <th class="text-center" style="width:10%;">Week</th>
+                    <th class="text-center" style="width:30%;">Periode Date</th>
+                    <th class="text-center" style="width:10%;">RFT QTY<br>(Pcs)</th>
+                    <th class="text-center" style="width:10%;">Inspect QTY<br>(Pcs)</th>
+                    <th class="text-center" style="width:10%;">Defect QTY<br>(Pcs)</th>
+                    <th class="text-center" style="width:10%;">RFT<br>(%)</th>
+                    <th class="text-center" style="width:10%;">WFT<br>(%)</th>
+                    <th class="text-center" style="width:10%;">Non Process<br>(%)</th>
+                    <th class="text-center" style="width:10%;">Process<br>(%)</th>
+                </tr>
+            </thead>
+            <tbody id="tableInlinePerformanceBody">
+                @include('monitoring::endlineperformance.performance.partials.weekly-row')
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Table 2: Top Defect Detail -->
+    <div class="mt-2">
+        <h6 class="subheader mb-0 fw-normal text-nowrap">TOP 5 DEFECT DETAIL</h6>
+    </div>
+
+    <div class="table-wrapper table-scroll-wrapper rounded mt-2">
+        <table id="tableInlineDefect" class="table-res table-custom table table-borderless align-middle w-100 table-hover">
+            <thead>
+                <tr>
+                    <th class="text-center" style="width:5%;">No.</th>
+                    <th class="text-center" style="width:20%;">Defect</th>
+                    <th class="text-center" style="width:7%;">Defect QTY</th>
+                    <th class="text-center" style="width:10%;">% of Total Defect</th>
+                    <th class="text-center" style="width:15%;">Top Style (Most Contribute)</th>
+                    <th class="text-center" style="width:10%;">QTY Defect (Pcs)</th>
+                    <th class="text-center" style="width:10%;">% of Defect</th>
+                </tr>
+            </thead>
+            <tbody id="tableInlineDefectBody" class="table-head text-center">
+                @php $top_defect = $top_defect ?? null; @endphp
+
+                @if (is_null($top_defect))
+                    @for ($r = 0; $r < 5; $r++)
+                        <tr class="skeleton-row skeleton-defect-row">
+                            <td><span class="skeleton-box"></span></td>
+                            <td>
+                                <div class="d-flex justify-content-start align-items-center gap-2">
+                                    <span class="skeleton-circle"></span>
+                                    <span class="skeleton-box text-start-w"></span>
+                                </div>
+                            </td>
+                            <td><span class="skeleton-box"></span></td>
+                            <td><span class="skeleton-box"></span></td>
+                            <td><span class="skeleton-box"></span></td>
+                            <td><span class="skeleton-box"></span></td>
+                            <td><span class="skeleton-box"></span></td>
+                        </tr>
+                    @endfor
+                @elseif ($top_defect->isEmpty())
+                    <tr class="empty-defect-row">
+                        <td colspan="7" class="text-center py-3 text-muted">
+                            There is no defect data for this week.
+                        </td>
+                    </tr>
+                @else
+                    @foreach ($top_defect as $index => $defect)
+                        @php $styles = $defect['top_style'] ?? []; @endphp
+
+                        @if (empty($styles))
+                            <tr>
+                                <td class="text-center">{{ $index + 1 }}</td>
+                                <td>
+                                    <div class="d-flex justify-content-start align-items-center gap-2">
+                                        <span class="defect-circle rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="background-color: {{ $defect['color'] }};"></span>
+                                        <span class="text-truncate" style="min-width:0; flex:1 1 auto;" title="{{ $defect['nmdefect'] }}">
+                                            {{ $defect['nmdefect'] }}
+                                        </span>
+                                    </div>
+                                </td>
+                                <td class="text-center">{{ $defect['defect_qty'] }}</td>
+                                <td class="text-center">{{ $defect['percent'] }}%</td>
+                                <td class="text-center">-</td>
+                                <td class="text-center">-</td>
+                                <td class="text-center">-</td>
+                            </tr>
+                        @else
+                            @foreach ($styles as $sIndex => $style)
+                                <tr>
+                                    @if ($sIndex === 0)
+                                        <td rowspan="{{ count($styles) }}" class="text-center">{{ $index + 1 }}</td>
+                                        <td rowspan="{{ count($styles) }}">
+                                            <div class="d-flex justify-content-start align-items-center gap-2">
+                                                <span class="defect-circle rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="background-color: {{ $defect['color'] }};"></span>
+                                                <span class="text-truncate" style="min-width:0; flex:1 1 auto;" title="{{ $defect['nmdefect'] }}">
+                                                    {{ $defect['nmdefect'] }}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td rowspan="{{ count($styles) }}" class="text-center">{{ $defect['defect_qty'] }}</td>
+                                        <td rowspan="{{ count($styles) }}" class="text-center">{{ $defect['percent'] }}%</td>
+                                    @endif
+                                    <td>{{ $style['style'] }}</td>
+                                    <td>{{ $style['qty'] }}</td>
+                                    <td>{{ $style['percent'] }}%</td>
+                                </tr>
+                            @endforeach
+                        @endif
+                    @endforeach
+                @endif
+            </tbody>
+            <tfoot class="table-foot" id="tableInlineDefectFoot">
+                <tr>
+                    <th></th>
+                    <th class="text-start">TOTAL</th>
+                    <th>{{ $totTopDefect ?? 0 }}</th>
+                    <th>
+                        @php
+                            $totPercent = collect($top_defect ?? [])->sum(fn($d) => (float) $d['percent']);
+                            $totPercent = round($totPercent);
+                        @endphp
+
+                        {{ number_format($totPercent, 0) }}%
+                    </th>
+
+                    <th></th>
+                    <th>
+                        @php
+                            $totStyleQty = collect($top_defect ?? [])
+                                ->flatMap(fn($d) => $d['top_style'] ?? [])
+                                ->sum(fn($s) => (int) $s['qty']);
+                        @endphp
+                        {{ $totStyleQty }}
+                    </th>
+                    <th>
+                        @php
+                            $totStylePercent = ($totTopDefect ?? 0) > 0 ? ($totStyleQty / $totTopDefect) * 100 : 0;
+                            $totStylePercent = min($totStylePercent, 100);
+                        @endphp
+                        {{ number_format($totStylePercent, 2) }}%
+                    </th>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+
+@push('scripts')
+<script>
+$(function () {
+    let weeklyDataTable = null;
+    let isTableLoading = false;
+
+    // Datatables
+    function destroyPerformanceDataTable() {
+        if ($.fn.DataTable.isDataTable('#tableInlinePerformance')) {
+            $('#tableInlinePerformance').DataTable().destroy();
+        }
+        weeklyDataTable = null;
+    }
+
+    function initPerformanceDataTable() {
+        if ($('#tableInlinePerformanceBody tr').length === 0) return;
+
+        destroyPerformanceDataTable();
+
+        weeklyDataTable = $('#tableInlinePerformance').DataTable({
+            paging: false,
+            ordering: false,
+            searching: false,
+            info: false,
+            lengthChange: false,
+            autoWidth: false,
+            dom: ''
+        });
+    }
+
+    function exportExcel() {
+        const workbook = XLSX.utils.book_new();
+        const exportData = [];
+
+        const styleRange = (worksheet, startRow, endRow, startCol, endCol, style) => {
+            for (let row = startRow; row <= endRow; row++) {
+                for (let col = startCol; col <= endCol; col++) {
+                    const cell = XLSX.utils.encode_cell({ r: row, c: col });
+                    if (worksheet[cell]) worksheet[cell].s = style;
+                }
+            }
+        };
+
+        // Style Definitions
+        const borderBase = { style: 'thin', color: { rgb: 'B7B7B7' } };
+        const border = { top: borderBase, bottom: borderBase, left: borderBase, right: borderBase };
+
+        const titleStyle = {
+            font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 12 },
+            fill: { fgColor: { rgb: '1B2433' } },
+            alignment: { horizontal: 'left', vertical: 'center' },
+            border: border
+        };
+
+        const headerStyle = {
+            font: { bold: true, color: { rgb: 'FFFFFF' } },
+            fill: { fgColor: { rgb: '242E3E' } },
+            alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+            border: border
+        };
+
+        const bodyStyle = { alignment: { vertical: 'center' }, border: border };
+        const centerStyle = { alignment: { horizontal: 'center', vertical: 'center' }, border: border };
+
+        // --- TABLE 1: Weekly Performance ---
+        const performanceTitleRow = exportData.length;
+        exportData.push(['WEEKLY ENDLINE PERFORMANCE']);
+
+        const performanceHeaderRow = exportData.length;
+        exportData.push([
+            'Week', 'Periode Date', 'RFT QTY (Pcs)', 'Inspect QTY (Pcs)',
+            'Defect QTY (Pcs)', 'RFT (%)', 'WFT (%)', 'Non Process (%)', 'Process (%)'
+        ]);
+
+        const performanceStartRow = exportData.length;
+        if (weeklyDataTable && $.fn.DataTable.isDataTable('#tableInlinePerformance')) {
+            weeklyDataTable.rows().every(function () {
+                const row = this.data();
+                exportData.push(row.map(value => $('<div>').html(value).text().trim()));
+            });
+        } else {
+            const performanceTable = document.getElementById('tableInlinePerformance');
+            const sheet = XLSX.utils.table_to_sheet(performanceTable, { raw: true });
+            const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            exportData.push(...data.slice(1));
+        }
+        const performanceEndRow = exportData.length - 1;
+
+        // Space Between Tables
+        exportData.push([]);
+
+        // --- TABLE 2: Top 5 Defect Detail ---
+        const defectTitleRow = exportData.length;
+        exportData.push(['TOP 5 DEFECT DETAIL']);
+
+        const defectHeaderRow = exportData.length;
+        exportData.push([
+            'No.', 'Defect', 'Defect QTY', '% of Total Defect',
+            'Top Style (Most Contribute)', 'QTY Defect (Pcs)', '% of Defect'
+        ]);
+
+        const defectStartRow = exportData.length;
+        const defectTable = document.getElementById('tableInlineDefect');
+        const defectSheet = XLSX.utils.table_to_sheet(defectTable, { raw: true });
+        const defectData = XLSX.utils.sheet_to_json(defectSheet, { header: 1 });
+        exportData.push(...defectData.slice(1));
+        const defectEndRow = exportData.length - 1;
+
+        const worksheet = XLSX.utils.aoa_to_sheet(exportData);
+
+        // Adjust Column Widths
+        worksheet['!cols'] = [
+            { wch: 10 }, { wch: 30 }, { wch: 15 }, { wch: 20 },
+            { wch: 30 }, { wch: 18 }, { wch: 15 }, { wch: 18 }, { wch: 15 }
+        ];
+
+        // Merge Titles
+        worksheet['!merges'] = [
+            { s: { r: performanceTitleRow, c: 0 }, e: { r: performanceTitleRow, c: 8 } },
+            { s: { r: defectTitleRow, c: 0 }, e: { r: defectTitleRow, c: 6 } }
+        ];
+
+        // Apply Styles
+        styleRange(worksheet, performanceTitleRow, performanceTitleRow, 0, 8, titleStyle);
+        styleRange(worksheet, performanceHeaderRow, performanceHeaderRow, 0, 8, headerStyle);
+
+        if (performanceEndRow >= performanceStartRow) {
+            styleRange(worksheet, performanceStartRow, performanceEndRow, 0, 8, bodyStyle);
+            styleRange(worksheet, performanceStartRow, performanceEndRow, 0, 0, centerStyle);
+            styleRange(worksheet, performanceStartRow, performanceEndRow, 2, 8, centerStyle);
+        }
+
+        styleRange(worksheet, defectTitleRow, defectTitleRow, 0, 8, titleStyle);
+        styleRange(worksheet, defectHeaderRow, defectHeaderRow, 0, 6, headerStyle);
+
+        if (defectEndRow >= defectStartRow) {
+            styleRange(worksheet, defectStartRow, defectEndRow, 0, 6, bodyStyle);
+            styleRange(worksheet, defectStartRow, defectEndRow, 0, 0, centerStyle);
+            styleRange(worksheet, defectStartRow, defectEndRow, 2, 3, centerStyle);
+            styleRange(worksheet, defectStartRow, defectEndRow, 5, 6, centerStyle);
+        }
+
+        worksheet['!rows'] = [];
+        worksheet['!rows'][performanceTitleRow] = { hpt: 25 };
+        worksheet['!rows'][performanceHeaderRow] = { hpt: 25 };
+        worksheet['!rows'][defectTitleRow] = { hpt: 25 };
+        worksheet['!rows'][defectHeaderRow] = { hpt: 25 };
+        worksheet['!freeze'] = { xSplit: 0, ySplit: performanceHeaderRow + 1 };
+
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Weekly Report');
+
+        let selectedWeek = $('#selectWeek option:selected').text() || 'Weekly Performance';
+        selectedWeek = selectedWeek.replace(/[\\/:*?"<>|]/g, '-').trim();
+        const fileName = `Report_Weekly_Endline_${selectedWeek}.xlsx`;
+
+        XLSX.writeFile(workbook, fileName);
+    }
+
+    $('#selectWeek').select2({
+        placeholder: 'Select Week',
+        width: '100%',
+        ajax: {
+            url: "{{ route('monitoring_endlineperformance_selectweek') }}",
+            type: "GET",
+            dataType: "json",
+            delay: 500,
+            data: params => ({ q: params.term, page: params.page || 1 }),
+            processResults: data => ({ results: data.results, pagination: data.pagination }),
+            cache: true
+        }
+    });
+
+    // Fetch Current Week
+    $.get("{{ route('monitoring_endlineperformance_currentweek') }}")
+        .done(res => {
+            if (!res?.selected?.id) {
+                console.error('Current week not found.', res);
+                return;
+            }
+            const option = new Option(res.selected.text, res.selected.id, true, true);
+            $('#selectWeek').append(option).trigger('change');
+        })
+        .fail(xhr => console.error('Failed to retrieve the current week.', xhr));
+
+    // Handle Week Change
+    $('#selectWeek').on('change', function () {
+        const weekId = $(this).val();
+        if (!weekId) return;
+
+        isTableLoading = true;
+        destroyPerformanceDataTable();
+
+        const week = weekId.split('-')[1];
+        $(document).trigger('week:changed', { week_id: weekId });
+        $('.subheader').text(`TOP 5 DEFECT DETAIL (WEEK ${week})`);
+
+        $.get("{{ route('monitoring_endlineperformance_data') }}", { week_id: weekId })
+            .done(html => {
+                const $res = $(html);
+
+                ['#tableInlinePerformanceBody', '#tableInlineDefectBody', '#tableInlineDefectFoot'].forEach(selector => {
+                    const content = $res.find(selector);
+                    if (content.length) $(selector).html(content.html());
+                });
+
+                initPerformanceDataTable();
+            })
+            .fail(xhr => console.error('Failed to get data.', xhr))
+            .always(() => isTableLoading = false);
+    });
+
+    $('#export-datatable-btn').off('click.exportExcel').on('click.exportExcel', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (isTableLoading) {
+            console.warn('Data is still loading, export cancelled.');
+            return;
+        }
+        exportExcel();
+    });
+});
+</script>
+
+@include('layouts.loading')
+@endpush
