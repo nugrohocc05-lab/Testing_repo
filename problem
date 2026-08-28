@@ -1,633 +1,435 @@
-<style>
-    thead tr th {
-        font-weight: 400;
-        font-size: 12px;
-    }
+  function datatable(Request $request)
+    {
+        preconnect(session('db'));
 
-    tbody tr td {
-        font-weight: 400;
-        font-size: 12px;
-        line-height: 28px;
-    }
+        $po = (new PurchaseOrder())->getTable();
+        $fi = (new OutputDetailFinalInspection())->getTable();
+        $od = (new OutputDetail())->getTable();
 
-    tfoot tr th {
-        font-weight: 600;
-        font-size: 14px;
-        line-height: 28px;
-    }
+        $outputdata = OutputDetailFinalInspection::selectRaw("DATE($fi.date_output) as tanggal")
+            ->addSelect(
+                "$od.kpno","$od.sub_style_id","$od.combine_pro","$od.idpo","$od.idcolor",
+                "$od.idsize","$po.idstyle","$fi.barcode","$fi.is_output","$fi.defect_code"
+            )
+            ->join($od,"$od.barcode","=","$fi.barcode")
+            ->join($po,"$po.idpo","=","$od.idpo")
+            ->whereNotNull("$fi.date_output")
+            ->orderBy("tanggal", "DESC");
 
-    .flex-fill.border-custom-datatable {
-        display: flex;
-        flex-direction: column;
-        min-height: 0;
-        height: 20%;
-        overflow: hidden;
-    }
+        $filter = false;
 
-    .wrapper-sub {
-        display: flex;
-        flex-direction: column;
-        min-height: 0;
-        flex: 1 1 auto;
-        overflow: hidden;
-    }
-
-    .table-scroll-wrapper {
-        flex: 1 1 auto;
-        min-height: 0;
-        overflow-y: auto;
-        overflow-x: auto;
-    }
-
-    .table-res {
-        margin-bottom: 0;
-
-    }
-
-    .table-res thead th {
-        position: sticky;
-        top: 0;
-        z-index: 2;
-        background-color: #1B2331;
-    }
-
-    .table-res tfoot th {
-        position: sticky;
-        bottom: 0;
-        z-index: 2;
-        background-color: #1B2331;
-    }
-</style>
-
-<div class="flex-fill border-custom-datatable rounded-1">
-    <div class="wrapper-sub">
-        <h6 class="subheader mb-0 fw-normal text-truncate px-3 pt-2">
-            PO PRIORITY PROGRESS FINAL (BASED ON ETD)
-        </h6>
-
-        <div class="table-wrapper table-scroll-wrapper rounded mt-2 px-2 pb-2">
-            <table class="table-res table-borderless align-middle w-100 table-hover">
-                <thead>
-                    <tr>
-                        <th class="text-center" style="width:4%;">Priority</th>
-                        <th class="text-center" style="width:8%;">PO No.</th>
-                        <th class="text-center" style="width:8%;">Buyer</th>
-                        <th class="text-center" style="width:8%;">Style</th>
-                        <th class="text-center" style="width:8%;">Article</th>
-                        <th class="text-center" style="width:8%;">Color</th>
-                        <th class="text-center" style="width:8%;">QTY Order <br>(Pcs)</th>
-                        <th class="text-center" style="width:8%;">Output <br>(Pcs)</th>
-                        <th class="text-center" style="width:8%;">Progress Output <br>(Pcs)</th>
-                        <th class="text-center" style="width:9%;">ETD <br>(Shipment Date)</th>
-                        <th class="text-center" style="width:8%;">Days to ETD</th>
-                        <th class="text-center" style="width:8%;">Status Final</th>
-                    </tr>
-                </thead>
-                <tbody class="text-center">
-                    <tr>
-                        <td class="text-center">1</td>
-                        <td class="text-center">PO-123</td>
-                        <td class="text-center">Adidas</td>
-                        <td class="text-center">S232MDH</td>
-                        <td class="text-center">MTR-110</td>
-                        <td class="text-center">Black</td>
-                        <td class="text-center">18,000</td>
-                        <td class="text-center">16,200</td>
-                        <td class="text-center">90.00%</td>
-                        <td class="text-center">22 Mei 2026</td>
-                        <td class="text-center">-2</td>
-                        <td class="text-center">REJECT</td>
-                    </tr>
-                    <tr>
-                        <td class="text-center">1</td>
-                        <td class="text-center">PO-123</td>
-                        <td class="text-center">Adidas</td>
-                        <td class="text-center">S232MDH</td>
-                        <td class="text-center">MTR-110</td>
-                        <td class="text-center">Black</td>
-                        <td class="text-center">18,000</td>
-                        <td class="text-center">16,200</td>
-                        <td class="text-center">90.00%</td>
-                        <td class="text-center">22 Mei 2026</td>
-                        <td class="text-center">-2</td>
-                        <td class="text-center">REJECT</td>
-                    </tr>
-                    <tr>
-                        <td class="text-center">1</td>
-                        <td class="text-center">PO-123</td>
-                        <td class="text-center">Adidas</td>
-                        <td class="text-center">S232MDH</td>
-                        <td class="text-center">MTR-110</td>
-                        <td class="text-center">Black</td>
-                        <td class="text-center">18,000</td>
-                        <td class="text-center">16,200</td>
-                        <td class="text-center">90.00%</td>
-                        <td class="text-center">22 Mei 2026</td>
-                        <td class="text-center">-2</td>
-                        <td class="text-center">REJECT</td>
-                    </tr>
-                    <tr>
-                        <td class="text-center">1</td>
-                        <td class="text-center">PO-123</td>
-                        <td class="text-center">Adidas</td>
-                        <td class="text-center">S232MDH</td>
-                        <td class="text-center">MTR-110</td>
-                        <td class="text-center">Black</td>
-                        <td class="text-center">18,000</td>
-                        <td class="text-center">16,200</td>
-                        <td class="text-center">90.00%</td>
-                        <td class="text-center">22 Mei 2026</td>
-                        <td class="text-center">-2</td>
-                        <td class="text-center">REJECT</td>
-                    </tr>
-                    <tr>
-                        <td class="text-center">1</td>
-                        <td class="text-center">PO-123</td>
-                        <td class="text-center">Adidas</td>
-                        <td class="text-center">S232MDH</td>
-                        <td class="text-center">MTR-110</td>
-                        <td class="text-center">Black</td>
-                        <td class="text-center">18,000</td>
-                        <td class="text-center">16,200</td>
-                        <td class="text-center">90.00%</td>
-                        <td class="text-center">22 Mei 2026</td>
-                        <td class="text-center">-2</td>
-                        <td class="text-center">REJECT</td>
-                    </tr>
-                    <tr>
-                        <td class="text-center">1</td>
-                        <td class="text-center">PO-123</td>
-                        <td class="text-center">Adidas</td>
-                        <td class="text-center">S232MDH</td>
-                        <td class="text-center">MTR-110</td>
-                        <td class="text-center">Black</td>
-                        <td class="text-center">18,000</td>
-                        <td class="text-center">16,200</td>
-                        <td class="text-center">90.00%</td>
-                        <td class="text-center">22 Mei 2026</td>
-                        <td class="text-center">-2</td>
-                        <td class="text-center">REJECT</td>
-                    </tr>
-
-                </tbody>
-                <tfoot class="table-foot" id="tableInlineDefectFoot">
-                    <tr>
-                        <th style="color: #4C8CF2;">Total</th>
-                        <th></th>
-                        <th></th>
-                        <th></th>
-                        <th></th>
-                        <th></th>
-                        <th class="text-center" style="color: #4C8CF2;">940,416</th>
-                        <th class="text-center" style="color: #4C8CF2;">940,416</th>
-                        <th class="text-center" style="color: #4C8CF2;">75.55%</th>
-                        <th class="text-center"></th>
-                        <th class="text-center" style="color: #4C8CF2;"></th>
-                        <th class="text-center" style="color: #4C8CF2;"></th>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
-    </div>
-</div>
-
-
-index
-@extends('layouts.masternonavbar')
-
-@section('extracss')
-<style>
-    .stat-card {
-        height: 150px !important;
-        min-height: 150px !important;
-        padding: 0 !important;
-    }
-
-    .stat-card img {
-        width: 40px !important;
-        height: 40px !important;
-        margin-bottom: .45rem !important;
-    }
-
-    .stat-card h6 {
-        font-size: 1rem;
-        margin-bottom: .25rem !important;
-    }
-
-    .stat-card h2 {
-        font-size: 1.5rem;
-        line-height: 1;
-    }
-
-    .stat-card small {
-        font-size: 1rem;
-    }
-
-    .stat-card-defect {
-        height: auto;
-    }
-
-    .stat-card-defect > div {
-        width: 100%;
-    }
-
-    .subtitle {
-        font-size: 13px;
-        color: white;
-    }
-
-    .defect-header {
-        width: 100%;
-    }
-
-    .defect-list {
-        width: 100%;
-        font-size: 13px;
-        gap: 2px;
-    }
-
-    #topDefectList {
-        max-height: 110px;
-        width: 100%;
-        overflow-y: auto;
-        overflow-x: hidden;
-        -webkit-overflow-scrolling: touch;
-    }
-
-    #topDefectList::-webkit-scrollbar {
-        width: 3px;
-    }
-
-    #topDefectList::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.3);
-        border-radius: 4px;
-    }
-
-    #topDefectList .defect-item {
-        display: flex;
-        align-items: center;
-        width: 100%;
-        margin-bottom: 1px;
-    }
-
-    #topDefectList .defect-item:last-child {
-        margin-bottom: 0;
-    }
-
-    .defect-circle {
-        width: 12px;
-        height: 12px;
-    }
-
-    .defect-name {
-        flex: 1;
-        min-width: 0;
-        margin-left: 8px;
-        text-align: left;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .defect-total {
-        flex: 0 0 auto;
-        margin-left: 8px;
-        white-space: nowrap;
-    }
-
-    .defect-percent {
-        flex: 0 0 55px;
-        margin-left: 8px;
-        text-align: right;
-        white-space: nowrap;
-    }
-
-    .icon-summary {
-        width: 25px;
-        height: 25px;
-    }
-
-    @media (min-width: 992px) and (max-width: 1400px) {
-        #topDefectList {
-            max-height: 83px;
+        if ($request->has('kp') and $request->kp != null) {
+            $outputdata = $outputdata->where("$od.kpno", $request->kp);
+            $filter = true;
         }
 
-        .stat-card {
-            height: 120px !important;
-            min-height: 120px !important;
-        }
+        if (
+            $request->has('datea') and
+            $request->has('dateb') and
+            $request->datea != null and
+            $request->dateb != null
+        ) {
+            if($request->datea == $request->dateb){
+                $dta = Carbon::parse($request->datea);
 
-        .stat-card img {
-            width: 24px !important;
-            height: 24px !important;
-            margin-bottom: .35rem !important;
-        }
+                $outputdata = $outputdata->whereDate('date_output', $dta);
+            }else{
+                $m_da =
+                    $request->datea > $request->dateb
+                        ? $request->dateb
+                        : $request->datea;
+                $m_db =
+                    $request->datea > $request->dateb
+                        ? $request->datea
+                        : $request->dateb;
+                $dta = Carbon::parse($m_da);
+                $dtb = Carbon::parse($m_db)->endOfDay();
 
-        .stat-card h6 {
-            font-size: 13px;
-            margin-bottom: .25rem !important;
-        }
+                $diff = $dta->diffInDays($dtb);
 
-        .stat-card h2 {
-            font-size: 15px;
-            line-height: 1;
-        }
+                if ($diff > 31) {
+                    return '<center><h3>Date Has More Than 31 Days in Range, Cannot View Data.</h3></center>';
+                }
 
-        .stat-card small {
-            font-size: 10px;
-        }
-
-        .stat-card-defect {
-            height: auto;
-        }
-
-        .stat-card-defect > div {
-            width: 100%;
-        }
-
-        .defect-header {
-            width: 100%;
-        }
-
-        .defect-list {
-            width: 100%;
-            font-size: 10px;
-        }
-
-        .flatpickr-calendar {
-            max-width: 315px;
-            padding: 4px;
-            border-radius: 4px;
-        }
-
-        .flatpickr-day {
-            width: 30px;
-            height: 30px;
-            line-height: 30px;
-            font-size: 0.68rem;
-        }
-
-        .flatpickr-current-month {
-            font-size: 0.95rem;
-        }
-
-        span.flatpickr-weekday {
-            font-size: 0.75rem;
-        }
-
-        .text-title {
-            font-size: 12px;
-        }
-
-        .margin-cstm {
-            margin-top: 10px !important;
-            padding: 6px 0 !important;
-        }
-    }
-
-    @media (max-width: 768px) {
-        #topDefectList {
-            max-height: 110px;
-        }
-
-        .defect-header {
-            flex-direction: column;
-            gap: 0.5rem !important;
-        }
-
-        .footer-title {
-            font-size: 12px;
-        }
-
-        .img-foot {
-            width: 15px;
-            height: 15px;
-        }
-
-        .title-pcs {
-            font-size: 10px !important;
-        }
-    }
-
-    .title-pcs {
-        font-size: 12px !important;
-    }
-
-    .subheader {
-        font-size: 15px;
-    }
-
-    .flex-lg-grow-7,
-    .flex-lg-grow-5 {
-        flex: 1 1 100%;
-    }
-
-    /* Desktop 992–1400 */
-    @media (min-width: 992px) and (max-width: 1399.98px) {
-        .flex-lg-grow-7 { flex: 7; }
-        .flex-lg-grow-5 { flex: 5; }
-
-        .subheader { font-size: 0.60rem; }
-
-        .wrapper-sub {
-            margin: 1px 2px;
-        }
-    }
-
-    /* Desktop besar >= 1400 */
-    @media (min-width: 1400px) {
-        .flex-lg-grow-7 { flex: 7; }
-        .flex-lg-grow-5 { flex: 5; }
-
-        .subheader { font-size: 0.9rem; }
-    }
-
-    .wrapper-sub {
-        margin: 10px 12px;
-    }
-</style>
-@endsection
-
-@section('content')
-<div class="container-fluid dashboard-wrap">
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
-        <div class="d-flex align-items-center gap-3 text-decoration-none">
-            <img src="{{ _asset('svg/finalInspection/final.svg') }}" class="icon-dashboard flex-shrink-0" alt="Endline Performance">
-            <div class="d-flex flex-column justify-content-center">
-                <h2 class="text-white mb-1 dashboard-title">FINAL INSPECTION DASHBOARD - {{ str_replace('GMS ', '', session('factoryname')) }}</h2>
-                <p class="text-white fs-6 mb-0 dashboard-subtitle">Monitoring Final Inspection and Shipment Readiness</p>
-            </div>
-        </div>
-
-        <div class="button-inline d-flex">
-            <button class="export-btn bg-transparent border-0 p-0" id="export-btn" aria-label="Export">
-                        <img src="{{ _asset('svg/inlinePerformance/export.svg') }}" alt="Export"
-                        class="export-icon"
-                        >
-                        <span class="custom-tooltip">Excel</span>
-                    </button>
-            <button type="button" class="export-btn px-3" style="border: none; background: transparent; outline: none; box-shadow: none; padding: 0;" onclick="location.reload()" aria-label="Refresh">
-                <img src="{{ _asset('svg/inlinePerformance/reload.svg') }}" alt="Refresh" class="icon-refresh">
-                <span class="custom-tooltip-bottom">Refresh</span>
-            </button>
-        </div>
-    </div>
-
-    <!-- Summary Filter -->
-    @include('monitoring::finalinspection.partials.summary')
-
-    <!-- Summary Cards -->
-    <div class="row g-3 card-wrapper">
-            <div class="col-12 col-sm-4 col-lg">
-                <div class="stat-card color-box-blue h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <img src="{{ _asset('svg/endlinePerformance/total-output.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
-                    <h6 class="fw-bold text-blue mb-0" style="line-height:1;">TOTAL</h6>
-                    <p class="fw-bold text-blue mb-0" style="line-height:1;">PO</p>
-                    <div class="d-flex align-items-end text-white">
-                        <h2 class="fw-bold mb-0" id="totalpo">-</h2>
-                    </div>
-                    <small class="title-pcs ms-1 text-white">PO</small>
-                </div>
-            </div>
-
-            <div class="col-12 col-sm-4 col-lg">
-                <div class="stat-card color-box-yellow h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <img src="{{ _asset('svg/inlinePerformance/qty-inspect.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
-                    <h6 class="fw-bold text-yellow mb-0" style="line-height:1;" >TOTAL</h6>
-                    <p class="fw-bold text-yellow mb-0" style="line-height:1;" >QTY</p>
-                    <div class="d-flex align-items-end text-white">
-                        <h2 class="fw-bold mb-0" id="cardQtyInspect">-</h2>
-                    </div>
-                    <small class="title-pcs ms-1 text-white">pcs</small>
-                </div>
-            </div>
-
-            <div class="col-12 col-sm-4 col-lg">
-                <div class="stat-card color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <img src="{{ _asset('svg/finalInspection/qty-inspect.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
-                    <h6 id="defectText" class="fw-bold text-red mb-0" style="line-height:1;" >TOTAL QTY</h6>
-                    <p class="fw-bold text-red mb-0" style="line-height:1;" >INSPECT</p>
-                    <div class="d-flex align-items-end text-white">
-                        <h2 class="fw-bold mb-0" id="cardQtyDefect">-</h2>
-                    </div>
-                    <small class="title-pcs ms-1 text-white">pcs</small>
-                </div>
-            </div>
-
-            <div class="col-12 col-sm-4 col-lg">
-                <div class="stat-card color-box-green h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <img src="{{ _asset('svg/finalInspection/po-need-final.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
-                    <h6 class="fw-bold text-green mb-0" style="line-height:1;" >PO NEED FINAL</h6>
-                    <p class="subtitle text-blue mb-0" style="line-height:1;" >(Final ≥ H - 1 ETD )</p>
-                    <div class="d-flex align-items-end text-white">
-                        <h2 class="fw-bold mb-0" id="cardRft">-</h2>
-                    </div>
-                    <small class="title-pcs ms-1 text-white">PO</small>
-                </div>
-            </div>
-
-            <div class="col-12 col-sm-4 col-lg">
-                <div class="stat-card color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <img src="{{ _asset('svg/finalInspection/overdue.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
-                    <h6 class="fw-bold text-red mb-0" style="line-height:1;" >OVERDUE</h6>
-                    <p class="subtitle text-blue mb-0" style="line-height:1;" >(ETD < Today)</p>
-                    <div class="d-flex align-items-end text-white">
-                        <h2 class="fw-bold mb-0" id="cardWft">-</h2>
-                    </div>
-                    <small class="title-pcs ms-1 text-white">PO</small>
-                </div>
-            </div>
-
-            <div class="col-12 col-sm-4 col-lg">
-                <div id="targetColor" class="stat-card color-box-green h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <img src="{{ _asset('svg/finalInspection/final-completed.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
-                    <h6 id="targetText" class="fw-bold text-green mb-0" style="line-height:1;" >FINAL</h6>
-                    <p class="text-green fw-bold mb-0" style="line-height:1;" >COMPLETED</p>
-                    <div class="d-flex align-items-end text-white">
-                        <h2 class="fw-bold mb-0 text-white">-</h2>
-                    </div>
-                    <small class="title-pcs ms-1 text-white">PO</small>
-                </div>
-            </div>
-
-            <div class="col-12 col-sm-4 col-lg">
-                <div id="targetColor" class="stat-card color-box-purple h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <img src="{{ _asset('svg/finalInspection/oql.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
-                    <h6 id="targetText" class="fw-bold text-purple mb-0" style="line-height:1;" >OQL</h6>
-                    <div class="d-flex align-items-end text-white">
-                        <h2 class="fw-bold mb-0 text-white">- %</h2>
-                    </div>
-                    <small class="title-pcs ms-1 text-white">Defect Rate</small>
-                </div>
-            </div>
-
-            <div class="col-12 col-sm-12 col-lg-2">
-                <div class="stat-card h-100 d-flex flex-column text-center p-3" style="background-color: #212B3E;border: 1px solid #4C8CF2; border-radius: 5px;">
-                    <h6 class="fw-bold text-white mb-3 mt-3 text-center">FINAL INSPECTION RESULT</h6>
-                    <div id="topDefectList" class="defect-list text-white ps-4 pe-3 w-100">
-                        <div class="text-white small text-center"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-    <!-- Weekly Defect -->
-    <div class="flex-grow-1" style="min-height:0;">
-        <div class="pt-3 row h-100 text-white g-2">
-            <!-- Left -->
-            <div class="col-12 col-lg-7 d-flex">
-                <div class="rounded d-flex flex-column w-100 gap-2" style="min-height:0;">
-                    <!-- Top -->
-                    @include('monitoring::finalinspection.partials.progress-final')
-
-                    <!-- Botttom Chart 3 Card-->
-                    @include('monitoring::finalinspection.partials.chart')
-                </div>
-            </div>
-
-            <!-- Right -->
-            <div class="col-12 col-lg-5 d-flex">
-                <div class="rounded d-flex flex-column w-100 gap-2" style="min-height:0; border:1px solid #242E3E;">
-                    <!-- Top -->
-                    @include('monitoring::finalinspection.partials.overview')
-
-                    <!-- Bottom Defect 2 card -->
-                    @include('monitoring::finalinspection.partials.category-defect')
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="footer-title text-white d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0">
-        <div class="d-flex align-items-center gap-2">
-            <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" class="img-foot" alt="">
-            Data Update
-            <span id="liveClock"></span>
-        </div>
-    </div>
-</div>
-
-@section('extrascript')
-<script>
-    $(document).on('click', '.loading-target', function (e) {
-        e.preventDefault();
-
-        const targetUrl = $(this).attr('href');
-
-        $('#loading').show();
-
-        setTimeout(function () {
-            window.location.href = targetUrl;
-        }, 100);
-
-        window.addEventListener('pageshow', function (event) {
-            if (event.persisted) {
-                $('#loading').hide();
+                $outputdata = $outputdata->whereBetween('date_output', [$dta, $dtb]);
             }
+
+            $filter = true;
+        }
+
+        if ($filter) {
+            $outputdata = $outputdata->get();
+        } else {
+            $outputdata = $outputdata->whereNull("$fi.barcode")->get();
+        }
+
+        $outputdata = $outputdata->sortBy('tanggal');
+
+        $mpo = $outputdata
+            ->pluck('idpo')
+            ->unique()
+            ->all();
+        $msize = $outputdata
+            ->pluck('idsize')
+            ->unique()
+            ->all();
+        $mcolor = $outputdata
+            ->pluck('idcolor')
+            ->unique()
+            ->all();
+        $mstyle = $outputdata
+            ->pluck('idstyle')
+            ->unique()
+            ->all();
+        $msubstyle = $outputdata
+            ->pluck('sub_style_id')
+            ->unique()
+            ->all();
+
+        $po = null;
+        $size = null;
+        $color = null;
+        $style = null;
+        $substyle = null;
+
+        foreach ($mpo as $p) {
+            $m_p = PurchaseOrder::where('idpo', $p)->first();
+            $po[$p] = $m_p ? $m_p->po : $p;
+        }
+
+        foreach ($mcolor as $c) {
+            $m_s = Color::select('nmcolor')
+                ->where('idcolor', $c)
+                ->first();
+            $color[$c] = $m_s ? $m_s->nmcolor : '-';
+        }
+
+        foreach ($msize as $u) {
+            $m_s = Size::select('nmsize')
+                ->where('idsize', $u)
+                ->first();
+            $size[$u] = $m_s ? $m_s->nmsize : '-';
+        }
+
+        foreach ($mstyle as $s) {
+            $m_s = Style::select('nmstyle')
+                ->where('idstyle', $s)
+                ->first();
+            $style[$s] = $m_s ? $m_s->nmstyle : '-';
+        }
+
+        foreach ($msubstyle as $ss) {
+            $m_ss = SubStyle::find($ss);
+            $substyle[$ss] = $m_ss ? $m_ss->name : '-';
+        }
+
+        $defects = QCDefect::select('kdcacat', 'pivot_code')
+            ->whereNotNull('pivot_code')
+            ->orderBy('pivot_code')
+            ->get();
+
+        session(['filterfikp' => $request->kp]);
+        session(['filterfidatea' => $request->datea]);
+        session(['filterfidateb' => $request->dateb]);
+
+        $outputdata = $outputdata->groupBy(
+            [
+                'tanggal',
+                'idstyle',
+                'kpno',
+                'sub_style_id',
+                'combine_pro',
+                'idpo',
+                'idcolor',
+                'idsize',
+            ],
+            false,
+        );
+
+        return view('qc::finalinspectionreport.datatable', [
+            'defects' => $defects,
+            'outputdata' => $outputdata,
+            'mypo' => $po,
+            'mystyle' => $style,
+            'mysubstyle' => $substyle,
+            'mycolor' => $color,
+            'mysize' => $size,
+            'ctrl' => $this,
+        ]);
+    }
+
+view
+@php
+$i = 1;
+$dataoutput[] = 0;
+$datarft[] = 0;
+$datatotal[] = 0;
+$datainspect[] = 0;
+$databgrade[] = 0;
+$datacgrade[] = 0;
+$datarar[] = 0;
+$databalance[] = 0;
+$data_sample[] = 0;
+$datadefect = null;
+@endphp
+@foreach ($defects as $def)
+    @php
+        $datadefect[$def->kdcacat] = 0;
+    @endphp
+@endforeach
+<table id="datatable" class="table table-bordered table-striped nowrap" style="width: 100%">
+    <thead>
+        <tr>
+            <th style="background-color: #b3ccff">
+                <center>No</center>
+            </th>
+            <th style="background-color: #b3ccff">
+                <center>Date</center>
+            </th>
+            <th style="background-color: #b3ccff">
+                <center>Style</center>
+            </th>
+            <th style="background-color: #b3ccff">
+                <center>KP</center>
+            </th>
+            <th style="background-color: #b3ccff">
+                <center>Sub-Style</center>
+            </th>
+            <th style="background-color: #b3ccff">
+                <center>Y.PRO</center>
+            </th>
+            <th style="background-color: #b3ccff">
+                <center>PO</center>
+            </th>
+            <th style="background-color: #b3ccff">
+                <center>Color</center>
+            </th>
+            <th style="background-color: #b3ccff">
+                <center>Size</center>
+            </th>
+
+            <th style="background-color: #b3ccff">
+                <center>OUTPUT</center>
+            </th>
+            <th style="background-color: #b3ccff">
+                <center>RFT</center>
+            </th>
+            <th style="background-color: #b3ccff">
+                <center>Garment Inspected</center>
+            </th>
+            <th style="background-color: #b3ccff">
+                <center>Total Inspect</center>
+            </th>
+            <th style="background-color: #b3ccff">
+                <center>RFT (%)</center>
+            </th>
+            <th style="background-color: #b3ccff">
+                <center>Total Defect</center>
+            </th>
+            <th style="background-color: #b3ccff">
+                <center>Defect (%)</center>
+            </th>
+            <th style="background-color: #b3ccff">
+                <center>B Grade</center>
+            </th>
+            <th style="background-color: #b3ccff">
+                <center>C Grade</center>
+            </th>
+            <th style="background-color: #b3ccff">
+                <center>RAR</center>
+            </th>
+            <th style="background-color: #b3ccff">
+                <center>Balance To Repair</center>
+            </th>
+            @foreach ($defects as $d)
+                <th style="background-color: #b3ccff">
+                    <center><span style="display: none">'</span>{{ $d->kdcacat }}<span style="display: none">'</span></center>
+                </th>
+            @endforeach
+        </tr>
+    </thead>
+    <tbody>
+        @foreach ($outputdata as $tang => $gal)
+            @foreach ($gal as $sty => $le)
+                @foreach ($le as $ka => $pe)
+                    @foreach ($pe as $ss => $pero)
+                        @foreach ($pero as $pro => $cpro)
+                            @foreach ($cpro as $p => $o)
+                                @foreach ($o as $col => $or)
+                                    @foreach ($or as $si => $ze)
+                                    <tr>
+                                        <td>{{ $i++ }}</td>
+                                        <td>{{ $tang }}</td>
+                                        <td>{{ $mystyle[$sty] }}</td>
+                                        <td>{{ $ka }}</td>
+                                        <td>{{ $mysubstyle[$ss] }}</td>
+                                        <td>{{ $pro }}</td>
+                                        <td>{{ $mypo[$p] }}</td>
+                                        <td>{{ $mycolor[$col] }}</td>
+                                        <td>{{ $mysize[$si] }}</td>
+                                        <!-- ini output -->
+                                        @php
+                                            $outputcount = $ze;
+                                            $m_ok = collect($outputcount)->where('is_output', 1)
+                                                ->whereNotIn('defect_code', ['800','900'])
+                                                ->count();
+
+                                            $dataoutput[] = $m_ok;
+                                        @endphp
+                                        <td>{{ $m_ok }}</td>
+                                        @php
+                                            $m_rft = $outputcount
+                                                ->where('is_output', 1)
+                                                ->where('defect_code', '=', null)
+                                                ->count();
+
+                                            $datarft[] = $m_rft;
+                                            $sample_inspected = $outputcount->count();
+                                            $data_sample[] = $sample_inspected;
+                                        @endphp
+                                        <td>{{ $m_rft }}</td>
+                                        <td>{{ $sample_inspected }}</td>
+                                        @php
+                                            $m_tot = $outputcount->count();
+                                            $datatotal[] = $m_tot;
+                                        @endphp
+                                        <td>{{ $m_tot }}</td>
+                                        @php
+                                            if ($m_tot > 0) {
+                                                $per = ($m_rft / $m_tot) * 100;
+                                            } else {
+                                                $per = 0;
+                                            }
+                                        @endphp
+                                        <td>{{ number_format($per, 2) }}</td>
+                                        @php
+                                            $m_ins = collect($outputcount)->whereNotIn('defect_code', [null,'800','900'])->count();
+                                            $datainspect[] = $m_ins;
+                                        @endphp
+                                        <td>{{ $m_ins }}</td>
+                                        @php
+                                            $ins = $m_ins ?: 0;
+                                            $rf = $m_tot ?: 0;
+                                            if ($rf > 0) {
+                                                $prc2 = ($ins / $rf) * 100;
+                                                $precentdefect = number_format($prc2, 2);
+                                            } else {
+                                                $precentdefect = 0;
+                                            }
+
+                                        @endphp
+                                        <td>{{ $precentdefect }} %</td>
+                                        @php
+                                            $m_bg = $outputcount->where('defect_code', '800')->count();
+                                            $databgrade[] = $m_bg;
+                                        @endphp
+                                        <td>{{ $m_bg }}</td>
+                                        @php
+                                            $m_cg = $outputcount->where('defect_code', '900')->count();
+                                            $datacgrade[] = $m_cg;
+                                        @endphp
+                                        <td>{{ $m_cg }}</td>
+                                        @php
+                                            $m_rar = $outputcount
+                                                ->where('is_output', 1)
+                                                ->where('defect_code', null)
+                                                ->count();
+                                            $datarar[] = $m_rar;
+                                        @endphp
+                                        <td>{{ $m_rar }}</td>
+                                        @php $databalance[] = $m_ins - $m_rar; @endphp
+                                        <td>{{ $m_ins - $m_rar }}</td>
+
+                                        @php
+                                            $myDefect = $ze->pluck('defect_code')->flatMap(function ($item) {
+                                                return explode(',', $item);
+                                            })->map(function ($item) {
+                                                return ['defect_code' => (string) $item];
+                                            });
+                                        @endphp
+                                        @foreach ($defects as $def)
+                                            @php
+                                                $m_jml = $myDefect->where('defect_code', $def->kdcacat)->count();
+                                                $datadefect[$def->kdcacat] += $m_jml;
+                                            @endphp
+                                            <td>{{ $m_jml }}</td>
+                                        @endforeach
+                                    </tr>
+                                    @endforeach
+                                @endforeach
+                            @endforeach
+                        @endforeach
+                    @endforeach
+                @endforeach
+            @endforeach
+        @endforeach
+    </tbody>
+    <tfoot>
+        <tr>
+            <th colspan="9">
+                <center> </center>
+            </th>
+            <th>
+                <center>{{ array_sum($dataoutput) }}</center>
+            </th>
+            <th>
+                <center>{{ array_sum($datarft) }}</center>
+            </th>
+            <th>
+                <center>{{ array_sum($data_sample) }}</center>
+            </th>
+            <th>
+                <center>{{ array_sum($datatotal) }}</center>
+            </th>
+            <th>
+                <center> </center>
+            </th>
+            <th>
+                <center>{{ array_sum($datainspect) }}</center>
+            </th>
+            <th>
+                <center> </center>
+            </th>
+            <th>
+                <center>{{ array_sum($databgrade) }}</center>
+            </th>
+            <th>
+                <center>{{ array_sum($datacgrade) }}</center>
+            </th>
+            <th>
+                <center>{{ array_sum($datarar) }}</center>
+            </th>
+            <th>
+                <center>{{ array_sum($databalance) }}</center>
+            </th>
+            @foreach ($defects as $d)
+                <th style="background-color: #b3ccff">
+                    <center>{{ $datadefect[$d->kdcacat] }}</center>
+                </th>
+            @endforeach
+        </tr>
+    </tfoot>
+</table>
+<script type="text/javascript">
+    $(document).ready(function() {
+        $('#datatable').dataTable({
+            scrollY: "500px",
+            scrollX: true,
+            ordering: true,
+            info: false,
+            scrollCollapse: true,
+            paging: false,
+            fixedColumns: {
+                leftColumns: 8
+            },
+            dom: 'lBfrtip',
+            buttons: [{
+                    extend: 'excelHtml5',
+                    title: 'Report Final Inspection {{ date('d-m-Y ') . date('h_i_s a') }}',
+                    footer: true
+
+                },
+            ],
         });
     });
 </script>
-@endsection
-
-@include('layouts.loading')
-@endsection
