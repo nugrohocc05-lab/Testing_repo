@@ -1,79 +1,47 @@
-// Defect Aktif (Belum diisi CAP lengkap) per line
-$activeDefectMap = SewingOutput::whereDate('date', $date)
-    ->whereIn('line', $lineIds)
-    ->whereNotNull('defect_code')
-    ->where(function ($q) {
-        $q->whereNull('problem')
-          ->orWhereNull('nik_pic')
-          ->orWhereNull('action')
-          ->orWhereNull('root_cause');
-    })
-    ->groupBy('line')
-    ->selectRaw('line, COUNT(*) as total')
-    ->pluck('total', 'line');
+function summaryFilter(Request $request) {
+       preconnect(session('db'));
 
-// Oil Defect Aktif (Belum diisi CAP lengkap) per line
-$activeOilDefectMap = SewingOutput::whereDate('date', $date)
-    ->whereIn('line', $lineIds)
-    ->where('is_qc', 1)
-    ->whereIn('defect_code', [602])
-    ->where(function ($q) {
-        $q->whereNull('problem')
-          ->orWhereNull('nik_pic')
-          ->orWhereNull('action')
-          ->orWhereNull('root_cause');
-    })
-    ->groupBy('line')
-    ->selectRaw('line, COUNT(*) as total')
-    ->pluck('total', 'line');
+        $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
+        $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
 
+        $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
+        $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
 
-$activeDefect    = $activeDefectMap[$lineId] ?? 0;
-$activeOilDefect = $activeOilDefectMap[$lineId] ?? 0;
+        $headerQuery = OutputDetailFinalInspection::whereBetween('date_output', [$dta, $dtb]);
 
-return [
-    'kodegroup'         => $line->kodegroup,
-    'namagroup'         => $line->namagroup,
-    'line_id'           => $lineId,
-    'tot_inspect'       => $totInspect,
-    'tot_defect'        => $totDefect,        // Tetap untuk display/WFT
-    'active_defect'     => $activeDefect,     // Untuk logika TLS
-    'active_oil_defect' => $activeOilDefect, // Untuk logika TLS
-    'oil_defect'        => $oilDefect,
-    'defect_not_oil'    => $defectNotOil,
-    'rft'               => $rft,
-    'wft'               => $wft,
-    'mp'                => $mp,
-    'line_off'          => $lineOff,
-    'mps_off'           => $mpsOff,
-];
+        if ($request->line && $request->line != 'all') {
+            $headerQuery = $headerQuery->where('line', $request->line);
+        }
 
+        if ($request->groupbuyer && $request->groupbuyer != 'all') {
+            $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)
+                ->pluck('idbuyer');
 
-if (!$isOff) {
-    $activeDefect    = $d['active_defect'] ?? 0;
-    $activeOilDefect = $d['active_oil_defect'] ?? 0;
+            $poIds = PurchaseOrder::whereIn('idbuyer', $buyerIds)
+                ->pluck('idpo');
 
-    // 1. Oil defect aktif >= 10 -> Merah & Biru aktif bersamaan
-    if ($activeOilDefect >= 10) {
-        $more3Color = '#ff0404';
-        $more3Class = 'is-active';
+            $barcodes = OutputDetail::whereIn('idpo', $poIds)
+                ->select('barcode')
+                ->distinct()
+                ->pluck('barcode');
 
-        $oilColor   = '#0000FF';
-        $oilClass   = 'is-active';
+            $fi = OutputDetailFinalInspection::whereIn('barcode', $barcodes)->pluck('id');
 
-    // 2. Defect aktif > 3 -> Merah
-    } elseif ($activeDefect > 3) {
-        $more3Color = '#ff0404';
-        $more3Class = 'is-active';
+            if ($fi->isEmpty()) {
+                $headerQuery = $headerQuery->whereRaw('1 = 0');
+            } else {
+                $headerQuery = $headerQuery
+                    ->whereIn('id', $fi)
+                    ->where('is_qc', 1);
+            }
+        }
 
-    // 3. Defect aktif 1 - 3 -> Kuning
-    } elseif ($activeDefect >= 1) {
-        $defectColor = '#fff133';
-        $defectClass = 'is-active';
+        $totalPo = (clone $headerQuery)
+            ->where('is_output', 1)
+            ->count();
 
-    // 4. Tidak ada defect aktif (termasuk jika semua defect lama sudah di-CAP) -> Hijau
-    } else {
-        $noDefectColor = '#3dff2c';
-        $noDefectClass = 'is-active';
+        return response()->json([
+            'total_po'    => $totalPo,
+        ]);
+
     }
-}
