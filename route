@@ -1,59 +1,227 @@
-// Ganti bagian totInspect/totDefect/totRft + Process/Non-Process di getWeeklyData:
+// buildDayBuckets & buildHourBuckets sekarang murni kalkulasi, tanpa query DB
+private function buildDayBuckets(Carbon $dta, Carbon $dtb): array
+{
+    $buckets = [];
+    $cursor  = $dta->copy();
 
-// totInspect, totDefect, totRft — 1 query, tanpa join (sama koneksi dgn SewingOutput)
-$stats = (clone $headerQuery)->selectRaw("
-        SUM(CASE WHEN is_qc = 1 THEN 1 ELSE 0 END) as tot_inspect,
-        SUM(CASE WHEN defect_code IS NOT NULL THEN 1 ELSE 0 END) as tot_defect,
-        SUM(CASE WHEN is_qc = 1 AND is_output = 1 AND qc_seq = 0 AND defect_code IS NULL
-            THEN 1 ELSE 0 END) as tot_rft
-    ")
-    ->first();
-
-$totInspect = (int) ($stats->tot_inspect ?? 0);
-$totDefect  = (int) ($stats->tot_defect ?? 0);
-$totRft     = (int) ($stats->tot_rft ?? 0);
-
-$rft = $totInspect > 0 ? round(($totRft / $totInspect) * 100, 2) : 0;
-$wft = $totInspect > 0 ? round(($totDefect / $totInspect) * 100, 2) : 0;
-
-// Process / Non-Process — agregasi per defect_code dulu (SQL, koneksi SewingOutput),
-// baru category-nya dicocokkan di PHP, TAPI hanya untuk defect_code unik (puluhan),
-// bukan per baris defect (ribuan). Tidak ada join lintas-DB.
-$defectCountsByCode = (clone $headerQuery)
-    ->whereNotNull('defect_code')
-    ->select('defect_code', DB::raw('COUNT(*) as total'))
-    ->groupBy('defect_code')
-    ->get()
-    ->pluck('total', 'defect_code');
-
-$categoryMap = QCDefect::whereIn('kdcacat', $defectCountsByCode->keys())
-    ->pluck('category', 'kdcacat');
-
-$processQty           = 0;
-$nonProcessQty         = 0;
-$nonProcessQtyNoGrade = 0;
-
-foreach ($defectCountsByCode as $code => $total) {
-    $category = (int) ($categoryMap[$code] ?? 0);
-
-    if ($category === 1) {
-        $processQty += $total;
-        continue;
+    while ($cursor->lte($dtb)) {
+        $buckets[] = [
+            'key'   => $cursor->format('Y-m-d'), // dipakai untuk match DATE(date) dari SQL
+            'label' => $cursor->format('d M'),
+        ];
+        $cursor->addDay();
     }
 
-    $nonProcessQty += $total;
-
-    if (!in_array($code, [800, 900, 888])) {
-        $nonProcessQtyNoGrade += $total;
-    }
+    return $buckets;
 }
 
-$totDefectProcess = $processQty + $nonProcessQty;
+private function buildHourBuckets(Carbon $date): array
+{
+    $buckets = [];
+    foreach (range(7, 23) as $h) {
+        $mid = $date->copy()->setTime($h, 30, 0);
+        $buckets[] = [
+            'key'   => $h, // dipakai untuk match HOUR(date) dari SQL
+            'label' => sprintf('%02d:00', $h),
+            'time'  => $mid->format('Y-m-d H:i:s'),
+        ];
+    }
 
-$processPercent = $totDefectProcess > 0
-    ? round(($processQty / $totDefectProcess) * 100, 2)
-    : 0;
+    return $buckets;
+}
 
-$nonProcessPercent = $totDefectProcess > 0
-    ? round(($nonProcessQtyNoGrade / $totDefectProcess) * 100, 2)
-    : 0;
+private function buildBucketTopStyles(
+    Collection $barcodeRows,
+    array $buckets,
+    Collection $defectCodes,
+    Collection $inspectQtyPerBucket,
+    int $limit = 3
+): array {
+    $bucketKeys = collect($buckets)->pluck('key');
+
+    if ($defectCodes->isEmpty() || $barcodeRows->isEmpty()) {
+        return $bucketKeys->mapWithKeys(fn ($k) => [$k => []])->all();
+    }
+
+    // Hanya barcode dari baris yang sudah difilter is_qc=1 + defect_code terpilih
+    // (jauh lebih kecil dari seluruh dataset satu minggu)
+    $allBarcodes = $barcodeRows->pluck('barcode')->unique()->values();
+
+    $outputRows = OutputDetail::whereIn('barcode', $allBarcodes)
+        ->select('idpo', 'barcode')
+        ->get();
+
+    $poToStyle = PurchaseOrder::whereIn('idpo', $outputRows->pluck('idpo')->unique())
+        ->pluck('idstyle', 'idpo');
+
+    $styleNames = Style::whereIn('idstyle', $poToStyle->values()->unique())
+        ->pluck('nmstyle', 'idstyle');
+
+    // Kelompokkan barcode per (bucket, defect_code)
+    $grouped = $barcodeRows->groupBy(fn ($r) => $r->bucket_key . '|' . $r->defect_code);
+
+    $results = [];
+
+    foreach ($buckets as $bucket) {
+        $key        = $bucket['key'];
+        $inspectQty = (int) ($inspectQtyPerBucket[$key] ?? 0);
+        $results[$key] = [];
+
+        foreach ($defectCodes as $code) {
+            $rowsForBucketCode = $grouped->get($key . '|' . $code, collect());
+
+            if ($rowsForBucketCode->isEmpty()) {
+                $results[$key][(string) $code] = [];
+                continue;
+            }
+
+            $barcodeSet = $rowsForBucketCode->pluck('barcode')->unique()->flip();
+
+            $styleQty = $outputRows->filter(fn ($r) => $barcodeSet->has($r->barcode))
+                ->groupBy('idpo')
+                ->map->count();
+
+            $styleGrouped = [];
+            foreach ($styleQty as $idpo => $total) {
+                $idstyle = $poToStyle[$idpo] ?? null;
+                $nmstyle = $idstyle ? ($styleNames[$idstyle] ?? '-') : '-';
+                $styleGrouped[$nmstyle] = ($styleGrouped[$nmstyle] ?? 0) + $total;
+            }
+
+            arsort($styleGrouped);
+            $top = array_slice($styleGrouped, 0, $limit, true);
+
+            $rows = [];
+            foreach ($top as $nmstyle => $qty) {
+                $rows[] = [
+                    'style' => $nmstyle,
+                    'qty'   => $qty,
+                    'wft'   => $inspectQty > 0 ? round(($qty / $inspectQty) * 100, 2) : 0,
+                ];
+            }
+
+            $results[$key][(string) $code] = $rows;
+        }
+    }
+
+    return $results;
+}
+
+public function getDefectChartData(Request $request)
+{
+    preconnect(session('db'));
+
+    $request->validate([
+        'mode' => 'required|in:weekly,day',
+    ]);
+
+    $defectCodes = collect($request->input('defects', []))->map(fn ($c) => (int) $c)->values();
+    $isDay       = $request->mode === 'day';
+
+    if ($isDay) {
+        $date       = Carbon::now();
+        $buckets    = $this->buildHourBuckets($date);
+        $rangeStart = $date->copy()->startOfDay();
+        $rangeEnd   = $date->copy()->endOfDay();
+        $bucketExpr = 'HOUR(date)';
+    } else {
+        $dta        = Carbon::now()->subDays(6)->startOfDay();
+        $dtb        = Carbon::now()->endOfDay();
+        $buckets    = $this->buildDayBuckets($dta, $dtb);
+        $rangeStart = $dta;
+        $rangeEnd   = $dtb;
+        $bucketExpr = 'DATE(date)';
+    }
+
+    $colorMap = $this->getDefectColorMap($request->mode);
+    $names    = QCDefect::whereIn('kdcacat', $defectCodes)->pluck('deskripsi', 'kdcacat');
+
+    // 1) inspect qty per bucket — 1 query agregasi (menggantikan load semua row + hitung di PHP)
+    $inspectRows = SewingOutput::whereBetween('date', [$rangeStart, $rangeEnd])
+        ->where('is_qc', 1)
+        ->selectRaw("$bucketExpr as bucket_key, COUNT(*) as total")
+        ->groupBy('bucket_key')
+        ->pluck('total', 'bucket_key');
+
+    // 2) defect qty per bucket per code — 1 query agregasi, hanya utk defect_code terpilih
+    $defectQtyMap = [];
+    if ($defectCodes->isNotEmpty()) {
+        $defectAgg = SewingOutput::whereBetween('date', [$rangeStart, $rangeEnd])
+            ->where('is_qc', 1)
+            ->whereIn('defect_code', $defectCodes)
+            ->selectRaw("$bucketExpr as bucket_key, defect_code, COUNT(*) as total")
+            ->groupBy('bucket_key', 'defect_code')
+            ->get();
+
+        foreach ($defectAgg as $row) {
+            $defectQtyMap[$row->bucket_key][$row->defect_code] = (int) $row->total;
+        }
+    }
+
+    // 3) barcode per bucket per code — HANYA baris yg relevan (is_qc=1 + defect terpilih),
+    //    bukan seluruh dataset seperti sebelumnya
+    $barcodeRows = collect();
+    if ($defectCodes->isNotEmpty()) {
+        $barcodeRows = SewingOutput::whereBetween('date', [$rangeStart, $rangeEnd])
+            ->where('is_qc', 1)
+            ->whereIn('defect_code', $defectCodes)
+            ->selectRaw("$bucketExpr as bucket_key, defect_code, barcode")
+            ->get();
+    }
+
+    $topStylesPerBucket = $this->buildBucketTopStyles($barcodeRows, $buckets, $defectCodes, $inspectRows);
+
+    $labels     = [];
+    $seriesData = [];
+    $seriesQty  = [];
+    foreach ($defectCodes as $c) {
+        $seriesData[$c] = [];
+        $seriesQty[$c]  = [];
+    }
+
+    $bucketMeta = [];
+
+    foreach ($buckets as $bucket) {
+        $labels[] = $bucket['label'];
+
+        $key        = $bucket['key'];
+        $inspectQty = (int) ($inspectRows[$key] ?? 0);
+
+        foreach ($defectCodes as $code) {
+            $qty = $defectQtyMap[$key][$code] ?? 0;
+            $wft = $inspectQty > 0 ? round(($qty / $inspectQty) * 100, 2) : 0;
+
+            $seriesData[$code][] = $wft;
+            $seriesQty[$code][]  = (int) $qty;
+        }
+
+        $bucketMeta[] = [
+            'topStyles'  => $topStylesPerBucket[$key] ?? [],
+            'inspectQty' => $inspectQty,
+        ];
+    }
+
+    $series = $defectCodes->values()->map(function ($code) use ($seriesData, $seriesQty, $names, $colorMap) {
+        $codeKey = (string) $code;
+        $mapped  = $colorMap[$codeKey] ?? null;
+
+        return [
+            'code'  => $codeKey,
+            'name'  => $mapped['name']  ?? ($names[$code] ?? '-'),
+            'color' => $mapped['color'] ?? '#8A93A6',
+            'data'  => $seriesData[$code],
+            'qty'   => $seriesQty[$code],
+        ];
+    });
+
+    $times = $isDay
+        ? collect($buckets)->pluck('time')->values()
+        : [];
+
+    return response()->json([
+        'labels'     => $labels,
+        'times'      => $times,
+        'series'     => $series,
+        'bucketMeta' => $bucketMeta,
+    ]);
+}
