@@ -22,6 +22,8 @@ $(function () {
     let chartSeries = [];
     let bucketMeta = [];
 
+    const MAX_DEFECT_SELECTION = 5;
+
     function styleRange(worksheet, startRow, endRow, startCol, endCol, style) {
         for (let row = startRow; row <= endRow; row++) {
             for (let col = startCol; col <= endCol; col++) {
@@ -131,9 +133,9 @@ $(function () {
         XLSX.writeFile(workbook, fileName);
     }
 
-    // Ambil options + chart data untuk 1 mode (defects=[] / default), gabung jadi 1 Promise.
-    // Kalau sudah pernah fetch (chartCache & optionsCache terisi), langsung resolve tanpa request.
-    // Kalau sedang fetch (pendingFetch), kembalikan promise yang sama — hindari fetch dobel.
+    // Ambil options + chart data (default, tanpa filter) untuk 1 mode, gabung jadi 1 Promise.
+    // Kalau sudah pernah fetch, langsung resolve tanpa request.
+    // Kalau sedang fetch, kembalikan promise yang sama — hindari fetch dobel.
     function loadMode(mode) {
         if (chartCache[mode] && optionsCache[mode]) {
             return Promise.resolve();
@@ -165,11 +167,25 @@ $(function () {
         return combined;
     }
 
-    // Ambil data yang sudah tersimpan (options+chart) untuk mode tertentu, taruh ke state aktif, render
+    // Fetch chart data dengan filter defect spesifik (dipakai tombol Find) — selalu fetch baru
+    function fetchChartData(mode, defects) {
+        const params = { mode: mode, defects: defects };
+        return $.get("{{ route('monitoring_endlineperformance_defectdata') }}", params)
+            .then(function (res) {
+                chartCache[mode] = {
+                    labels: res.labels,
+                    times: res.times || [],
+                    series: res.series,
+                    bucketMeta: res.bucketMeta || [],
+                };
+            });
+    }
+
+    // Dipakai HANYA saat toggle weekly/day — refresh daftar defect + validasi ulang selection
     function applyModeFromCache(mode) {
         allDefects = optionsCache[mode] || [];
-        const validCodes = allDefects.map(o => o.code);
-        selectedDefects = selectedDefects.filter(c => validCodes.includes(c));
+        const validCodes = allDefects.map(o => String(o.code));
+        selectedDefects = selectedDefects.filter(c => validCodes.includes(String(c)));
 
         const cached = chartCache[mode] || { labels: [], times: [], series: [], bucketMeta: [] };
         xAxisLabels = cached.labels;
@@ -182,19 +198,16 @@ $(function () {
         renderChart();
     }
 
-    // Fetch data untuk filter defect spesifik (dipakai tombol Find) — selalu fetch baru,
-    // dan overwrite cache mode ini supaya toggle berikutnya tetap konsisten dgn filter terakhir
-    function fetchChartData(mode, defects) {
-        const params = { mode: mode, defects: defects };
-        return $.get("{{ route('monitoring_endlineperformance_defectdata') }}", params)
-            .then(function (res) {
-                chartCache[mode] = {
-                    labels: res.labels,
-                    times: res.times || [],
-                    series: res.series,
-                    bucketMeta: res.bucketMeta || [],
-                };
-            });
+    // Dipakai saat Find diklik — HANYA update chart, TIDAK menyentuh selectedDefects/allDefects
+    // (ini fix untuk bug chips hilang setelah Find)
+    function applyChartFromCache(mode) {
+        const cached = chartCache[mode] || { labels: [], times: [], series: [], bucketMeta: [] };
+        xAxisLabels = cached.labels;
+        xAxisTimes  = cached.times;
+        chartSeries = cached.series;
+        bucketMeta  = cached.bucketMeta;
+
+        renderChart();
     }
 
     // Toggle weekly/day
@@ -515,8 +528,6 @@ $(function () {
         $dropdown.toggleClass('d-none');
     });
 
-    const MAX_DEFECT_SELECTION = 5;
-
     $optionsList.on('click', '.filter-option-pill', function () {
         const code = String($(this).attr('data-code'));
         if (selectedDefects.includes(code)) {
@@ -556,11 +567,12 @@ $(function () {
         }
     });
 
-    // Tombol "Find" — selalu fetch baru sesuai filter yang dipilih user
+    // Tombol "Find" — selalu fetch baru sesuai filter yang dipilih user.
+    // Pakai applyChartFromCache (BUKAN applyModeFromCache) supaya chips tidak ikut ke-reset.
     $('#findbtndefect').on('click', function () {
         $('#loading').show();
         fetchChartData(currentMode, selectedDefects).then(function () {
-            applyModeFromCache(currentMode);
+            applyChartFromCache(currentMode);
             hasFiltered = true;
             $('#loading').hide();
         });
@@ -596,8 +608,8 @@ $(function () {
         applyModeFromCache(currentMode);
         $('#loading').hide();
 
-        // 2) Baru setelah render pertama selesai, prefetch mode satunya (day)
-        //    di background — TANPA loading indicator, tidak mengganggu user.
+        // 2) Setelah render pertama selesai, prefetch mode satunya (day) di background,
+        //    TANPA loading indicator, supaya tidak mengganggu tampilan awal.
         const otherMode = currentMode === 'weekly' ? 'day' : 'weekly';
         const prefetch = () => loadMode(otherMode);
 
