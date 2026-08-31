@@ -8,8 +8,8 @@ public function getFilterData(Request $request)
     $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
     $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
 
-    // Cache singkat: filter yang sama sering dipanggil ulang (summaryFilter & exportSummary)
     $cacheKey = 'endline_filter_' . md5(implode('|', [
+        session('db')->iddb ?? 'default',
         $dta->toDateTimeString(),
         $dtb->toDateTimeString(),
         $request->line ?? 'all',
@@ -25,27 +25,30 @@ public function getFilterData(Request $request)
         }
 
         if ($request->groupbuyer && $request->groupbuyer != 'all') {
-            // Subquery bertingkat — semuanya diproses di DB, tidak ada whereIn dengan
-            // array ID besar yang ditarik ke PHP lalu dikirim balik ke SQL.
-            $buyerSub = Buyer::where('groupbuyer', $request->groupbuyer)
-                ->select('idbuyer');
+            // Dikembalikan ke pendekatan pluck terpisah — model-model ini bisa
+            // resolve ke koneksi DB berbeda (multi-tenant via preconnect()),
+            // jadi tidak aman di-inline sebagai subquery lintas koneksi.
+            $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)
+                ->pluck('idbuyer');
 
-            $poSub = PurchaseOrder::whereIn('idbuyer', $buyerSub)
-                ->select('idpo');
+            $poIds = PurchaseOrder::whereIn('idbuyer', $buyerIds)
+                ->pluck('idpo');
 
-            $barcodeSub = OutputDetail::whereIn('idpo', $poSub)
+            $barcodes = OutputDetail::whereIn('idpo', $poIds)
                 ->select('barcode')
-                ->distinct();
+                ->distinct()
+                ->pluck('barcode');
 
-            // Kalau tidak ada barcode yang cocok, whereIn subquery kosong otomatis
-            // menghasilkan 0 baris — tidak perlu whereRaw('1=0') manual lagi.
-            $headerQuery = $headerQuery
-                ->where('is_qc', 1)
-                ->whereIn('barcode', $barcodeSub);
+            if ($barcodes->isEmpty()) {
+                $headerQuery = $headerQuery->whereRaw('1 = 0');
+            } else {
+                $headerQuery = $headerQuery
+                    ->where('is_qc', 1)
+                    ->whereIn('barcode', $barcodes);
+            }
         }
 
-        // Gabungkan totOutput, totInspect, totDefect, totRft jadi 1 query
-        // (sebelumnya 4 query COUNT(*) terpisah dari clone yang sama)
+        // Tetap digabung jadi 1 query (aman, semua di dalam koneksi SewingOutput yang sama)
         $agg = (clone $headerQuery)->selectRaw("
                 SUM(CASE WHEN is_output = 1
                          AND (defect_code NOT IN (800, 900) OR defect_code IS NULL)
