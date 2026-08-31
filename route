@@ -1,612 +1,13 @@
-<style>
-    .defect-card-body {
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-        min-height: 0;
-    }
-
-    .table-wrapper {
-        max-height: 300px;
-        overflow-y: auto;
-        overflow-x: auto;
-    }
-
-    .table-wrapper thead th {
-        position: sticky;
-        top: 0;
-        z-index: 10;
-    }
-
-    .table-wrapper tfoot th,
-    .table-wrapper tfoot td {
-        position: sticky;
-        bottom: 0;
-        z-index: 10;
-    }
-
-    .table-head {
-        table-layout: fixed;
-    }
-
-    .table-foot {
-        table-layout: fixed;
-    }
-
-    @media (min-width: 992px) and (max-width: 1400px) {
-        .table-wrapper {
-            max-height: 140px;
-            overflow-y: auto;
-            overflow-x: hidden;
-        }
-
-        .table-res {
-            font-size: 10px !important;
-        }
-
-        .subheader {
-            font-size: 15px;
-        }
-
-        .datatable-header-left h5 {
-            font-size: 12px !important;
-            line-height: 1.2;
-        }
-
-        .toggle-wrapper {
-            display: inline-flex;
-            background-color: #212B3E;
-            border-radius: 8px;
-            gap: 0;
-            overflow: hidden;
-        }
-
-        .toggle-btn {
-            min-width: 70px;
-            padding: 1px 10px;
-            text-align: center;
-            color: #fff;
-            background-color: transparent;
-            cursor: pointer;
-            font-weight: 400;
-            transition: all 0.2s ease;
-            margin: 0;
-        }
-
-         .defect-filter .position-relative {
-            width: 22px;
-            height: 22px;
-        }
-    }
-
-    @media (max-width: 768px) {
-        .table-wrapper {
-            max-height: 280px;
-            overflow-y: auto;
-            overflow-x: hidden;
-        }
-
-        .table-res {
-            font-size: 10px !important;
-        }
-    }
-
-    .table-res {
-        font-size: 13px;
-    }
-
-    .filter-chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        color: #FFFFFF;
-        font-size: 13px;
-        padding: 4px 10px;
-        border-radius: 20px;
-        cursor: pointer;
-        width: 100px;
-        flex-shrink: 0;
-    }
-
-
-    .filter-chip .chip-name {
-        overflow: hidden;
-        white-space: nowrap;
-        text-overflow: ellipsis;
-        min-width: 0;
-        flex: 1 1 auto;
-    }
-
-    .filter-chip .chip-remove {
-        cursor: pointer;
-        font-size: 12px;
-        line-height: 1;
-        opacity: 0.85;
-        border: none;
-        background: transparent;
-        color: inherit;
-        padding: 0;
-        flex-shrink: 0;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .filter-chip .chip-remove:hover {
-        opacity: 1;
-    }
-
-    .add-filter-btn {
-        width: 28px;
-        height: 28px;
-        padding: 0;
-        border-radius: 50%;
-        border: 1px solid #3A4557;
-        background-color: #35476C;
-        color: #FFFFFF;
-        font-size: 16px;
-        line-height: 28px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        flex-shrink: 0;
-    }
-
-    .add-filter-btn:hover {
-        background-color: #242E3E;
-    }
-
-    .filter-dropdown {
-        position: absolute;
-        top: calc(100% + 8px);
-        left: 0;
-        width: 280px;
-        max-height: 240px;
-        background-color: #1B2434;
-        border: 1px solid #3A4557;
-        border-radius: 10px;
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
-        z-index: 9999;
-        padding: 12px;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-    }
-
-    .filter-search-input {
-        width: 100%;
-        background-color: #242E3E;
-        border: 1px solid #3A4557;
-        color: #FFFFFF;
-        font-size: 13px;
-        padding: 6px 10px;
-        border-radius: 8px;
-        margin-bottom: 10px;
-        outline: none;
-        flex-shrink: 0;
-    }
-
-    .filter-options-list {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        overflow-y: auto;
-        padding-right: 4px;
-    }
-
-    .filter-option-pill {
-        display: inline-flex;
-        align-items: center;
-        background-color: #242E3E;
-        border: 1px solid var(--defect-color, #3A4557);
-        color: #FFFFFF;
-        font-size: 13px;
-        padding: 5px 12px;
-        border-radius: 20px;
-        cursor: pointer;
-        transition: all 0.15s ease;
-    }
-
-    .filter-option-pill.is-selected {
-        background-color: var(--defect-color);
-        color: #FFFFFF;
-    }
-
-    .filter-option-empty {
-        font-size: 13px;
-        color: #8A93A6;
-    }
-
-    .d-none {
-        display: none;
-    }
-
-    .chart-wrapper {
-        border-radius: 10px;
-        padding: 20px;
-        flex: 1 1 auto;
-        min-height: 0;
-        display: flex;
-        flex-direction: column;
-    }
-
-    #defectChart {
-        width: 100%;
-        height: 100%;
-        min-height: 0;
-    }
-
-    @media (max-width: 768px) {
-        .chart-wrapper {
-            min-height: 220px;
-            padding: 12px;
-        }
-
-        #defectChart {
-            min-height: 220px;
-        }
-    }
-
-    .toggle-wrapper {
-        display: inline-flex;
-        background-color: #212B3E;
-        border-radius: 8px;
-        gap: 0;
-        overflow: hidden;
-    }
-
-    .toggle-btn {
-        min-width: 70px;
-        padding: 5px 10px;
-        text-align: center;
-        color: #fff;
-        background-color: transparent;
-        cursor: pointer;
-        font-weight: 400;
-        transition: all 0.2s ease;
-        margin: 0;
-    }
-
-    #weekly:checked + .toggle-btn {
-        color: #fff;
-        background-color: #4C8CF2;
-        border-radius: 8px 0 0 8px;
-    }
-
-    #day:checked + .toggle-btn {
-        color: #fff;
-        background-color: #4C8CF2;
-        border-radius: 0 8px 8px 0;
-    }
-
-    .btn-check:checked + .toggle-btn:hover {
-        color: #fff;
-    }
-
-    .defect-filter-container {
-        display: flex;
-        align-items: center;
-        width: 100%;
-        min-width: 0;
-        gap: 12px;
-    }
-
-    .defect-filter {
-        display: flex;
-        align-items: flex-start;
-        flex-wrap: nowrap;
-        gap: 8px;
-        flex: 0 1 auto;
-        min-width: 0;
-        overflow: visible;
-        justify-content: flex-start;
-    }
-
-    .defect-filter .position-relative {
-        flex: 0 0 auto;
-        width: 28px;
-        height: 28px;
-    }
-
-    .filter-label {
-        color: #FFFFFF;
-        font-size: 14px;
-        white-space: nowrap;
-        flex-shrink: 0;
-    }
-
-    #selectedChips {
-        display: flex;
-        align-items: center;
-        flex-wrap: nowrap;
-        gap: 8px;
-        min-width: 0;
-        flex: 0 1 auto;
-        max-width: 100%;
-        overflow-x: auto;
-        overflow-y: hidden;
-        white-space: nowrap;
-        scrollbar-width: thin;
-        scrollbar-color: #D9D9D9 var(--bg-dark-2);
-    }
-
-    #selectedChips::-webkit-scrollbar {
-        height: 8px;
-    }
-
-    #selectedChips::-webkit-scrollbar-track {
-        background: var(--bg-dark-2);
-        border-radius: 4px;
-    }
-
-    #selectedChips::-webkit-scrollbar-thumb {
-        background: #D9D9D9;
-        border-radius: 4px;
-    }
-
-    .add-filter-btn {
-        width: 28px;
-        height: 28px;
-        padding: 0;
-        border-radius: 50%;
-        border: 1px solid #3A4557;
-        background-color: #35476C;
-        color: #FFFFFF;
-        font-size: 16px;
-        line-height: 28px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        flex-shrink: 0;
-    }
-
-    .filter-dropdown {
-        position: absolute;
-        top: calc(100% + 8px);
-        left: 0;
-        width: 280px;
-        max-height: 240px;
-        overflow-y: auto;
-        background-color: #1B2434;
-        border: 1px solid #3A4557;
-        border-radius: 10px;
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
-        z-index: 9999;
-        padding: 12px;
-    }
-
-    .filter-options-list {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-    }
-
-    .filter-option-pill {
-        display: inline-flex;
-        align-items: center;
-        background-color: #242E3E;
-        border: 1px solid #3A4557;
-        color: #FFFFFF;
-        font-size: 13px;
-        padding: 5px 12px;
-        border-radius: 20px;
-        cursor: pointer;
-    }
-
-    .btn-find {
-        flex-shrink: 0;
-        white-space: nowrap;
-        margin-left: auto;
-    }
-
-    @media (min-width: 992px) and (max-width: 1400px) {
-        /* Table */
-        .table-wrapper {
-            max-height: 140px;
-            overflow-y: auto;
-            overflow-x: hidden;
-        }
-
-        .table-res {
-            font-size: 10px !important;
-        }
-
-        .subheader {
-            font-size: 15px;
-        }
-
-        /* Header */
-        .datatable-header-left h5 {
-            font-size: 12px !important;
-            line-height: 1.2;
-        }
-
-        .detailIcon {
-            width: 18px !important;
-            height: 18px !important;
-        }
-
-        .export-icon {
-            width: 18px !important;
-            height: 18px !important;
-        }
-
-        /* Toggle weekly/day */
-        .toggle-wrapper {
-            display: inline-flex;
-            background-color: #212B3E;
-            border-radius: 8px;
-            gap: 0;
-            overflow: hidden;
-        }
-
-        .toggle-btn {
-            min-width: 50px;
-            padding: 3px 8px;
-            font-size: 11px;
-            text-align: center;
-            color: #fff;
-            background-color: transparent;
-            cursor: pointer;
-            font-weight: 400;
-            transition: all 0.2s ease;
-            margin: 0;
-        }
-
-        /* Filter defect */
-        .filter-label {
-            font-size: 11px;
-        }
-
-        .filter-chip {
-            font-size: 9px;
-            padding: 2px 8px;
-            gap: 4px;
-            width: 50px;
-        }
-
-        .filter-chip .chip-remove {
-            font-size: 10px;
-        }
-
-        .add-filter-btn {
-            width: 22px;
-            height: 22px;
-            font-size: 13px;
-            line-height: 22px;
-        }
-
-        .filter-dropdown {
-            width: 220px;
-            max-height: 180px;
-            padding: 8px;
-        }
-
-        .filter-option-pill {
-            font-size: 11px;
-            padding: 3px 9px;
-        }
-
-        .btn-find {
-            font-size: 11px;
-            padding: 3px 10px;
-        }
-
-        .defect-filter-container {
-            gap: 8px;
-        }
-
-        .defect-filter {
-            gap: 6px;
-        }
-
-        #selectedChips {
-            gap: 6px;
-        }
-
-        /* Chart */
-        .chart-wrapper {
-            min-height: 210px;
-            padding: 10px;
-        }
-
-        #defectChart {
-            min-height: 190px;
-        }
-    }
-
-    .filter-search-input::placeholder {
-        color: #8A93A6;
-    }
-
-    .filter-search-input:focus {
-        border-color: #4C8CF2;
-    }
-
-    @media (max-width: 768px) {
-        .chart-wrapper {
-            height: 220px;
-            min-height: 220px;
-            padding: 12px;
-        }
-
-        #defectChart {
-            height: 220px;
-            min-height: 220px;
-        }
-    }
-
-    @media (max-width: 820px) {
-        .chart-wrapper {
-            height: 220px;
-            min-height: 220px;
-            padding: 12px;
-        }
-
-        #defectChart {
-            height: 250px;
-            min-height: 220px;
-        }
-    }
-
-</style>
-
-<div class="defect-card-body">
-    <div class="d-flex align-items-center wrapper-title justify-content-between">
-        <div class="datatable-header-left">
-            <img src="{{ _asset('svg/endlinePerformance/defect-monitor.svg') }}" style="width:25px;height:25px;" class="detailIcon" alt="">
-            <h5 class="mb-0 fw-normal text-nowrap">
-                DEFECT MONITORING (WFT%)
-            </h5>
-        </div>
-        <div class="datatable-header-right gap-4" style="justify-content: end;">
-            <div class="toggle-wrapper">
-                <input type="radio" name="schedule_type" id="weekly" value="weekly" class="btn-check" autocomplete="off" checked>
-                <label class="toggle-btn" for="weekly">Weekly</label>
-                <input type="radio" name="schedule_type" id="day" value="day" class="btn-check" autocomplete="off">
-                <label class="toggle-btn" for="day">Day</label>
-            </div>
-            <button class="export-btn bg-transparent border-0 p-0 d-flex align-items-center gap-1" id="export-datatable" aria-label="Export">
-                <img src="{{ _asset('svg/inlinePerformance/export.svg') }}" class="export-icon" style="width:27px; height:27px;" alt="Export">
-                <span class="custom-tooltip-bottom">Excel</span>
-            </button>
-        </div>
-    </div>
-
-    <div class="d-flex flex-column gap-3">
-        <div class="defect-filter-container my-2">
-            <div class="defect-filter">
-                <span class="filter-label">Filter Defect:</span>
-                <div id="selectedChips"></div>
-                <div class="position-relative">
-                    <button id="addFilterBtn" class="add-filter-btn" type="button" aria-label="Add filter">+</button>
-                    <div id="filterDropdown" class="filter-dropdown d-none">
-                        <input type="text" id="defectSearchInput" class="filter-search-input" placeholder="Search..." autocomplete="off">
-                        <div id="filterOptionsList" class="filter-options-list"></div>
-                    </div>
-                </div>
-            </div>
-            <button class="btn-find" id="findbtndefect">
-                <img src="{{ _asset('svg/inlinePerformance/search.svg') }}" style="width:20px;height:15px;" alt="">
-                Find
-            </button>
-        </div>
-    </div>
-
-    <div class="chart-wrapper">
-        <div id="defectChart"></div>
-    </div>
-</div>
-
-@push('scripts')
 <script>
 $(function () {
     let allDefects = [];
     let selectedDefects = [];
     let hasFiltered = false;
     let currentMode = 'weekly';
+
+    // Cache hasil fetch per mode — supaya toggle weekly/day tidak fetch ulang ke server
+    const optionsCache = {}; // { weekly: [...], day: [...] }
+    const chartCache   = {}; // { weekly: {labels,times,series,bucketMeta}, day: {...} }
 
     const $chips = $('#selectedChips');
     const $dropdown = $('#filterDropdown');
@@ -729,40 +130,51 @@ $(function () {
         XLSX.writeFile(workbook, fileName);
     }
 
-    function fetchDefectOptions() {
-        return $.get("{{ route('monitoring_endlineperformance_defectoptions') }}", { mode: currentMode }, function (res) {
-            allDefects = res.options;
-            const validCodes = allDefects.map(o => o.code);
-            selectedDefects = selectedDefects.filter(c => validCodes.includes(c));
-        });
+    // ===== Fetch functions — sekarang menerima parameter mode & defects,
+    // dan menyimpan hasilnya ke cache, bukan langsung ke variabel state aktif =====
+
+    function fetchDefectOptions(mode) {
+        return $.get("{{ route('monitoring_endlineperformance_defectoptions') }}", { mode: mode })
+            .then(function (res) {
+                optionsCache[mode] = res.options;
+            });
     }
 
-    function fetchChartData() {
-        const params = {
-            mode: currentMode,
-            defects: selectedDefects,
-        };
-
-        $.get("{{ route('monitoring_endlineperformance_defectdata') }}", params, function (res) {
-            xAxisLabels = res.labels;
-            xAxisTimes = res.times || [];
-            chartSeries = res.series;
-            bucketMeta = res.bucketMeta || [];
-            renderChart();
-            $('#loading').hide();
-        });
+    function fetchChartData(mode, defects) {
+        const params = { mode: mode, defects: defects };
+        return $.get("{{ route('monitoring_endlineperformance_defectdata') }}", params)
+            .then(function (res) {
+                chartCache[mode] = {
+                    labels: res.labels,
+                    times: res.times || [],
+                    series: res.series,
+                    bucketMeta: res.bucketMeta || [],
+                };
+            });
     }
 
+    // Ambil data dari cache untuk mode tertentu, taruh ke variabel state aktif, lalu render
+    function applyModeFromCache(mode) {
+        allDefects = optionsCache[mode] || [];
+        const validCodes = allDefects.map(o => o.code);
+        selectedDefects = selectedDefects.filter(c => validCodes.includes(c));
+
+        const cached = chartCache[mode] || { labels: [], times: [], series: [], bucketMeta: [] };
+        xAxisLabels = cached.labels;
+        xAxisTimes  = cached.times;
+        chartSeries = cached.series;
+        bucketMeta  = cached.bucketMeta;
+
+        renderChips();
+        renderOptions();
+        renderChart();
+    }
+
+    // Toggle weekly/day — TIDAK fetch ke server, cukup switch dari cache
     function changeSchedule(type) {
         currentMode = type;
         selectedDefects = [];
-        hasFiltered = false;
-        $('#loading').show();
-        fetchDefectOptions().then(function () {
-            renderChips();
-            renderOptions();
-            fetchChartData();
-        });
+        applyModeFromCache(currentMode);
     }
 
     $('#weekly').on('change', function () { changeSchedule('weekly'); });
@@ -1102,18 +514,15 @@ $(function () {
         }
     });
 
+    // Tombol "Find" — TETAP fetch baru ke server, karena filter defect berubah
     $('#findbtndefect').on('click', function () {
-        fetchChartData();
-        hasFiltered = true;
         $('#loading').show();
+        fetchChartData(currentMode, selectedDefects).then(function () {
+            applyModeFromCache(currentMode);
+            hasFiltered = true;
+            $('#loading').hide();
+        });
     });
-
-    fetchDefectOptions().then(function () {
-        renderChips();
-        renderOptions();
-    });
-
-    fetchChartData();
 
     $('#export-datatable').on('click', function (e) {
         e.preventDefault();
@@ -1138,7 +547,20 @@ $(function () {
         renderOptions();
     });
 
+    // ===== INIT: fetch weekly + day sekaligus, sekali saja saat render pertama =====
+    $('#loading').show();
+    Promise.all([
+        fetchDefectOptions('weekly'),
+        fetchDefectOptions('day'),
+        fetchChartData('weekly', []),
+        fetchChartData('day', []),
+    ]).then(function () {
+        applyModeFromCache(currentMode); // currentMode default 'weekly'
+        $('#loading').hide();
+    }).catch(function () {
+        $('#loading').hide();
+        swal('Warning!', 'Failed to load chart data.', 'warning');
+    });
+
 });
 </script>
-@include('layouts.loading')
-@endpush
