@@ -1,133 +1,101 @@
-public function getFilterData(Request $request)
-{
-    preconnect(session('db'));
+// Ganti blok 6 query terpisah + $incompleteCapLines dengan ini:
 
-    $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
-    $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+$statsByLine = SewingOutput::whereDate('date', $date)
+    ->whereIn('line', $lineIds)
+    ->selectRaw("
+        line,
+        SUM(CASE WHEN is_qc = 1 THEN 1 ELSE 0 END) as tot_inspect,
+        SUM(CASE WHEN defect_code IS NOT NULL THEN 1 ELSE 0 END) as tot_defect,
+        SUM(CASE WHEN defect_code IS NOT NULL
+                 AND (problem IS NULL OR nik_pic IS NULL OR action IS NULL OR root_cause IS NULL)
+            THEN 1 ELSE 0 END) as tot_defect_cap,
+        SUM(CASE WHEN defect_code IS NOT NULL AND defect_code NOT IN (602)
+            THEN 1 ELSE 0 END) as defect_not_oil,
+        SUM(CASE WHEN is_qc = 1 AND defect_code IN (602)
+                 AND (problem IS NULL OR nik_pic IS NULL OR action IS NULL OR root_cause IS NULL)
+            THEN 1 ELSE 0 END) as oil_defect,
+        SUM(CASE WHEN is_output = 1 AND qc_seq = 0 AND defect_code IS NULL
+            THEN 1 ELSE 0 END) as tot_rft
+    ")
+    ->groupBy('line')
+    ->get()
+    ->keyBy('line');
 
-    $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
-    $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+// incompleteCapLines diturunkan dari statsByLine, tanpa query tambahan
+// (kondisinya identik dengan tot_defect_cap > 0)
+$incompleteCapLines = $statsByLine
+    ->filter(fn ($row) => $row->tot_defect_cap > 0)
+    ->keys()
+    ->flip();
 
-    $cacheKey = 'endline_filter_' . md5(implode('|', [
-        session('db')->iddb ?? 'default',
-        $dta->toDateTimeString(),
-        $dtb->toDateTimeString(),
-        $request->line ?? 'all',
-        $request->groupbuyer ?? 'all',
-    ]));
 
-    return Cache::remember($cacheKey, now()->addSeconds(60), function () use ($request, $dta, $dtb) {
 
-        $headerQuery = SewingOutput::whereBetween('date', [$dta, $dtb]);
+$lines = $lines->map(function ($line) use (
+    $mpMinusParam,
+    $statsByLine,
+    $incompleteCapLines
+    // hapus $totInspectMap, $totDefectMap, $totDefectCapMap, $defectNotOilMap, $oilDefectMap, $totRftMap dari use()
+) {
+    $lineId = $line->kodegroup;
+    $stat   = $statsByLine->get($lineId);
 
-        if ($request->line && $request->line != 'all') {
-            $headerQuery = $headerQuery->where('line', $request->line);
-        }
+    $totInspect    = (int) ($stat->tot_inspect ?? 0);
+    $totDefect     = (int) ($stat->tot_defect ?? 0);
+    $totDefectCap  = (int) ($stat->tot_defect_cap ?? 0);
+    $defectNotOil  = (int) ($stat->defect_not_oil ?? 0);
+    $oilDefect     = (int) ($stat->oil_defect ?? 0);
+    $totRft        = (int) ($stat->tot_rft ?? 0);
+    $capFilled     = !isset($incompleteCapLines[$lineId]);
 
-        if ($request->groupbuyer && $request->groupbuyer != 'all') {
-            // Dikembalikan ke pendekatan pluck terpisah — model-model ini bisa
-            // resolve ke koneksi DB berbeda (multi-tenant via preconnect()),
-            // jadi tidak aman di-inline sebagai subquery lintas koneksi.
-            $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)
-                ->pluck('idbuyer');
+    $rft = $totInspect > 0 ? round(($totRft / $totInspect) * 100, 2) : 0;
+    $wft = $totInspect > 0 ? round(($totDefect / $totInspect) * 100, 2) : 0;
 
-            $poIds = PurchaseOrder::whereIn('idbuyer', $buyerIds)
-                ->pluck('idpo');
+    // ... sisa logic lineOff/mpsOff/mp dari perbaikan sebelumnya TETAP SAMA, tidak berubah ...
 
-            $barcodes = OutputDetail::whereIn('idpo', $poIds)
-                ->select('barcode')
-                ->distinct()
-                ->pluck('barcode');
 
-            if ($barcodes->isEmpty()) {
-                $headerQuery = $headerQuery->whereRaw('1 = 0');
-            } else {
-                $headerQuery = $headerQuery
-                    ->where('is_qc', 1)
-                    ->whereIn('barcode', $barcodes);
-            }
-        }
 
-        // Tetap digabung jadi 1 query (aman, semua di dalam koneksi SewingOutput yang sama)
-        $agg = (clone $headerQuery)->selectRaw("
-                SUM(CASE WHEN is_output = 1
-                         AND (defect_code NOT IN (800, 900) OR defect_code IS NULL)
-                    THEN 1 ELSE 0 END) as tot_output,
-                SUM(CASE WHEN is_qc = 1 THEN 1 ELSE 0 END) as tot_inspect,
-                SUM(CASE WHEN defect_code IS NOT NULL THEN 1 ELSE 0 END) as tot_defect,
-                SUM(CASE WHEN is_qc = 1
-                         AND is_output = 1
-                         AND qc_seq = 0
-                         AND defect_code IS NULL
-                    THEN 1 ELSE 0 END) as tot_rft
-            ")
-            ->first();
+$so = (new SewingOutput())->getTable();
+$qc = (new QCDefect())->getTable();
 
-        $totOutput  = (int) ($agg->tot_output ?? 0);
-        $totInspect = (int) ($agg->tot_inspect ?? 0);
-        $totDefect  = (int) ($agg->tot_defect ?? 0);
-        $totRft     = (int) ($agg->tot_rft ?? 0);
+// 1 query menggabungkan: totInspect, totDefect, totRft, dan hitung Process/Non-Process
+// (sebelumnya: 3 query count + tarik SEMUA baris defect_code ke PHP untuk dihitung manual)
+$stats = (clone $headerQuery)
+    ->leftJoin("$qc", "$qc.kdcacat", '=', "$so.defect_code")
+    ->selectRaw("
+        SUM(CASE WHEN $so.is_qc = 1 THEN 1 ELSE 0 END) as tot_inspect,
+        SUM(CASE WHEN $so.defect_code IS NOT NULL THEN 1 ELSE 0 END) as tot_defect,
+        SUM(CASE WHEN $so.is_qc = 1 AND $so.is_output = 1 AND $so.qc_seq = 0
+                 AND $so.defect_code IS NULL
+            THEN 1 ELSE 0 END) as tot_rft,
+        SUM(CASE WHEN $so.defect_code IS NOT NULL AND COALESCE($qc.category, 0) = 1
+            THEN 1 ELSE 0 END) as process_qty,
+        SUM(CASE WHEN $so.defect_code IS NOT NULL AND COALESCE($qc.category, 0) = 0
+            THEN 1 ELSE 0 END) as non_process_qty,
+        SUM(CASE WHEN $so.defect_code IS NOT NULL AND COALESCE($qc.category, 0) = 0
+                 AND $so.defect_code NOT IN (800, 900, 888)
+            THEN 1 ELSE 0 END) as non_process_qty_no_grade
+    ")
+    ->first();
 
-        $rft = $totInspect > 0 ? round(($totRft / $totInspect) * 100, 2) : 0;
-        $wft = $totInspect > 0 ? round(($totDefect / $totInspect) * 100, 2) : 0;
+$totInspect = (int) ($stats->tot_inspect ?? 0);
+$totDefect  = (int) ($stats->tot_defect ?? 0);
+$totRft     = (int) ($stats->tot_rft ?? 0);
 
-        $target    = Param::where('header', 'qc')->where('key', 'rft_endline_target')->value('value');
-        $rftTarget = ($totInspect > 0 && $rft <= $target) ? true : false;
+$rft = $totInspect > 0 ? round(($totRft / $totInspect) * 100, 2) : 0;
+$wft = $totInspect > 0 ? round(($totDefect / $totInspect) * 100, 2) : 0;
 
-        $topDefect = (clone $headerQuery)
-            ->whereNotNull('defect_code')
-            ->whereNotIn('defect_code', [800, 900])
-            ->select('defect_code', DB::raw('COUNT(*) as total'))
-            ->groupBy('defect_code')
-            ->orderByDesc('total')
-            ->orderBy('defect_code', 'asc')
-            ->limit(4)
-            ->get();
+$processQty           = (int) ($stats->process_qty ?? 0);
+$nonProcessQty        = (int) ($stats->non_process_qty ?? 0);
+$nonProcessQtyNoGrade = (int) ($stats->non_process_qty_no_grade ?? 0);
 
-        $defectIds       = $topDefect->pluck('defect_code');
-        $masterQcDefects = QCDefect::whereIn('kdcacat', $defectIds)->pluck('deskripsi', 'kdcacat');
+$totDefectProcess = $processQty + $nonProcessQty;
 
-        $colors = ['#004FE0', '#3DAA25', '#F4947E', '#F24C4C', '#29B1AE'];
+$processPercent = $totDefectProcess > 0
+    ? round(($processQty / $totDefectProcess) * 100, 2)
+    : 0;
 
-        $topDefect = $topDefect->values()->map(function ($item, $index) use ($masterQcDefects, $totDefect, $colors) {
-            $percent = $totDefect > 0 ? ($item->total / $totDefect) * 100 : 0;
-            return [
-                'defect_id' => $item->defect_code,
-                'nmdefect'  => $masterQcDefects[$item->defect_code] ?? '-',
-                'total'     => (int) $item->total,
-                'percent'   => number_format($percent, 2),
-                'color'     => $colors[$index] ?? '#BDBDBD',
-            ];
-        });
+$nonProcessPercent = $totDefectProcess > 0
+    ? round(($nonProcessQtyNoGrade / $totDefectProcess) * 100, 2)
+    : 0;
 
-        $top4Total   = $topDefect->sum('total');
-        $othersTotal = $totDefect - $top4Total;
 
-        if ($othersTotal > 0) {
-            $othersPercent = $totDefect > 0 ? ($othersTotal / $totDefect) * 100 : 0;
-            $topDefect->push([
-                'defect_id' => 'others',
-                'nmdefect'  => 'Others',
-                'total'     => (int) $othersTotal,
-                'percent'   => number_format($othersPercent, 2),
-                'color'     => '#29B1AE',
-            ]);
-        }
-
-        return [
-            'periode' => [
-                'from' => $dta->format('d-m-Y'),
-                'to'   => $dtb->format('d-m-Y'),
-            ],
-            'tot_output'  => $totOutput,
-            'tot_inspect' => $totInspect,
-            'tot_defect'  => $totDefect,
-            'rft'         => $rft,
-            'wft'         => $wft,
-            'rft_target'  => $rftTarget,
-            'top_defect'  => $topDefect,
-            'line'        => $request->line,
-            'group_buyer' => $request->groupbuyer,
-        ];
-    });
-}
