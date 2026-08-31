@@ -1,227 +1,29 @@
-// buildDayBuckets & buildHourBuckets sekarang murni kalkulasi, tanpa query DB
-private function buildDayBuckets(Carbon $dta, Carbon $dtb): array
-{
-    $buckets = [];
-    $cursor  = $dta->copy();
+if ($request->groupbuyer && $request->groupbuyer != 'all') {
+    // Buyer di DB berbeda dari PO/OutputDetail — tetap harus query terpisah
+    $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)
+        ->pluck('idbuyer');
 
-    while ($cursor->lte($dtb)) {
-        $buckets[] = [
-            'key'   => $cursor->format('Y-m-d'), // dipakai untuk match DATE(date) dari SQL
-            'label' => $cursor->format('d M'),
-        ];
-        $cursor->addDay();
-    }
-
-    return $buckets;
-}
-
-private function buildHourBuckets(Carbon $date): array
-{
-    $buckets = [];
-    foreach (range(7, 23) as $h) {
-        $mid = $date->copy()->setTime($h, 30, 0);
-        $buckets[] = [
-            'key'   => $h, // dipakai untuk match HOUR(date) dari SQL
-            'label' => sprintf('%02d:00', $h),
-            'time'  => $mid->format('Y-m-d H:i:s'),
-        ];
-    }
-
-    return $buckets;
-}
-
-private function buildBucketTopStyles(
-    Collection $barcodeRows,
-    array $buckets,
-    Collection $defectCodes,
-    Collection $inspectQtyPerBucket,
-    int $limit = 3
-): array {
-    $bucketKeys = collect($buckets)->pluck('key');
-
-    if ($defectCodes->isEmpty() || $barcodeRows->isEmpty()) {
-        return $bucketKeys->mapWithKeys(fn ($k) => [$k => []])->all();
-    }
-
-    // Hanya barcode dari baris yang sudah difilter is_qc=1 + defect_code terpilih
-    // (jauh lebih kecil dari seluruh dataset satu minggu)
-    $allBarcodes = $barcodeRows->pluck('barcode')->unique()->values();
-
-    $outputRows = OutputDetail::whereIn('barcode', $allBarcodes)
-        ->select('idpo', 'barcode')
-        ->get();
-
-    $poToStyle = PurchaseOrder::whereIn('idpo', $outputRows->pluck('idpo')->unique())
-        ->pluck('idstyle', 'idpo');
-
-    $styleNames = Style::whereIn('idstyle', $poToStyle->values()->unique())
-        ->pluck('nmstyle', 'idstyle');
-
-    // Kelompokkan barcode per (bucket, defect_code)
-    $grouped = $barcodeRows->groupBy(fn ($r) => $r->bucket_key . '|' . $r->defect_code);
-
-    $results = [];
-
-    foreach ($buckets as $bucket) {
-        $key        = $bucket['key'];
-        $inspectQty = (int) ($inspectQtyPerBucket[$key] ?? 0);
-        $results[$key] = [];
-
-        foreach ($defectCodes as $code) {
-            $rowsForBucketCode = $grouped->get($key . '|' . $code, collect());
-
-            if ($rowsForBucketCode->isEmpty()) {
-                $results[$key][(string) $code] = [];
-                continue;
-            }
-
-            $barcodeSet = $rowsForBucketCode->pluck('barcode')->unique()->flip();
-
-            $styleQty = $outputRows->filter(fn ($r) => $barcodeSet->has($r->barcode))
-                ->groupBy('idpo')
-                ->map->count();
-
-            $styleGrouped = [];
-            foreach ($styleQty as $idpo => $total) {
-                $idstyle = $poToStyle[$idpo] ?? null;
-                $nmstyle = $idstyle ? ($styleNames[$idstyle] ?? '-') : '-';
-                $styleGrouped[$nmstyle] = ($styleGrouped[$nmstyle] ?? 0) + $total;
-            }
-
-            arsort($styleGrouped);
-            $top = array_slice($styleGrouped, 0, $limit, true);
-
-            $rows = [];
-            foreach ($top as $nmstyle => $qty) {
-                $rows[] = [
-                    'style' => $nmstyle,
-                    'qty'   => $qty,
-                    'wft'   => $inspectQty > 0 ? round(($qty / $inspectQty) * 100, 2) : 0,
-                ];
-            }
-
-            $results[$key][(string) $code] = $rows;
-        }
-    }
-
-    return $results;
-}
-
-public function getDefectChartData(Request $request)
-{
-    preconnect(session('db'));
-
-    $request->validate([
-        'mode' => 'required|in:weekly,day',
-    ]);
-
-    $defectCodes = collect($request->input('defects', []))->map(fn ($c) => (int) $c)->values();
-    $isDay       = $request->mode === 'day';
-
-    if ($isDay) {
-        $date       = Carbon::now();
-        $buckets    = $this->buildHourBuckets($date);
-        $rangeStart = $date->copy()->startOfDay();
-        $rangeEnd   = $date->copy()->endOfDay();
-        $bucketExpr = 'HOUR(date)';
+    if ($buyerIds->isEmpty()) {
+        $headerQuery = $headerQuery->whereRaw('1 = 0');
     } else {
-        $dta        = Carbon::now()->subDays(6)->startOfDay();
-        $dtb        = Carbon::now()->endOfDay();
-        $buckets    = $this->buildDayBuckets($dta, $dtb);
-        $rangeStart = $dta;
-        $rangeEnd   = $dtb;
-        $bucketExpr = 'DATE(date)';
-    }
+        // PurchaseOrder & OutputDetail satu DB — join jadi 1 query,
+        // idbuyer sudah ada langsung di PurchaseOrder, tak perlu tabel Buyer lagi
+        $od = (new OutputDetail())->getTable();
+        $po = (new PurchaseOrder())->getTable();
 
-    $colorMap = $this->getDefectColorMap($request->mode);
-    $names    = QCDefect::whereIn('kdcacat', $defectCodes)->pluck('deskripsi', 'kdcacat');
+        $barcodes = OutputDetail::query()
+            ->join("$po as po", 'po.idpo', '=', "$od.idpo")
+            ->whereIn('po.idbuyer', $buyerIds)
+            ->select("$od.barcode")
+            ->distinct()
+            ->pluck('barcode');
 
-    // 1) inspect qty per bucket — 1 query agregasi (menggantikan load semua row + hitung di PHP)
-    $inspectRows = SewingOutput::whereBetween('date', [$rangeStart, $rangeEnd])
-        ->where('is_qc', 1)
-        ->selectRaw("$bucketExpr as bucket_key, COUNT(*) as total")
-        ->groupBy('bucket_key')
-        ->pluck('total', 'bucket_key');
-
-    // 2) defect qty per bucket per code — 1 query agregasi, hanya utk defect_code terpilih
-    $defectQtyMap = [];
-    if ($defectCodes->isNotEmpty()) {
-        $defectAgg = SewingOutput::whereBetween('date', [$rangeStart, $rangeEnd])
-            ->where('is_qc', 1)
-            ->whereIn('defect_code', $defectCodes)
-            ->selectRaw("$bucketExpr as bucket_key, defect_code, COUNT(*) as total")
-            ->groupBy('bucket_key', 'defect_code')
-            ->get();
-
-        foreach ($defectAgg as $row) {
-            $defectQtyMap[$row->bucket_key][$row->defect_code] = (int) $row->total;
+        if ($barcodes->isEmpty()) {
+            $headerQuery = $headerQuery->whereRaw('1 = 0');
+        } else {
+            $headerQuery = $headerQuery
+                ->where('is_qc', 1)
+                ->whereIn('barcode', $barcodes);
         }
     }
-
-    // 3) barcode per bucket per code — HANYA baris yg relevan (is_qc=1 + defect terpilih),
-    //    bukan seluruh dataset seperti sebelumnya
-    $barcodeRows = collect();
-    if ($defectCodes->isNotEmpty()) {
-        $barcodeRows = SewingOutput::whereBetween('date', [$rangeStart, $rangeEnd])
-            ->where('is_qc', 1)
-            ->whereIn('defect_code', $defectCodes)
-            ->selectRaw("$bucketExpr as bucket_key, defect_code, barcode")
-            ->get();
-    }
-
-    $topStylesPerBucket = $this->buildBucketTopStyles($barcodeRows, $buckets, $defectCodes, $inspectRows);
-
-    $labels     = [];
-    $seriesData = [];
-    $seriesQty  = [];
-    foreach ($defectCodes as $c) {
-        $seriesData[$c] = [];
-        $seriesQty[$c]  = [];
-    }
-
-    $bucketMeta = [];
-
-    foreach ($buckets as $bucket) {
-        $labels[] = $bucket['label'];
-
-        $key        = $bucket['key'];
-        $inspectQty = (int) ($inspectRows[$key] ?? 0);
-
-        foreach ($defectCodes as $code) {
-            $qty = $defectQtyMap[$key][$code] ?? 0;
-            $wft = $inspectQty > 0 ? round(($qty / $inspectQty) * 100, 2) : 0;
-
-            $seriesData[$code][] = $wft;
-            $seriesQty[$code][]  = (int) $qty;
-        }
-
-        $bucketMeta[] = [
-            'topStyles'  => $topStylesPerBucket[$key] ?? [],
-            'inspectQty' => $inspectQty,
-        ];
-    }
-
-    $series = $defectCodes->values()->map(function ($code) use ($seriesData, $seriesQty, $names, $colorMap) {
-        $codeKey = (string) $code;
-        $mapped  = $colorMap[$codeKey] ?? null;
-
-        return [
-            'code'  => $codeKey,
-            'name'  => $mapped['name']  ?? ($names[$code] ?? '-'),
-            'color' => $mapped['color'] ?? '#8A93A6',
-            'data'  => $seriesData[$code],
-            'qty'   => $seriesQty[$code],
-        ];
-    });
-
-    $times = $isDay
-        ? collect($buckets)->pluck('time')->values()
-        : [];
-
-    return response()->json([
-        'labels'     => $labels,
-        'times'      => $times,
-        'series'     => $series,
-        'bucketMeta' => $bucketMeta,
-    ]);
 }
