@@ -1,56 +1,1125 @@
-function styleSelect(Request $request)
+<?php
+
+namespace Modules\Monitoring\Http\Controllers;
+
+use DB;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Collection;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Schema;
+use App\Http\Controllers\Controller;
+use App\Http\Models\DataBreakdown;
+use App\Http\Models\FactoryParameter;
+use App\Http\Models\HistoryDataBreakdown;
+use App\Http\Models\HistoryPO;
+use App\Http\Models\Main\MasterEmployeeGroup;
+use App\Http\Models\Main\MasterEmployeeSection;
+use App\Http\Models\Main\MasterGroupBuyer;
+use App\Http\Models\PurchaseOrder;
+use App\Http\Models\Main\Buyer;
+use App\Http\Models\Main\EmployeeAttendance;
+use App\Http\Models\Main\Style;
+use App\Http\Models\Main\Param;
+use App\Http\Models\Main\QCDefect;
+use App\Http\Models\OutputDetail;
+use App\Http\Models\OutputDetailFinalInspection;
+use App\Http\Models\SewingOutput;
+use Illuminate\Support\Facades\Log;
+use Modules\Sewing\Http\Controllers\WorktimeSettingController;
+use Symfony\Component\Console\Output\Output;
+
+class FinalInspectionController extends Controller
 {
-    preconnect(session('db'));
+    protected $m_modul = 'report';
 
-    $page = (int) $request->get('page', 1);
+    protected $perPage = 20;
 
-    $fi = OutputDetailFinalInspection::select('barcode')
-        ->distinct()
-        ->pluck('barcode');
-
-    $od = OutputDetail::whereIn('barcode', $fi)
-        ->where('is_final_inspection', 1)
-        ->distinct()
-        ->pluck('idpo');
-
-    $query = PurchaseOrder::whereIn('idpo', $od);
-
-    // TAMBAHAN: filter groupbuyer
-    if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
-        $buyer = Buyer::where('groupbuyer', $request->groupbuyer)
-            ->pluck('idbuyer');
-
-        $query->whereIn('idbuyer', $buyer);
+    function __construct()
+    {
+        $this->middleware('auth');
     }
 
-    if ($request->filled('selectpo') && $request->selectpo !== 'all') {
-        $query->where('idpo', $request->selectpo);
+    function index(Request $request)
+    {
+        if ($this->myaccess() == '0') {
+            return redirect()
+                ->back()
+                ->with('alert', [
+                    'title' => 'Unauthorized!',
+                    'message' => 'You Dont Have Any Access Here!',
+                    'status' => 'warning',
+                ]);
+        }
+
+        preconnect(session('db'));
+
+        return view('monitoring::finalinspection.index');
     }
 
-    if ($request->filled('q')) {
-        $query->where('idstyle', 'like', '%' . $request->q . '%');
-    }
+    function groupbuyer(Request $request)
+    {
+        preconnect(session('db'));
 
-    $style = $query
-        ->select('idstyle')
-        ->distinct()
-        ->pluck('idstyle');
+        $q = $request->get('q');
+        $page = (int) $request->get('page', 1);
 
-    $paginator = Style::whereIn('idstyle', $style)
-        ->select('idstyle', 'nmstyle')
-        ->paginate($this->perPage, ['idstyle', 'nmstyle'], 'page', $page);
+        $paginator = MasterGroupBuyer::select('id', 'group_name')
+            ->when($q, function ($query) use ($q) {
+                $query->where('group_name', 'like', '%' . $q . '%');
+            })
+            ->orderBy('group_name', 'asc')
+            ->paginate($this->perPage, ['id', 'group_name'], 'page', $page);
 
-    $styles = collect($paginator->items());
-
-    return response()->json([
-        'results' => $styles->map(function ($item) {
+        $data = collect($paginator->items())->map(function ($item) {
             return [
-                'id' => $item->idstyle,
-                'text' => $item->nmstyle
+                'id' => $item->id,
+                'text' => $item->group_name
             ];
-        })->values(),
-        'pagination' => [
-            'more' => $paginator->hasMorePages()
-        ]
-    ]);
+        });
+
+        return response()->json([
+            'results' => $data,
+            'pagination' => [
+                'more' => $paginator->hasMorePages()
+            ]
+        ]);
+    }
+
+    function poSelect(Request $request)
+    {
+        preconnect(session('db'));
+
+        $page = (int) $request->get('page', 1);
+
+        // Purchase order ambil po dan juga idbuyer untuk select group buyer
+        $fi = OutputDetailFinalInspection::select('barcode')
+            ->distinct()
+            ->pluck('barcode');
+
+        $od = OutputDetail::whereIn('barcode', $fi)
+            ->where('is_final_inspection', 1)
+            ->distinct()
+            ->pluck('idpo');
+
+        $query = PurchaseOrder::whereIn('idpo', $od);
+
+        if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
+            $buyer = Buyer::where('groupbuyer', $request->groupbuyer)
+                ->pluck('idbuyer');
+
+            $query->whereIn('idbuyer', $buyer);
+        }
+
+        if ($request->filled('q')) {
+            $query->where('po', 'like', '%' . $request->q . '%');
+        }
+
+        $paginator = $query
+            ->select('idpo', 'po')
+            ->distinct()
+            ->paginate($this->perPage, ['idpo', 'po'], 'page', $page);
+
+        $po = collect($paginator->items());
+
+        return response()->json([
+            'results' => $po->map(function ($item) {
+                return [
+                    'id' => $item->idpo,
+                    'text' => $item->po
+                ];
+            })->values(),
+            'pagination' => [
+                'more' => $paginator->hasMorePages()
+            ]
+        ]);
+    }
+
+    function styleSelect(Request $request)
+    {
+        preconnect(session('db'));
+
+        $page = (int) $request->get('page', 1);
+
+        $fi = OutputDetailFinalInspection::select('barcode')
+            ->distinct()
+            ->pluck('barcode');
+
+        $od = OutputDetail::whereIn('barcode', $fi)
+            ->where('is_final_inspection', 1)
+            ->distinct()
+            ->pluck('idpo');
+
+        $query = PurchaseOrder::whereIn('idpo', $od);
+
+        if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
+            $buyer = Buyer::where('groupbuyer', $request->groupbuyer)
+                ->pluck('idbuyer');
+
+            $query->whereIn('idbuyer', $buyer);
+        }
+
+        if ($request->filled('selectpo') && $request->selectpo !== 'all') {
+            $query->where('idpo', $request->selectpo);
+        }
+
+        if ($request->filled('q')) {
+            $query->where('idstyle', 'like', '%' . $request->q . '%');
+        }
+
+        $style = $query
+            ->select('idstyle')
+            ->distinct()
+            ->pluck('idstyle');
+
+        $paginator = Style::whereIn('idstyle', $style)
+            ->select('idstyle', 'nmstyle')
+            ->paginate($this->perPage, ['idstyle', 'nmstyle'], 'page', $page);
+
+        $styles = collect($paginator->items());
+
+        return response()->json([
+            'results' => $styles->map(function ($item) {
+                return [
+                    'id' => $item->idstyle,
+                    'text' => $item->nmstyle
+                ];
+            })->values(),
+            'pagination' => [
+                'more' => $paginator->hasMorePages()
+            ]
+        ]);
+    }
+
+    function summaryFilter(Request $request)
+    {
+        preconnect(session('db'));
+
+        $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
+        $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+
+        $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
+        $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+
+        $fi  = (new OutputDetailFinalInspection())->getTable();
+        $od  = (new OutputDetail())->getTable();
+        $po  = (new PurchaseOrder())->getTable();
+        $dbr = (new HistoryDataBreakdown())->getTable();
+
+        $applyCommonFilters = function ($query) use ($request, $po, $od) {
+            if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
+                $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
+                $query->whereIn("$po.idbuyer", $buyerIds);
+            }
+            if ($request->filled('po') && $request->po !== 'all') {
+                $query->where("$od.idpo", $request->po);
+            }
+            if ($request->filled('style') && $request->style !== 'all') {
+                $query->where("$po.idstyle", $request->style);
+            }
+            return $query;
+        };
+
+        // PO dikecualikan kalau ada minimal satu barcode di PO itu yang sudah is_output = 1
+        $excludeIfAnyFinal = function ($query) use ($fi, $od) {
+            $query->whereNotExists(function ($q) use ($fi, $od) {
+                $q->select(DB::raw(1))
+                    ->from("$fi as fi2")
+                    ->join("$od as od2", "od2.barcode", '=', 'fi2.barcode')
+                    ->whereColumn('od2.idpo', "$od.idpo")
+                    ->where('fi2.is_output', 1);
+            });
+            return $query;
+        };
+
+        $headerQuery = OutputDetailFinalInspection::query()
+            ->join($od, "$od.barcode", '=', "$fi.barcode")
+            ->join($po, "$po.idpo", '=', "$od.idpo")
+            ->whereExists(function ($query) use ($dbr, $od, $dta, $dtb) {
+                $query->select(DB::raw(1))
+                    ->from($dbr)
+                    ->whereColumn("$dbr.idpo", "$od.idpo")
+                    ->whereBetween("$dbr.deliverydate", [$dta, $dtb])
+                    ->where("$dbr.is_cutoff", "1")
+                    ->where("$dbr.production_status", "IH");
+            });
+        $applyCommonFilters($headerQuery);
+
+        $poIds = (clone $headerQuery)
+            ->select("$od.idpo")
+            ->distinct()
+            ->pluck("$od.idpo");
+
+        $totalPo = $poIds->count();
+
+        $totalQty = HistoryDataBreakdown::whereIn('idpo', $poIds)
+            ->where('is_cutoff', '1')
+            ->sum('qty_ori');
+
+        $totalQtyInspect = (clone $headerQuery)
+            ->whereNotNull("$fi.date_output")
+            ->count(DB::raw("DISTINCT $fi.id"));
+
+        // ===== PO Need Final: today s/d dtb, TIDAK ADA barcode is_output=1 sama sekali di PO tsb =====
+        $today = Carbon::today()->startOfDay();
+
+        $needFinalFrom = $today->copy();
+        $needFinalTo   = $dtb->copy();
+
+        if ($needFinalFrom->lessThanOrEqualTo($needFinalTo)) {
+            $needFinalQuery = OutputDetailFinalInspection::query()
+                ->join($od, "$od.barcode", '=', "$fi.barcode")
+                ->join($po, "$po.idpo", '=', "$od.idpo")
+                ->whereExists(function ($query) use ($dbr, $od, $needFinalFrom, $needFinalTo) {
+                    $query->select(DB::raw(1))
+                        ->from($dbr)
+                        ->whereColumn("$dbr.idpo", "$od.idpo")
+                        ->whereBetween("$dbr.deliverydate", [$needFinalFrom, $needFinalTo])
+                        ->where("$dbr.is_cutoff", "1")
+                        ->where("$dbr.production_status", "IH");
+                });
+            $excludeIfAnyFinal($needFinalQuery);
+            $applyCommonFilters($needFinalQuery);
+
+            $poNeedFinal = $needFinalQuery->count(DB::raw("DISTINCT $po.po"));
+        } else {
+            $poNeedFinal = 0;
+        }
+
+        // ===== Overdue: today-7 s/d today, TIDAK ADA barcode is_output=1 sama sekali di PO tsb =====
+        $overdueFrom = $today->copy()->subDays(7)->startOfDay();
+        $overdueTo   = $today->copy()->endOfDay();
+
+        $overdueQuery = OutputDetailFinalInspection::query()
+            ->join($od, "$od.barcode", '=', "$fi.barcode")
+            ->join($po, "$po.idpo", '=', "$od.idpo")
+            ->whereExists(function ($query) use ($dbr, $od, $overdueFrom, $overdueTo) {
+                $query->select(DB::raw(1))
+                    ->from($dbr)
+                    ->whereColumn("$dbr.idpo", "$od.idpo")
+                    ->whereBetween("$dbr.deliverydate", [$overdueFrom, $overdueTo])
+                    ->where("$dbr.is_cutoff", "1")
+                    ->where("$dbr.production_status", "IH");
+            });
+        $excludeIfAnyFinal($overdueQuery);
+        $applyCommonFilters($overdueQuery);
+
+        $overdue = $overdueQuery->count(DB::raw("DISTINCT $po.po"));
+
+        // ===== Final Completed: PO dengan is_output = 1, dalam range asli (dta - dtb) =====
+        $finalCom = (clone $headerQuery)
+            ->where("$fi.is_output", 1)
+            ->count(DB::raw("DISTINCT $po.po"));
+
+        // ===== OQL =====
+        $totDefect = (clone $headerQuery)
+            ->whereNotNull("$fi.date_output")
+            ->whereNotNull("$fi.defect_code")
+            ->count(DB::raw("DISTINCT $fi.id"));
+
+        $oql = $totalQtyInspect > 0 ? round(($totDefect / $totalQtyInspect) * 100, 2) : 0;
+
+        // ===== Passing / Reject Rate =====
+        $poNoDefect = (clone $headerQuery)
+            ->whereNotNull("$fi.date_output")
+            ->whereNull("$fi.defect_code")
+            ->count(DB::raw("DISTINCT $fi.id"));
+
+        $poWithDefect = (clone $headerQuery)
+            ->whereNotNull("$fi.date_output")
+            ->whereNotNull("$fi.defect_code")
+            ->count(DB::raw("DISTINCT $fi.id"));
+
+        $passingRate = $totalPo > 0 ? round(($poNoDefect / $totalPo) * 100, 2) : 0;
+        $rejectRate  = $totalPo > 0 ? round(($poWithDefect / $totalPo) * 100, 2) : 0;
+
+        return response()->json([
+            'total_po'          => $totalPo,
+            'total_qty'         => $totalQty,
+            'total_qty_inspect' => $totalQtyInspect,
+            'po_need_final'     => $poNeedFinal,
+            'overdue'           => $overdue,
+            'final_completed'   => $finalCom,
+            'oql'               => $oql,
+            'passing_rate'      => $passingRate,
+            'reject_rate'       => $rejectRate,
+        ]);
+    }
+
+    function priorityFinal(Request $request)
+    {
+        preconnect(session('db'));
+
+        $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
+        $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+
+        $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
+        $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+
+        $fi  = (new OutputDetailFinalInspection())->getTable();
+        $od  = (new OutputDetail())->getTable();
+        $po  = (new PurchaseOrder())->getTable();
+        $dbr = (new HistoryDataBreakdown())->getTable();
+
+        $applyCommonFilters = function ($query) use ($request, $po, $od) {
+            if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
+                $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
+                $query->whereIn("$po.idbuyer", $buyerIds);
+            }
+            if ($request->filled('po') && $request->po !== 'all') {
+                $query->where("$od.idpo", $request->po);
+            }
+            if ($request->filled('style') && $request->style !== 'all') {
+                $query->where("$po.idstyle", $request->style);
+            }
+            return $query;
+        };
+
+        // PO dikecualikan kalau ada minimal satu barcode di PO itu yang sudah is_output = 1
+        $excludeIfAnyFinal = function ($query) use ($fi, $od) {
+            $query->whereNotExists(function ($q) use ($fi, $od) {
+                $q->select(DB::raw(1))
+                    ->from("$fi as fi2")
+                    ->join("$od as od2", "od2.barcode", '=', 'fi2.barcode')
+                    ->whereColumn('od2.idpo', "$od.idpo")
+                    ->where('fi2.is_output', 1);
+            });
+            return $query;
+        };
+
+        $headerQuery = OutputDetailFinalInspection::query()
+            ->join($od, "$od.barcode", '=', "$fi.barcode")
+            ->join($po, "$po.idpo", '=', "$od.idpo")
+            ->whereExists(function ($query) use ($dbr, $od, $dta, $dtb) {
+                $query->select(DB::raw(1))
+                    ->from($dbr)
+                    ->whereColumn("$dbr.idpo", "$od.idpo")
+                    ->whereBetween("$dbr.deliverydate", [$dta, $dtb])
+                    ->where("$dbr.is_cutoff", "1")
+                    ->where("$dbr.production_status", "IH");
+            });
+        $applyCommonFilters($headerQuery);
+
+        // ===== PO Need Final: today s/d dtb, TIDAK ADA barcode is_output=1 sama sekali di PO tsb =====
+        $today = Carbon::today()->startOfDay();
+
+        $needFinalFrom = $today->copy();
+        $needFinalTo   = $dtb->copy();
+
+        if ($needFinalFrom->lessThanOrEqualTo($needFinalTo)) {
+            $needFinalQuery = OutputDetailFinalInspection::query()
+                ->join($od, "$od.barcode", '=', "$fi.barcode")
+                ->join($po, "$po.idpo", '=', "$od.idpo")
+                ->whereExists(function ($query) use ($dbr, $od, $needFinalFrom, $needFinalTo) {
+                    $query->select(DB::raw(1))
+                        ->from($dbr)
+                        ->whereColumn("$dbr.idpo", "$od.idpo")
+                        ->whereBetween("$dbr.deliverydate", [$needFinalFrom, $needFinalTo])
+                        ->where("$dbr.is_cutoff", "1")
+                        ->where("$dbr.production_status", "IH");
+                });
+            $excludeIfAnyFinal($needFinalQuery);
+            $applyCommonFilters($needFinalQuery);
+
+            $poNeedFinal = $needFinalQuery->count(DB::raw("DISTINCT $po.po"));
+        } else {
+            $poNeedFinal = 0;
+        }
+
+        // ===== Overdue: today-7 s/d today, TIDAK ADA barcode is_output=1 sama sekali di PO tsb =====
+        $overdueFrom = $today->copy()->subDays(7)->startOfDay();
+        $overdueTo   = $today->copy()->endOfDay();
+
+        $overdueQuery = OutputDetailFinalInspection::query()
+            ->join($od, "$od.barcode", '=', "$fi.barcode")
+            ->join($po, "$po.idpo", '=', "$od.idpo")
+            ->whereExists(function ($query) use ($dbr, $od, $overdueFrom, $overdueTo) {
+                $query->select(DB::raw(1))
+                    ->from($dbr)
+                    ->whereColumn("$dbr.idpo", "$od.idpo")
+                    ->whereBetween("$dbr.deliverydate", [$overdueFrom, $overdueTo])
+                    ->where("$dbr.is_cutoff", "1")
+                    ->where("$dbr.production_status", "IH");
+            });
+        $excludeIfAnyFinal($overdueQuery);
+        $applyCommonFilters($overdueQuery);
+
+        $overdue = $overdueQuery->count(DB::raw("DISTINCT $po.po"));
+
+
+        // return view('monitoring::finalinspection.index');
+           return response()->json([
+            'po_need_final'     => $poNeedFinal,
+            'overdue'           => $overdue,
+        ]);
+    }
 }
+
+
+<style>
+     @media (max-width: 768px) {
+        .action-btn {
+            display: flex !important;
+            justify-content: flex-start !important;
+            align-items: center !important;
+            width: 100%;
+            gap: 10px;
+        }
+
+        .btn-find {
+            width: auto !important;
+            margin-left: 0 !important;
+        }
+
+        .export-btn {
+            margin-left: 0 !important;
+        }
+    }
+
+    .select2-container--default.select2-container--disabled .select2-selection--single {
+        background-color: #242E3E;
+        border-color: #d1d5db;
+        cursor: not-allowed;
+    }
+
+    .select2-container--default.select2-container--disabled .select2-selection__rendered {
+        color: #9ca3af;
+    }
+</style>
+
+<div class="row margin-cstm border-custom rounded px-2 py-2 text-white" style="margin: 0 1px 0 1px;">
+
+    <!-- Periode Date (SEKARANG DI DEPAN) -->
+    <div class="col-12 col-md-5 border-end-custom d-flex mb-3 mb-md-0">
+        <div class="icon-filter">
+            <div class="box-custom bg-transparent" style="height: 31px;"></div>
+            <div>
+                <img src="{{ _asset('svg/inlinePerformance/calendar.svg') }}"
+                    class="icon-summary" alt="">
+            </div>
+        </div>
+
+        <div class="w-100">
+            <label class="mb-1 text-title">
+                ETD (Shipment Date)
+            </label>
+            <div class="wrapper-date d-flex align-items-center gap-2 w-100 flex-nowrap period-date">
+                <div class="position-relative flex-grow-1 date-input-col">
+                    <input
+                        type="text"
+                        id="datea"
+                        class="form-control pe-5"
+                        placeholder="Pilih tanggal">
+                    <img
+                        src="{{ _asset('svg/inlinePerformance/calendar-flat.svg') }}"
+                        class="position-absolute top-50 end-0 translate-middle-y me-3"
+                        style="width:18px; height:18px; pointer-events:none;" alt="">
+                </div>
+
+                <span class="to px-2">to</span>
+                <div class="position-relative flex-grow-1 date-input-col">
+                    <input
+                        type="text"
+                        id="dateb"
+                        class="form-control pe-5"
+                        placeholder="Pilih tanggal">
+                    <img
+                        src="{{ _asset('svg/inlinePerformance/calendar-flat.svg') }}"
+                        class="position-absolute top-50 end-0 translate-middle-y me-3"
+                        style="width:18px; height:18px; pointer-events:none;" alt="">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Group Buyer -->
+    <div class="col-12 col-md border-end-custom d-flex mb-3 mb-md-0">
+        <div class="icon-filter">
+            <div class="box-custom" style="height: 31px;"></div>
+            <div class="">
+                <img src="{{ _asset('svg/inlinePerformance/user.svg') }}"
+                    class="icon-summary" alt="">
+            </div>
+        </div>
+
+        <div class="w-100">
+            <label class="mb-1 text-title">
+                Group Buyer
+            </label>
+                <div class="flex-grow-1">
+                    <select id="groupbuyer" class="form-select select2 w-100" disabled>
+                        <option></option>
+                    </select>
+                </div>
+        </div>
+    </div>
+
+    <!-- PO -->
+    <div class="col-12 col-md border-end-custom d-flex mb-3 mb-md-0">
+        <div class="icon-filter">
+            <div class="box-custom" style="height: 31px;"></div>
+            <div class="">
+                <img src="{{ _asset('svg/finalInspection/po.svg') }}"
+                    class="icon-summary" alt="">
+            </div>
+        </div>
+
+        <div class="w-100">
+            <label class="mb-1 text-title">
+                PO
+            </label>
+                <div class="flex-grow-1">
+                    <select id="selectpo" class="form-select select2 w-100" disabled>
+                        <option></option>
+                    </select>
+                </div>
+        </div>
+    </div>
+
+    <!-- Style -->
+    <div class="col-12 col-md border-end-custom d-flex mb-3 mb-md-0 align-items-center">
+        <div class="icon-filter">
+            <div class="box-custom" style="height: 31px;"></div>
+            <div class="">
+                <img src="{{ _asset('svg/finalInspection/style.svg') }}"
+                    class="icon-summary" alt="">
+            </div>
+        </div>
+
+        <div class="w-100">
+            <label class="mb-1 text-title">
+                Style
+            </label>
+                <div class="flex-grow-1">
+                    <select id="selectstyle" class="form-select select2 w-100" disabled>
+                        <option></option>
+                    </select>
+                </div>
+        </div>
+        <div class="action-btn d-flex h-100">
+            <button class="btn-find" id="findbtn">
+                <img src="{{ _asset('svg/inlinePerformance/search.svg') }}" style="width:20px;height:15px;margin-right:2px;" alt="">
+                    Find
+            </button>
+        </div>
+    </div>
+
+</div>
+@push('scripts')
+<script>
+    $(function () {
+        function parseDMY(str) {
+            const [d, m, y] = str.split('-');
+            return new Date(`${y}-${m}-${d}`);
+        }
+
+        function checkDateSelection() {
+            let datea = $('#datea').val();
+            let dateb = $('#dateb').val();
+
+            $('#groupbuyer').val(null).trigger('change');
+            $('#selectpo').val(null).trigger('change');
+            $('#selectstyle').val(null).trigger('change');
+
+            $('#selectpo').prop('disabled', true).trigger('change.select2');
+            $('#selectstyle').prop('disabled', true).trigger('change.select2');
+
+            if (!datea || !dateb) {
+                $('#groupbuyer').prop('disabled', true).trigger('change.select2');
+                return;
+            }
+
+            const start = parseDMY(datea);
+            const end = parseDMY(dateb);
+
+            if (start > end) {
+                swal('Warning!', 'Start date cannot be later than end date!', 'warning');
+                $('#groupbuyer').prop('disabled', true).trigger('change.select2');
+                return;
+            }
+
+            const diffDays = (end - start) / (1000 * 60 * 60 * 24);
+
+            if (diffDays > 31) {
+                swal('Warning!', 'Date Has More Than 31 Days in Range, Cannot View Data.', 'warning');
+                $('#groupbuyer').prop('disabled', true).trigger('change.select2');
+                return;
+            }
+
+            $('#groupbuyer').prop('disabled', false).trigger('change.select2');
+        }
+
+        const dateOpt = {
+            dateFormat: "d-m-Y",
+            altInput: true,
+            altFormat: "d F Y",
+            allowInput: false,
+            monthSelectorType: "static",
+            disableMobile: true,
+            defaultDate: "today",
+            onChange: function () {
+                checkDateSelection();
+            }
+        };
+        flatpickr("#datea", dateOpt);
+        flatpickr("#dateb", dateOpt);
+
+        $('#groupbuyer').select2({
+            placeholder: 'Select Buyer',
+            width: '100%',
+            ajax: {
+                url: "{{ route('monitoring_endlineperformance_groupbuyer') }}",
+                type: "GET",
+                dataType: "json",
+                delay: 500,
+                data: function (params) {
+                    return {
+                        q: params.term || '',
+                        page: params.page || 1,
+                        datea: $('#datea').val(),
+                        dateb: $('#dateb').val()
+                    };
+                },
+                processResults: function (data, params) {
+                    params.page = params.page || 1;
+                    let results = data.results || [];
+                    if (params.page === 1 && !params.term) {
+                        results = [
+                            { id: 'all', text: 'All Buyer' },
+                            ...results
+                        ];
+                    }
+                    return {
+                        results: results
+                    };
+                },
+                cache: true
+            }
+        });
+
+        $('#selectpo').select2({
+            placeholder: 'Select PO',
+            width: '100%',
+            ajax: {
+                url: "{{ route('monitoring_finalinspection_selectpo') }}",
+                type: "GET",
+                dataType: "json",
+                delay: 500,
+                data: function (params) {
+                    return {
+                        q: params.term || '',
+                        page: params.page || 1,
+                        datea: $('#datea').val(),
+                        dateb: $('#dateb').val(),
+                        groupbuyer: $('#groupbuyer').val()
+                    };
+                },
+                processResults: function (data, params) {
+                    params.page = params.page || 1;
+                    let results = data.results || [];
+
+                    if (params.page === 1 && !params.term && results.length > 0) {
+                        results = [
+                            { id: 'all', text: 'All PO' },
+                            ...results
+                        ];
+                    }
+
+                    return {
+                        results: results
+                    };
+                },
+                cache: true
+            },
+            language: {
+                noResults: function () {
+                    return 'PO Not Found';
+                }
+            }
+        });
+
+        $('#selectstyle').select2({
+            placeholder: 'Select Style',
+            width: '100%',
+            ajax: {
+                url: "{{ route('monitoring_finalinspection_selectstyle') }}",
+                type: "GET",
+                dataType: "json",
+                delay: 500,
+                data: function (params) {
+                    return {
+                        q: params.term || '',
+                        page: params.page || 1,
+                        datea: $('#datea').val(),
+                        dateb: $('#dateb').val(),
+                        groupbuyer: $('#groupbuyer').val(),
+                        selectpo: $('#selectpo').val()
+                    };
+                },
+                processResults: function (data, params) {
+                    params.page = params.page || 1;
+                    let results = data.results || [];
+
+                    if (params.page === 1 && !params.term && results.length > 0) {
+                        results = [
+                            { id: 'all', text: 'All Style' },
+                            ...results
+                        ];
+                    }
+
+                    return { results: results };
+                },
+                cache: true
+            },
+            language: {
+                noResults: function () {
+                    return 'Style Not Found';
+                }
+            }
+        });
+
+        $('#groupbuyer').prop('disabled', true).trigger('change.select2');
+        $('#selectpo').prop('disabled', true).trigger('change.select2');
+        $('#selectstyle').prop('disabled', true).trigger('change.select2');
+
+        checkDateSelection();
+
+        $('#groupbuyer').on('change', function () {
+            let buyer = $(this).val();
+
+            $('#selectpo').val(null).trigger('change');
+            $('#selectstyle').val(null).trigger('change');
+
+            $('#selectpo').prop('disabled', !buyer).trigger('change.select2');
+            $('#selectstyle').prop('disabled', true).trigger('change.select2');
+        });
+
+        $('#selectpo').on('change', function () {
+            let po = $(this).val();
+
+            $('#selectstyle').val(null).trigger('change');
+            $('#selectstyle').prop('disabled', !po).trigger('change.select2');
+        });
+
+        window.currentFilter = {
+            line: 'all',
+            datea: $('#datea').val(),
+            dateb: $('#dateb').val(),
+            groupbuyer: 'all'
+        };
+
+        let hasFiltered = false;
+
+        $('#groupbuyer, #selectpo, #selectstyle, #datea, #dateb').on('change input', function () {
+            hasFiltered = false;
+        });
+
+        function loadCards(filter) {
+            $.ajax({
+                url: "{{ route('monitoring_finalinspection_summaryfilter') }}",
+                type: "GET",
+                data: filter,
+                beforeSend: function () {
+                    $('#loading').show();
+                },
+                success: function (response) {
+                    $('#totalpo').text(response.total_po ?? '-');
+                    $('#totalqty').text(response.total_qty ?? '-');
+                    $('#totalqtyinspect').text(response.total_qty_inspect ?? '-');
+                    $('#poneedfinal').text(response.po_need_final ?? '-');
+                    $('#overdue').text(response.overdue ?? '-');
+                    $('#final').text(response.final_completed ?? '-');
+                    $('#oql').text(response.oql ?? '-');
+
+                    let passingRate = response.passing_rate ?? 50;
+                    let rejectRate = response.reject_rate ?? 80;
+
+                    $('#passingRateValue').text(passingRate + '%');
+                    $('#rejectRateValue').text(rejectRate + '%');
+
+                    $('#passingRateBar').css('width', passingRate + '%');
+                    $('#rejectRateBar').css('width', rejectRate + '%');
+
+                    updateDataTime();
+                },
+                error: function (xhr) {
+                    console.log(xhr.responseText);
+                },
+                complete: function () {
+                    $('#loading').hide();
+                }
+            });
+        }
+
+        function updateDataTime() {
+            let now = new Date();
+            let day = String(now.getDate()).padStart(2, '0');
+            let month = [
+                "January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November", "December"
+            ];
+            let year = now.getFullYear();
+            let hour = String(now.getHours()).padStart(2, '0');
+            let minute = String(now.getMinutes()).padStart(2, '0');
+            let second = String(now.getSeconds()).padStart(2, '0');
+
+            let formatted = `${day} ${month[now.getMonth()]} ${year} - ${hour} : ${minute} : ${second}`;
+
+            document.getElementById('liveClock').innerHTML = formatted;
+
+            localStorage.setItem('lastDataUpdate', formatted);
+        }
+
+        updateDataTime();
+        window.updateDataTime = updateDataTime;
+
+        $('#findbtn').on('click', function (e) {
+            e.preventDefault();
+
+            currentFilter = {
+                groupbuyer: $('#groupbuyer').val(),
+                po: $('#selectpo').val(),
+                style: $('#selectstyle').val(),
+                datea: $('#datea').val(),
+                dateb: $('#dateb').val(),
+            };
+
+            if (currentFilter.datea == null || currentFilter.datea == '' ||
+                currentFilter.dateb == null || currentFilter.dateb == '') {
+                swal('Warning!', 'Please select Periode Date first!', 'warning');
+                return;
+            }
+
+            const start = parseDMY(currentFilter.datea);
+            const end = parseDMY(currentFilter.dateb);
+
+            if (start > end) {
+                swal('Warning!', 'Start date cannot be later than end date!', 'warning');
+                return;
+            }
+
+            const diffDays = (end - start) / (1000 * 60 * 60 * 24);
+
+            if (diffDays > 31) {
+                swal('Warning!', 'Date Has More Than 31 Days in Range, Cannot View Data.', 'warning');
+                return;
+            }
+
+            if (currentFilter.groupbuyer == null || currentFilter.groupbuyer == '') {
+                swal('Warning!', 'Please select Group Buyer first!', 'warning');
+                return;
+            }
+
+            if (currentFilter.po == null || currentFilter.po == '') {
+                swal('Warning!', 'Please select PO first!', 'warning');
+                return;
+            }
+
+            if (currentFilter.style == null || currentFilter.style == '') {
+                swal('Warning!', 'Please select Style first!', 'warning');
+                return;
+            }
+
+            hasFiltered = true;
+            loadCards(currentFilter);
+        });
+
+    });
+</script>
+@include('layouts.loading')
+@endpush
+
+
+<style>
+    thead tr th {
+        font-weight: 400;
+        font-size: 12px;
+    }
+
+    tbody tr td {
+        font-weight: 400;
+        font-size: 12px;
+        line-height: 28px;
+    }
+
+    tfoot tr th {
+        font-weight: 600;
+        font-size: 14px;
+        line-height: 28px;
+    }
+
+    .flex-fill.border-custom-datatable {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        flex: 1 1 0;
+        overflow: hidden;
+    }
+
+    .wrapper-sub {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        flex: 1 1 auto;
+        overflow: hidden;
+    }
+
+    .table-scroll-wrapper {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: auto;
+    }
+
+    .table-res {
+        margin-bottom: 0;
+
+    }
+
+    .table-res thead th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background-color: #1B2331;
+    }
+
+    .table-res tfoot th {
+        position: sticky;
+        bottom: 0;
+        z-index: 2;
+        background-color: #1B2331;
+    }
+</style>
+
+<div class="flex-fill border-custom-datatable rounded-1">
+    <div class="wrapper-sub">
+        <h6 class="subheader mb-0 fw-normal text-truncate px-3 pt-2">
+            PO PRIORITY PROGRESS FINAL (BASED ON ETD)
+        </h6>
+
+        <div class="table-wrapper table-scroll-wrapper rounded mt-2 px-2 pb-2">
+            <table class="table-res table-borderless align-middle w-100 table-hover">
+                <thead>
+                    <tr>
+                        <th class="text-center" style="width:4%;">Priority</th>
+                        <th class="text-center" style="width:8%;">PO No.</th>
+                        <th class="text-center" style="width:8%;">Buyer</th>
+                        <th class="text-center" style="width:8%;">Style</th>
+                        <th class="text-center" style="width:8%;">Article</th>
+                        <th class="text-center" style="width:8%;">Color</th>
+                        <th class="text-center" style="width:8%;">QTY Order <br>(Pcs)</th>
+                        <th class="text-center" style="width:8%;">Output <br>(Pcs)</th>
+                        <th class="text-center" style="width:8%;">Progress Output <br>(Pcs)</th>
+                        <th class="text-center" style="width:9%;">ETD <br>(Shipment Date)</th>
+                        <th class="text-center" style="width:8%;">Days to ETD</th>
+                        <th class="text-center" style="width:8%;">Status Final</th>
+                    </tr>
+                </thead>
+                <tbody class="text-center">
+                    <tr>
+                        <td class="text-center">1</td>
+                        <td class="text-center">PO-123</td>
+                        <td class="text-center">Adidas</td>
+                        <td class="text-center">S232MDH</td>
+                        <td class="text-center">MTR-110</td>
+                        <td class="text-center">Black</td>
+                        <td class="text-center">18,000</td>
+                        <td class="text-center">16,200</td>
+                        <td class="text-center">90.00%</td>
+                        <td class="text-center">22 Mei 2026</td>
+                        <td class="text-center">-2</td>
+                        <td class="text-center">REJECT</td>
+                    </tr>
+                    <tr>
+                        <td class="text-center">1</td>
+                        <td class="text-center">PO-123</td>
+                        <td class="text-center">Adidas</td>
+                        <td class="text-center">S232MDH</td>
+                        <td class="text-center">MTR-110</td>
+                        <td class="text-center">Black</td>
+                        <td class="text-center">18,000</td>
+                        <td class="text-center">16,200</td>
+                        <td class="text-center">90.00%</td>
+                        <td class="text-center">22 Mei 2026</td>
+                        <td class="text-center">-2</td>
+                        <td class="text-center">REJECT</td>
+                    </tr>
+                    <tr>
+                        <td class="text-center">1</td>
+                        <td class="text-center">PO-123</td>
+                        <td class="text-center">Adidas</td>
+                        <td class="text-center">S232MDH</td>
+                        <td class="text-center">MTR-110</td>
+                        <td class="text-center">Black</td>
+                        <td class="text-center">18,000</td>
+                        <td class="text-center">16,200</td>
+                        <td class="text-center">90.00%</td>
+                        <td class="text-center">22 Mei 2026</td>
+                        <td class="text-center">-2</td>
+                        <td class="text-center">REJECT</td>
+                    </tr>
+                    <tr>
+                        <td class="text-center">1</td>
+                        <td class="text-center">PO-123</td>
+                        <td class="text-center">Adidas</td>
+                        <td class="text-center">S232MDH</td>
+                        <td class="text-center">MTR-110</td>
+                        <td class="text-center">Black</td>
+                        <td class="text-center">18,000</td>
+                        <td class="text-center">16,200</td>
+                        <td class="text-center">90.00%</td>
+                        <td class="text-center">22 Mei 2026</td>
+                        <td class="text-center">-2</td>
+                        <td class="text-center">REJECT</td>
+                    </tr>
+                    <tr>
+                        <td class="text-center">1</td>
+                        <td class="text-center">PO-123</td>
+                        <td class="text-center">Adidas</td>
+                        <td class="text-center">S232MDH</td>
+                        <td class="text-center">MTR-110</td>
+                        <td class="text-center">Black</td>
+                        <td class="text-center">18,000</td>
+                        <td class="text-center">16,200</td>
+                        <td class="text-center">90.00%</td>
+                        <td class="text-center">22 Mei 2026</td>
+                        <td class="text-center">-2</td>
+                        <td class="text-center">REJECT</td>
+                    </tr>
+                    <tr>
+                        <td class="text-center">1</td>
+                        <td class="text-center">PO-123</td>
+                        <td class="text-center">Adidas</td>
+                        <td class="text-center">S232MDH</td>
+                        <td class="text-center">MTR-110</td>
+                        <td class="text-center">Black</td>
+                        <td class="text-center">18,000</td>
+                        <td class="text-center">16,200</td>
+                        <td class="text-center">90.00%</td>
+                        <td class="text-center">22 Mei 2026</td>
+                        <td class="text-center">-2</td>
+                        <td class="text-center">REJECT</td>
+                    </tr>
+
+                </tbody>
+                <tfoot class="table-foot" id="tableInlineDefectFoot">
+                    <tr>
+                        <th style="color: #4C8CF2;">Total</th>
+                        <th></th>
+                        <th></th>
+                        <th></th>
+                        <th></th>
+                        <th></th>
+                        <th class="text-center" style="color: #4C8CF2;">940,416</th>
+                        <th class="text-center" style="color: #4C8CF2;">940,416</th>
+                        <th class="text-center" style="color: #4C8CF2;">75.55%</th>
+                        <th class="text-center"></th>
+                        <th class="text-center" style="color: #4C8CF2;"></th>
+                        <th class="text-center" style="color: #4C8CF2;"></th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
