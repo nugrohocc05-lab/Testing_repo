@@ -1,37 +1,784 @@
-if ($needFinalFrom->lessThanOrEqualTo($needFinalTo)) {
-    $needFinalQuery = OutputDetailFinalInspection::query()
-        ->join($od, "$od.barcode", '=', "$fi.barcode")
-        ->join($po, "$po.idpo", '=', "$od.idpo")
-        ->whereExists(function ($query) use ($dbr, $od, $needFinalFrom, $needFinalTo) {
-            $query->select(DB::raw(1))
-                ->from($dbr)
-                ->whereColumn("$dbr.idpo", "$od.idpo")
-                ->whereBetween("$dbr.deliverydate", [$needFinalFrom, $needFinalTo])
-                ->where("$dbr.is_cutoff", "1")
-                ->where("$dbr.production_status", "IH");
-        })
-        ->where($notFinalCondition);
-    $applyCommonFilters($needFinalQuery);
-
-    // ===== DEBUG SEMENTARA =====
-    $debugRows = (clone $needFinalQuery)
-        ->select(
-            "$po.po",
-            "$po.idpo",
-            "$od.barcode",
-            "$fi.id as fi_id",
-            "$fi.date_output",
-            "$fi.is_output"
-        )
-        ->distinct()
-        ->get();
-
-    Log::info('DEBUG needFinal rows', $debugRows->toArray());
-    // atau kalau mau lihat langsung di browser waktu dev, ganti Log::info jadi:
-    // dd($debugRows->toArray());
-    // ===== END DEBUG =====
-
-    $poNeedFinal = $needFinalQuery->count(DB::raw("DISTINCT $po.po"));
-} else {
-    $poNeedFinal = 0;
+Illuminate\Database\Eloquent\Collection {#6542
+  #items: array:15 [
+    0 => App\Http\Models\OutputDetailFinalInspection {#6543
+      #connection: "mysql"
+      #table: "outputdetailfinalinspection"
+      #guarded: []
+      -rules: array:8 [
+        "barcode" => "required|max:16|string"
+        "date_in" => "required|date"
+        "nik_in" => "required|string|max:10"
+        "date_output" => "required|date"
+        "is_output" => "required|integer"
+        "defect_code" => "required|max:3|integer"
+        "nik_approve" => "required|string|max:10"
+        "nik_qc" => "required|string|max:10"
+      ]
+      #primaryKey: "id"
+      #keyType: "int"
+      +incrementing: true
+      #with: []
+      #withCount: []
+      #perPage: 15
+      +exists: true
+      +wasRecentlyCreated: false
+      #attributes: array:6 [
+        "po" => "4512211838"
+        "idpo" => "0051916"
+        "barcode" => "0600519160000008"
+        "fi_id" => 206
+        "date_output" => "2026-08-28 09:37:11"
+        "is_output" => 0
+      ]
+      #original: array:6 [
+        "po" => "4512211838"
+        "idpo" => "0051916"
+        "barcode" => "0600519160000008"
+        "fi_id" => 206
+        "date_output" => "2026-08-28 09:37:11"
+        "is_output" => 0
+      ]
+      #changes: []
+      #casts: []
+      #dates: []
+      #dateFormat: null
+      #appends: []
+      #dispatchesEvents: []
+      #observables: []
+      #relations: []
+      #touches: []
+      +timestamps: true
+      #hidden: []
+      #visible: []
+      #fillable: []
+    }
+    1 => App\Http\Models\OutputDetailFinalInspection {#6544
+      #connection: "mysql"
+      #table: "outputdetailfinalinspection"
+      #guarded: []
+      -rules: array:8 [
+        "barcode" => "required|max:16|string"
+        "date_in" => "required|date"
+        "nik_in" => "required|string|max:10"
+        "date_output" => "required|date"
+        "is_output" => "required|integer"
+        "defect_code" => "required|max:3|integer"
+        "nik_approve" => "required|string|max:10"
+        "nik_qc" => "required|string|max:10"
+      ]
+      #primaryKey: "id"
+      #keyType: "int"
+      +incrementing: true
+      #with: []
+      #withCount: []
+      #perPage: 15
+      +exists: true
+      +wasRecentlyCreated: false
+      #attributes: array:6 [
+        "po" => "4512211838"
+        "idpo" => "0051916"
+        "barcode" => "0600519160000009"
+        "fi_id" => 205
+        "date_output" => null
+        "is_output" => null
+      ]
+      #original: array:6 [
+        "po" => "4512211838"
+        "idpo" => "0051916"
+        "barcode" => "0600519160000009"
+        "fi_id" => 205
+        "date_output" => null
+        "is_output" => null
+      ]
+      #changes: []
+      #casts: []
+      #dates: []
+      #dateFormat: null
+      #appends: []
+      #dispatchesEvents: []
+      #observables: []
+      #relations: []
+      #touches: []
+      +timestamps: true
+      #hidden: []
+      #visible: []
+      #fillable: []
+    }
+    2 => App\Http\Models\OutputDetailFinalInspection {#6545
+      #connection: "mysql"
+      #table: "outputdetailfinalinspection"
+      #guarded: []
+      -rules: array:8 [
+        "barcode" => "required|max:16|string"
+        "date_in" => "required|date"
+        "nik_in" => "required|string|max:10"
+        "date_output" => "required|date"
+        "is_output" => "required|integer"
+        "defect_code" => "required|max:3|integer"
+        "nik_approve" => "required|string|max:10"
+        "nik_qc" => "required|string|max:10"
+      ]
+      #primaryKey: "id"
+      #keyType: "int"
+      +incrementing: true
+      #with: []
+      #withCount: []
+      #perPage: 15
+      +exists: true
+      +wasRecentlyCreated: false
+      #attributes: array:6 [
+        "po" => "4512211838"
+        "idpo" => "0051916"
+        "barcode" => "0600519160000001"
+        "fi_id" => 209
+        "date_output" => null
+        "is_output" => null
+      ]
+      #original: array:6 [
+        "po" => "4512211838"
+        "idpo" => "0051916"
+        "barcode" => "0600519160000001"
+        "fi_id" => 209
+        "date_output" => null
+        "is_output" => null
+      ]
+      #changes: []
+      #casts: []
+      #dates: []
+      #dateFormat: null
+      #appends: []
+      #dispatchesEvents: []
+      #observables: []
+      #relations: []
+      #touches: []
+      +timestamps: true
+      #hidden: []
+      #visible: []
+      #fillable: []
+    }
+    3 => App\Http\Models\OutputDetailFinalInspection {#6546
+      #connection: "mysql"
+      #table: "outputdetailfinalinspection"
+      #guarded: []
+      -rules: array:8 [
+        "barcode" => "required|max:16|string"
+        "date_in" => "required|date"
+        "nik_in" => "required|string|max:10"
+        "date_output" => "required|date"
+        "is_output" => "required|integer"
+        "defect_code" => "required|max:3|integer"
+        "nik_approve" => "required|string|max:10"
+        "nik_qc" => "required|string|max:10"
+      ]
+      #primaryKey: "id"
+      #keyType: "int"
+      +incrementing: true
+      #with: []
+      #withCount: []
+      #perPage: 15
+      +exists: true
+      +wasRecentlyCreated: false
+      #attributes: array:6 [
+        "po" => "4512211838"
+        "idpo" => "0051916"
+        "barcode" => "0600519160000002"
+        "fi_id" => 210
+        "date_output" => null
+        "is_output" => null
+      ]
+      #original: array:6 [
+        "po" => "4512211838"
+        "idpo" => "0051916"
+        "barcode" => "0600519160000002"
+        "fi_id" => 210
+        "date_output" => null
+        "is_output" => null
+      ]
+      #changes: []
+      #casts: []
+      #dates: []
+      #dateFormat: null
+      #appends: []
+      #dispatchesEvents: []
+      #observables: []
+      #relations: []
+      #touches: []
+      +timestamps: true
+      #hidden: []
+      #visible: []
+      #fillable: []
+    }
+    4 => App\Http\Models\OutputDetailFinalInspection {#6547
+      #connection: "mysql"
+      #table: "outputdetailfinalinspection"
+      #guarded: []
+      -rules: array:8 [
+        "barcode" => "required|max:16|string"
+        "date_in" => "required|date"
+        "nik_in" => "required|string|max:10"
+        "date_output" => "required|date"
+        "is_output" => "required|integer"
+        "defect_code" => "required|max:3|integer"
+        "nik_approve" => "required|string|max:10"
+        "nik_qc" => "required|string|max:10"
+      ]
+      #primaryKey: "id"
+      #keyType: "int"
+      +incrementing: true
+      #with: []
+      #withCount: []
+      #perPage: 15
+      +exists: true
+      +wasRecentlyCreated: false
+      #attributes: array:6 [
+        "po" => "4512211838"
+        "idpo" => "0051916"
+        "barcode" => "0600519160000003"
+        "fi_id" => 211
+        "date_output" => null
+        "is_output" => null
+      ]
+      #original: array:6 [
+        "po" => "4512211838"
+        "idpo" => "0051916"
+        "barcode" => "0600519160000003"
+        "fi_id" => 211
+        "date_output" => null
+        "is_output" => null
+      ]
+      #changes: []
+      #casts: []
+      #dates: []
+      #dateFormat: null
+      #appends: []
+      #dispatchesEvents: []
+      #observables: []
+      #relations: []
+      #touches: []
+      +timestamps: true
+      #hidden: []
+      #visible: []
+      #fillable: []
+    }
+    5 => App\Http\Models\OutputDetailFinalInspection {#6548
+      #connection: "mysql"
+      #table: "outputdetailfinalinspection"
+      #guarded: []
+      -rules: array:8 [
+        "barcode" => "required|max:16|string"
+        "date_in" => "required|date"
+        "nik_in" => "required|string|max:10"
+        "date_output" => "required|date"
+        "is_output" => "required|integer"
+        "defect_code" => "required|max:3|integer"
+        "nik_approve" => "required|string|max:10"
+        "nik_qc" => "required|string|max:10"
+      ]
+      #primaryKey: "id"
+      #keyType: "int"
+      +incrementing: true
+      #with: []
+      #withCount: []
+      #perPage: 15
+      +exists: true
+      +wasRecentlyCreated: false
+      #attributes: array:6 [
+        "po" => "4512211838"
+        "idpo" => "0051916"
+        "barcode" => "0600519160000004"
+        "fi_id" => 212
+        "date_output" => null
+        "is_output" => null
+      ]
+      #original: array:6 [
+        "po" => "4512211838"
+        "idpo" => "0051916"
+        "barcode" => "0600519160000004"
+        "fi_id" => 212
+        "date_output" => null
+        "is_output" => null
+      ]
+      #changes: []
+      #casts: []
+      #dates: []
+      #dateFormat: null
+      #appends: []
+      #dispatchesEvents: []
+      #observables: []
+      #relations: []
+      #touches: []
+      +timestamps: true
+      #hidden: []
+      #visible: []
+      #fillable: []
+    }
+    6 => App\Http\Models\OutputDetailFinalInspection {#6549
+      #connection: "mysql"
+      #table: "outputdetailfinalinspection"
+      #guarded: []
+      -rules: array:8 [
+        "barcode" => "required|max:16|string"
+        "date_in" => "required|date"
+        "nik_in" => "required|string|max:10"
+        "date_output" => "required|date"
+        "is_output" => "required|integer"
+        "defect_code" => "required|max:3|integer"
+        "nik_approve" => "required|string|max:10"
+        "nik_qc" => "required|string|max:10"
+      ]
+      #primaryKey: "id"
+      #keyType: "int"
+      +incrementing: true
+      #with: []
+      #withCount: []
+      #perPage: 15
+      +exists: true
+      +wasRecentlyCreated: false
+      #attributes: array:6 [
+        "po" => "4512211838"
+        "idpo" => "0051916"
+        "barcode" => "0600519160000005"
+        "fi_id" => 213
+        "date_output" => null
+        "is_output" => null
+      ]
+      #original: array:6 [
+        "po" => "4512211838"
+        "idpo" => "0051916"
+        "barcode" => "0600519160000005"
+        "fi_id" => 213
+        "date_output" => null
+        "is_output" => null
+      ]
+      #changes: []
+      #casts: []
+      #dates: []
+      #dateFormat: null
+      #appends: []
+      #dispatchesEvents: []
+      #observables: []
+      #relations: []
+      #touches: []
+      +timestamps: true
+      #hidden: []
+      #visible: []
+      #fillable: []
+    }
+    7 => App\Http\Models\OutputDetailFinalInspection {#6550
+      #connection: "mysql"
+      #table: "outputdetailfinalinspection"
+      #guarded: []
+      -rules: array:8 [
+        "barcode" => "required|max:16|string"
+        "date_in" => "required|date"
+        "nik_in" => "required|string|max:10"
+        "date_output" => "required|date"
+        "is_output" => "required|integer"
+        "defect_code" => "required|max:3|integer"
+        "nik_approve" => "required|string|max:10"
+        "nik_qc" => "required|string|max:10"
+      ]
+      #primaryKey: "id"
+      #keyType: "int"
+      +incrementing: true
+      #with: []
+      #withCount: []
+      #perPage: 15
+      +exists: true
+      +wasRecentlyCreated: false
+      #attributes: array:6 [
+        "po" => "990825090123"
+        "idpo" => "0051917"
+        "barcode" => "0600519170000004"
+        "fi_id" => 215
+        "date_output" => null
+        "is_output" => null
+      ]
+      #original: array:6 [
+        "po" => "990825090123"
+        "idpo" => "0051917"
+        "barcode" => "0600519170000004"
+        "fi_id" => 215
+        "date_output" => null
+        "is_output" => null
+      ]
+      #changes: []
+      #casts: []
+      #dates: []
+      #dateFormat: null
+      #appends: []
+      #dispatchesEvents: []
+      #observables: []
+      #relations: []
+      #touches: []
+      +timestamps: true
+      #hidden: []
+      #visible: []
+      #fillable: []
+    }
+    8 => App\Http\Models\OutputDetailFinalInspection {#6551
+      #connection: "mysql"
+      #table: "outputdetailfinalinspection"
+      #guarded: []
+      -rules: array:8 [
+        "barcode" => "required|max:16|string"
+        "date_in" => "required|date"
+        "nik_in" => "required|string|max:10"
+        "date_output" => "required|date"
+        "is_output" => "required|integer"
+        "defect_code" => "required|max:3|integer"
+        "nik_approve" => "required|string|max:10"
+        "nik_qc" => "required|string|max:10"
+      ]
+      #primaryKey: "id"
+      #keyType: "int"
+      +incrementing: true
+      #with: []
+      #withCount: []
+      #perPage: 15
+      +exists: true
+      +wasRecentlyCreated: false
+      #attributes: array:6 [
+        "po" => "990825090123"
+        "idpo" => "0051917"
+        "barcode" => "0600519170000003"
+        "fi_id" => 216
+        "date_output" => null
+        "is_output" => null
+      ]
+      #original: array:6 [
+        "po" => "990825090123"
+        "idpo" => "0051917"
+        "barcode" => "0600519170000003"
+        "fi_id" => 216
+        "date_output" => null
+        "is_output" => null
+      ]
+      #changes: []
+      #casts: []
+      #dates: []
+      #dateFormat: null
+      #appends: []
+      #dispatchesEvents: []
+      #observables: []
+      #relations: []
+      #touches: []
+      +timestamps: true
+      #hidden: []
+      #visible: []
+      #fillable: []
+    }
+    9 => App\Http\Models\OutputDetailFinalInspection {#6552
+      #connection: "mysql"
+      #table: "outputdetailfinalinspection"
+      #guarded: []
+      -rules: array:8 [
+        "barcode" => "required|max:16|string"
+        "date_in" => "required|date"
+        "nik_in" => "required|string|max:10"
+        "date_output" => "required|date"
+        "is_output" => "required|integer"
+        "defect_code" => "required|max:3|integer"
+        "nik_approve" => "required|string|max:10"
+        "nik_qc" => "required|string|max:10"
+      ]
+      #primaryKey: "id"
+      #keyType: "int"
+      +incrementing: true
+      #with: []
+      #withCount: []
+      #perPage: 15
+      +exists: true
+      +wasRecentlyCreated: false
+      #attributes: array:6 [
+        "po" => "990825090456"
+        "idpo" => "0051918"
+        "barcode" => "0600519180000002"
+        "fi_id" => 218
+        "date_output" => null
+        "is_output" => null
+      ]
+      #original: array:6 [
+        "po" => "990825090456"
+        "idpo" => "0051918"
+        "barcode" => "0600519180000002"
+        "fi_id" => 218
+        "date_output" => null
+        "is_output" => null
+      ]
+      #changes: []
+      #casts: []
+      #dates: []
+      #dateFormat: null
+      #appends: []
+      #dispatchesEvents: []
+      #observables: []
+      #relations: []
+      #touches: []
+      +timestamps: true
+      #hidden: []
+      #visible: []
+      #fillable: []
+    }
+    10 => App\Http\Models\OutputDetailFinalInspection {#6553
+      #connection: "mysql"
+      #table: "outputdetailfinalinspection"
+      #guarded: []
+      -rules: array:8 [
+        "barcode" => "required|max:16|string"
+        "date_in" => "required|date"
+        "nik_in" => "required|string|max:10"
+        "date_output" => "required|date"
+        "is_output" => "required|integer"
+        "defect_code" => "required|max:3|integer"
+        "nik_approve" => "required|string|max:10"
+        "nik_qc" => "required|string|max:10"
+      ]
+      #primaryKey: "id"
+      #keyType: "int"
+      +incrementing: true
+      #with: []
+      #withCount: []
+      #perPage: 15
+      +exists: true
+      +wasRecentlyCreated: false
+      #attributes: array:6 [
+        "po" => "990823184123"
+        "idpo" => "0051921"
+        "barcode" => "0600519210000002"
+        "fi_id" => 219
+        "date_output" => null
+        "is_output" => null
+      ]
+      #original: array:6 [
+        "po" => "990823184123"
+        "idpo" => "0051921"
+        "barcode" => "0600519210000002"
+        "fi_id" => 219
+        "date_output" => null
+        "is_output" => null
+      ]
+      #changes: []
+      #casts: []
+      #dates: []
+      #dateFormat: null
+      #appends: []
+      #dispatchesEvents: []
+      #observables: []
+      #relations: []
+      #touches: []
+      +timestamps: true
+      #hidden: []
+      #visible: []
+      #fillable: []
+    }
+    11 => App\Http\Models\OutputDetailFinalInspection {#6554
+      #connection: "mysql"
+      #table: "outputdetailfinalinspection"
+      #guarded: []
+      -rules: array:8 [
+        "barcode" => "required|max:16|string"
+        "date_in" => "required|date"
+        "nik_in" => "required|string|max:10"
+        "date_output" => "required|date"
+        "is_output" => "required|integer"
+        "defect_code" => "required|max:3|integer"
+        "nik_approve" => "required|string|max:10"
+        "nik_qc" => "required|string|max:10"
+      ]
+      #primaryKey: "id"
+      #keyType: "int"
+      +incrementing: true
+      #with: []
+      #withCount: []
+      #perPage: 15
+      +exists: true
+      +wasRecentlyCreated: false
+      #attributes: array:6 [
+        "po" => "990823184123"
+        "idpo" => "0051921"
+        "barcode" => "0600519210000004"
+        "fi_id" => 220
+        "date_output" => null
+        "is_output" => null
+      ]
+      #original: array:6 [
+        "po" => "990823184123"
+        "idpo" => "0051921"
+        "barcode" => "0600519210000004"
+        "fi_id" => 220
+        "date_output" => null
+        "is_output" => null
+      ]
+      #changes: []
+      #casts: []
+      #dates: []
+      #dateFormat: null
+      #appends: []
+      #dispatchesEvents: []
+      #observables: []
+      #relations: []
+      #touches: []
+      +timestamps: true
+      #hidden: []
+      #visible: []
+      #fillable: []
+    }
+    12 => App\Http\Models\OutputDetailFinalInspection {#6555
+      #connection: "mysql"
+      #table: "outputdetailfinalinspection"
+      #guarded: []
+      -rules: array:8 [
+        "barcode" => "required|max:16|string"
+        "date_in" => "required|date"
+        "nik_in" => "required|string|max:10"
+        "date_output" => "required|date"
+        "is_output" => "required|integer"
+        "defect_code" => "required|max:3|integer"
+        "nik_approve" => "required|string|max:10"
+        "nik_qc" => "required|string|max:10"
+      ]
+      #primaryKey: "id"
+      #keyType: "int"
+      +incrementing: true
+      #with: []
+      #withCount: []
+      #perPage: 15
+      +exists: true
+      +wasRecentlyCreated: false
+      #attributes: array:6 [
+        "po" => "990823184123"
+        "idpo" => "0051921"
+        "barcode" => "0600519210000005"
+        "fi_id" => 221
+        "date_output" => null
+        "is_output" => null
+      ]
+      #original: array:6 [
+        "po" => "990823184123"
+        "idpo" => "0051921"
+        "barcode" => "0600519210000005"
+        "fi_id" => 221
+        "date_output" => null
+        "is_output" => null
+      ]
+      #changes: []
+      #casts: []
+      #dates: []
+      #dateFormat: null
+      #appends: []
+      #dispatchesEvents: []
+      #observables: []
+      #relations: []
+      #touches: []
+      +timestamps: true
+      #hidden: []
+      #visible: []
+      #fillable: []
+    }
+    13 => App\Http\Models\OutputDetailFinalInspection {#6556
+      #connection: "mysql"
+      #table: "outputdetailfinalinspection"
+      #guarded: []
+      -rules: array:8 [
+        "barcode" => "required|max:16|string"
+        "date_in" => "required|date"
+        "nik_in" => "required|string|max:10"
+        "date_output" => "required|date"
+        "is_output" => "required|integer"
+        "defect_code" => "required|max:3|integer"
+        "nik_approve" => "required|string|max:10"
+        "nik_qc" => "required|string|max:10"
+      ]
+      #primaryKey: "id"
+      #keyType: "int"
+      +incrementing: true
+      #with: []
+      #withCount: []
+      #perPage: 15
+      +exists: true
+      +wasRecentlyCreated: false
+      #attributes: array:6 [
+        "po" => "991380081291"
+        "idpo" => "0051931"
+        "barcode" => "0600519310000001"
+        "fi_id" => 223
+        "date_output" => null
+        "is_output" => null
+      ]
+      #original: array:6 [
+        "po" => "991380081291"
+        "idpo" => "0051931"
+        "barcode" => "0600519310000001"
+        "fi_id" => 223
+        "date_output" => null
+        "is_output" => null
+      ]
+      #changes: []
+      #casts: []
+      #dates: []
+      #dateFormat: null
+      #appends: []
+      #dispatchesEvents: []
+      #observables: []
+      #relations: []
+      #touches: []
+      +timestamps: true
+      #hidden: []
+      #visible: []
+      #fillable: []
+    }
+    14 => App\Http\Models\OutputDetailFinalInspection {#6557
+      #connection: "mysql"
+      #table: "outputdetailfinalinspection"
+      #guarded: []
+      -rules: array:8 [
+        "barcode" => "required|max:16|string"
+        "date_in" => "required|date"
+        "nik_in" => "required|string|max:10"
+        "date_output" => "required|date"
+        "is_output" => "required|integer"
+        "defect_code" => "required|max:3|integer"
+        "nik_approve" => "required|string|max:10"
+        "nik_qc" => "required|string|max:10"
+      ]
+      #primaryKey: "id"
+      #keyType: "int"
+      +incrementing: true
+      #with: []
+      #withCount: []
+      #perPage: 15
+      +exists: true
+      +wasRecentlyCreated: false
+      #attributes: array:6 [
+        "po" => "991380081291"
+        "idpo" => "0051931"
+        "barcode" => "0600519310000002"
+        "fi_id" => 224
+        "date_output" => null
+        "is_output" => null
+      ]
+      #original: array:6 [
+        "po" => "991380081291"
+        "idpo" => "0051931"
+        "barcode" => "0600519310000002"
+        "fi_id" => 224
+        "date_output" => null
+        "is_output" => null
+      ]
+      #changes: []
+      #casts: []
+      #dates: []
+      #dateFormat: null
+      #appends: []
+      #dispatchesEvents: []
+      #observables: []
+      #relations: []
+      #touches: []
+      +timestamps: true
+      #hidden: []
+      #visible: []
+      #fillable: []
+    }
+  ]
 }
