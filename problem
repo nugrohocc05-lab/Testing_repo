@@ -3,88 +3,54 @@ function styleSelect(Request $request)
     preconnect(session('db'));
 
     $page = (int) $request->get('page', 1);
-    $key  = $this->cacheKey('style', $request);
 
-    $result = Cache::remember($key, 30, function () use ($request, $page) {
-        $idpoSub = $this->idpoSubQuery($request);
+    $fi = OutputDetailFinalInspection::select('barcode')
+        ->distinct()
+        ->pluck('barcode');
 
-        $idstyleSub = function ($q) use ($idpoSub, $request) {
-            $q->select('idstyle')->from('purchase_order')->whereIn('idpo', $idpoSub);
+    $od = OutputDetail::whereIn('barcode', $fi)
+        ->where('is_final_inspection', 1)
+        ->distinct()
+        ->pluck('idpo');
 
-            // FIX: filter berdasarkan groupbuyer juga, bukan hanya selectpo
-            if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
-                $idbuyerSub = function ($qb) use ($request) {
-                    $qb->select('idbuyer')->from('buyer')->where('groupbuyer', $request->groupbuyer);
-                };
-                $q->whereIn('idbuyer', $idbuyerSub);
-            }
+    $query = PurchaseOrder::whereIn('idpo', $od);
 
-            if ($request->filled('selectpo') && $request->selectpo !== 'all') {
-                $q->where('idpo', $request->selectpo);
-            }
-        };
+    // TAMBAHAN: filter groupbuyer
+    if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
+        $buyer = Buyer::where('groupbuyer', $request->groupbuyer)
+            ->pluck('idbuyer');
 
-        $query = Style::select('idstyle', 'nmstyle')
-            ->whereIn('idstyle', $idstyleSub);
+        $query->whereIn('idbuyer', $buyer);
+    }
 
-        if ($request->filled('q')) {
-            $query->where('idstyle', 'like', '%' . $request->q . '%');
-        }
+    if ($request->filled('selectpo') && $request->selectpo !== 'all') {
+        $query->where('idpo', $request->selectpo);
+    }
 
-        $paginator = $query->paginate($this->perPage, ['idstyle', 'nmstyle'], 'page', $page);
+    if ($request->filled('q')) {
+        $query->where('idstyle', 'like', '%' . $request->q . '%');
+    }
 
-        return [
-            'results' => collect($paginator->items())->map(fn($item) => [
-                'id' => $item->idstyle,
-                'text' => $item->nmstyle
-            ]),
-            'more' => $paginator->hasMorePages()
-        ];
-    });
+    $style = $query
+        ->select('idstyle')
+        ->distinct()
+        ->pluck('idstyle');
+
+    $paginator = Style::whereIn('idstyle', $style)
+        ->select('idstyle', 'nmstyle')
+        ->paginate($this->perPage, ['idstyle', 'nmstyle'], 'page', $page);
+
+    $styles = collect($paginator->items());
 
     return response()->json([
-        'results' => $result['results'],
-        'pagination' => ['more' => $result['more']]
+        'results' => $styles->map(function ($item) {
+            return [
+                'id' => $item->idstyle,
+                'text' => $item->nmstyle
+            ];
+        })->values(),
+        'pagination' => [
+            'more' => $paginator->hasMorePages()
+        ]
     ]);
 }
-
-
-$('#selectstyle').select2({
-    placeholder: 'Select Style',
-    width: '100%',
-    ajax: {
-        url: "{{ route('monitoring_finalinspection_selectstyle') }}",
-        type: "GET",
-        dataType: "json",
-        delay: 500,
-        data: function (params) {
-            return {
-                q: params.term || '',
-                page: params.page || 1,
-                datea: $('#datea').val(),
-                dateb: $('#dateb').val(),
-                groupbuyer: $('#groupbuyer').val(),   // ← tambahan penting
-                selectpo: $('#selectpo').val()
-            };
-        },
-        processResults: function (data, params) {
-            params.page = params.page || 1;
-            let results = data.results || [];
-
-            if (params.page === 1 && !params.term && results.length > 0) {
-                results = [
-                    { id: 'all', text: 'All Style' },
-                    ...results
-                ];
-            }
-
-            return { results: results };
-        },
-        cache: true
-    },
-    language: {
-        noResults: function () {
-            return 'Style Not Found';
-        }
-    }
-});
