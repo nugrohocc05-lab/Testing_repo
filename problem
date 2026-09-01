@@ -1,118 +1,3 @@
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Cache;
-use Carbon\Carbon;
-
-/**
- * Bangun subquery idpo dari historydbreakdown (belum dieksekusi, hanya Closure)
- */
-private function idpoSubQuery(Request $request)
-{
-    return function ($q) use ($request) {
-        $q->select('idpo')->from('historydbreakdown');
-
-        if ($request->filled('datea') && $request->filled('dateb')) {
-            $start = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
-            $end   = Carbon::createFromFormat('d-m-Y', $request->dateb)->endOfDay();
-            $q->whereBetween('deliverydate', [$start, $end]);
-        }
-    };
-}
-
-/**
- * Cache key unik per kombinasi filter, biar tidak query ulang untuk filter yang sama
- */
-private function cacheKey(string $prefix, Request $request)
-{
-    return $prefix . ':' . md5(json_encode($request->only([
-        'q', 'page', 'datea', 'dateb', 'groupbuyer', 'selectpo'
-    ])));
-}
-
-function groupbuyer(Request $request)
-{
-    preconnect(session('db'));
-
-    $page = (int) $request->get('page', 1);
-    $key  = $this->cacheKey('groupbuyer', $request);
-
-    $result = Cache::remember($key, 30, function () use ($request, $page) {
-        $idpoSub = $this->idpoSubQuery($request);
-
-        // subquery idbuyer dari purchase_order, langsung di dalam SQL (bukan pluck PHP)
-        $idbuyerSub = function ($q) use ($idpoSub) {
-            $q->select('idbuyer')->from('purchase_order')->whereIn('idpo', $idpoSub);
-        };
-
-        // subquery groupbuyer dari buyer
-        $groupSub = function ($q) use ($idbuyerSub) {
-            $q->select('groupbuyer')->from('buyer')->whereIn('idbuyer', $idbuyerSub);
-        };
-
-        $paginator = MasterGroupBuyer::select('id', 'group_name')
-            ->whereIn('id', $groupSub)
-            ->when($request->filled('q'), function ($query) use ($request) {
-                $query->where('group_name', 'like', '%' . $request->q . '%');
-            })
-            ->orderBy('group_name', 'asc')
-            ->paginate($this->perPage, ['id', 'group_name'], 'page', $page);
-
-        return [
-            'results' => collect($paginator->items())->map(fn($item) => [
-                'id' => $item->id,
-                'text' => $item->group_name
-            ]),
-            'more' => $paginator->hasMorePages()
-        ];
-    });
-
-    return response()->json([
-        'results' => $result['results'],
-        'pagination' => ['more' => $result['more']]
-    ]);
-}
-
-function poSelect(Request $request)
-{
-    preconnect(session('db'));
-
-    $page = (int) $request->get('page', 1);
-    $key  = $this->cacheKey('po', $request);
-
-    $result = Cache::remember($key, 30, function () use ($request, $page) {
-        $idpoSub = $this->idpoSubQuery($request);
-
-        $query = PurchaseOrder::select('idpo', 'po')
-            ->whereIn('idpo', $idpoSub);
-
-        if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
-            $idbuyerSub = function ($q) use ($request) {
-                $q->select('idbuyer')->from('buyer')->where('groupbuyer', $request->groupbuyer);
-            };
-            $query->whereIn('idbuyer', $idbuyerSub);
-        }
-
-        if ($request->filled('q')) {
-            $query->where('po', 'like', '%' . $request->q . '%');
-        }
-
-        $paginator = $query->distinct()
-            ->paginate($this->perPage, ['idpo', 'po'], 'page', $page);
-
-        return [
-            'results' => collect($paginator->items())->map(fn($item) => [
-                'id' => $item->idpo,
-                'text' => $item->po
-            ]),
-            'more' => $paginator->hasMorePages()
-        ];
-    });
-
-    return response()->json([
-        'results' => $result['results'],
-        'pagination' => ['more' => $result['more']]
-    ]);
-}
-
 function styleSelect(Request $request)
 {
     preconnect(session('db'));
@@ -125,6 +10,14 @@ function styleSelect(Request $request)
 
         $idstyleSub = function ($q) use ($idpoSub, $request) {
             $q->select('idstyle')->from('purchase_order')->whereIn('idpo', $idpoSub);
+
+            // FIX: filter berdasarkan groupbuyer juga, bukan hanya selectpo
+            if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
+                $idbuyerSub = function ($qb) use ($request) {
+                    $qb->select('idbuyer')->from('buyer')->where('groupbuyer', $request->groupbuyer);
+                };
+                $q->whereIn('idbuyer', $idbuyerSub);
+            }
 
             if ($request->filled('selectpo') && $request->selectpo !== 'all') {
                 $q->where('idpo', $request->selectpo);
@@ -148,9 +41,50 @@ function styleSelect(Request $request)
             'more' => $paginator->hasMorePages()
         ];
     });
-p
+
     return response()->json([
         'results' => $result['results'],
         'pagination' => ['more' => $result['more']]
     ]);
 }
+
+
+$('#selectstyle').select2({
+    placeholder: 'Select Style',
+    width: '100%',
+    ajax: {
+        url: "{{ route('monitoring_finalinspection_selectstyle') }}",
+        type: "GET",
+        dataType: "json",
+        delay: 500,
+        data: function (params) {
+            return {
+                q: params.term || '',
+                page: params.page || 1,
+                datea: $('#datea').val(),
+                dateb: $('#dateb').val(),
+                groupbuyer: $('#groupbuyer').val(),   // ← tambahan penting
+                selectpo: $('#selectpo').val()
+            };
+        },
+        processResults: function (data, params) {
+            params.page = params.page || 1;
+            let results = data.results || [];
+
+            if (params.page === 1 && !params.term && results.length > 0) {
+                results = [
+                    { id: 'all', text: 'All Style' },
+                    ...results
+                ];
+            }
+
+            return { results: results };
+        },
+        cache: true
+    },
+    language: {
+        noResults: function () {
+            return 'Style Not Found';
+        }
+    }
+});
