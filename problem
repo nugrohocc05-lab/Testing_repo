@@ -1,173 +1,147 @@
- function summaryFilter(Request $request)
-    {
-        preconnect(session('db'));
+function summaryFilter(Request $request)
+{
+    preconnect(session('db'));
 
-        $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
-        $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+    $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
+    $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
 
-        $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
-        $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+    $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
+    $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
 
-        $fi  = (new OutputDetailFinalInspection())->getTable();
-        $od  = (new OutputDetail())->getTable();
-        $po  = (new PurchaseOrder())->getTable();
-        $dbr = (new HistoryDataBreakdown())->getTable();
+    $fi  = (new OutputDetailFinalInspection())->getTable();
+    $od  = (new OutputDetail())->getTable();
+    $po  = (new PurchaseOrder())->getTable();
+    $dbr = (new HistoryDataBreakdown())->getTable();
 
-        $applyCommonFilters = function ($query) use ($request, $po, $od) {
-            if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
-                $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
-                $query->whereIn("$po.idbuyer", $buyerIds);
-            }
-            if ($request->filled('po') && $request->po !== 'all') {
-                $query->where("$od.idpo", $request->po);
-            }
-            if ($request->filled('style') && $request->style !== 'all') {
-                $query->where("$po.idstyle", $request->style);
-            }
-            return $query;
-        };
-
-        $notFinalCondition = function ($q) use ($fi) {
-            $q->whereNull("$fi.is_output")->orWhere("$fi.is_output", 0);
-        };
-
-        $headerQuery = OutputDetailFinalInspection::query()
-            ->join($od, "$od.barcode", '=', "$fi.barcode")
-            ->join($po, "$po.idpo", '=', "$od.idpo")
-            ->whereExists(function ($query) use ($dbr, $od, $dta, $dtb) {
-                $query->select(DB::raw(1))
-                    ->from($dbr)
-                    ->whereColumn("$dbr.idpo", "$od.idpo")
-                    ->whereBetween("$dbr.deliverydate", [$dta, $dtb])
-                    ->where("$dbr.is_cutoff", "1")
-                    ->where("$dbr.production_status", "IH");
-            });
-        $applyCommonFilters($headerQuery);
-
-        $poIds = (clone $headerQuery)
-            ->select("$od.idpo")
-            ->distinct()
-            ->pluck("$od.idpo");
-
-        $totalPo = $poIds->count();
-
-        $totalQty = HistoryDataBreakdown::whereIn('idpo', $poIds)
-            ->where('is_cutoff', '1')
-            ->sum('qty_ori');
-
-        $totalQtyInspect = (clone $headerQuery)
-            ->whereNotNull("$fi.date_output")
-            ->count(DB::raw("DISTINCT $fi.id"));
-
-        // ===== Pecah rentang filter (dta - dtb) berdasarkan hari ini, dengan overlap 1 hari =====
-        $today = Carbon::today()->startOfDay();
-
-        $needFinalFrom = $today->copy();
-        $needFinalTo   = $dtb->copy();
-
-        if ($needFinalFrom->lessThanOrEqualTo($needFinalTo)) {
-
-            $needFinalQuery = DB::table($po)
-                ->join($od, "$od.idpo", '=', "$po.idpo")
-
-                // ETD / delivery date 0 - 7 hari
-                ->whereExists(function ($query) use ($dbr, $od, $needFinalFrom, $needFinalTo) {
-                    $query->select(DB::raw(1))
-                        ->from($dbr)
-                        ->whereColumn("$dbr.idpo", "$od.idpo")
-                        ->whereBetween("$dbr.deliverydate", [
-                            $needFinalFrom,
-                            $needFinalTo
-                        ])
-                        ->where("$dbr.is_cutoff", 1)
-                        ->where("$dbr.production_status", "IH");
-                })
-
-                // BELUM ADA FINAL INSPECTION SAMA SEKALI
-                ->whereNotExists(function ($query) use ($fi, $od) {
-                    $query->select(DB::raw(1))
-                        ->from($fi)
-                        ->whereColumn("$fi.barcode", "$od.barcode");
-                });
-
-            $applyCommonFilters($needFinalQuery);
-
-            $poNeedFinal = $needFinalQuery
-                ->distinct()
-                ->count("$po.po");
-
-        } else {
-            $poNeedFinal = 0;
+    $applyCommonFilters = function ($query) use ($request, $po, $od) {
+        if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
+            $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
+            $query->whereIn("$po.idbuyer", $buyerIds);
         }
+        if ($request->filled('po') && $request->po !== 'all') {
+            $query->where("$od.idpo", $request->po);
+        }
+        if ($request->filled('style') && $request->style !== 'all') {
+            $query->where("$po.idstyle", $request->style);
+        }
+        return $query;
+    };
 
+    // Kondisi "belum final": sudah masuk proses inspeksi, tapi is_output masih null/0
+    $notFinalCondition = function ($q) use ($fi) {
+        $q->whereNull("$fi.is_output")->orWhere("$fi.is_output", 0);
+    };
 
+    $headerQuery = OutputDetailFinalInspection::query()
+        ->join($od, "$od.barcode", '=', "$fi.barcode")
+        ->join($po, "$po.idpo", '=', "$od.idpo")
+        ->whereExists(function ($query) use ($dbr, $od, $dta, $dtb) {
+            $query->select(DB::raw(1))
+                ->from($dbr)
+                ->whereColumn("$dbr.idpo", "$od.idpo")
+                ->whereBetween("$dbr.deliverydate", [$dta, $dtb])
+                ->where("$dbr.is_cutoff", "1")
+                ->where("$dbr.production_status", "IH");
+        });
+    $applyCommonFilters($headerQuery);
 
-        // Overdue: dta s/d besok (today + 1, sengaja overlap 1 hari dengan Need Final)
-        $overdueFrom = $today->copy()->subDays(7)->startOfDay();
-        $overdueTo   = $today->copy()->endOfDay();
+    $poIds = (clone $headerQuery)
+        ->select("$od.idpo")
+        ->distinct()
+        ->pluck("$od.idpo");
 
-        $overdueQuery = OutputDetailFinalInspection::query()
+    $totalPo = $poIds->count();
+
+    $totalQty = HistoryDataBreakdown::whereIn('idpo', $poIds)
+        ->where('is_cutoff', '1')
+        ->sum('qty_ori');
+
+    $totalQtyInspect = (clone $headerQuery)
+        ->whereNotNull("$fi.date_output")
+        ->count(DB::raw("DISTINCT $fi.id"));
+
+    // ===== PO Need Final: today s/d dtb, sudah masuk $fi tapi is_output masih null/0 =====
+    $today = Carbon::today()->startOfDay();
+
+    $needFinalFrom = $today->copy();
+    $needFinalTo   = $dtb->copy();
+
+    if ($needFinalFrom->lessThanOrEqualTo($needFinalTo)) {
+        $needFinalQuery = OutputDetailFinalInspection::query()
             ->join($od, "$od.barcode", '=', "$fi.barcode")
             ->join($po, "$po.idpo", '=', "$od.idpo")
-            ->whereExists(function ($query) use (
-                $dbr,
-                $od,
-                $overdueFrom,
-                $overdueTo
-            ) {
+            ->whereExists(function ($query) use ($dbr, $od, $needFinalFrom, $needFinalTo) {
                 $query->select(DB::raw(1))
                     ->from($dbr)
                     ->whereColumn("$dbr.idpo", "$od.idpo")
-                    ->whereBetween("$dbr.deliverydate", [
-                        $overdueFrom,
-                        $overdueTo
-                    ])
+                    ->whereBetween("$dbr.deliverydate", [$needFinalFrom, $needFinalTo])
                     ->where("$dbr.is_cutoff", "1")
                     ->where("$dbr.production_status", "IH");
             })
             ->where($notFinalCondition);
+        $applyCommonFilters($needFinalQuery);
 
-        $applyCommonFilters($overdueQuery);
-
-        $overdue = $overdueQuery->count(DB::raw("DISTINCT $po.po"));
-
-
-        // ===== Final Completed: PO dengan is_output = 1, dalam range asli (dta - dtb) =====
-        $finalCom = (clone $headerQuery)
-            ->where("$fi.is_output", 1)
-            ->count(DB::raw("DISTINCT $po.po"));
-
-        // ===== OQL =====
-        $totDefect = (clone $headerQuery)
-            ->whereNotNull("$fi.date_output")
-            ->whereNotNull("$fi.defect_code")
-            ->count(DB::raw("DISTINCT $fi.id"));
-
-        $oql = $totalQtyInspect > 0 ? round(($totDefect / $totalQtyInspect) * 100, 2) : 0;
-
-        // ===== Passing / Reject Rate =====
-        $poNoDefect = (clone $headerQuery)
-            ->whereNotNull("$fi.date_output")
-            ->whereNull("$fi.defect_code")
-            ->count(DB::raw("DISTINCT $fi.id"));
-
-        $poWithDefect = (clone $headerQuery)
-            ->whereNotNull("$fi.date_output")
-            ->whereNotNull("$fi.defect_code")
-            ->count(DB::raw("DISTINCT $fi.id"));
-
-        $passingRate = $totalPo > 0 ? round(($poNoDefect / $totalPo) * 100, 2) : 0;
-        $rejectRate  = $totalPo > 0 ? round(($poWithDefect / $totalPo) * 100, 2) : 0;
-
-        return response()->json([
-            'total_po'          => $totalPo,
-            'total_qty'         => $totalQty,
-            'total_qty_inspect' => $totalQtyInspect,
-            'po_need_final'     => $poNeedFinal,
-            'overdue'           => $overdue,
-            'final_completed'   => $finalCom,
-            'oql'               => $oql,
-            'passing_rate'      => $passingRate,
-            'reject_rate'       => $rejectRate,
-        ]);
+        $poNeedFinal = $needFinalQuery->count(DB::raw("DISTINCT $po.po"));
+    } else {
+        $poNeedFinal = 0;
     }
+
+    // ===== Overdue: today-7 s/d today (window fix, tidak dipengaruhi dta) =====
+    $overdueFrom = $today->copy()->subDays(7)->startOfDay();
+    $overdueTo   = $today->copy()->endOfDay();
+
+    $overdueQuery = OutputDetailFinalInspection::query()
+        ->join($od, "$od.barcode", '=', "$fi.barcode")
+        ->join($po, "$po.idpo", '=', "$od.idpo")
+        ->whereExists(function ($query) use ($dbr, $od, $overdueFrom, $overdueTo) {
+            $query->select(DB::raw(1))
+                ->from($dbr)
+                ->whereColumn("$dbr.idpo", "$od.idpo")
+                ->whereBetween("$dbr.deliverydate", [$overdueFrom, $overdueTo])
+                ->where("$dbr.is_cutoff", "1")
+                ->where("$dbr.production_status", "IH");
+        })
+        ->where($notFinalCondition);
+    $applyCommonFilters($overdueQuery);
+
+    $overdue = $overdueQuery->count(DB::raw("DISTINCT $po.po"));
+
+    // ===== Final Completed: PO dengan is_output = 1, dalam range asli (dta - dtb) =====
+    $finalCom = (clone $headerQuery)
+        ->where("$fi.is_output", 1)
+        ->count(DB::raw("DISTINCT $po.po"));
+
+    // ===== OQL =====
+    $totDefect = (clone $headerQuery)
+        ->whereNotNull("$fi.date_output")
+        ->whereNotNull("$fi.defect_code")
+        ->count(DB::raw("DISTINCT $fi.id"));
+
+    $oql = $totalQtyInspect > 0 ? round(($totDefect / $totalQtyInspect) * 100, 2) : 0;
+
+    // ===== Passing / Reject Rate =====
+    $poNoDefect = (clone $headerQuery)
+        ->whereNotNull("$fi.date_output")
+        ->whereNull("$fi.defect_code")
+        ->count(DB::raw("DISTINCT $fi.id"));
+
+    $poWithDefect = (clone $headerQuery)
+        ->whereNotNull("$fi.date_output")
+        ->whereNotNull("$fi.defect_code")
+        ->count(DB::raw("DISTINCT $fi.id"));
+
+    $passingRate = $totalPo > 0 ? round(($poNoDefect / $totalPo) * 100, 2) : 0;
+    $rejectRate  = $totalPo > 0 ? round(($poWithDefect / $totalPo) * 100, 2) : 0;
+
+    return response()->json([
+        'total_po'          => $totalPo,
+        'total_qty'         => $totalQty,
+        'total_qty_inspect' => $totalQtyInspect,
+        'po_need_final'     => $poNeedFinal,
+        'overdue'           => $overdue,
+        'final_completed'   => $finalCom,
+        'oql'               => $oql,
+        'passing_rate'      => $passingRate,
+        'reject_rate'       => $rejectRate,
+    ]);
+}
