@@ -1,186 +1,491 @@
+@push('scripts')
+<script>
+    $(function () {
 
-    const dateOpt = {
-        dateFormat: "d-m-Y",
-        altInput: true,
-        altFormat: "d F Y",
-        allowInput: false,
-        monthSelectorType: "static",
-        disableMobile: true,
-        defaultDate: "today",
-        onChange: function () {
-            checkDateSelection();
-        }
-    };
-    flatpickr("#datea", dateOpt);
-    flatpickr("#dateb", dateOpt);
-
-    $('#groupbuyer').select2({ /* ...tetap sama... */ });
-    $('#selectpo').select2({ /* ...tetap sama, tapi tambahkan datea/dateb di data:... */ });
-    $('#selectstyle').select2({ /* ...tetap sama, tambahkan datea/dateb juga... */ });
-
-    // semua disabled dari awal (select2 butuh trigger ulang agar UI ikut disabled)
-    $('#groupbuyer').prop('disabled', true).trigger('change.select2');
-    $('#selectpo').prop('disabled', true).trigger('change.select2');
-    $('#selectstyle').prop('disabled', true).trigger('change.select2');
-
-    function parseDMY(str) {
-        const [d, m, y] = str.split('-');
-        return new Date(`${y}-${m}-${d}`);
-    }
-
-    function checkDateSelection() {
-        let datea = $('#datea').val();
-        let dateb = $('#dateb').val();
-
-        // reset semua step berikutnya setiap kali tanggal berubah
-        $('#groupbuyer').val(null).trigger('change');
-        $('#selectpo').val(null).trigger('change');
-        $('#selectstyle').val(null).trigger('change');
-
-        if (!datea || !dateb) {
-            $('#groupbuyer').prop('disabled', true);
-            return;
+        function parseDMY(str) {
+            const [d, m, y] = str.split('-');
+            return new Date(`${y}-${m}-${d}`);
         }
 
-        const start = parseDMY(datea);
-        const end = parseDMY(dateb);
+        // ================= FLATPICKR =================
+        const dateOpt = {
+            dateFormat: "d-m-Y",
+            altInput: true,
+            altFormat: "d F Y",
+            allowInput: false,
+            monthSelectorType: "static",
+            disableMobile: true,
+            defaultDate: "today",
+            onChange: function () {
+                checkDateSelection();
+            }
+        };
+        flatpickr("#datea", dateOpt);
+        flatpickr("#dateb", dateOpt);
 
-        if (start > end) {
-            swal('Warning!', 'Start date cannot be later than end date!', 'warning');
-            $('#groupbuyer').prop('disabled', true);
-            return;
+        // ================= SELECT2: GROUP BUYER =================
+        $('#groupbuyer').select2({
+            placeholder: 'Select Buyer',
+            width: '100%',
+            ajax: {
+                url: "{{ route('monitoring_endlineperformance_groupbuyer') }}",
+                type: "GET",
+                dataType: "json",
+                delay: 500,
+                data: function (params) {
+                    return {
+                        q: params.term || '',
+                        page: params.page || 1,
+                        datea: $('#datea').val(),
+                        dateb: $('#dateb').val()
+                    };
+                },
+                processResults: function (data, params) {
+                    params.page = params.page || 1;
+                    let results = data.results || [];
+                    if (params.page === 1 && !params.term) {
+                        results = [
+                            { id: 'all', text: 'All Buyer' },
+                            ...results
+                        ];
+                    }
+                    return {
+                        results: results
+                    };
+                },
+                cache: true
+            }
+        });
+
+        // ================= SELECT2: PO =================
+        $('#selectpo').select2({
+            placeholder: 'Select PO',
+            width: '100%',
+            ajax: {
+                url: "{{ route('monitoring_finalinspection_selectpo') }}",
+                type: "GET",
+                dataType: "json",
+                delay: 500,
+                data: function (params) {
+                    return {
+                        q: params.term || '',
+                        page: params.page || 1,
+                        datea: $('#datea').val(),
+                        dateb: $('#dateb').val(),
+                        groupbuyer: $('#groupbuyer').val()
+                    };
+                },
+                processResults: function (data, params) {
+                    params.page = params.page || 1;
+                    let results = data.results || [];
+
+                    if (params.page === 1 && !params.term && results.length > 0) {
+                        results = [
+                            { id: 'all', text: 'All PO' },
+                            ...results
+                        ];
+                    }
+
+                    return {
+                        results: results
+                    };
+                },
+                cache: true
+            },
+            language: {
+                noResults: function () {
+                    return 'PO Not Found';
+                }
+            }
+        });
+
+        // ================= SELECT2: STYLE =================
+        $('#selectstyle').select2({
+            placeholder: 'Select Style',
+            width: '100%',
+            ajax: {
+                url: "{{ route('monitoring_finalinspection_selectstyle') }}",
+                type: "GET",
+                dataType: "json",
+                delay: 500,
+                data: function (params) {
+                    return {
+                        q: params.term || '',
+                        page: params.page || 1,
+                        datea: $('#datea').val(),
+                        dateb: $('#dateb').val(),
+                        selectpo: $('#selectpo').val()
+                    };
+                },
+                processResults: function (data, params) {
+                    params.page = params.page || 1;
+                    let results = data.results || [];
+
+                    if (params.page === 1 && !params.term && results.length > 0) {
+                        results = [
+                            { id: 'all', text: 'All Style' },
+                            ...results
+                        ];
+                    }
+
+                    return {
+                        results: results
+                    };
+                },
+                cache: true
+            },
+            language: {
+                noResults: function () {
+                    return 'Style Not Found';
+                }
+            }
+        });
+
+        // ================= INITIAL STATE: SEMUA DISABLED =================
+        $('#groupbuyer').prop('disabled', true).trigger('change.select2');
+        $('#selectpo').prop('disabled', true).trigger('change.select2');
+        $('#selectstyle').prop('disabled', true).trigger('change.select2');
+
+        // ================= VALIDASI TANGGAL =================
+        function checkDateSelection() {
+            let datea = $('#datea').val();
+            let dateb = $('#dateb').val();
+
+            // reset semua step berikutnya setiap kali tanggal berubah
+            $('#groupbuyer').val(null).trigger('change');
+            $('#selectpo').val(null).trigger('change');
+            $('#selectstyle').val(null).trigger('change');
+
+            $('#selectpo').prop('disabled', true).trigger('change.select2');
+            $('#selectstyle').prop('disabled', true).trigger('change.select2');
+
+            if (!datea || !dateb) {
+                $('#groupbuyer').prop('disabled', true).trigger('change.select2');
+                return;
+            }
+
+            const start = parseDMY(datea);
+            const end = parseDMY(dateb);
+
+            if (start > end) {
+                swal('Warning!', 'Start date cannot be later than end date!', 'warning');
+                $('#groupbuyer').prop('disabled', true).trigger('change.select2');
+                return;
+            }
+
+            const diffDays = (end - start) / (1000 * 60 * 60 * 24);
+
+            if (diffDays > 31) {
+                swal('Warning!', 'Date Has More Than 31 Days in Range, Cannot View Data.', 'warning');
+                $('#groupbuyer').prop('disabled', true).trigger('change.select2');
+                return;
+            }
+
+            // tanggal valid -> Group Buyer boleh dipilih
+            $('#groupbuyer').prop('disabled', false).trigger('change.select2');
         }
 
-        const diffDays = (end - start) / (1000 * 60 * 60 * 24);
-        if (diffDays > 31) {
-            swal('Warning!', 'Date Has More Than 31 Days in Range, Cannot View Data.', 'warning');
-            $('#groupbuyer').prop('disabled', true);
-            return;
+        // ================= CHAIN: GROUP BUYER -> PO =================
+        $('#groupbuyer').on('change', function () {
+            let buyer = $(this).val();
+
+            $('#selectpo').val(null).trigger('change');
+            $('#selectstyle').val(null).trigger('change');
+
+            $('#selectpo').prop('disabled', !buyer).trigger('change.select2');
+            $('#selectstyle').prop('disabled', true).trigger('change.select2');
+        });
+
+        // ================= CHAIN: PO -> STYLE =================
+        $('#selectpo').on('change', function () {
+            let po = $(this).val();
+
+            $('#selectstyle').val(null).trigger('change');
+            $('#selectstyle').prop('disabled', !po).trigger('change.select2');
+        });
+
+        // ================= FILTER STATE =================
+        window.currentFilter = {
+            line: 'all',
+            datea: $('#datea').val(),
+            dateb: $('#dateb').val(),
+            groupbuyer: 'all'
+        };
+
+        let hasFiltered = false;
+
+        $('#groupbuyer, #selectpo, #selectstyle, #datea, #dateb').on('change input', function () {
+            hasFiltered = false;
+        });
+
+        // ================= LOAD CARDS =================
+        function loadCards(filter) {
+            $.ajax({
+                url: "{{ route('monitoring_finalinspection_summaryfilter') }}",
+                type: "GET",
+                data: filter,
+                beforeSend: function () {
+                    $('#loading').show();
+                },
+                success: function (response) {
+                    $('#totalpo').text(response.total_po ?? '-');
+                    $('#totalqty').text(response.total_qty ?? '-');
+                    $('#totalqtyinspect').text(response.total_qty_inspect ?? '-');
+                    $('#poneedfinal').text(response.po_need_final ?? '-');
+                    $('#overdue').text(response.overdue ?? '-');
+                    $('#final').text(response.final_completed ?? '-');
+                    $('#oql').text(response.oql ?? '-');
+
+                    let passingRate = response.passing_rate ?? 50;
+                    let rejectRate = response.reject_rate ?? 80;
+
+                    $('#passingRateValue').text(passingRate + '%');
+                    $('#rejectRateValue').text(rejectRate + '%');
+
+                    $('#passingRateBar').css('width', passingRate + '%');
+                    $('#rejectRateBar').css('width', rejectRate + '%');
+
+                    updateDataTime();
+                },
+                error: function (xhr) {
+                    console.log(xhr.responseText);
+                },
+                complete: function () {
+                    $('#loading').hide();
+                }
+            });
         }
 
-        // tanggal valid -> baru boleh pilih Group Buyer
-        $('#groupbuyer').prop('disabled', false);
-    }
+        // ================= LIVE CLOCK =================
+        function updateDataTime() {
+            let now = new Date();
+            let day = String(now.getDate()).padStart(2, '0');
+            let month = [
+                "January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November", "December"
+            ];
+            let year = now.getFullYear();
+            let hour = String(now.getHours()).padStart(2, '0');
+            let minute = String(now.getMinutes()).padStart(2, '0');
+            let second = String(now.getSeconds()).padStart(2, '0');
 
-    $('#groupbuyer').on('change', function () {
-        let buyer = $(this).val();
-        $('#selectpo').val(null).trigger('change');
-        $('#selectstyle').val(null).trigger('change');
-        $('#selectpo').prop('disabled', !buyer);
-        $('#selectstyle').prop('disabled', true);
+            let formatted = `${day} ${month[now.getMonth()]} ${year} - ${hour} : ${minute} : ${second}`;
+
+            document.getElementById('liveClock').innerHTML = formatted;
+
+            localStorage.setItem('lastDataUpdate', formatted);
+        }
+
+        updateDataTime();
+        window.updateDataTime = updateDataTime;
+
+        // ================= FIND BUTTON =================
+        $('#findbtn').on('click', function (e) {
+            e.preventDefault();
+
+            currentFilter = {
+                groupbuyer: $('#groupbuyer').val(),
+                po: $('#selectpo').val(),
+                style: $('#selectstyle').val(),
+                datea: $('#datea').val(),
+                dateb: $('#dateb').val(),
+            };
+
+            if (currentFilter.datea == null || currentFilter.datea == '' ||
+                currentFilter.dateb == null || currentFilter.dateb == '') {
+                swal('Warning!', 'Please select Periode Date first!', 'warning');
+                return;
+            }
+
+            const start = parseDMY(currentFilter.datea);
+            const end = parseDMY(currentFilter.dateb);
+
+            if (start > end) {
+                swal('Warning!', 'Start date cannot be later than end date!', 'warning');
+                return;
+            }
+
+            const diffDays = (end - start) / (1000 * 60 * 60 * 24);
+
+            if (diffDays > 31) {
+                swal('Warning!', 'Date Has More Than 31 Days in Range, Cannot View Data.', 'warning');
+                return;
+            }
+
+            if (currentFilter.groupbuyer == null || currentFilter.groupbuyer == '') {
+                swal('Warning!', 'Please select Group Buyer first!', 'warning');
+                return;
+            }
+
+            if (currentFilter.po == null || currentFilter.po == '') {
+                swal('Warning!', 'Please select PO first!', 'warning');
+                return;
+            }
+
+            if (currentFilter.style == null || currentFilter.style == '') {
+                swal('Warning!', 'Please select Style first!', 'warning');
+                return;
+            }
+
+            hasFiltered = true;
+            loadCards(currentFilter);
+        });
+
     });
-
-    $('#selectpo').on('change', function () {
-        let po = $(this).val();
-        $('#selectstyle').val(null).trigger('change');
-        $('#selectstyle').prop('disabled', !po);
-    });
-    
+</script>
+@include('layouts.loading')
+@endpush
 
 
 
-private function getFilteredIdpo(Request $request)
-{
-    $fi = OutputDetailFinalInspection::select('barcode')->distinct()->pluck('barcode');
+<style>
+     @media (max-width: 768px) {
+        .action-btn {
+            display: flex !important;
+            justify-content: flex-start !important;
+            align-items: center !important;
+            width: 100%;
+            gap: 10px;
+        }
 
-    $query = OutputDetail::whereIn('barcode', $fi)
-        ->where('is_final_inspection', 1);
+        .btn-find {
+            width: auto !important;
+            margin-left: 0 !important;
+        }
 
-    if ($request->filled('datea') && $request->filled('dateb')) {
-        $start = \Carbon\Carbon::createFromFormat('d-m-Y', $request->datea)->format('Y-m-d');
-        $end = \Carbon\Carbon::createFromFormat('d-m-Y', $request->dateb)->format('Y-m-d');
-        $query->whereBetween('etd', [$start, $end]); // sesuaikan kolom ETD
+        .export-btn {
+            margin-left: 0 !important;
+        }
     }
 
-    return $query->distinct()->pluck('idpo');
-}
-
-function groupbuyer(Request $request)
-{
-    preconnect(session('db'));
-
-    $q = $request->get('q');
-    $page = (int) $request->get('page', 1);
-
-    $idpo = $this->getFilteredIdpo($request);
-    $idbuyer = PurchaseOrder::whereIn('idpo', $idpo)->distinct()->pluck('idbuyer');
-    $groupIds = Buyer::whereIn('idbuyer', $idbuyer)->distinct()->pluck('groupbuyer');
-
-    $paginator = MasterGroupBuyer::select('id', 'group_name')
-        ->whereIn('id', $groupIds)
-        ->when($q, function ($query) use ($q) {
-            $query->where('group_name', 'like', '%' . $q . '%');
-        })
-        ->orderBy('group_name', 'asc')
-        ->paginate($this->perPage, ['id', 'group_name'], 'page', $page);
-
-    $data = collect($paginator->items())->map(function ($item) {
-        return ['id' => $item->id, 'text' => $item->group_name];
-    });
-
-    return response()->json([
-        'results' => $data,
-        'pagination' => ['more' => $paginator->hasMorePages()]
-    ]);
-}
-
-function poSelect(Request $request)
-{
-    preconnect(session('db'));
-
-    $page = (int) $request->get('page', 1);
-    $idpo = $this->getFilteredIdpo($request);
-
-    $query = PurchaseOrder::whereIn('idpo', $idpo);
-
-    if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
-        $buyer = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
-        $query->whereIn('idbuyer', $buyer);
+    .select2-container--default.select2-container--disabled .select2-selection--single {
+        background-color: #242E3E;
+        border-color: #d1d5db;
+        cursor: not-allowed;
     }
 
-    if ($request->filled('q')) {
-        $query->where('po', 'like', '%' . $request->q . '%');
+    .select2-container--default.select2-container--disabled .select2-selection__rendered {
+        color: #9ca3af;
     }
+</style>
 
-    $paginator = $query->select('idpo', 'po')->distinct()
-        ->paginate($this->perPage, ['idpo', 'po'], 'page', $page);
+<div class="row margin-cstm border-custom rounded px-2 py-2 text-white" style="margin: 0 1px 0 1px;">
 
-    $po = collect($paginator->items());
+    <!-- Periode Date (SEKARANG DI DEPAN) -->
+    <div class="col-12 col-md-5 border-end-custom d-flex mb-3 mb-md-0">
+        <div class="icon-filter">
+            <div class="box-custom bg-transparent" style="height: 31px;"></div>
+            <div>
+                <img src="{{ _asset('svg/inlinePerformance/calendar.svg') }}"
+                    class="icon-summary" alt="">
+            </div>
+        </div>
 
-    return response()->json([
-        'results' => $po->map(fn($item) => ['id' => $item->idpo, 'text' => $item->po])->values(),
-        'pagination' => ['more' => $paginator->hasMorePages()]
-    ]);
-}
+        <div class="w-100">
+            <label class="mb-1 text-title">
+                ETD (Shipment Date)
+            </label>
+            <div class="wrapper-date d-flex align-items-center gap-2 w-100 flex-nowrap period-date">
+                <div class="position-relative flex-grow-1 date-input-col">
+                    <input
+                        type="text"
+                        id="datea"
+                        class="form-control pe-5"
+                        placeholder="Pilih tanggal">
+                    <img
+                        src="{{ _asset('svg/inlinePerformance/calendar-flat.svg') }}"
+                        class="position-absolute top-50 end-0 translate-middle-y me-3"
+                        style="width:18px; height:18px; pointer-events:none;" alt="">
+                </div>
 
-function styleSelect(Request $request)
-{
-    preconnect(session('db'));
+                <span class="to px-2">to</span>
+                <div class="position-relative flex-grow-1 date-input-col">
+                    <input
+                        type="text"
+                        id="dateb"
+                        class="form-control pe-5"
+                        placeholder="Pilih tanggal">
+                    <img
+                        src="{{ _asset('svg/inlinePerformance/calendar-flat.svg') }}"
+                        class="position-absolute top-50 end-0 translate-middle-y me-3"
+                        style="width:18px; height:18px; pointer-events:none;" alt="">
+                </div>
+                <div class="action-btn align-items-center">
+                    <button class="margin-button btn-find" id="findbtn">
+                        <img src="{{ _asset('svg/inlinePerformance/search.svg') }}"
+                            style="width:20px;height:15px;margin-right:2px;" alt="">
+                        Find
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
-    $page = (int) $request->get('page', 1);
-    $idpo = $this->getFilteredIdpo($request);
+    <!-- Group Buyer -->
+    <div class="col-12 col-md border-end-custom d-flex mb-3 mb-md-0">
+        <div class="icon-filter">
+            <div class="box-custom" style="height: 31px;"></div>
+            <div class="">
+                <img src="{{ _asset('svg/inlinePerformance/user.svg') }}"
+                    class="icon-summary" alt="">
+            </div>
+        </div>
 
-    $query = PurchaseOrder::whereIn('idpo', $idpo);
+        <div class="w-100">
+            <label class="mb-1 text-title">
+                Group Buyer
+            </label>
+                <div class="flex-grow-1">
+                    <select id="groupbuyer" class="form-select select2 w-100" disabled>
+                        <option></option>
+                    </select>
+                </div>
+        </div>
+    </div>
 
-    if ($request->filled('selectpo') && $request->selectpo !== 'all') {
-        $query->where('idpo', $request->selectpo);
-    }
+    <!-- PO -->
+    <div class="col-12 col-md border-end-custom d-flex mb-3 mb-md-0">
+        <div class="icon-filter">
+            <div class="box-custom" style="height: 31px;"></div>
+            <div class="">
+                <img src="{{ _asset('svg/finalInspection/po.svg') }}"
+                    class="icon-summary" alt="">
+            </div>
+        </div>
 
-    if ($request->filled('q')) {
-        $query->where('idstyle', 'like', '%' . $request->q . '%');
-    }
+        <div class="w-100">
+            <label class="mb-1 text-title">
+                PO
+            </label>
+                <div class="flex-grow-1">
+                    <select id="selectpo" class="form-select select2 w-100" disabled>
+                        <option></option>
+                    </select>
+                </div>
+        </div>
+    </div>
 
-    $style = $query->select('idstyle')->distinct()->pluck('idstyle');
+    <!-- Style -->
+    <div class="col-12 col-md border-end-custom d-flex mb-3 mb-md-0">
+        <div class="icon-filter">
+            <div class="box-custom" style="height: 31px;"></div>
+            <div class="">
+                <img src="{{ _asset('svg/finalInspection/style.svg') }}"
+                    class="icon-summary" alt="">
+            </div>
+        </div>
 
-    $paginator = Style::whereIn('idstyle', $style)
-        ->select('idstyle', 'nmstyle')
-        ->paginate($this->perPage, ['idstyle', 'nmstyle'], 'page', $page);
+        <div class="w-100">
+            <label class="mb-1 text-title">
+                Style
+            </label>
+                <div class="flex-grow-1">
+                    <select id="selectstyle" class="form-select select2 w-100" disabled>
+                        <option></option>
+                    </select>
+                </div>
+        </div>
+    </div>
 
-    $styles = collect($paginator->items());
-
-    return response()->json([
-        'results' => $styles->map(fn($item) => ['id' => $item->idstyle, 'text' => $item->nmstyle])->values(),
-        'pagination' => ['more' => $paginator->hasMorePages()]
-    ]);
-}
+</div>
 
