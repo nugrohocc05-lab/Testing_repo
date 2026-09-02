@@ -1,43 +1,130 @@
-private function getDefectColorMap(string $mode): array
-{
-    // Cache key tanpa menit — cukup per hari, supaya TTL benar-benar efektif
-    $cacheKey = "defect_color_map_{$mode}_" . Carbon::now()->format('Y-m-d');
+<style>
+    thead tr th {
+        font-weight: 400;
+        font-size: 12px;
+    }
 
-    return Cache::remember($cacheKey, now()->addMinutes(2), function () use ($mode) {
-        if ($mode === 'day') {
-            // whereBetween index-friendly, ganti dari whereDate()
-            $dta = Carbon::now()->startOfDay();
-            $dtb = Carbon::now()->endOfDay();
-            $headerQuery = SewingOutput::whereBetween('date', [$dta, $dtb]);
-        } else {
-            $dta = Carbon::now()->subDays(6)->startOfDay();
-            $dtb = Carbon::now()->endOfDay();
-            $headerQuery = SewingOutput::whereBetween('date', [$dta, $dtb]);
-        }
+    tbody tr td {
+        font-weight: 400;
+        font-size: 12px;
+        line-height: 28px;
+    }
 
-        $rankedCodes = (clone $headerQuery)
-            ->whereNotNull('defect_code')
-            ->whereNotIn('defect_code', [800, 900])
-            ->select('defect_code', DB::raw('COUNT(*) as total'))
-            ->groupBy('defect_code')
-            ->orderByDesc('total')
-            ->orderBy('defect_code', 'asc')
-            ->pluck('total', 'defect_code')
-            ->keys();
+    tfoot tr th {
+        font-weight: 600;
+        font-size: 14px;
+        line-height: 28px;
+    }
 
-        $names = QCDefect::whereIn('kdcacat', $rankedCodes)
-            ->pluck('deskripsi', 'kdcacat');
+    .flex-fill.border-custom-datatable {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        min-width: 0;
+        width: 100%;
+        flex: 1 1 0;
+        overflow: hidden;
+    }
 
-        $palette = $this->generateDistinctColors($rankedCodes->count());
+    .wrapper-sub {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        min-width: 0;
+        width: 100%;
+        flex: 1 1 auto;
+        overflow: hidden;
+    }
 
-        $map = [];
-        foreach ($rankedCodes->values() as $index => $code) {
-            $map[(string) $code] = [
-                'name'  => $names[$code] ?? '-',
-                'color' => $palette[$index],
-            ];
-        }
+    .table-scroll-wrapper {
+        flex: 1 1 auto;
+        min-height: 0;
+        min-width: 0;
+        width: 100%;
+        overflow-y: auto;
+        overflow-x: auto;
+    }
 
-        return $map;
-    });
-}
+    .table-res {
+        width: 100%;
+        margin-bottom: 0;
+        table-layout: fixed;
+        border-collapse: collapse;
+    }
+
+    .table-res thead th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background-color: #1B2331;
+        vertical-align: middle; 
+        word-wrap: break-word;
+    }
+
+    .table-res tbody td {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        vertical-align: middle;
+        padding: 0.5rem;
+    }
+
+    .table-res tfoot th {
+        position: sticky;
+        bottom: 0;
+        z-index: 2;
+        background-color: #1B2331;
+    }
+</style>
+
+
+<div class="flex-fill border-custom-datatable rounded-1">
+    <div class="wrapper-sub">
+        <h6 class="subheader mb-0 fw-normal text-truncate px-3 pt-2">
+            PO PRIORITY PROGRESS FINAL (BASED ON ETD)
+        </h6>
+
+        <div class="table-wrapper table-scroll-wrapper rounded mt-2 px-2 pb-2">
+            <table class="table-res table-borderless w-100 table-hover">
+                <thead>
+                    <tr>
+                        <th class="text-center" style="width:5%;">Priority</th>
+                        <th class="text-center" style="width:9%;">PO No.</th>
+                        <th class="text-center" style="width:9%;">Buyer</th>
+                        <th class="text-center" style="width:9%;">Style</th>
+                        <th class="text-center" style="width:9%;">Article</th>
+                        <th class="text-center" style="width:9%;">Color</th>
+                        <th class="text-center" style="width:8%;">QTY Order<br>(Pcs)</th>
+                        <th class="text-center" style="width:8%;">Output<br>(Pcs)</th>
+                        <th class="text-center" style="width:9%;">Progress<br>Output</th>
+                        <th class="text-center" style="width:9%;">ETD<br>(Shipment Date)</th>
+                        <th class="text-center" style="width:8%;">Days to<br>ETD</th>
+                        <th class="text-center" style="width:8%;">Status<br>Final</th>
+                    </tr>
+                </thead>
+                <tbody class="text-center" id="tablePriorityFinalBody">
+                    <tr>
+                        <td colspan="12" class="text-center">No Data</td>
+                    </tr>
+                </tbody>
+
+                <tfoot class="table-foot" id="tableInlineDefectFoot">
+                    <tr>
+                        <th style="color: #4C8CF2;">Total</th>
+                        <th></th>
+                        <th></th>
+                        <th></th>
+                        <th></th>
+                        <th></th>
+                        <th class="text-center" style="color: #4C8CF2;">940,416</th>
+                        <th class="text-center" style="color: #4C8CF2;">940,416</th>
+                        <th class="text-center" style="color: #4C8CF2;">75.55%</th>
+                        <th class="text-center"></th>
+                        <th class="text-center" style="color: #4C8CF2;"></th>
+                        <th class="text-center" style="color: #4C8CF2;"></th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
