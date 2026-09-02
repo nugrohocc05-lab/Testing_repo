@@ -1,96 +1,53 @@
-function priorityFinal(Request $request)
-{
-    preconnect(session('db'));
+// ============================
+// HARDCODED DEBUG — otomatis jalan tiap klik Find, ganti angka ini sesuai kebutuhan
+// ============================
+$debugTarget = '4123'; // <-- cek PO 4123
 
-    $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
-    $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+$poRow = PurchaseOrder::where('idpo', 'like', "%$debugTarget%")
+    ->orWhere('po', 'like', "%$debugTarget%")
+    ->select('idpo', 'po', 'idbuyer', 'idstyle')
+    ->first();
 
-    $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
-    $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+if ($poRow) {
+    $idpo = $poRow->idpo;
 
-    $fi  = (new OutputDetailFinalInspection())->getTable();
-    $od  = (new OutputDetail())->getTable();
-    $po  = (new PurchaseOrder())->getTable();
-    $dbr = (new HistoryDataBreakdown())->getTable();
-
-    $applyCommonFilters = function ($query) use ($request, $po, $dbr) {
-        if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
-            $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
-            $query->whereIn("$po.idbuyer", $buyerIds);
-        }
-        if ($request->filled('po') && $request->po !== 'all') {
-            $query->where("$dbr.idpo", $request->po);
-        }
-        if ($request->filled('style') && $request->style !== 'all') {
-            $query->where("$po.idstyle", $request->style);
-        }
-        return $query;
-    };
-
-    // WAJIB: order ini (dicek lewat combine_pro, mencakup versi sebelum revisi)
-    // sudah punya minimal 1 barcode yang di-entry ke final inspection
-    $requireHasFinalRecord = function ($query) use ($fi, $od, $dbr) {
-        $query->whereExists(function ($q) use ($fi, $od, $dbr) {
-            $q->select(DB::raw(1))
-                ->from("$fi as fi3")
-                ->join("$od as od3", "od3.barcode", '=', 'fi3.barcode')
-                ->join("$dbr as dbr3", "dbr3.idpo", '=', 'od3.idpo')
-                ->whereColumn('dbr3.combine_pro', "$dbr.combine_pro");
-        });
-        return $query;
-    };
-
-    // Exclude kalau order ini (lewat combine_pro) sudah ada barcode is_output = 1
-    $excludeIfAnyFinal = function ($query) use ($fi, $od, $dbr) {
-        $query->whereNotExists(function ($q) use ($fi, $od, $dbr) {
-            $q->select(DB::raw(1))
-                ->from("$fi as fi2")
-                ->join("$od as od2", "od2.barcode", '=', 'fi2.barcode')
-                ->join("$dbr as dbr2", "dbr2.idpo", '=', 'od2.idpo')
-                ->whereColumn('dbr2.combine_pro', "$dbr.combine_pro")
-                ->where('fi2.is_output', 1);
-        });
-        return $query;
-    };
-
-    $listQuery = HistoryDataBreakdown::query()
-        ->join($po, "$po.idpo", '=', "$dbr.idpo")
-        ->whereBetween("$dbr.deliverydate", [$dta, $dtb])
-        ->where("$dbr.production_status", "IH")
-        // Exclude PO lama yang sudah digantikan revisi kartu produksi
-        ->whereNotExists(function ($q) use ($dbr) {
-            $q->from("$dbr as dbr2")
-                ->whereColumn("dbr2.combine_pro", "$dbr.combine_pro")
-                ->where("dbr2.revisi_kp", 1)
-                ->whereNotNull("dbr2.kp_item_ref")
-                ->whereColumn("dbr2.idpo", ">", "$dbr.idpo");
-        });
-
-    $requireHasFinalRecord($listQuery);
-    $excludeIfAnyFinal($listQuery);
-    $applyCommonFilters($listQuery);
-
-    $poList = $listQuery
-        ->select("$dbr.idpo", "$po.po", "$po.idbuyer", "$po.idstyle")
-        ->distinct()
+    $breakdownRows = HistoryDataBreakdown::where('idpo', $idpo)
+        ->select('idpo', 'combine_pro', 'deliverydate', 'production_status', 'is_cutoff', 'revisi_kp', 'kp_item_ref')
         ->get();
 
-    $buyerIds = $poList->pluck('idbuyer')->filter()->unique()->values();
-    $buyerGroupMap = Buyer::whereIn('idbuyer', $buyerIds)->pluck('groupbuyer', 'idbuyer');
-    $groupBuyerIds = $buyerGroupMap->filter()->unique()->values();
-    $groupBuyerNames = MasterGroupBuyer::whereIn('id', $groupBuyerIds)->pluck('group_name', 'id');
-    $styleIds = $poList->pluck('idstyle')->filter()->unique()->values();
-    $styleMap = Style::whereIn('idstyle', $styleIds)->pluck('nmstyle', 'idstyle');
+    // Cari SEMUA idpo lain yang share combine_pro yang sama (ini kunci masalahnya)
+    $combineProValues = $breakdownRows->pluck('combine_pro')->unique();
 
-    $data = $poList->map(function ($item) use ($buyerGroupMap, $groupBuyerNames, $styleMap) {
-        $groupBuyerId = $buyerGroupMap->get($item->idbuyer);
-        return [
-            'idpo'  => $item->idpo,
-            'po'    => $item->po,
-            'style' => $styleMap->get($item->idstyle) ?? '-',
-            'buyer' => $groupBuyerId ? ($groupBuyerNames->get($groupBuyerId) ?? '-') : '-',
+    $sameCombineProRows = HistoryDataBreakdown::whereIn('combine_pro', $combineProValues)
+        ->select('idpo', 'combine_pro', 'revisi_kp', 'kp_item_ref', 'deliverydate', 'production_status')
+        ->get()
+        ->groupBy('idpo');
+
+    // Untuk tiap idpo yang share combine_pro, cek apakah dia punya barcode is_output = 1
+    $od  = (new OutputDetail())->getTable();
+    $fi  = (new OutputDetailFinalInspection())->getTable();
+
+    $relatedIdpoFinalStatus = [];
+    foreach ($sameCombineProRows as $relatedIdpo => $rows) {
+        $finalRows = OutputDetailFinalInspection::query()
+            ->join($od, "$od.barcode", '=', "$fi.barcode")
+            ->where("$od.idpo", $relatedIdpo)
+            ->select("$fi.barcode", "$fi.is_output")
+            ->get();
+
+        $relatedIdpoFinalStatus[$relatedIdpo] = [
+            'combine_pro_rows' => $rows,
+            'final_rows'       => $finalRows,
+            'has_output_1'     => $finalRows->where('is_output', 1)->isNotEmpty(),
         ];
-    })->values();
+    }
 
-    return response()->json(['data' => $data]);
+    dd([
+        'debug_target'              => $debugTarget,
+        'idpo'                      => $idpo,
+        'po'                        => $poRow->po,
+        'breakdown_rows'            => $breakdownRows,
+        'combine_pro_values'        => $combineProValues,
+        'related_idpo_via_combine_pro' => $relatedIdpoFinalStatus, // <-- cek ini: idpo mana yang has_output_1 = true
+    ]);
 }
