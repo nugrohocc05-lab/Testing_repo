@@ -1,12 +1,176 @@
-Untuk flow sekarang hanya cek combine pro, revisi kp 1 ,kp_item_ref ada atau tidak 
-dan ambil idpo yang lebih besar 
+function priorityFinal(Request $request)
+    {
+        preconnect(session('db'));
 
-seharusnya ambil original_pro 
-yang is_cutoff 1 
-dan cek kp_item_ref yang sama dengan kp_item 
-lalu cek qty ori nya  0 atau tidak
-misal dari po yang direroute kan jadi dua 
-misal 91 dan 92
-cek qty_ori semisal awalnya sebelum reroute po 91 qty 4 lalu reroute qty jadi 0 maka ambil
-po yang terbaru yaitu 92
-kalauqty ori menjadi split jadi 91 qty 2 92 qty 2, maka tampil kan kedua po nya 
+        $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
+        $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+
+        $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
+        $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+
+        $fi  = (new OutputDetailFinalInspection())->getTable();
+        $od  = (new OutputDetail())->getTable();
+        $po  = (new PurchaseOrder())->getTable();
+        $dbr = (new HistoryDataBreakdown())->getTable();
+        $so  = (new SewingOutput())->getTable();
+
+        $applyCommonFilters = function ($query) use ($request, $po, $dbr) {
+            if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
+                $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
+                $query->whereIn("$po.idbuyer", $buyerIds);
+            }
+            if ($request->filled('po') && $request->po !== 'all') {
+                $query->where("$dbr.idpo", $request->po);
+            }
+            if ($request->filled('style') && $request->style !== 'all') {
+                $query->where("$po.idstyle", $request->style);
+            }
+            return $query;
+        };
+
+        $effectiveIdpoSql = function () use ($dbr) {
+            return "(CASE WHEN $dbr.revisi_kp = 1 AND $dbr.kp_item_ref IS NOT NULL
+                THEN (SELECT dbr_prev.idpo FROM $dbr as dbr_prev
+                    WHERE dbr_prev.combine_pro = $dbr.combine_pro
+                        AND dbr_prev.idpo < $dbr.idpo
+                    ORDER BY dbr_prev.idpo DESC LIMIT 1)
+                ELSE $dbr.idpo END)";
+        };
+
+        $requireHasFinalRecord = function ($query) use ($fi, $od, $effectiveIdpoSql) {
+            $expr = $effectiveIdpoSql();
+            $query->whereExists(function ($q) use ($fi, $od, $expr) {
+                $q->select(DB::raw(1))
+                    ->from("$fi as fi3")
+                    ->join("$od as od3", "od3.barcode", '=', 'fi3.barcode')
+                    ->whereRaw("od3.idpo = $expr");
+            });
+            return $query;
+        };
+
+        $excludeIfAnyFinal = function ($query) use ($fi, $od, $effectiveIdpoSql) {
+            $expr = $effectiveIdpoSql();
+            $query->whereNotExists(function ($q) use ($fi, $od, $expr) {
+                $q->select(DB::raw(1))
+                    ->from("$fi as fi2")
+                    ->join("$od as od2", "od2.barcode", '=', 'fi2.barcode')
+                    ->whereRaw("od2.idpo = $expr")
+                    ->where('fi2.is_output', 1);
+            });
+            return $query;
+        };
+
+        $listQuery = HistoryDataBreakdown::query()
+            ->join($po, "$po.idpo", '=', "$dbr.idpo")
+            ->whereBetween("$dbr.deliverydate", [$dta, $dtb])
+            ->where("$dbr.production_status", "IH")
+            ->whereNotExists(function ($q) use ($dbr) {
+                $q->from("$dbr as dbr2")
+                    ->whereColumn("dbr2.combine_pro", "$dbr.combine_pro")
+                    ->where("dbr2.revisi_kp", 1)
+                    ->whereNotNull("dbr2.kp_item_ref")
+                    ->whereColumn("dbr2.idpo", ">", "$dbr.idpo");
+            });
+
+        $requireHasFinalRecord($listQuery);
+        $excludeIfAnyFinal($listQuery);
+        $applyCommonFilters($listQuery);
+
+        $poList = $listQuery
+            ->select("$dbr.idpo", "$po.po", "$po.idbuyer", "$po.idstyle", "$dbr.idcolor")
+            ->distinct()
+            ->get();
+
+
+        $idpoList = $poList->pluck('idpo')->unique()->values();
+
+        $buyerIds = $poList->pluck('idbuyer')->filter()->unique()->values();
+        $buyerGroupMap = Buyer::whereIn('idbuyer', $buyerIds)->pluck('groupbuyer', 'idbuyer');
+        $groupBuyerIds = $buyerGroupMap->filter()->unique()->values();
+        $groupBuyerNames = MasterGroupBuyer::whereIn('id', $groupBuyerIds)->pluck('group_name', 'id');
+        $styleIds = $poList->pluck('idstyle')->filter()->unique()->values();
+        $styleMap = Style::whereIn('idstyle', $styleIds)->pluck('nmstyle', 'idstyle');
+
+        $colorIds = $poList->pluck('idcolor')->filter()->unique()->values();
+        $colorMap = Color::whereIn('idcolor', $colorIds)->pluck('nmcolor', 'idcolor');
+
+        $qtyEtdRows = HistoryDataBreakdown::whereIn('idpo', $idpoList)
+            ->whereBetween('deliverydate', [$dta, $dtb])
+            ->where('production_status', 'IH')
+            ->selectRaw('idpo, SUM(qty_ori) as total_qty, MAX(deliverydate) as etd')
+            ->groupBy('idpo')
+            ->get()
+            ->keyBy('idpo');
+
+        $expr = $effectiveIdpoSql();
+
+        $outputRows = HistoryDataBreakdown::query()
+            ->join("$od as od_out", DB::raw('od_out.idpo'), '=', DB::raw($expr))
+            ->join("$so as so_out", 'so_out.barcode', '=', 'od_out.barcode')
+            ->whereIn("$dbr.idpo", $idpoList)
+            ->where('so_out.is_output', 1)
+            ->selectRaw("$dbr.idpo as idpo, COUNT(DISTINCT so_out.barcode) as total_output")
+            ->groupBy("$dbr.idpo")
+            ->get()
+            ->keyBy('idpo');
+
+        $today = Carbon::today()->startOfDay();
+
+        $data = $poList->map(function ($item) use (
+            $buyerGroupMap,
+            $groupBuyerNames,
+            $styleMap,
+            $colorMap,
+            $qtyEtdRows,
+            $outputRows,
+            $today
+        ) {
+            $groupBuyerId = $buyerGroupMap->get($item->idbuyer);
+            $qtyEtd = $qtyEtdRows->get($item->idpo);
+            $outputRow = $outputRows->get($item->idpo);
+
+            $etd = $qtyEtd ? $qtyEtd->etd : null;
+            $daysToEtd = null;
+
+            if ($etd) {
+                $etdDate = Carbon::parse($etd)->startOfDay();
+                $daysToEtd = $today->diffInDays($etdDate, false);
+            }
+
+            $totalQty = (int) ($qtyEtd ? $qtyEtd->total_qty : 0);
+            $totalOutput = (int) ($outputRow ? $outputRow->total_output : 0);
+
+            $progressOutput = $totalQty > 0
+                ? round(($totalOutput / $totalQty) * 100, 2)
+                : 0;
+
+            return [
+                'idpo'            => $item->idpo,
+                'po'              => $item->po,
+                'style'           => $styleMap->get($item->idstyle) ?? '-',
+                'color'           => $colorMap->get($item->idcolor) ?? '-',
+                'buyer'           => $groupBuyerId ? ($groupBuyerNames->get($groupBuyerId) ?? '-') : '-',
+                'qty_order'       => $totalQty,
+                'output'          => $totalOutput,
+                'progress_output' => $progressOutput,
+                'etd'             => $etd ? Carbon::parse($etd)->format('d-m-Y') : '-',
+                'days_to_etd'     => $daysToEtd,
+            ];
+        })->values();
+
+        $totalQtyOrderAll = $data->sum('qty_order');
+        $totalOutputAll   = $data->sum('output');
+
+        $totalProgressOutputAll = $totalQtyOrderAll > 0
+            ? round(($totalOutputAll / $totalQtyOrderAll) * 100, 2)
+            : 0;
+
+        return response()->json([
+            'data'  => $data,
+            'total' => [
+                'qty_order'       => $totalQtyOrderAll,
+                'output'          => $totalOutputAll,
+                'progress_output' => $totalProgressOutputAll,
+            ],
+        ]);
+    }
