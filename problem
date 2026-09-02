@@ -13,11 +13,10 @@ function priorityFinal(Request $request)
     $dbr = (new HistoryDataBreakdown())->getTable();
     $so  = (new SewingOutput())->getTable();
 
-    // ⚠️ ASUMSI SEMENTARA: scope keluarga pakai combine_pro.
-    // Kalau ternyata harus pakai original_pro, ganti baris ini saja:
     $familyColumn = 'combine_pro';
+    // $familyColumn = 'original_pro';
 
-    // ================= STEP 1: ambil semua baris histori mentah (kena filter dasar) =================
+    // Filter awal
     $rawQuery = HistoryDataBreakdown::query()
         ->join($po, "$po.idpo", '=', "$dbr.idpo")
         ->whereBetween("$dbr.deliverydate", [$dta, $dtb])
