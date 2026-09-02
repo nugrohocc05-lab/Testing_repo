@@ -74,9 +74,103 @@ function priorityFinal(Request $request)
                 ->whereColumn("dbr2.idpo", ">", "$dbr.idpo");
         });
 
-    $requireHasFinalRecord($listQuery);   // <-- tambahan: PO harus sudah masuk proses final inspection
-    $excludeIfAnyFinal($listQuery);       // PO belum ada barcode is_output = 1
+    $requireHasFinalRecord($listQuery);
+    $excludeIfAnyFinal($listQuery);
     $applyCommonFilters($listQuery);
+
+    // ============================
+    // DD DEBUG MODE
+    // Panggil dengan tambahan &debug_po=1292 di query string
+    // ============================
+    if ($request->filled('debug_po')) {
+        $debugSearch = $request->get('debug_po');
+
+        $matchedPos = PurchaseOrder::where('idpo', 'like', "%$debugSearch%")
+            ->orWhere('po', 'like', "%$debugSearch%")
+            ->select('idpo', 'po', 'idbuyer', 'idstyle')
+            ->get();
+
+        $debugResult = [];
+
+        foreach ($matchedPos as $poRow) {
+            $idpo = $poRow->idpo;
+
+            $breakdownRows = HistoryDataBreakdown::where('idpo', $idpo)
+                ->select(
+                    'idpo',
+                    'combine_pro',
+                    'deliverydate',
+                    'production_status',
+                    'is_cutoff',
+                    'revisi_kp',
+                    'kp_item_ref'
+                )
+                ->get();
+
+            $revisiConflicts = [];
+            foreach ($breakdownRows as $row) {
+                $conflicts = HistoryDataBreakdown::where('combine_pro', $row->combine_pro)
+                    ->where('revisi_kp', 1)
+                    ->whereNotNull('kp_item_ref')
+                    ->where('idpo', '>', $row->idpo)
+                    ->select('idpo', 'combine_pro', 'revisi_kp', 'kp_item_ref')
+                    ->get();
+
+                if ($conflicts->isNotEmpty()) {
+                    $revisiConflicts[] = [
+                        'source_row'     => $row,
+                        'conflicts_with' => $conflicts,
+                    ];
+                }
+            }
+
+            $finalInspectionRows = OutputDetailFinalInspection::query()
+                ->join($od, "$od.barcode", '=', "$fi.barcode")
+                ->where("$od.idpo", $idpo)
+                ->select("$fi.barcode", "$fi.is_output", "$fi.date_output", "$fi.defect_code")
+                ->get();
+
+            $hasAnyFinalRecord = $finalInspectionRows->isNotEmpty();
+            $hasAnyOutput1     = $finalInspectionRows->where('is_output', 1)->isNotEmpty();
+
+            $matchDateStatus = $breakdownRows->filter(function ($row) use ($dta, $dtb) {
+                if (!$row->deliverydate) return false;
+                $d = Carbon::parse($row->deliverydate);
+                return $d->betweenIncluded($dta, $dtb) && $row->production_status === 'IH';
+            })->values();
+
+            // Cek apakah PO ini lolos semua kondisi listQuery (tanpa applyCommonFilters,
+            // supaya kelihatan murni karena logic exclude atau karena filter buyer/style)
+            $passesRawQuery = (clone $listQuery)
+                ->where("$dbr.idpo", $idpo)
+                ->exists();
+
+            $debugResult[$idpo] = [
+                'po'                      => $poRow->po,
+                'idbuyer'                 => $poRow->idbuyer,
+                'idstyle'                 => $poRow->idstyle,
+                'breakdown_rows'          => $breakdownRows,
+                'match_date_status_rows'  => $matchDateStatus, // kosong -> gagal whereBetween/production_status
+                'revisi_conflicts'        => $revisiConflicts, // ada isi -> ke-exclude logic revisi kartu produksi
+                'final_inspection_rows'   => $finalInspectionRows,
+                'has_any_final_record'    => $hasAnyFinalRecord, // false -> ke-exclude requireHasFinalRecord
+                'has_any_output_1'        => $hasAnyOutput1,     // true -> ke-exclude excludeIfAnyFinal
+                'passes_raw_query'        => $passesRawQuery,    // false berarti gagal di salah satu kondisi listQuery (belum termasuk applyCommonFilters)
+            ];
+        }
+
+        dd([
+            'debug_search' => $debugSearch,
+            'date_from'    => $dta->toDateTimeString(),
+            'date_to'      => $dtb->toDateTimeString(),
+            'request_filters' => [
+                'groupbuyer' => $request->get('groupbuyer'),
+                'po'         => $request->get('po'),
+                'style'      => $request->get('style'),
+            ],
+            'result' => $debugResult,
+        ]);
+    }
 
     $poList = $listQuery
         ->select(
@@ -113,11 +207,7 @@ function priorityFinal(Request $request)
         return [
             'idpo'  => $item->idpo,
             'po'    => $item->po,
-
-            // Ambil style berdasarkan idstyle PO
             'style' => $styleMap->get($item->idstyle) ?? '-',
-
-            // Ambil group buyer berdasarkan idbuyer
             'buyer' => $groupBuyerId
                 ? ($groupBuyerNames->get($groupBuyerId) ?? '-')
                 : '-',
