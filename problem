@@ -4,7 +4,6 @@ function priorityFinal(Request $request)
 
     $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
     $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
-
     $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
     $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
 
@@ -14,102 +13,122 @@ function priorityFinal(Request $request)
     $dbr = (new HistoryDataBreakdown())->getTable();
     $so  = (new SewingOutput())->getTable();
 
-    $applyCommonFilters = function ($query) use ($request, $po, $dbr) {
-        if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
-            $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
-            $query->whereIn("$po.idbuyer", $buyerIds);
-        }
-        if ($request->filled('po') && $request->po !== 'all') {
-            $query->where("$dbr.idpo", $request->po);
-        }
-        if ($request->filled('style') && $request->style !== 'all') {
-            $query->where("$po.idstyle", $request->style);
-        }
-        return $query;
+    // ⚠️ ASUMSI SEMENTARA: scope keluarga pakai combine_pro.
+    // Kalau ternyata harus pakai original_pro, ganti baris ini saja:
+    $familyColumn = 'combine_pro';
+
+    // ================= STEP 1: ambil semua baris histori mentah (kena filter dasar) =================
+    $rawQuery = HistoryDataBreakdown::query()
+        ->join($po, "$po.idpo", '=', "$dbr.idpo")
+        ->whereBetween("$dbr.deliverydate", [$dta, $dtb])
+        ->where("$dbr.production_status", "IH");
+
+    if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
+        $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
+        $rawQuery->whereIn("$po.idbuyer", $buyerIds);
+    }
+    if ($request->filled('po') && $request->po !== 'all') {
+        $rawQuery->where("$dbr.idpo", $request->po);
+    }
+    if ($request->filled('style') && $request->style !== 'all') {
+        $rawQuery->where("$po.idstyle", $request->style);
+    }
+
+    $rawRows = $rawQuery->select(
+        "$dbr.idpo", "$dbr.idcolor", "$dbr.qty_ori", "$dbr.kp_item",
+        "$dbr.kp_item_ref", "$dbr.revisi_kp", "$dbr.deliverydate",
+        "$dbr.$familyColumn as family_key",
+        "$po.po", "$po.idbuyer", "$po.idstyle"
+    )->get();
+
+    // ================= STEP 2: dedup -> per (idpo, idcolor, kp_item) ambil revisi_kp terbesar =================
+    $deduped = $rawRows
+        ->groupBy(fn ($r) => $r->idpo . '|' . $r->idcolor . '|' . $r->kp_item)
+        ->map(fn ($group) => $group->sortByDesc('revisi_kp')->first())
+        ->values();
+
+    // ================= STEP 3: LEAF DETECTION =================
+    // Per family (combine_pro), kumpulkan semua kp_item_ref yang pernah dipakai (non-null).
+    // kp_item yang MASUK ke himpunan ini berarti sudah "digantikan" -> bukan leaf -> dibuang.
+    $refByFamily = $deduped
+        ->whereNotNull('kp_item_ref')
+        ->groupBy('family_key')
+        ->map(fn ($group) => $group->pluck('kp_item_ref')->unique()->values());
+
+    $leafRows = $deduped->filter(function ($row) use ($refByFamily) {
+        $refs = $refByFamily->get($row->family_key);
+        // kalau kp_item milik row ini ada di daftar "pernah dirujuk" -> bukan leaf
+        return !($refs && $refs->contains($row->kp_item));
+    })->values();
+
+    // ================= STEP 4: SUM qty & ETD per idpo dari leaf rows saja =================
+    $byIdpoLeaf = $leafRows->groupBy('idpo');
+
+    $qtyPerIdpo = [];
+    $etdPerIdpo = [];
+
+    foreach ($byIdpoLeaf as $idpo => $rows) {
+        $qtyPerIdpo[$idpo] = (int) $rows->sum('qty_ori');
+        $etdPerIdpo[$idpo] = $rows->max('deliverydate');
+    }
+
+    // PO yang tampil = qty leaf-nya > 0
+    $qualifiedIdpo = collect($qtyPerIdpo)->filter(fn ($qty) => $qty > 0)->keys()->values();
+
+    // ================= (SEMENTARA MASIH LOGIC LAMA) final-inspection check =================
+    $effectiveIdpoSql = function () use ($dbr) {
+        return "(CASE WHEN $dbr.revisi_kp = 1 AND $dbr.kp_item_ref IS NOT NULL
+            THEN (SELECT dbr_prev.idpo FROM $dbr as dbr_prev
+                WHERE dbr_prev.combine_pro = $dbr.combine_pro
+                    AND dbr_prev.idpo < $dbr.idpo
+                ORDER BY dbr_prev.idpo DESC LIMIT 1)
+            ELSE $dbr.idpo END)";
     };
 
-    // ================= FIX: baris "current" per idpo = revisi_kp TERBESAR per idpo =================
-    // (bukan per kp_item lagi -- ini yang bikin hasil kemarin salah)
-    $currentRevisiExpr = "$dbr.revisi_kp = (
-        SELECT MAX(dr2.revisi_kp) FROM $dbr as dr2 WHERE dr2.idpo = $dbr.idpo
-    )";
-
-    // ================= FAMILY / REROUTE (untuk final-check & output) =================
-    $effectiveIdpoRawSql = "
-        SELECT fam.idpo FROM $dbr as fam
-        WHERE fam.revisi_kp = (SELECT MAX(fam_r.revisi_kp) FROM $dbr as fam_r WHERE fam_r.idpo = fam.idpo)
-          AND COALESCE(fam.original_pro, fam.idpo) = COALESCE($dbr.original_pro, $dbr.idpo)
-          AND (
-                fam.idpo = $dbr.idpo
-                OR (
-                    (SELECT SUM(fam_q.qty_ori) FROM $dbr as fam_q
-                        WHERE fam_q.idpo = fam.idpo
-                          AND fam_q.revisi_kp = (SELECT MAX(fam_q2.revisi_kp) FROM $dbr as fam_q2 WHERE fam_q2.idpo = fam_q.idpo)
-                    ) = 0
-                    AND (SELECT SUM(dbr_q.qty_ori) FROM $dbr as dbr_q
-                        WHERE dbr_q.idpo = $dbr.idpo
-                          AND dbr_q.revisi_kp = (SELECT MAX(dbr_q2.revisi_kp) FROM $dbr as dbr_q2 WHERE dbr_q2.idpo = dbr_q.idpo)
-                    ) > 0
-                    AND $dbr.idpo = (
-                        SELECT MAX(fam3.idpo) FROM $dbr as fam3
-                        WHERE fam3.revisi_kp = (SELECT MAX(fam3_r.revisi_kp) FROM $dbr as fam3_r WHERE fam3_r.idpo = fam3.idpo)
-                          AND COALESCE(fam3.original_pro, fam3.idpo) = COALESCE($dbr.original_pro, $dbr.idpo)
-                          AND (SELECT SUM(fam3_q.qty_ori) FROM $dbr as fam3_q
-                                WHERE fam3_q.idpo = fam3.idpo
-                                  AND fam3_q.revisi_kp = (SELECT MAX(fam3_q2.revisi_kp) FROM $dbr as fam3_q2 WHERE fam3_q2.idpo = fam3_q.idpo)
-                              ) > 0
-                    )
-                )
-          )
-    ";
-
-    $requireHasFinalRecord = function ($query) use ($fi, $od, $effectiveIdpoRawSql) {
-        $query->whereExists(function ($q) use ($fi, $od, $effectiveIdpoRawSql) {
+    $requireHasFinalRecord = function ($query) use ($fi, $od, $effectiveIdpoSql) {
+        $expr = $effectiveIdpoSql();
+        $query->whereExists(function ($q) use ($fi, $od, $expr) {
             $q->select(DB::raw(1))
                 ->from("$fi as fi3")
                 ->join("$od as od3", "od3.barcode", '=', 'fi3.barcode')
-                ->whereRaw("od3.idpo IN ($effectiveIdpoRawSql)");
+                ->whereRaw("od3.idpo = $expr");
         });
         return $query;
     };
 
-    $excludeIfAnyFinal = function ($query) use ($fi, $od, $effectiveIdpoRawSql) {
-        $query->whereNotExists(function ($q) use ($fi, $od, $effectiveIdpoRawSql) {
+    $excludeIfAnyFinal = function ($query) use ($fi, $od, $effectiveIdpoSql) {
+        $expr = $effectiveIdpoSql();
+        $query->whereNotExists(function ($q) use ($fi, $od, $expr) {
             $q->select(DB::raw(1))
                 ->from("$fi as fi2")
                 ->join("$od as od2", "od2.barcode", '=', 'fi2.barcode')
-                ->whereRaw("od2.idpo IN ($effectiveIdpoRawSql)")
+                ->whereRaw("od2.idpo = $expr")
                 ->where('fi2.is_output', 1);
         });
         return $query;
     };
 
-    // ================= LIST QUERY: hanya baris revisi terbaru per idpo, total qty > 0 =================
-    $qualifyingIdpoSubquery = function ($q) use ($dbr, $dta, $dtb, $currentRevisiExpr) {
-        $q->select('idpo')
-          ->from("$dbr as q1")
-          ->whereRaw(str_replace("$dbr.", 'q1.', $currentRevisiExpr))
-          ->whereBetween('q1.deliverydate', [$dta, $dtb])
-          ->where('q1.production_status', 'IH')
-          ->groupBy('q1.idpo')
-          ->havingRaw('SUM(q1.qty_ori) > 0');
-    };
-
-    $listQuery = HistoryDataBreakdown::query()
+    $finalCheckQuery = HistoryDataBreakdown::query()
         ->join($po, "$po.idpo", '=', "$dbr.idpo")
-        ->whereBetween("$dbr.deliverydate", [$dta, $dtb])
-        ->where("$dbr.production_status", "IH")
-        ->whereRaw($currentRevisiExpr)
-        ->whereIn("$dbr.idpo", $qualifyingIdpoSubquery);
+        ->whereIn("$dbr.idpo", $qualifiedIdpo);
 
-    $requireHasFinalRecord($listQuery);
-    $excludeIfAnyFinal($listQuery);
-    $applyCommonFilters($listQuery);
+    $requireHasFinalRecord($finalCheckQuery);
+    $excludeIfAnyFinal($finalCheckQuery);
 
-    $poList = $listQuery
-        ->select("$dbr.idpo", "$po.po", "$po.idbuyer", "$po.idstyle", "$dbr.idcolor")
-        ->distinct()
-        ->get();
+    $finalIdpoList = $finalCheckQuery->select("$dbr.idpo")->distinct()->pluck('idpo');
+
+    // ================= STEP 5: build PO list final =================
+    $poList = $finalIdpoList->map(function ($idpo) use ($byIdpoLeaf) {
+        $rows = $byIdpoLeaf->get($idpo);
+        $first = $rows->first();
+        return (object) [
+            'idpo'    => $idpo,
+            'po'      => $first->po,
+            'idbuyer' => $first->idbuyer,
+            'idstyle' => $first->idstyle,
+            'idcolor' => $first->idcolor,
+        ];
+    });
 
     $idpoList = $poList->pluck('idpo')->unique()->values();
 
@@ -119,26 +138,14 @@ function priorityFinal(Request $request)
     $groupBuyerNames = MasterGroupBuyer::whereIn('id', $groupBuyerIds)->pluck('group_name', 'id');
     $styleIds = $poList->pluck('idstyle')->filter()->unique()->values();
     $styleMap = Style::whereIn('idstyle', $styleIds)->pluck('nmstyle', 'idstyle');
-
     $colorIds = $poList->pluck('idcolor')->filter()->unique()->values();
     $colorMap = Color::whereIn('idcolor', $colorIds)->pluck('nmcolor', 'idcolor');
 
-    // ================= FIX: QTY = revisi_kp terbesar PER IDPO, lalu SUM =================
-    $qtyEtdRows = DB::table("$dbr as d1")
-        ->whereIn('d1.idpo', $idpoList)
-        ->whereBetween('d1.deliverydate', [$dta, $dtb])
-        ->where('d1.production_status', 'IH')
-        ->whereRaw("d1.revisi_kp = (SELECT MAX(d2.revisi_kp) FROM $dbr as d2 WHERE d2.idpo = d1.idpo)")
-        ->selectRaw('d1.idpo, SUM(d1.qty_ori) as total_qty, MAX(d1.deliverydate) as etd')
-        ->groupBy('d1.idpo')
-        ->get()
-        ->keyBy('idpo');
+    // ================= OUTPUT ROWS (SEMENTARA MASIH LOGIC LAMA) =================
+    $expr = $effectiveIdpoSql();
 
-    // ================= OUTPUT ROWS =================
     $outputRows = HistoryDataBreakdown::query()
-        ->join("$od as od_out", function ($join) use ($effectiveIdpoRawSql) {
-            $join->whereRaw("od_out.idpo IN ($effectiveIdpoRawSql)");
-        })
+        ->join("$od as od_out", DB::raw('od_out.idpo'), '=', DB::raw($expr))
         ->join("$so as so_out", 'so_out.barcode', '=', 'od_out.barcode')
         ->whereIn("$dbr.idpo", $idpoList)
         ->where('so_out.is_output', 1)
@@ -150,32 +157,22 @@ function priorityFinal(Request $request)
     $today = Carbon::today()->startOfDay();
 
     $data = $poList->map(function ($item) use (
-        $buyerGroupMap,
-        $groupBuyerNames,
-        $styleMap,
-        $colorMap,
-        $qtyEtdRows,
-        $outputRows,
-        $today
+        $buyerGroupMap, $groupBuyerNames, $styleMap, $colorMap,
+        $qtyPerIdpo, $etdPerIdpo, $outputRows, $today
     ) {
         $groupBuyerId = $buyerGroupMap->get($item->idbuyer);
-        $qtyEtd = $qtyEtdRows->get($item->idpo);
         $outputRow = $outputRows->get($item->idpo);
 
-        $etd = $qtyEtd ? $qtyEtd->etd : null;
+        $etd = $etdPerIdpo[$item->idpo] ?? null;
         $daysToEtd = null;
-
         if ($etd) {
             $etdDate = Carbon::parse($etd)->startOfDay();
             $daysToEtd = $today->diffInDays($etdDate, false);
         }
 
-        $totalQty = (int) ($qtyEtd ? $qtyEtd->total_qty : 0);
+        $totalQty = (int) ($qtyPerIdpo[$item->idpo] ?? 0);
         $totalOutput = (int) ($outputRow ? $outputRow->total_output : 0);
-
-        $progressOutput = $totalQty > 0
-            ? round(($totalOutput / $totalQty) * 100, 2)
-            : 0;
+        $progressOutput = $totalQty > 0 ? round(($totalOutput / $totalQty) * 100, 2) : 0;
 
         return [
             'idpo'            => $item->idpo,
@@ -193,7 +190,6 @@ function priorityFinal(Request $request)
 
     $totalQtyOrderAll = $data->sum('qty_order');
     $totalOutputAll   = $data->sum('output');
-
     $totalProgressOutputAll = $totalQtyOrderAll > 0
         ? round(($totalOutputAll / $totalQtyOrderAll) * 100, 2)
         : 0;
