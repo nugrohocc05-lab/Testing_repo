@@ -1,53 +1,372 @@
-// ============================
-// HARDCODED DEBUG — otomatis jalan tiap klik Find, ganti angka ini sesuai kebutuhan
-// ============================
-$debugTarget = '4123'; // <-- cek PO 4123
-
-$poRow = PurchaseOrder::where('idpo', 'like', "%$debugTarget%")
-    ->orWhere('po', 'like', "%$debugTarget%")
-    ->select('idpo', 'po', 'idbuyer', 'idstyle')
-    ->first();
-
-if ($poRow) {
-    $idpo = $poRow->idpo;
-
-    $breakdownRows = HistoryDataBreakdown::where('idpo', $idpo)
-        ->select('idpo', 'combine_pro', 'deliverydate', 'production_status', 'is_cutoff', 'revisi_kp', 'kp_item_ref')
-        ->get();
-
-    // Cari SEMUA idpo lain yang share combine_pro yang sama (ini kunci masalahnya)
-    $combineProValues = $breakdownRows->pluck('combine_pro')->unique();
-
-    $sameCombineProRows = HistoryDataBreakdown::whereIn('combine_pro', $combineProValues)
-        ->select('idpo', 'combine_pro', 'revisi_kp', 'kp_item_ref', 'deliverydate', 'production_status')
-        ->get()
-        ->groupBy('idpo');
-
-    // Untuk tiap idpo yang share combine_pro, cek apakah dia punya barcode is_output = 1
-    $od  = (new OutputDetail())->getTable();
-    $fi  = (new OutputDetailFinalInspection())->getTable();
-
-    $relatedIdpoFinalStatus = [];
-    foreach ($sameCombineProRows as $relatedIdpo => $rows) {
-        $finalRows = OutputDetailFinalInspection::query()
-            ->join($od, "$od.barcode", '=', "$fi.barcode")
-            ->where("$od.idpo", $relatedIdpo)
-            ->select("$fi.barcode", "$fi.is_output")
-            ->get();
-
-        $relatedIdpoFinalStatus[$relatedIdpo] = [
-            'combine_pro_rows' => $rows,
-            'final_rows'       => $finalRows,
-            'has_output_1'     => $finalRows->where('is_output', 1)->isNotEmpty(),
-        ];
-    }
-
-    dd([
-        'debug_target'              => $debugTarget,
-        'idpo'                      => $idpo,
-        'po'                        => $poRow->po,
-        'breakdown_rows'            => $breakdownRows,
-        'combine_pro_values'        => $combineProValues,
-        'related_idpo_via_combine_pro' => $relatedIdpoFinalStatus, // <-- cek ini: idpo mana yang has_output_1 = true
-    ]);
-}
+array:6 [
+  "debug_target" => "4123"
+  "idpo" => "0051921"
+  "po" => "990823184123"
+  "breakdown_rows" => Illuminate\Database\Eloquent\Collection {#6516
+    #items: array:1 [
+      0 => App\Http\Models\HistoryDataBreakdown {#6519
+        #connection: "mysql"
+        #table: "historydbreakdown"
+        #primaryKey: "hist_id"
+        #guarded: []
+        #perPage: 15
+        -rules: array:8 [
+          "idpo" => "required|max:7|string"
+          "revisi" => "max:2|string"
+          "idcolor" => "required|max:6|string"
+          "idsize" => "required|max:6|string"
+          "qtysize" => "required|digits_between:1,8"
+          "systemcode" => "max:30|string"
+          "id" => "required|max:20|string"
+          "setcode" => "nullable|max:20|string"
+        ]
+        #keyType: "int"
+        +incrementing: true
+        #with: []
+        #withCount: []
+        +exists: true
+        +wasRecentlyCreated: false
+        #attributes: array:7 [
+          "idpo" => "0051921"
+          "combine_pro" => "150000023184"
+          "deliverydate" => "2026-09-08"
+          "production_status" => "IH"
+          "is_cutoff" => 1
+          "revisi_kp" => 0
+          "kp_item_ref" => null
+        ]
+        #original: array:7 [
+          "idpo" => "0051921"
+          "combine_pro" => "150000023184"
+          "deliverydate" => "2026-09-08"
+          "production_status" => "IH"
+          "is_cutoff" => 1
+          "revisi_kp" => 0
+          "kp_item_ref" => null
+        ]
+        #changes: []
+        #casts: []
+        #dates: []
+        #dateFormat: null
+        #appends: []
+        #dispatchesEvents: []
+        #observables: []
+        #relations: []
+        #touches: []
+        +timestamps: true
+        #hidden: []
+        #visible: []
+        #fillable: []
+      }
+    ]
+  }
+  "combine_pro_values" => Illuminate\Support\Collection {#6525
+    #items: array:1 [
+      0 => "150000023184"
+    ]
+  }
+  "related_idpo_via_combine_pro" => array:2 [
+    "0051921" => array:3 [
+      "combine_pro_rows" => Illuminate\Database\Eloquent\Collection {#6524
+        #items: array:1 [
+          0 => App\Http\Models\HistoryDataBreakdown {#6529
+            #connection: "mysql"
+            #table: "historydbreakdown"
+            #primaryKey: "hist_id"
+            #guarded: []
+            #perPage: 15
+            -rules: array:8 [
+              "idpo" => "required|max:7|string"
+              "revisi" => "max:2|string"
+              "idcolor" => "required|max:6|string"
+              "idsize" => "required|max:6|string"
+              "qtysize" => "required|digits_between:1,8"
+              "systemcode" => "max:30|string"
+              "id" => "required|max:20|string"
+              "setcode" => "nullable|max:20|string"
+            ]
+            #keyType: "int"
+            +incrementing: true
+            #with: []
+            #withCount: []
+            +exists: true
+            +wasRecentlyCreated: false
+            #attributes: array:6 [
+              "idpo" => "0051921"
+              "combine_pro" => "150000023184"
+              "revisi_kp" => 0
+              "kp_item_ref" => null
+              "deliverydate" => "2026-09-08"
+              "production_status" => "IH"
+            ]
+            #original: array:6 [
+              "idpo" => "0051921"
+              "combine_pro" => "150000023184"
+              "revisi_kp" => 0
+              "kp_item_ref" => null
+              "deliverydate" => "2026-09-08"
+              "production_status" => "IH"
+            ]
+            #changes: []
+            #casts: []
+            #dates: []
+            #dateFormat: null
+            #appends: []
+            #dispatchesEvents: []
+            #observables: []
+            #relations: []
+            #touches: []
+            +timestamps: true
+            #hidden: []
+            #visible: []
+            #fillable: []
+          }
+        ]
+      }
+      "final_rows" => Illuminate\Database\Eloquent\Collection {#6536
+        #items: array:3 [
+          0 => App\Http\Models\OutputDetailFinalInspection {#6540
+            #connection: "mysql"
+            #table: "outputdetailfinalinspection"
+            #guarded: []
+            -rules: array:8 [
+              "barcode" => "required|max:16|string"
+              "date_in" => "required|date"
+              "nik_in" => "required|string|max:10"
+              "date_output" => "required|date"
+              "is_output" => "required|integer"
+              "defect_code" => "required|max:3|integer"
+              "nik_approve" => "required|string|max:10"
+              "nik_qc" => "required|string|max:10"
+            ]
+            #primaryKey: "id"
+            #keyType: "int"
+            +incrementing: true
+            #with: []
+            #withCount: []
+            #perPage: 15
+            +exists: true
+            +wasRecentlyCreated: false
+            #attributes: array:2 [
+              "barcode" => "0600519210000002"
+              "is_output" => null
+            ]
+            #original: array:2 [
+              "barcode" => "0600519210000002"
+              "is_output" => null
+            ]
+            #changes: []
+            #casts: []
+            #dates: []
+            #dateFormat: null
+            #appends: []
+            #dispatchesEvents: []
+            #observables: []
+            #relations: []
+            #touches: []
+            +timestamps: true
+            #hidden: []
+            #visible: []
+            #fillable: []
+          }
+          1 => App\Http\Models\OutputDetailFinalInspection {#6537
+            #connection: "mysql"
+            #table: "outputdetailfinalinspection"
+            #guarded: []
+            -rules: array:8 [
+              "barcode" => "required|max:16|string"
+              "date_in" => "required|date"
+              "nik_in" => "required|string|max:10"
+              "date_output" => "required|date"
+              "is_output" => "required|integer"
+              "defect_code" => "required|max:3|integer"
+              "nik_approve" => "required|string|max:10"
+              "nik_qc" => "required|string|max:10"
+            ]
+            #primaryKey: "id"
+            #keyType: "int"
+            +incrementing: true
+            #with: []
+            #withCount: []
+            #perPage: 15
+            +exists: true
+            +wasRecentlyCreated: false
+            #attributes: array:2 [
+              "barcode" => "0600519210000004"
+              "is_output" => null
+            ]
+            #original: array:2 [
+              "barcode" => "0600519210000004"
+              "is_output" => null
+            ]
+            #changes: []
+            #casts: []
+            #dates: []
+            #dateFormat: null
+            #appends: []
+            #dispatchesEvents: []
+            #observables: []
+            #relations: []
+            #touches: []
+            +timestamps: true
+            #hidden: []
+            #visible: []
+            #fillable: []
+          }
+          2 => App\Http\Models\OutputDetailFinalInspection {#6538
+            #connection: "mysql"
+            #table: "outputdetailfinalinspection"
+            #guarded: []
+            -rules: array:8 [
+              "barcode" => "required|max:16|string"
+              "date_in" => "required|date"
+              "nik_in" => "required|string|max:10"
+              "date_output" => "required|date"
+              "is_output" => "required|integer"
+              "defect_code" => "required|max:3|integer"
+              "nik_approve" => "required|string|max:10"
+              "nik_qc" => "required|string|max:10"
+            ]
+            #primaryKey: "id"
+            #keyType: "int"
+            +incrementing: true
+            #with: []
+            #withCount: []
+            #perPage: 15
+            +exists: true
+            +wasRecentlyCreated: false
+            #attributes: array:2 [
+              "barcode" => "0600519210000005"
+              "is_output" => null
+            ]
+            #original: array:2 [
+              "barcode" => "0600519210000005"
+              "is_output" => null
+            ]
+            #changes: []
+            #casts: []
+            #dates: []
+            #dateFormat: null
+            #appends: []
+            #dispatchesEvents: []
+            #observables: []
+            #relations: []
+            #touches: []
+            +timestamps: true
+            #hidden: []
+            #visible: []
+            #fillable: []
+          }
+        ]
+      }
+      "has_output_1" => false
+    ]
+    "0051922" => array:3 [
+      "combine_pro_rows" => Illuminate\Database\Eloquent\Collection {#6521
+        #items: array:1 [
+          0 => App\Http\Models\HistoryDataBreakdown {#6530
+            #connection: "mysql"
+            #table: "historydbreakdown"
+            #primaryKey: "hist_id"
+            #guarded: []
+            #perPage: 15
+            -rules: array:8 [
+              "idpo" => "required|max:7|string"
+              "revisi" => "max:2|string"
+              "idcolor" => "required|max:6|string"
+              "idsize" => "required|max:6|string"
+              "qtysize" => "required|digits_between:1,8"
+              "systemcode" => "max:30|string"
+              "id" => "required|max:20|string"
+              "setcode" => "nullable|max:20|string"
+            ]
+            #keyType: "int"
+            +incrementing: true
+            #with: []
+            #withCount: []
+            +exists: true
+            +wasRecentlyCreated: false
+            #attributes: array:6 [
+              "idpo" => "0051922"
+              "combine_pro" => "150000023184"
+              "revisi_kp" => 0
+              "kp_item_ref" => null
+              "deliverydate" => "2026-09-08"
+              "production_status" => "IH"
+            ]
+            #original: array:6 [
+              "idpo" => "0051922"
+              "combine_pro" => "150000023184"
+              "revisi_kp" => 0
+              "kp_item_ref" => null
+              "deliverydate" => "2026-09-08"
+              "production_status" => "IH"
+            ]
+            #changes: []
+            #casts: []
+            #dates: []
+            #dateFormat: null
+            #appends: []
+            #dispatchesEvents: []
+            #observables: []
+            #relations: []
+            #touches: []
+            +timestamps: true
+            #hidden: []
+            #visible: []
+            #fillable: []
+          }
+        ]
+      }
+      "final_rows" => Illuminate\Database\Eloquent\Collection {#6541
+        #items: array:1 [
+          0 => App\Http\Models\OutputDetailFinalInspection {#6539
+            #connection: "mysql"
+            #table: "outputdetailfinalinspection"
+            #guarded: []
+            -rules: array:8 [
+              "barcode" => "required|max:16|string"
+              "date_in" => "required|date"
+              "nik_in" => "required|string|max:10"
+              "date_output" => "required|date"
+              "is_output" => "required|integer"
+              "defect_code" => "required|max:3|integer"
+              "nik_approve" => "required|string|max:10"
+              "nik_qc" => "required|string|max:10"
+            ]
+            #primaryKey: "id"
+            #keyType: "int"
+            +incrementing: true
+            #with: []
+            #withCount: []
+            #perPage: 15
+            +exists: true
+            +wasRecentlyCreated: false
+            #attributes: array:2 [
+              "barcode" => "0600519220000001"
+              "is_output" => 1
+            ]
+            #original: array:2 [
+              "barcode" => "0600519220000001"
+              "is_output" => 1
+            ]
+            #changes: []
+            #casts: []
+            #dates: []
+            #dateFormat: null
+            #appends: []
+            #dispatchesEvents: []
+            #observables: []
+            #relations: []
+            #touches: []
+            +timestamps: true
+            #hidden: []
+            #visible: []
+            #fillable: []
+          }
+        ]
+      }
+      "has_output_1" => true
+    ]
+  ]
+]
