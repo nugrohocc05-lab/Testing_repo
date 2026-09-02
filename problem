@@ -28,60 +28,78 @@ function priorityFinal(Request $request)
         return $query;
     };
 
-    // ================= (LAMA, BELUM DIUBAH) EFFECTIVE IDPO UNTUK FINAL CHECK =================
-    $effectiveIdpoSql = function () use ($dbr) {
-        return "(CASE WHEN $dbr.revisi_kp = 1 AND $dbr.kp_item_ref IS NOT NULL
-            THEN (SELECT dbr_prev.idpo FROM $dbr as dbr_prev
-                WHERE dbr_prev.combine_pro = $dbr.combine_pro
-                    AND dbr_prev.idpo < $dbr.idpo
-                ORDER BY dbr_prev.idpo DESC LIMIT 1)
-            ELSE $dbr.idpo END)";
-    };
+    // ================= FIX: baris "current" per idpo = revisi_kp TERBESAR per idpo =================
+    // (bukan per kp_item lagi -- ini yang bikin hasil kemarin salah)
+    $currentRevisiExpr = "$dbr.revisi_kp = (
+        SELECT MAX(dr2.revisi_kp) FROM $dbr as dr2 WHERE dr2.idpo = $dbr.idpo
+    )";
 
-    $requireHasFinalRecord = function ($query) use ($fi, $od, $effectiveIdpoSql) {
-        $expr = $effectiveIdpoSql();
-        $query->whereExists(function ($q) use ($fi, $od, $expr) {
+    // ================= FAMILY / REROUTE (untuk final-check & output) =================
+    $effectiveIdpoRawSql = "
+        SELECT fam.idpo FROM $dbr as fam
+        WHERE fam.revisi_kp = (SELECT MAX(fam_r.revisi_kp) FROM $dbr as fam_r WHERE fam_r.idpo = fam.idpo)
+          AND COALESCE(fam.original_pro, fam.idpo) = COALESCE($dbr.original_pro, $dbr.idpo)
+          AND (
+                fam.idpo = $dbr.idpo
+                OR (
+                    (SELECT SUM(fam_q.qty_ori) FROM $dbr as fam_q
+                        WHERE fam_q.idpo = fam.idpo
+                          AND fam_q.revisi_kp = (SELECT MAX(fam_q2.revisi_kp) FROM $dbr as fam_q2 WHERE fam_q2.idpo = fam_q.idpo)
+                    ) = 0
+                    AND (SELECT SUM(dbr_q.qty_ori) FROM $dbr as dbr_q
+                        WHERE dbr_q.idpo = $dbr.idpo
+                          AND dbr_q.revisi_kp = (SELECT MAX(dbr_q2.revisi_kp) FROM $dbr as dbr_q2 WHERE dbr_q2.idpo = dbr_q.idpo)
+                    ) > 0
+                    AND $dbr.idpo = (
+                        SELECT MAX(fam3.idpo) FROM $dbr as fam3
+                        WHERE fam3.revisi_kp = (SELECT MAX(fam3_r.revisi_kp) FROM $dbr as fam3_r WHERE fam3_r.idpo = fam3.idpo)
+                          AND COALESCE(fam3.original_pro, fam3.idpo) = COALESCE($dbr.original_pro, $dbr.idpo)
+                          AND (SELECT SUM(fam3_q.qty_ori) FROM $dbr as fam3_q
+                                WHERE fam3_q.idpo = fam3.idpo
+                                  AND fam3_q.revisi_kp = (SELECT MAX(fam3_q2.revisi_kp) FROM $dbr as fam3_q2 WHERE fam3_q2.idpo = fam3_q.idpo)
+                              ) > 0
+                    )
+                )
+          )
+    ";
+
+    $requireHasFinalRecord = function ($query) use ($fi, $od, $effectiveIdpoRawSql) {
+        $query->whereExists(function ($q) use ($fi, $od, $effectiveIdpoRawSql) {
             $q->select(DB::raw(1))
                 ->from("$fi as fi3")
                 ->join("$od as od3", "od3.barcode", '=', 'fi3.barcode')
-                ->whereRaw("od3.idpo = $expr");
+                ->whereRaw("od3.idpo IN ($effectiveIdpoRawSql)");
         });
         return $query;
     };
 
-    $excludeIfAnyFinal = function ($query) use ($fi, $od, $effectiveIdpoSql) {
-        $expr = $effectiveIdpoSql();
-        $query->whereNotExists(function ($q) use ($fi, $od, $expr) {
+    $excludeIfAnyFinal = function ($query) use ($fi, $od, $effectiveIdpoRawSql) {
+        $query->whereNotExists(function ($q) use ($fi, $od, $effectiveIdpoRawSql) {
             $q->select(DB::raw(1))
                 ->from("$fi as fi2")
                 ->join("$od as od2", "od2.barcode", '=', 'fi2.barcode')
-                ->whereRaw("od2.idpo = $expr")
+                ->whereRaw("od2.idpo IN ($effectiveIdpoRawSql)")
                 ->where('fi2.is_output', 1);
         });
         return $query;
     };
 
-    // ================= FIX: QUALIFYING IDPO (dedup revisi_kp per kp_item, lalu total qty_ori > 0) =================
-    $qualifyingIdpoSubquery = function ($q) use ($dbr, $dta, $dtb) {
+    // ================= LIST QUERY: hanya baris revisi terbaru per idpo, total qty > 0 =================
+    $qualifyingIdpoSubquery = function ($q) use ($dbr, $dta, $dtb, $currentRevisiExpr) {
         $q->select('idpo')
           ->from("$dbr as q1")
-          ->whereRaw("q1.revisi_kp = (
-              SELECT MAX(q2.revisi_kp) FROM $dbr as q2
-              WHERE q2.idpo = q1.idpo
-                AND q2.idcolor = q1.idcolor
-                AND q2.kp_item = q1.kp_item
-          )")
+          ->whereRaw(str_replace("$dbr.", 'q1.', $currentRevisiExpr))
           ->whereBetween('q1.deliverydate', [$dta, $dtb])
           ->where('q1.production_status', 'IH')
           ->groupBy('q1.idpo')
           ->havingRaw('SUM(q1.qty_ori) > 0');
     };
 
-    // ================= LIST QUERY (pakai qualifying idpo, bukan filter qty_ori mentah) =================
     $listQuery = HistoryDataBreakdown::query()
         ->join($po, "$po.idpo", '=', "$dbr.idpo")
         ->whereBetween("$dbr.deliverydate", [$dta, $dtb])
         ->where("$dbr.production_status", "IH")
+        ->whereRaw($currentRevisiExpr)
         ->whereIn("$dbr.idpo", $qualifyingIdpoSubquery);
 
     $requireHasFinalRecord($listQuery);
@@ -105,27 +123,22 @@ function priorityFinal(Request $request)
     $colorIds = $poList->pluck('idcolor')->filter()->unique()->values();
     $colorMap = Color::whereIn('idcolor', $colorIds)->pluck('nmcolor', 'idcolor');
 
-    // ================= FIX: QTY_ORI dedup per kp_item (ambil revisi_kp terbesar saja) =================
+    // ================= FIX: QTY = revisi_kp terbesar PER IDPO, lalu SUM =================
     $qtyEtdRows = DB::table("$dbr as d1")
         ->whereIn('d1.idpo', $idpoList)
         ->whereBetween('d1.deliverydate', [$dta, $dtb])
         ->where('d1.production_status', 'IH')
-        ->whereRaw("d1.revisi_kp = (
-            SELECT MAX(d2.revisi_kp) FROM $dbr as d2
-            WHERE d2.idpo = d1.idpo
-              AND d2.idcolor = d1.idcolor
-              AND d2.kp_item = d1.kp_item
-        )")
+        ->whereRaw("d1.revisi_kp = (SELECT MAX(d2.revisi_kp) FROM $dbr as d2 WHERE d2.idpo = d1.idpo)")
         ->selectRaw('d1.idpo, SUM(d1.qty_ori) as total_qty, MAX(d1.deliverydate) as etd')
         ->groupBy('d1.idpo')
         ->get()
         ->keyBy('idpo');
 
-    // ================= (LAMA, BELUM DIUBAH) OUTPUT ROWS =================
-    $expr = $effectiveIdpoSql();
-
+    // ================= OUTPUT ROWS =================
     $outputRows = HistoryDataBreakdown::query()
-        ->join("$od as od_out", DB::raw('od_out.idpo'), '=', DB::raw($expr))
+        ->join("$od as od_out", function ($join) use ($effectiveIdpoRawSql) {
+            $join->whereRaw("od_out.idpo IN ($effectiveIdpoRawSql)");
+        })
         ->join("$so as so_out", 'so_out.barcode', '=', 'od_out.barcode')
         ->whereIn("$dbr.idpo", $idpoList)
         ->where('so_out.is_output', 1)
