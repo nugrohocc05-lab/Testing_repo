@@ -12,6 +12,7 @@ function priorityFinal(Request $request)
     $od  = (new OutputDetail())->getTable();
     $po  = (new PurchaseOrder())->getTable();
     $dbr = (new HistoryDataBreakdown())->getTable();
+    $so  = (new SewingOutput())->getTable();
 
     $applyCommonFilters = function ($query) use ($request, $po, $dbr) {
         if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
@@ -101,6 +102,21 @@ function priorityFinal(Request $request)
         ->get()
         ->keyBy('idpo');
 
+    // Output (Pcs): dihitung lewat effective idpo (nyambung ke PO predecessor kalau PO ini hasil revisi)
+    // historydbreakdown.idpo (effective) -> outputdetail.idpo (ambil barcode) -> sewingoutput.barcode, is_output = 1
+    $expr = $effectiveIdpoSql();
+
+    $outputRows = HistoryDataBreakdown::query()
+        ->join("$od as od_out", DB::raw('od_out.idpo'), '=', DB::raw($expr))
+        ->join("$so as so_out", 'so_out.barcode', '=', 'od_out.barcode')
+        ->whereIn("$dbr.idpo", $idpoList)
+        ->where('so_out.is_output', 1)
+        // groupBy pakai idpo ASLI ($dbr.idpo), bukan effective, supaya tetap ke-map ke PO revisi yang tampil di tabel
+        ->selectRaw("$dbr.idpo as idpo, COUNT(DISTINCT so_out.barcode) as total_output")
+        ->groupBy("$dbr.idpo")
+        ->get()
+        ->keyBy('idpo');
+
     $today = Carbon::today()->startOfDay();
 
     $data = $poList->map(function ($item) use (
@@ -109,10 +125,12 @@ function priorityFinal(Request $request)
         $styleMap,
         $colorMap,
         $qtyEtdRows,
+        $outputRows,
         $today
     ) {
         $groupBuyerId = $buyerGroupMap->get($item->idbuyer);
         $qtyEtd = $qtyEtdRows->get($item->idpo);
+        $outputRow = $outputRows->get($item->idpo);
 
         $etd = $qtyEtd ? $qtyEtd->etd : null;
         $daysToEtd = null;
@@ -122,15 +140,24 @@ function priorityFinal(Request $request)
             $daysToEtd = $today->diffInDays($etdDate, false);
         }
 
+        $totalQty = (int) ($qtyEtd ? $qtyEtd->total_qty : 0);
+        $totalOutput = (int) ($outputRow ? $outputRow->total_output : 0);
+
+        $progressOutput = $totalQty > 0
+            ? round(($totalOutput / $totalQty) * 100, 2)
+            : 0;
+
         return [
-            'idpo'        => $item->idpo,
-            'po'          => $item->po,
-            'style'       => $styleMap->get($item->idstyle) ?? '-',
-            'color'       => $colorMap->get($item->idcolor) ?? '-',
-            'buyer'       => $groupBuyerId ? ($groupBuyerNames->get($groupBuyerId) ?? '-') : '-',
-            'qty_order'   => (int) ($qtyEtd ? $qtyEtd->total_qty : 0),
-            'etd'         => $etd ? Carbon::parse($etd)->format('d-m-Y') : '-',
-            'days_to_etd' => $daysToEtd,
+            'idpo'            => $item->idpo,
+            'po'              => $item->po,
+            'style'           => $styleMap->get($item->idstyle) ?? '-',
+            'color'           => $colorMap->get($item->idcolor) ?? '-',
+            'buyer'           => $groupBuyerId ? ($groupBuyerNames->get($groupBuyerId) ?? '-') : '-',
+            'qty_order'       => $totalQty,
+            'output'          => $totalOutput,
+            'progress_output' => $progressOutput,
+            'etd'             => $etd ? Carbon::parse($etd)->format('d-m-Y') : '-',
+            'days_to_etd'     => $daysToEtd,
         ];
     })->values();
 
