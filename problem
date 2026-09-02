@@ -76,7 +76,7 @@ function priorityFinal(Request $request)
     $applyCommonFilters($listQuery);
 
     $poList = $listQuery
-        ->select("$dbr.idpo", "$po.po", "$po.idbuyer", "$po.idstyle")
+        ->select("$dbr.idpo", "$po.po", "$po.idbuyer", "$po.idstyle", "$dbr.idcolor")
         ->distinct()
         ->get();
 
@@ -88,6 +88,9 @@ function priorityFinal(Request $request)
     $groupBuyerNames = MasterGroupBuyer::whereIn('id', $groupBuyerIds)->pluck('group_name', 'id');
     $styleIds = $poList->pluck('idstyle')->filter()->unique()->values();
     $styleMap = Style::whereIn('idstyle', $styleIds)->pluck('nmstyle', 'idstyle');
+
+    $colorIds = $poList->pluck('idcolor')->filter()->unique()->values();
+    $colorMap = Color::whereIn('idcolor', $colorIds)->pluck('nmcolor', 'idcolor');
 
     // Qty order (sum qty_ori) + ETD, match filter tanggal & status IH
     $qtyEtdRows = HistoryDataBreakdown::whereIn('idpo', $idpoList)
@@ -104,26 +107,28 @@ function priorityFinal(Request $request)
         $buyerGroupMap,
         $groupBuyerNames,
         $styleMap,
+        $colorMap,
         $qtyEtdRows,
         $today
     ) {
         $groupBuyerId = $buyerGroupMap->get($item->idbuyer);
         $qtyEtd = $qtyEtdRows->get($item->idpo);
 
-        $etd = $qtyEtd?->etd;
+        $etd = $qtyEtd ? $qtyEtd->etd : null;
         $daysToEtd = null;
 
         if ($etd) {
             $etdDate = Carbon::parse($etd)->startOfDay();
-            $daysToEtd = $today->diffInDays($etdDate, false); // negatif kalau sudah lewat ETD
+            $daysToEtd = $today->diffInDays($etdDate, false);
         }
 
         return [
             'idpo'        => $item->idpo,
             'po'          => $item->po,
             'style'       => $styleMap->get($item->idstyle) ?? '-',
+            'color'       => $colorMap->get($item->idcolor) ?? '-',
             'buyer'       => $groupBuyerId ? ($groupBuyerNames->get($groupBuyerId) ?? '-') : '-',
-            'qty_order'   => (int) ($qtyEtd?->total_qty ?? 0),
+            'qty_order'   => (int) ($qtyEtd ? $qtyEtd->total_qty : 0),
             'etd'         => $etd ? Carbon::parse($etd)->format('d-m-Y') : '-',
             'days_to_etd' => $daysToEtd,
         ];
