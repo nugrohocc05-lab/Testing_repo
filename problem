@@ -34,7 +34,6 @@ function priorityFinal(Request $request)
         return $query;
     };
 
-    // WAJIB: PO harus sudah punya minimal 1 barcode yang di-entry ke final inspection
     $requireHasFinalRecord = function ($query) use ($fi, $od, $dbr) {
         $query->whereExists(function ($q) use ($fi, $od, $dbr) {
             $q->select(DB::raw(1))
@@ -45,7 +44,6 @@ function priorityFinal(Request $request)
         return $query;
     };
 
-    // Exclude PO yang sudah punya barcode is_output = 1 (sudah final)
     $excludeIfAnyFinal = function ($query) use ($fi, $od, $dbr) {
         $query->whereNotExists(function ($q) use ($fi, $od, $dbr) {
             $q->select(DB::raw(1))
@@ -64,8 +62,6 @@ function priorityFinal(Request $request)
             [$dta, $dtb]
         )
         ->where("$dbr.production_status", "IH")
-
-        // Exclude PO lama yang sudah digantikan revisi kartu produksi
         ->whereNotExists(function ($q) use ($dbr) {
             $q->from("$dbr as dbr2")
                 ->whereColumn("dbr2.combine_pro", "$dbr.combine_pro")
@@ -79,142 +75,90 @@ function priorityFinal(Request $request)
     $applyCommonFilters($listQuery);
 
     // ============================
-    // DD DEBUG MODE
-    // Panggil dengan tambahan &debug_po=1292 di query string
+    // HARDCODED DEBUG — otomatis jalan tiap klik Find, ganti angka ini sesuai kebutuhan
     // ============================
-    if ($request->filled('debug_po')) {
-        $debugSearch = $request->get('debug_po');
+    $debugTarget = '1292'; // <-- ganti ke PO yang mau dicek
 
-        $matchedPos = PurchaseOrder::where('idpo', 'like', "%$debugSearch%")
-            ->orWhere('po', 'like', "%$debugSearch%")
-            ->select('idpo', 'po', 'idbuyer', 'idstyle')
+    $poRow = PurchaseOrder::where('idpo', 'like', "%$debugTarget%")
+        ->orWhere('po', 'like', "%$debugTarget%")
+        ->select('idpo', 'po', 'idbuyer', 'idstyle')
+        ->first();
+
+    if ($poRow) {
+        $idpo = $poRow->idpo;
+
+        $breakdownRows = HistoryDataBreakdown::where('idpo', $idpo)
+            ->select('idpo', 'combine_pro', 'deliverydate', 'production_status', 'is_cutoff', 'revisi_kp', 'kp_item_ref')
             ->get();
 
-        $debugResult = [];
-
-        foreach ($matchedPos as $poRow) {
-            $idpo = $poRow->idpo;
-
-            $breakdownRows = HistoryDataBreakdown::where('idpo', $idpo)
-                ->select(
-                    'idpo',
-                    'combine_pro',
-                    'deliverydate',
-                    'production_status',
-                    'is_cutoff',
-                    'revisi_kp',
-                    'kp_item_ref'
-                )
+        $revisiConflicts = [];
+        foreach ($breakdownRows as $row) {
+            $conflicts = HistoryDataBreakdown::where('combine_pro', $row->combine_pro)
+                ->where('revisi_kp', 1)
+                ->whereNotNull('kp_item_ref')
+                ->where('idpo', '>', $row->idpo)
+                ->select('idpo', 'combine_pro', 'revisi_kp', 'kp_item_ref')
                 ->get();
 
-            $revisiConflicts = [];
-            foreach ($breakdownRows as $row) {
-                $conflicts = HistoryDataBreakdown::where('combine_pro', $row->combine_pro)
-                    ->where('revisi_kp', 1)
-                    ->whereNotNull('kp_item_ref')
-                    ->where('idpo', '>', $row->idpo)
-                    ->select('idpo', 'combine_pro', 'revisi_kp', 'kp_item_ref')
-                    ->get();
-
-                if ($conflicts->isNotEmpty()) {
-                    $revisiConflicts[] = [
-                        'source_row'     => $row,
-                        'conflicts_with' => $conflicts,
-                    ];
-                }
+            if ($conflicts->isNotEmpty()) {
+                $revisiConflicts[] = ['source_row' => $row, 'conflicts_with' => $conflicts];
             }
-
-            $finalInspectionRows = OutputDetailFinalInspection::query()
-                ->join($od, "$od.barcode", '=', "$fi.barcode")
-                ->where("$od.idpo", $idpo)
-                ->select("$fi.barcode", "$fi.is_output", "$fi.date_output", "$fi.defect_code")
-                ->get();
-
-            $hasAnyFinalRecord = $finalInspectionRows->isNotEmpty();
-            $hasAnyOutput1     = $finalInspectionRows->where('is_output', 1)->isNotEmpty();
-
-            $matchDateStatus = $breakdownRows->filter(function ($row) use ($dta, $dtb) {
-                if (!$row->deliverydate) return false;
-                $d = Carbon::parse($row->deliverydate);
-                return $d->betweenIncluded($dta, $dtb) && $row->production_status === 'IH';
-            })->values();
-
-            // Cek apakah PO ini lolos semua kondisi listQuery (tanpa applyCommonFilters,
-            // supaya kelihatan murni karena logic exclude atau karena filter buyer/style)
-            $passesRawQuery = (clone $listQuery)
-                ->where("$dbr.idpo", $idpo)
-                ->exists();
-
-            $debugResult[$idpo] = [
-                'po'                      => $poRow->po,
-                'idbuyer'                 => $poRow->idbuyer,
-                'idstyle'                 => $poRow->idstyle,
-                'breakdown_rows'          => $breakdownRows,
-                'match_date_status_rows'  => $matchDateStatus, // kosong -> gagal whereBetween/production_status
-                'revisi_conflicts'        => $revisiConflicts, // ada isi -> ke-exclude logic revisi kartu produksi
-                'final_inspection_rows'   => $finalInspectionRows,
-                'has_any_final_record'    => $hasAnyFinalRecord, // false -> ke-exclude requireHasFinalRecord
-                'has_any_output_1'        => $hasAnyOutput1,     // true -> ke-exclude excludeIfAnyFinal
-                'passes_raw_query'        => $passesRawQuery,    // false berarti gagal di salah satu kondisi listQuery (belum termasuk applyCommonFilters)
-            ];
         }
 
+        $finalInspectionRows = OutputDetailFinalInspection::query()
+            ->join($od, "$od.barcode", '=', "$fi.barcode")
+            ->where("$od.idpo", $idpo)
+            ->select("$fi.barcode", "$fi.is_output", "$fi.date_output", "$fi.defect_code")
+            ->get();
+
+        $matchDateStatus = $breakdownRows->filter(function ($row) use ($dta, $dtb) {
+            if (!$row->deliverydate) return false;
+            $d = Carbon::parse($row->deliverydate);
+            return $d->betweenIncluded($dta, $dtb) && $row->production_status === 'IH';
+        })->values();
+
+        $passesRawQuery = (clone $listQuery)->where("$dbr.idpo", $idpo)->exists();
+
         dd([
-            'debug_search' => $debugSearch,
-            'date_from'    => $dta->toDateTimeString(),
-            'date_to'      => $dtb->toDateTimeString(),
-            'request_filters' => [
-                'groupbuyer' => $request->get('groupbuyer'),
-                'po'         => $request->get('po'),
-                'style'      => $request->get('style'),
-            ],
-            'result' => $debugResult,
+            'debug_target'           => $debugTarget,
+            'idpo'                   => $idpo,
+            'po'                     => $poRow->po,
+            'date_from'              => $dta->toDateTimeString(),
+            'date_to'                => $dtb->toDateTimeString(),
+            'breakdown_rows'         => $breakdownRows,
+            'match_date_status_rows' => $matchDateStatus, // kosong -> gagal whereBetween/production_status
+            'revisi_conflicts'       => $revisiConflicts,  // ada isi -> ke-exclude logic revisi kartu produksi
+            'final_inspection_rows'  => $finalInspectionRows,
+            'has_any_final_record'   => $finalInspectionRows->isNotEmpty(), // false -> ke-exclude requireHasFinalRecord
+            'has_any_output_1'       => $finalInspectionRows->where('is_output', 1)->isNotEmpty(), // true -> ke-exclude excludeIfAnyFinal
+            'passes_raw_query'       => $passesRawQuery, // false -> gagal salah satu kondisi di atas (belum termasuk applyCommonFilters)
         ]);
+    } else {
+        dd("PO dengan keyword '$debugTarget' tidak ditemukan di tabel purchase_order");
     }
 
+    // kode di bawah ini tidak akan jalan selama dd() di atas aktif
     $poList = $listQuery
-        ->select(
-            "$dbr.idpo",
-            "$po.po",
-            "$po.idbuyer",
-            "$po.idstyle"
-        )
+        ->select("$dbr.idpo", "$po.po", "$po.idbuyer", "$po.idstyle")
         ->distinct()
         ->get();
 
     $buyerIds = $poList->pluck('idbuyer')->filter()->unique()->values();
-
-    $buyerGroupMap = Buyer::whereIn('idbuyer', $buyerIds)
-        ->pluck('groupbuyer', 'idbuyer');
-
+    $buyerGroupMap = Buyer::whereIn('idbuyer', $buyerIds)->pluck('groupbuyer', 'idbuyer');
     $groupBuyerIds = $buyerGroupMap->filter()->unique()->values();
-
-    $groupBuyerNames = MasterGroupBuyer::whereIn('id', $groupBuyerIds)
-        ->pluck('group_name', 'id');
-
+    $groupBuyerNames = MasterGroupBuyer::whereIn('id', $groupBuyerIds)->pluck('group_name', 'id');
     $styleIds = $poList->pluck('idstyle')->filter()->unique()->values();
+    $styleMap = Style::whereIn('idstyle', $styleIds)->pluck('nmstyle', 'idstyle');
 
-    $styleMap = Style::whereIn('idstyle', $styleIds)
-        ->pluck('nmstyle', 'idstyle');
-
-    $data = $poList->map(function ($item) use (
-        $buyerGroupMap,
-        $groupBuyerNames,
-        $styleMap
-    ) {
+    $data = $poList->map(function ($item) use ($buyerGroupMap, $groupBuyerNames, $styleMap) {
         $groupBuyerId = $buyerGroupMap->get($item->idbuyer);
-
         return [
             'idpo'  => $item->idpo,
             'po'    => $item->po,
             'style' => $styleMap->get($item->idstyle) ?? '-',
-            'buyer' => $groupBuyerId
-                ? ($groupBuyerNames->get($groupBuyerId) ?? '-')
-                : '-',
+            'buyer' => $groupBuyerId ? ($groupBuyerNames->get($groupBuyerId) ?? '-') : '-',
         ];
     })->values();
 
-    return response()->json([
-        'data' => $data,
-    ]);
+    return response()->json(['data' => $data]);
 }
