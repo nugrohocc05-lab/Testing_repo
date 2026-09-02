@@ -27,9 +27,6 @@ function priorityFinal(Request $request)
         return $query;
     };
 
-    // Idpo efektif untuk pengecekan final: kalau PO ini hasil revisi (revisi_kp=1 + kp_item_ref terisi),
-    // cek ke PO pendahulunya (combine_pro sama, idpo lebih kecil, terdekat).
-    // Kalau bukan revisi, cek dirinya sendiri saja.
     $effectiveIdpoSql = function () use ($dbr) {
         return "(CASE WHEN $dbr.revisi_kp = 1 AND $dbr.kp_item_ref IS NOT NULL
             THEN (SELECT dbr_prev.idpo FROM $dbr as dbr_prev
@@ -66,7 +63,6 @@ function priorityFinal(Request $request)
         ->join($po, "$po.idpo", '=', "$dbr.idpo")
         ->whereBetween("$dbr.deliverydate", [$dta, $dtb])
         ->where("$dbr.production_status", "IH")
-        // Exclude PO lama yang sudah digantikan revisi kartu produksi
         ->whereNotExists(function ($q) use ($dbr) {
             $q->from("$dbr as dbr2")
                 ->whereColumn("dbr2.combine_pro", "$dbr.combine_pro")
@@ -84,6 +80,8 @@ function priorityFinal(Request $request)
         ->distinct()
         ->get();
 
+    $idpoList = $poList->pluck('idpo')->unique()->values();
+
     $buyerIds = $poList->pluck('idbuyer')->filter()->unique()->values();
     $buyerGroupMap = Buyer::whereIn('idbuyer', $buyerIds)->pluck('groupbuyer', 'idbuyer');
     $groupBuyerIds = $buyerGroupMap->filter()->unique()->values();
@@ -91,13 +89,43 @@ function priorityFinal(Request $request)
     $styleIds = $poList->pluck('idstyle')->filter()->unique()->values();
     $styleMap = Style::whereIn('idstyle', $styleIds)->pluck('nmstyle', 'idstyle');
 
-    $data = $poList->map(function ($item) use ($buyerGroupMap, $groupBuyerNames, $styleMap) {
+    // Qty order (sum qty_ori) + ETD, match filter tanggal & status IH
+    $qtyEtdRows = HistoryDataBreakdown::whereIn('idpo', $idpoList)
+        ->whereBetween('deliverydate', [$dta, $dtb])
+        ->where('production_status', 'IH')
+        ->selectRaw('idpo, SUM(qty_ori) as total_qty, MAX(deliverydate) as etd')
+        ->groupBy('idpo')
+        ->get()
+        ->keyBy('idpo');
+
+    $today = Carbon::today()->startOfDay();
+
+    $data = $poList->map(function ($item) use (
+        $buyerGroupMap,
+        $groupBuyerNames,
+        $styleMap,
+        $qtyEtdRows,
+        $today
+    ) {
         $groupBuyerId = $buyerGroupMap->get($item->idbuyer);
+        $qtyEtd = $qtyEtdRows->get($item->idpo);
+
+        $etd = $qtyEtd?->etd;
+        $daysToEtd = null;
+
+        if ($etd) {
+            $etdDate = Carbon::parse($etd)->startOfDay();
+            $daysToEtd = $today->diffInDays($etdDate, false); // negatif kalau sudah lewat ETD
+        }
+
         return [
-            'idpo'  => $item->idpo,
-            'po'    => $item->po,
-            'style' => $styleMap->get($item->idstyle) ?? '-',
-            'buyer' => $groupBuyerId ? ($groupBuyerNames->get($groupBuyerId) ?? '-') : '-',
+            'idpo'        => $item->idpo,
+            'po'          => $item->po,
+            'style'       => $styleMap->get($item->idstyle) ?? '-',
+            'buyer'       => $groupBuyerId ? ($groupBuyerNames->get($groupBuyerId) ?? '-') : '-',
+            'qty_order'   => (int) ($qtyEtd?->total_qty ?? 0),
+            'etd'         => $etd ? Carbon::parse($etd)->format('d-m-Y') : '-',
+            'days_to_etd' => $daysToEtd,
         ];
     })->values();
 
