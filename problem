@@ -1,126 +1,130 @@
 function priorityFinal(Request $request)
-    {
-        preconnect(session('db'));
+{
+    preconnect(session('db'));
 
-        $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
-        $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+    $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
+    $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
 
-        $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
-        $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+    $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
+    $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
 
-        $fi  = (new OutputDetailFinalInspection())->getTable();
-        $od  = (new OutputDetail())->getTable();
-        $po  = (new PurchaseOrder())->getTable();
-        $dbr = (new HistoryDataBreakdown())->getTable();
+    $fi  = (new OutputDetailFinalInspection())->getTable();
+    $od  = (new OutputDetail())->getTable();
+    $po  = (new PurchaseOrder())->getTable();
+    $dbr = (new HistoryDataBreakdown())->getTable();
 
-        // Filter umum
-        $applyCommonFilters = function ($query) use ($request, $po, $dbr) {
+    // Filter umum
+    $applyCommonFilters = function ($query) use ($request, $po, $dbr) {
 
-            if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
-                $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)
-                    ->pluck('idbuyer');
+        if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
+            $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)
+                ->pluck('idbuyer');
 
-                $query->whereIn("$po.idbuyer", $buyerIds);
-            }
+            $query->whereIn("$po.idbuyer", $buyerIds);
+        }
 
-            if ($request->filled('po') && $request->po !== 'all') {
-                $query->where("$dbr.idpo", $request->po);
-            }
+        if ($request->filled('po') && $request->po !== 'all') {
+            $query->where("$dbr.idpo", $request->po);
+        }
 
-            if ($request->filled('style') && $request->style !== 'all') {
-                $query->where("$po.idstyle", $request->style);
-            }
+        if ($request->filled('style') && $request->style !== 'all') {
+            $query->where("$po.idstyle", $request->style);
+        }
 
-            return $query;
-        };
+        return $query;
+    };
 
-        // Exclude PO yang sudah punya final/output
-        $excludeIfAnyFinal = function ($query) use ($fi, $od, $dbr) {
-            $query->whereNotExists(function ($q) use ($fi, $od, $dbr) {
-                $q->select(DB::raw(1))
-                    ->from("$fi as fi2")
-                    ->join("$od as od2", "od2.barcode", '=', 'fi2.barcode')
-                    ->whereColumn('od2.idpo', "$dbr.idpo")
-                    ->where('fi2.is_output', 1);
-            });
-            return $query;
-        };
+    // WAJIB: PO harus sudah punya minimal 1 barcode yang di-entry ke final inspection
+    $requireHasFinalRecord = function ($query) use ($fi, $od, $dbr) {
+        $query->whereExists(function ($q) use ($fi, $od, $dbr) {
+            $q->select(DB::raw(1))
+                ->from("$fi as fi3")
+                ->join("$od as od3", "od3.barcode", '=', 'fi3.barcode')
+                ->whereColumn('od3.idpo', "$dbr.idpo");
+        });
+        return $query;
+    };
 
-        $listQuery = HistoryDataBreakdown::query()
-            ->join($po, "$po.idpo", '=', "$dbr.idpo")
-            ->whereBetween(
-                "$dbr.deliverydate",
-                [$dta, $dtb]
-            )
-            ->where("$dbr.production_status", "IH")
+    // Exclude PO yang sudah punya barcode is_output = 1 (sudah final)
+    $excludeIfAnyFinal = function ($query) use ($fi, $od, $dbr) {
+        $query->whereNotExists(function ($q) use ($fi, $od, $dbr) {
+            $q->select(DB::raw(1))
+                ->from("$fi as fi2")
+                ->join("$od as od2", "od2.barcode", '=', 'fi2.barcode')
+                ->whereColumn('od2.idpo', "$dbr.idpo")
+                ->where('fi2.is_output', 1);
+        });
+        return $query;
+    };
 
-            ->whereNotExists(function ($q) use ($dbr) {
-                $q->from("$dbr as dbr2")
-                    ->whereColumn(
-                        "dbr2.combine_pro",
-                        "$dbr.combine_pro"
-                    )
-                    ->where("dbr2.revisi_kp", 1)
-                    ->whereNotNull("dbr2.kp_item_ref")
-                    ->whereColumn(
-                        "dbr2.idpo",
-                        ">",
-                        "$dbr.idpo"
-                    );
-            });
+    $listQuery = HistoryDataBreakdown::query()
+        ->join($po, "$po.idpo", '=', "$dbr.idpo")
+        ->whereBetween(
+            "$dbr.deliverydate",
+            [$dta, $dtb]
+        )
+        ->where("$dbr.production_status", "IH")
 
+        // Exclude PO lama yang sudah digantikan revisi kartu produksi
+        ->whereNotExists(function ($q) use ($dbr) {
+            $q->from("$dbr as dbr2")
+                ->whereColumn("dbr2.combine_pro", "$dbr.combine_pro")
+                ->where("dbr2.revisi_kp", 1)
+                ->whereNotNull("dbr2.kp_item_ref")
+                ->whereColumn("dbr2.idpo", ">", "$dbr.idpo");
+        });
 
-        $excludeIfAnyFinal($listQuery);
-        $applyCommonFilters($listQuery);
+    $requireHasFinalRecord($listQuery);   // <-- tambahan: PO harus sudah masuk proses final inspection
+    $excludeIfAnyFinal($listQuery);       // PO belum ada barcode is_output = 1
+    $applyCommonFilters($listQuery);
 
-        $poList = $listQuery
-            ->select(
-                "$dbr.idpo",
-                "$po.po",
-                "$po.idbuyer",
-                "$po.idstyle"
-            )
-            ->distinct()
-            ->get();
+    $poList = $listQuery
+        ->select(
+            "$dbr.idpo",
+            "$po.po",
+            "$po.idbuyer",
+            "$po.idstyle"
+        )
+        ->distinct()
+        ->get();
 
-        $buyerIds = $poList->pluck('idbuyer')->filter()->unique()->values();
+    $buyerIds = $poList->pluck('idbuyer')->filter()->unique()->values();
 
-        $buyerGroupMap = Buyer::whereIn('idbuyer', $buyerIds)
-            ->pluck('groupbuyer', 'idbuyer');
+    $buyerGroupMap = Buyer::whereIn('idbuyer', $buyerIds)
+        ->pluck('groupbuyer', 'idbuyer');
 
-        $groupBuyerIds = $buyerGroupMap->filter()->unique()->values();
+    $groupBuyerIds = $buyerGroupMap->filter()->unique()->values();
 
-        $groupBuyerNames = MasterGroupBuyer::whereIn('id', $groupBuyerIds)
-            ->pluck('group_name', 'id');
+    $groupBuyerNames = MasterGroupBuyer::whereIn('id', $groupBuyerIds)
+        ->pluck('group_name', 'id');
 
-        $styleIds = $poList->pluck('idstyle')->filter()->unique()->values();
+    $styleIds = $poList->pluck('idstyle')->filter()->unique()->values();
 
-        $styleMap = Style::whereIn('idstyle', $styleIds)
-            ->pluck('nmstyle', 'idstyle');
+    $styleMap = Style::whereIn('idstyle', $styleIds)
+        ->pluck('nmstyle', 'idstyle');
 
+    $data = $poList->map(function ($item) use (
+        $buyerGroupMap,
+        $groupBuyerNames,
+        $styleMap
+    ) {
+        $groupBuyerId = $buyerGroupMap->get($item->idbuyer);
 
-        $data = $poList->map(function ($item) use (
-            $buyerGroupMap,
-            $groupBuyerNames,
-            $styleMap
-        ) {
-            $groupBuyerId = $buyerGroupMap->get($item->idbuyer);
+        return [
+            'idpo'  => $item->idpo,
+            'po'    => $item->po,
 
-            return [
-                'idpo'  => $item->idpo,
-                'po'    => $item->po,
+            // Ambil style berdasarkan idstyle PO
+            'style' => $styleMap->get($item->idstyle) ?? '-',
 
-                // Ambil style berdasarkan idstyle PO
-                'style' => $styleMap->get($item->idstyle) ?? '-',
+            // Ambil group buyer berdasarkan idbuyer
+            'buyer' => $groupBuyerId
+                ? ($groupBuyerNames->get($groupBuyerId) ?? '-')
+                : '-',
+        ];
+    })->values();
 
-                // Ambil group buyer berdasarkan idbuyer
-                'buyer' => $groupBuyerId
-                    ? ($groupBuyerNames->get($groupBuyerId) ?? '-')
-                    : '-',
-            ];
-        })->values();
-
-        return response()->json([
-            'data' => $data,
-        ]);
-    }
+    return response()->json([
+        'data' => $data,
+    ]);
+}
