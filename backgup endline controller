@@ -1,776 +1,176 @@
-<?php
-
-namespace Modules\Monitoring\Http\Controllers;
-
-use DB;
-use Carbon\Carbon;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Collection;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
-use App\Http\Controllers\Controller;
-use App\Http\Models\Main\MasterEmployeeGroup;
-use App\Http\Models\Main\MasterEmployeeSection;
-use App\Http\Models\Main\MasterGroupBuyer;
-use App\Http\Models\PurchaseOrder;
-use App\Http\Models\Main\Buyer;
-use App\Http\Models\InlineDetail;
-use App\Http\Models\InlineHeader;
-use App\Http\Models\Main\Employee;
-use App\Http\Models\Main\Style;
-use App\Http\Models\Main\Param;
-use App\Http\Models\Main\QCDefect;
-use App\Http\Models\OutputDetail;
-use App\Http\Models\SewingOutput;
-
-class EndlinePerformanceController extends Controller
-{
-    protected $m_modul = 'report';
-
-    function __construct()
-    {
-        $this->middleware('auth');
-    }
-
-    function index(Request $request)
-    {
-        if ($this->myaccess() == '0') {
-            return redirect()
-                ->back()
-                ->with('alert', [
-                    'title' => 'Unauthorized!',
-                    'message' => 'You Dont Have Any Access Here!',
-                    'status' => 'warning',
-                ]);
-        }
-
-        preconnect(session('db'));
-
-        return view('monitoring::endlineperformance.performance.index');
-    }
-
-    function selectline(Request $request)
+function priorityFinal(Request $request)
     {
         preconnect(session('db'));
 
-        $g = (new MasterEmployeeGroup())->getTable();
-        $s = (new MasterEmployeeSection())->getTable();
-
-        $data = MasterEmployeeGroup::select(
-                "$g.id as kodegroup", "$g.section_id as kodebagian",
-                "$g.name as namagroup", "$s.name as namabagian"
-            )
-            ->join($s, "$s.id", '=', "$g.section_id")
-            ->distinct()
-            ->whereHas('groupline', function($q){
-                $q->where('factory_id', session('db')->iddb)
-                    ->where('is_show', 1)
-                    ->where('is_line', 1);
-            });
-
-        if ($request->q) {
-            $data = $data->where(function ($q) use ($request, $g) {
-                $q->where("$g.name", 'like', "%$request->q%");
-            });
-        }
-        $data = $data->orderBy('kodegroup')->paginate(15, $request->page);
-
-        return response()->json($data);
-    }
-
-    function groupbuyer(Request $request)
-    {
-        preconnect(session('db'));
-
-        $q = $request->get('q');
-
-        $data = MasterGroupBuyer::select('id', 'group_name')
-            ->when($q, function ($query) use ($q) {
-                $query->where('group_name', 'like', '%' . $q . '%');
-            })
-            ->orderBy('group_name', 'asc')
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'id' => $item->id,
-                    'text' => $item->group_name
-                ];
-            });
-
-        return response()->json([
-            'results' => $data
-        ]);
-    }
-
-    public function getFilterData(Request $request)
-    {
         $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
         $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
 
         $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
         $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
 
-        $headerQuery = SewingOutput::whereBetween('date', [$dta, $dtb]);
+        $fi  = (new OutputDetailFinalInspection())->getTable();
+        $od  = (new OutputDetail())->getTable();
+        $po  = (new PurchaseOrder())->getTable();
+        $dbr = (new HistoryDataBreakdown())->getTable();
+        $so  = (new SewingOutput())->getTable();
 
-        if ($request->line && $request->line != 'all') {
-            $headerQuery = $headerQuery->where('line', $request->line);
-        }
-
-        if ($request->groupbuyer && $request->groupbuyer != 'all') {
-            $buyerIds  = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
-            $poIds     = PurchaseOrder::whereIn('idbuyer', $buyerIds)->pluck('idpo');
-            $outputId  = OutputDetail::whereIn('idpo', $poIds)->pluck('barcode');
-            $headerQuery = $headerQuery->whereIn('barcode', $outputId)->where('is_qc', 1);
-        }
-
-        $headerIds = (clone $headerQuery)->pluck('id');
-
-        $totOutput  = SewingOutput::whereIn('id', $headerIds)->where('is_output', 1)->count();
-        $totInspect = SewingOutput::whereIn('id', $headerIds)->where('is_qc', 1)->count();
-        $totDefect  = SewingOutput::whereIn('id', $headerIds)->whereNotNull('defect_code')->count();
-
-        $rft = $totInspect > 0 ? round((($totInspect - $totDefect) / $totInspect) * 100, 2) : 0;
-        $wft = $totInspect > 0 ? round(($totDefect / $totInspect) * 100, 2) : 0;
-
-        $target    = Param::where('header', 'qc')->where('key', 'rft_endline_target')->value('value');
-        $rftTarget = $rft <= $target ? true : false;
-
-        $topDefect = SewingOutput::whereIn('id', $headerIds)
-            ->whereNotNull('defect_code')
-            ->whereNotIn('defect_code', [800, 900])
-            ->select('defect_code', DB::raw('COUNT(*) as total'))
-            ->groupBy('defect_code')
-            ->orderByDesc('total')
-            ->orderBy('defect_code', 'asc')
-            ->limit(4)
-            ->get();
-
-        $defectIds       = $topDefect->pluck('defect_code');
-        $masterQcDefects = QCDefect::whereIn('kdcacat', $defectIds)->pluck('deskripsi', 'kdcacat');
-
-        $colors = ['#004FE0', '#3DAA25', '#F4947E', '#F24C4C', '#29B1AE'];
-
-        $topDefect = $topDefect->values()->map(function ($item, $index) use ($masterQcDefects, $totDefect, $colors) {
-            $percent = $totDefect > 0 ? ($item->total / $totDefect) * 100 : 0;
-            return [
-                'defect_id' => $item->defect_code,
-                'nmdefect'  => $masterQcDefects[$item->defect_code] ?? '-',
-                'total'     => (int) $item->total,
-                'percent'   => number_format($percent, 2),
-                'color'     => $colors[$index] ?? '#BDBDBD',
-            ];
-        });
-
-        $top4Total   = $topDefect->sum('total');
-        $othersTotal = $totDefect - $top4Total;
-
-        if ($othersTotal > 0) {
-            $othersPercent = $totDefect > 0 ? ($othersTotal / $totDefect) * 100 : 0;
-            $topDefect->push([
-                'defect_id' => 'others',
-                'nmdefect'  => 'Others',
-                'total'     => (int) $othersTotal,
-                'percent'   => number_format($othersPercent, 2),
-                'color'     => '#29B1AE',
-            ]);
-        }
-
-        return [
-            'periode' => [
-                'from' => $dta->format('d-m-Y'),
-                'to'   => $dtb->format('d-m-Y'),
-            ],
-            'tot_output'  => $totOutput,
-            'tot_inspect' => $totInspect,
-            'tot_defect'  => $totDefect,
-            'rft'         => $rft,
-            'wft'         => $wft,
-            'rft_target'  => $rftTarget,
-            'top_defect'  => $topDefect,
-            'line'        => $request->line,
-            'group_buyer' => $request->groupbuyer,
-        ];
-    }
-
-    public function summaryFilter(Request $request)
-    {
-        return response()->json($this->getFilterData($request));
-    }
-
-    public function exportSummary(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'line'       => 'required|string',
-            'groupbuyer' => 'required|string',
-            'datea'      => 'required|date_format:d-m-Y',
-            'dateb'      => 'required|date_format:d-m-Y',
-        ]);
-
-        if ($validator->fails()) {
-            abort(response()->json([
-                'message' => 'Filters are incomplete, please click "Find" before exporting.',
-                'errors'  => $validator->errors(),
-            ], 422));
-        }
-
-        preconnect(session('db'));
-
-        $data = $this->getFilterData($request);
-
-        $lineLabel = (empty($data['line']) || $data['line'] === 'all')
-            ? 'All Lines'
-            : $data['line'];
-
-        $groupBuyerName = 'All Buyers';
-        if ($data['group_buyer'] && $data['group_buyer'] !== 'all') {
-            $gb = MasterGroupBuyer::where('id', $data['group_buyer'])->first();
-            $groupBuyerName = $gb->group_name ?? $data['group_buyer'];
-        }
-
-        $targetLabel = $data['rft_target'] ? 'NO' : 'YES';
-
-        $html = view('monitoring::endlineperformance.performance.partials.export', [
-            'data'           => $data,
-            'lineLabel'      => $lineLabel,
-            'groupBuyerName' => $groupBuyerName,
-            'targetLabel'    => $targetLabel,
-        ])->render();
-
-        return response($html)
-            ->header('Content-Type', 'application/vnd.ms-excel')
-            ->header('Content-Disposition', 'attachment; filename=Report_Endline_Summary.xls');
-    }
-
-    private function buildWeeks($year)
-    {
-        return Cache::remember("weeks_list_{$year}", now()->addDay(), function () use ($year) {
-            $startOfYear = Carbon::createFromDate($year, 1, 1)->startOfDay();
-            $endOfYear   = Carbon::createFromDate($year, 12, 31)->endOfDay();
-
-            $weeks = [];
-            $weekNumber = 1;
-            $current = $startOfYear->copy();
-
-            while ($current->lte($endOfYear)) {
-                $weekStart = $current->copy();
-                $weekEnd   = $current->copy()->addDays(6);
-
-                if ($weekEnd->gt($endOfYear)) {
-                    $weekEnd = $endOfYear->copy();
-                }
-
-                $weeks[] = [
-                    'id'    => $year . '-' . $weekNumber,
-                    'year'  => $year,
-                    'week'  => $weekNumber,
-                    'start' => $weekStart->format('Y-m-d'),
-                    'end'   => $weekEnd->format('Y-m-d'),
-                    'text'  => 'Week ' . $weekNumber . ' (' . $weekStart->format('d M') . ' - ' . $weekEnd->format('d M Y') . ')',
-                ];
-
-                $weekNumber++;
-                $current->addDays(7);
+        $applyCommonFilters = function ($query) use ($request, $po, $dbr) {
+            if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
+                $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
+                $query->whereIn("$po.idbuyer", $buyerIds);
             }
+            if ($request->filled('po') && $request->po !== 'all') {
+                $query->where("$dbr.idpo", $request->po);
+            }
+            if ($request->filled('style') && $request->style !== 'all') {
+                $query->where("$po.idstyle", $request->style);
+            }
+            return $query;
+        };
 
-            return $weeks;
-        });
-    }
+        $effectiveIdpoSql = function () use ($dbr) {
+            return "(CASE WHEN $dbr.revisi_kp = 1 AND $dbr.kp_item_ref IS NOT NULL
+                THEN (SELECT dbr_prev.idpo FROM $dbr as dbr_prev
+                    WHERE dbr_prev.combine_pro = $dbr.combine_pro
+                        AND dbr_prev.idpo < $dbr.idpo
+                    ORDER BY dbr_prev.idpo DESC LIMIT 1)
+                ELSE $dbr.idpo END)";
+        };
 
+        $requireHasFinalRecord = function ($query) use ($fi, $od, $effectiveIdpoSql) {
+            $expr = $effectiveIdpoSql();
+            $query->whereExists(function ($q) use ($fi, $od, $expr) {
+                $q->select(DB::raw(1))
+                    ->from("$fi as fi3")
+                    ->join("$od as od3", "od3.barcode", '=', 'fi3.barcode')
+                    ->whereRaw("od3.idpo = $expr");
+            });
+            return $query;
+        };
 
-    // Deteksi year + week number dari tanggal (default hari ini)
-    private function detectCurrentWeek($date = null)
-    {
-        $date = $date ? Carbon::parse($date) : Carbon::now();
-        $year = $date->year;
+        $excludeIfAnyFinal = function ($query) use ($fi, $od, $effectiveIdpoSql) {
+            $expr = $effectiveIdpoSql();
+            $query->whereNotExists(function ($q) use ($fi, $od, $expr) {
+                $q->select(DB::raw(1))
+                    ->from("$fi as fi2")
+                    ->join("$od as od2", "od2.barcode", '=', 'fi2.barcode')
+                    ->whereRaw("od2.idpo = $expr")
+                    ->where('fi2.is_output', 1);
+            });
+            return $query;
+        };
 
-        $startOfYear = Carbon::createFromDate($year, 1, 1)->startOfDay();
-        $dayOfYear   = $startOfYear->diffInDays($date->copy()->startOfDay()) + 1;
-        $weekNumber  = (int) ceil($dayOfYear / 7);
+        $listQuery = HistoryDataBreakdown::query()
+            ->join($po, "$po.idpo", '=', "$dbr.idpo")
+            ->whereBetween("$dbr.deliverydate", [$dta, $dtb])
+            ->where("$dbr.production_status", "IH")
+            ->whereNotExists(function ($q) use ($dbr) {
+                $q->from("$dbr as dbr2")
+                    ->whereColumn("dbr2.combine_pro", "$dbr.combine_pro")
+                    ->where("dbr2.revisi_kp", 1)
+                    ->whereNotNull("dbr2.kp_item_ref")
+                    ->whereColumn("dbr2.idpo", ">", "$dbr.idpo");
+            });
 
-        return [
-            'id'   => $year . '-' . $weekNumber,
-            'year' => $year,
-            'week' => $weekNumber,
-        ];
-    }
+        $requireHasFinalRecord($listQuery);
+        $excludeIfAnyFinal($listQuery);
+        $applyCommonFilters($listQuery);
 
-    public function selectWeek(Request $request)
-    {
-        $year   = Carbon::now()->year;
-        $search = trim((string) $request->q);
-
-        $weeks = collect($this->buildWeeks($year));
-
-        // Batasi hanya sampai week yang mencakup hari ini
-        $currentWeek = $this->detectCurrentWeek();
-        $weeks = $weeks->filter(fn ($w) => $w['week'] <= $currentWeek['week'])->values();
-
-        if ($search !== '') {
-            $needle = mb_strtolower($search);
-            $weeks = $weeks->filter(fn ($w) => str_contains(mb_strtolower($w['text']), $needle))->values();
-        }
-
-        $perPage = 20;
-        $page    = (int) ($request->page ?? 1);
-        $paged   = $weeks->slice(($page - 1) * $perPage, $perPage)->values();
-
-        return response()->json([
-            'results'    => $paged->map(fn ($w) => ['id' => $w['id'], 'text' => $w['text']]),
-            'pagination' => ['more' => $weeks->count() > $page * $perPage],
-        ]);
-    }
-
-    public function currentWeek()
-    {
-        $current = $this->detectCurrentWeek();
-
-        $weeks = collect($this->buildWeeks($current['year']));
-
-        $selectedWeek = $weeks->first(function ($week) use ($current) {
-            return $week['week'] === $current['week'];
-        });
-
-        return response()->json([
-            'selected' => [
-                'id'   => $selectedWeek['id'],
-                'text' => $selectedWeek['text'],
-            ],
-        ]);
-    }
+        $poList = $listQuery
+            ->select("$dbr.idpo", "$po.po", "$po.idbuyer", "$po.idstyle", "$dbr.idcolor")
+            ->distinct()
+            ->get();
 
 
-    private function getTopStyleForDefect(Collection $headerIds, array $defectCodes, int $limit = 2): array
-    {
-        $barcodes = SewingOutput::whereIn('id', $headerIds)
-            ->whereIn('defect_code', $defectCodes)
-            ->pluck('barcode');
+        $idpoList = $poList->pluck('idpo')->unique()->values();
 
-        if ($barcodes->isEmpty()) {
-            return ['rows' => [], 'total' => 0];
-        }
+        $buyerIds = $poList->pluck('idbuyer')->filter()->unique()->values();
+        $buyerGroupMap = Buyer::whereIn('idbuyer', $buyerIds)->pluck('groupbuyer', 'idbuyer');
+        $groupBuyerIds = $buyerGroupMap->filter()->unique()->values();
+        $groupBuyerNames = MasterGroupBuyer::whereIn('id', $groupBuyerIds)->pluck('group_name', 'id');
+        $styleIds = $poList->pluck('idstyle')->filter()->unique()->values();
+        $styleMap = Style::whereIn('idstyle', $styleIds)->pluck('nmstyle', 'idstyle');
 
-        $styleQty = OutputDetail::whereIn('barcode', $barcodes)
-            ->select('idpo', DB::raw('COUNT(*) as total'))
+        $colorIds = $poList->pluck('idcolor')->filter()->unique()->values();
+        $colorMap = Color::whereIn('idcolor', $colorIds)->pluck('nmcolor', 'idcolor');
+
+        $qtyEtdRows = HistoryDataBreakdown::whereIn('idpo', $idpoList)
+            ->whereBetween('deliverydate', [$dta, $dtb])
+            ->where('production_status', 'IH')
+            ->selectRaw('idpo, SUM(qty_ori) as total_qty, MAX(deliverydate) as etd')
             ->groupBy('idpo')
-            ->get();
-
-        $totalDefectQty = $styleQty->sum('total');
-
-        $poToStyle = PurchaseOrder::whereIn('idpo', $styleQty->pluck('idpo'))
-            ->pluck('idstyle', 'idpo');
-
-        $styleNames = Style::whereIn('idstyle', $poToStyle->values()->unique())
-            ->pluck('nmstyle', 'idstyle');
-
-        $grouped = [];
-        foreach ($styleQty as $row) {
-            $idstyle = $poToStyle[$row->idpo] ?? null;
-            $nmstyle = $idstyle ? ($styleNames[$idstyle] ?? '-') : '-';
-
-            $grouped[$nmstyle] = ($grouped[$nmstyle] ?? 0) + $row->total;
-        }
-
-        arsort($grouped);
-
-        $top = array_slice($grouped, 0, $limit, true);
-        $othersQty = $totalDefectQty - array_sum($top);
-
-        $rows = [];
-        foreach ($top as $nmstyle => $qty) {
-            $rows[] = [
-                'style'   => $nmstyle,
-                'qty'     => $qty,
-                'percent' => $totalDefectQty > 0 ? number_format(($qty / $totalDefectQty) * 100, 2) : '0.00',
-            ];
-        }
-
-        if ($othersQty > 0) {
-            $rows[] = [
-                'style'   => 'Others',
-                'qty'     => $othersQty,
-                'percent' => $totalDefectQty > 0 ? number_format(($othersQty / $totalDefectQty) * 100, 2) : '0.00',
-            ];
-        }
-
-        return ['rows' => $rows, 'total' => $totalDefectQty];
-    }
-
-    public function getWeeklyData(Request $request)
-    {
-        preconnect(session('db'));
-
-        $request->validate([
-            'week_id' => 'required|string',
-        ]);
-
-        [$year, $weekNumber] = explode('-', $request->week_id);
-        $weekNumber = (int) $weekNumber;
-
-        if ($weekNumber < 1 || $weekNumber > 53) {
-            abort(422, 'Week tidak valid');
-        }
-
-        $dta = Carbon::createFromDate($year, 1, 1)
-            ->startOfDay()
-            ->addDays(($weekNumber - 1) * 7);
-
-        $dtb = $dta->copy()
-            ->addDays(6)
-            ->endOfDay();
-
-        $endOfYear = Carbon::createFromDate($year, 12, 31)->endOfDay();
-
-        if ($dtb->gt($endOfYear)) {
-            $dtb = $endOfYear->copy();
-        }
-
-        $headerQuery = SewingOutput::whereBetween('date', [$dta, $dtb]);
-        $headerIds = (clone $headerQuery)->pluck('id');
-
-        $totInspect = SewingOutput::whereIn('id', $headerIds)
-            ->where('is_qc', 1)
-            ->count();
-
-        $totDefect = SewingOutput::whereIn('id', $headerIds)
-            ->whereNotNull('defect_code')
-            ->count();
-
-        $rft_qty = $totInspect - $totDefect;
-
-        $rft = $totInspect > 0
-            ? round((($totInspect - $totDefect) / $totInspect) * 100, 2)
-            : 0;
-
-        $wft = $totInspect > 0
-            ? round(($totDefect / $totInspect) * 100, 2)
-            : 0;
-
-        $header = [
-            'week'   => 'Week ' . $weekNumber,
-            'period' => 'Week ' . $weekNumber . ' (' . $dta->format('d M') . ' - ' . $dtb->format('d M Y') . ')',
-        ];
-
-        $topDefect = SewingOutput::whereIn('id', $headerIds)
-            ->whereNotNull('defect_code')
-            ->whereNotIn('defect_code', [800, 900])
-            ->select(
-                'defect_code',
-                DB::raw('COUNT(*) as total')
-            )
-            ->groupBy('defect_code')
-            ->orderByDesc('total')
-            ->orderBy('defect_code', 'asc')
-            ->limit(4)
-            ->get();
-
-        $defectIds = $topDefect->pluck('defect_code');
-
-        $masterQcDefects = QCDefect::whereIn('kdcacat', $defectIds)
-            ->pluck('deskripsi', 'kdcacat');
-
-        $colors = [
-            '#004FE0',
-            '#3DAA25',
-            '#F4947E',
-            '#F24C4C',
-            '#29B1AE',
-        ];
-
-        $totTop4DefectQty = $topDefect->sum('total');
-
-        $othersQty = max(0, $totDefect - $totTop4DefectQty);
-
-        $othersPercent = $totDefect > 0
-            ? ($othersQty / $totDefect) * 100
-            : 0;
-
-        // Mapping Top 4 Defect + Top Style tiap defect
-        $topDefect = $topDefect->values()->map(function ($item, $index) use (
-            $masterQcDefects,
-            $totDefect,
-            $colors,
-            $headerIds
-        ) {
-            $percent = $totDefect > 0 ? ($item->total / $totDefect) * 100 : 0;
-
-            return [
-                'defect_id'  => $item->defect_code,
-                'nmdefect'   => $masterQcDefects[$item->defect_code] ?? '-',
-                'defect_qty' => (int) $item->total,
-                'percent'    => number_format($percent, 2),
-                'color'      => $colors[$index] ?? '#29B1AE',
-                'top_style'  => $this->getTopStyleForDefect($headerIds, [$item->defect_code])['rows'],
-            ];
-        });
-
-        $othersDefectCodes = SewingOutput::whereIn('id', $headerIds)
-            ->whereNotNull('defect_code')
-            ->whereNotIn('defect_code', $defectIds->toArray())
-            ->pluck('defect_code')
-            ->unique()
-            ->values()
-            ->toArray();
-
-        $topDefect->push([
-            'defect_id'  => 'others',
-            'nmdefect'   => 'Others',
-            'defect_qty' => (int) $othersQty,
-            'percent'    => number_format($othersPercent, 2),
-            'color'      => '#29B1AE',
-            'top_style'  => $this->getTopStyleForDefect($headerIds, $othersDefectCodes)['rows'],
-        ]);
-
-        $totTopDefect = $topDefect->sum('defect_qty');
-
-        return view('monitoring::endlineperformance.performance.partials.weekly', [
-            'header'       => $header,
-            'rft_qty'      => $rft_qty,
-            'inspect_qty'  => $totInspect,
-            'defect_qty'   => $totDefect,
-            'rft'          => $rft,
-            'wft'          => $wft,
-            'top_defect'   => $topDefect,
-            'totTopDefect' => $totTopDefect,
-        ]);
-    }
-
-    // Helper: hitung range tanggal dari week_id
-    private function weekRange($year, int $weekNumber): array
-    {
-        $dta = Carbon::createFromDate($year, 1, 1)->startOfDay()->addDays(($weekNumber - 1) * 7);
-        $dtb = $dta->copy()->addDays(6)->endOfDay();
-
-        $endOfYear = Carbon::createFromDate($year, 12, 31)->endOfDay();
-        if ($dtb->gt($endOfYear)) {
-            $dtb = $endOfYear->copy();
-        }
-
-        return [$dta, $dtb];
-    }
-
-    // Helper: pecah range tanggal jadi bucket per hari
-    private function buildDayBuckets(Carbon $dta, Carbon $dtb): array
-    {
-        $buckets = [];
-        $cursor = $dta->copy();
-
-        while ($cursor->lte($dtb)) {
-            $ids = SewingOutput::whereDate('date', $cursor)->pluck('id');
-            $buckets[] = ['label' => $cursor->format('d M'), 'ids' => $ids];
-            $cursor->addDay();
-        }
-
-        return $buckets;
-    }
-
-    // Helper: pecah satu hari jadi bucket per jam
-    private function buildHourBuckets(Carbon $date): array
-    {
-        $rows = SewingOutput::whereDate('date', $date)
-            ->select('id', DB::raw('HOUR(date) as hh'))
             ->get()
-            ->groupBy('hh');
+            ->keyBy('idpo');
 
-        $buckets = [];
-        foreach (range(7, 23) as $h) {
-            $buckets[] = [
-                'label' => sprintf('%02d:00', $h),
-                'ids'   => $rows->has($h) ? $rows[$h]->pluck('id') : collect(),
-            ];
-        }
+        $expr = $effectiveIdpoSql();
 
-        return $buckets;
-    }
+        $outputRows = HistoryDataBreakdown::query()
+            ->join("$od as od_out", DB::raw('od_out.idpo'), '=', DB::raw($expr))
+            ->join("$so as so_out", 'so_out.barcode', '=', 'od_out.barcode')
+            ->whereIn("$dbr.idpo", $idpoList)
+            ->where('so_out.is_output', 1)
+            ->selectRaw("$dbr.idpo as idpo, COUNT(DISTINCT so_out.barcode) as total_output")
+            ->groupBy("$dbr.idpo")
+            ->get()
+            ->keyBy('idpo');
 
-    private function getTopStyleForBucket(Collection $bucketIds, array $defectCodes, int $inspectQty, int $limit = 3): array
-    {
-        $barcodes = SewingOutput::whereIn('id', $bucketIds)
-            ->where('is_qc', 1)
-            ->whereIn('defect_code', $defectCodes)
-            ->pluck('barcode');
+        $today = Carbon::today()->startOfDay();
 
-        if ($barcodes->isEmpty()) {
-            return [];
-        }
+        $data = $poList->map(function ($item) use (
+            $buyerGroupMap,
+            $groupBuyerNames,
+            $styleMap,
+            $colorMap,
+            $qtyEtdRows,
+            $outputRows,
+            $today
+        ) {
+            $groupBuyerId = $buyerGroupMap->get($item->idbuyer);
+            $qtyEtd = $qtyEtdRows->get($item->idpo);
+            $outputRow = $outputRows->get($item->idpo);
 
-        $styleQty = OutputDetail::whereIn('barcode', $barcodes)
-            ->select('idpo', DB::raw('COUNT(*) as total'))
-            ->groupBy('idpo')
-            ->get();
+            $etd = $qtyEtd ? $qtyEtd->etd : null;
+            $daysToEtd = null;
 
-        $poToStyle = PurchaseOrder::whereIn('idpo', $styleQty->pluck('idpo'))
-            ->pluck('idstyle', 'idpo');
-
-        $styleNames = Style::whereIn('idstyle', $poToStyle->values()->unique())
-            ->pluck('nmstyle', 'idstyle');
-
-        $grouped = [];
-        foreach ($styleQty as $row) {
-            $idstyle = $poToStyle[$row->idpo] ?? null;
-            $nmstyle = $idstyle ? ($styleNames[$idstyle] ?? '-') : '-';
-            $grouped[$nmstyle] = ($grouped[$nmstyle] ?? 0) + $row->total;
-        }
-
-        arsort($grouped);
-        $top = array_slice($grouped, 0, $limit, true);
-
-        $rows = [];
-        foreach ($top as $nmstyle => $qty) {
-            $rows[] = [
-                'style' => $nmstyle,
-                'qty'   => $qty,
-                'wft'   => $inspectQty > 0 ? round(($qty / $inspectQty) * 100, 2) : 0,
-            ];
-        }
-
-        return $rows;
-    }
-
-     private array $defectColors = [
-        '#1B4FE0',
-        '#F4977B',
-        '#36B37E',
-        '#FFAB00',
-        '#8777D9',
-        '#00B8D9',
-        '#F24C4C',
-        '#29B1AE',
-    ];
-
-    private function getDefectColorMap(string $mode, int $limit = 5): array
-    {
-        if ($mode === 'day') {
-            $headerQuery = SewingOutput::whereDate('date', Carbon::now());
-        } else {
-            $dta = Carbon::now()->subDays(6)->startOfDay();
-            $dtb = Carbon::now()->endOfDay();
-            $headerQuery = SewingOutput::whereBetween('date', [$dta, $dtb]);
-        }
-
-        $headerIds = $headerQuery->pluck('id');
-
-        $rankedCodes = SewingOutput::whereIn('id', $headerIds)
-            ->whereNotNull('defect_code')
-            ->whereNotIn('defect_code', [800, 900])
-            ->select('defect_code', DB::raw('COUNT(*) as total'))
-            ->groupBy('defect_code')
-            ->orderByDesc('total')
-            ->limit($limit)
-            ->pluck('total', 'defect_code')
-            ->keys();
-
-        $names = QCDefect::whereIn('kdcacat', $rankedCodes)
-            ->pluck('deskripsi', 'kdcacat');
-
-        $map = [];
-        foreach ($rankedCodes->values() as $index => $code) {
-            $map[(string) $code] = [
-                'name'  => $names[$code] ?? '-',
-                'color' => $this->defectColors[$index % count($this->defectColors)],
-            ];
-        }
-
-        return $map;
-    }
-
-    public function getDefectChartOptions(Request $request)
-    {
-        preconnect(session('db'));
-
-        $request->validate([
-            'mode' => 'required|in:weekly,day',
-        ]);
-
-        $colorMap = $this->getDefectColorMap($request->mode);
-
-        $options = collect($colorMap)
-            ->map(function ($item, $code) {
-                return [
-                    'code'  => $code,
-                    'name'  => $item['name'],
-                    'color' => $item['color'],
-                ];
-            })
-            ->values();
-
-        return response()->json([
-            'options' => $options,
-        ]);
-    }
-
-    public function getDefectChartData(Request $request)
-    {
-        preconnect(session('db'));
-
-        $request->validate([
-            'mode' => 'required|in:weekly,day',
-        ]);
-
-        $defectCodes = collect($request->input('defects', []))->map(fn ($c) => (int) $c);
-
-        if ($request->mode === 'day') {
-            $buckets = $this->buildHourBuckets(Carbon::now());
-        } else {
-            $dta = Carbon::now()->subDays(6)->startOfDay();
-            $dtb = Carbon::now()->endOfDay();
-            $buckets = $this->buildDayBuckets($dta, $dtb);
-        }
-
-        $colorMap = $this->getDefectColorMap($request->mode);
-
-        $names = QCDefect::whereIn('kdcacat', $defectCodes)->pluck('deskripsi', 'kdcacat');
-
-        $seriesData = [];
-        foreach ($defectCodes as $c) {
-            $seriesData[$c] = [];
-        }
-
-        $labels = [];
-        $bucketMeta = [];
-
-        foreach ($buckets as $bucket) {
-            $labels[] = $bucket['label'];
-
-            $inspectQty = SewingOutput::whereIn('id', $bucket['ids'])
-                ->where('is_qc', 1)
-                ->count();
-
-            $defectQtyPerCode = SewingOutput::whereIn('id', $bucket['ids'])
-                ->where('is_qc', 1)
-                ->whereIn('defect_code', $defectCodes)
-                ->select('defect_code', DB::raw('COUNT(*) as total'))
-                ->groupBy('defect_code')
-                ->pluck('total', 'defect_code');
-
-            foreach ($defectCodes as $code) {
-                $qty = $defectQtyPerCode[$code] ?? 0;
-                $wft = $inspectQty > 0 ? round(($qty / $inspectQty) * 100, 2) : 0;
-                $seriesData[$code][] = $wft;
+            if ($etd) {
+                $etdDate = Carbon::parse($etd)->startOfDay();
+                $daysToEtd = $today->diffInDays($etdDate, false);
             }
 
-            $bucketMeta[] = [
-                'topStyles' => $defectCodes->isNotEmpty()
-                    ? $this->getTopStyleForBucket($bucket['ids'], $defectCodes->toArray(), $inspectQty)
-                    : [],
-            ];
-        }
+            $totalQty = (int) ($qtyEtd ? $qtyEtd->total_qty : 0);
+            $totalOutput = (int) ($outputRow ? $outputRow->total_output : 0);
 
-        $series = $defectCodes->values()->map(function ($code) use ($seriesData, $names, $colorMap) {
-            $codeKey = (string) $code;
-            $mapped  = $colorMap[$codeKey] ?? null;
+            $progressOutput = $totalQty > 0
+                ? round(($totalOutput / $totalQty) * 100, 2)
+                : 0;
 
             return [
-                'code'  => $codeKey,
-                'name'  => $mapped['name']  ?? ($names[$code] ?? '-'),
-                'color' => $mapped['color'] ?? '#8A93A6',
-                'data'  => $seriesData[$code],
+                'idpo'            => $item->idpo,
+                'po'              => $item->po,
+                'style'           => $styleMap->get($item->idstyle) ?? '-',
+                'color'           => $colorMap->get($item->idcolor) ?? '-',
+                'buyer'           => $groupBuyerId ? ($groupBuyerNames->get($groupBuyerId) ?? '-') : '-',
+                'qty_order'       => $totalQty,
+                'output'          => $totalOutput,
+                'progress_output' => $progressOutput,
+                'etd'             => $etd ? Carbon::parse($etd)->format('d-m-Y') : '-',
+                'days_to_etd'     => $daysToEtd,
             ];
-        });
+        })->values();
+
+        $totalQtyOrderAll = $data->sum('qty_order');
+        $totalOutputAll   = $data->sum('output');
+
+        $totalProgressOutputAll = $totalQtyOrderAll > 0
+            ? round(($totalOutputAll / $totalQtyOrderAll) * 100, 2)
+            : 0;
 
         return response()->json([
-            'labels'     => $labels,
-            'series'     => $series,
-            'bucketMeta' => $bucketMeta,
+            'data'  => $data,
+            'total' => [
+                'qty_order'       => $totalQtyOrderAll,
+                'output'          => $totalOutputAll,
+                'progress_output' => $totalProgressOutputAll,
+            ],
         ]);
     }
-}
