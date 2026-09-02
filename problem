@@ -1,180 +1,126 @@
 function priorityFinal(Request $request)
-{
-    preconnect(session('db'));
+    {
+        preconnect(session('db'));
 
-    $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
-    $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+        $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
+        $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
 
-    $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
-    $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+        $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
+        $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
 
-    $fi  = (new OutputDetailFinalInspection())->getTable();
-    $od  = (new OutputDetail())->getTable();
-    $po  = (new PurchaseOrder())->getTable();
-    $dbr = (new HistoryDataBreakdown())->getTable();
+        $fi  = (new OutputDetailFinalInspection())->getTable();
+        $od  = (new OutputDetail())->getTable();
+        $po  = (new PurchaseOrder())->getTable();
+        $dbr = (new HistoryDataBreakdown())->getTable();
 
-    $applyCommonFilters = function ($query) use ($request, $po, $od) {
-        if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
-            $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
-            $query->whereIn("$po.idbuyer", $buyerIds);
-        }
-        if ($request->filled('po') && $request->po !== 'all') {
-            $query->where("$od.idpo", $request->po);
-        }
-        if ($request->filled('style') && $request->style !== 'all') {
-            $query->where("$po.idstyle", $request->style);
-        }
-        return $query;
-    };
+        // Filter umum
+        $applyCommonFilters = function ($query) use ($request, $po, $dbr) {
 
-    $excludeIfAnyFinal = function ($query) use ($fi, $od) {
-        $query->whereNotExists(function ($q) use ($fi, $od) {
-            $q->select(DB::raw(1))
-                ->from("$fi as fi2")
-                ->join("$od as od2", "od2.barcode", '=', 'fi2.barcode')
-                ->whereColumn('od2.idpo', "$od.idpo")
-                ->where('fi2.is_output', 1);
-        });
-        return $query;
-    };
+            if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
+                $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)
+                    ->pluck('idbuyer');
 
-    // ===== List PO yang belum final, dalam range tanggal =====
-    $listQuery = OutputDetailFinalInspection::query()
-        ->join($od, "$od.barcode", '=', "$fi.barcode")
-        ->join($po, "$po.idpo", '=', "$od.idpo")
-        ->whereExists(function ($query) use ($dbr, $od, $dta, $dtb) {
-            $query->select(DB::raw(1))
-                ->from($dbr)
-                ->whereColumn("$dbr.idpo", "$od.idpo")
-                ->whereBetween("$dbr.deliverydate", [$dta, $dtb])
-                ->where("$dbr.is_cutoff", "1")
-                ->where("$dbr.production_status", "IH");
-        });
-    $excludeIfAnyFinal($listQuery);
-    $applyCommonFilters($listQuery);
-
-    $poList = $listQuery
-        ->select("$po.idpo", "$po.po", "$po.idbuyer")
-        ->distinct()
-        ->get();
-
-    // Resolve nama Group Buyer dari idbuyer
-    $buyerIds = $poList->pluck('idbuyer')->filter()->unique()->values();
-
-    $buyerGroupMap = Buyer::whereIn('idbuyer', $buyerIds)
-        ->pluck('groupbuyer', 'idbuyer'); // [idbuyer => idgroupbuyer]
-
-    $groupBuyerIds = $buyerGroupMap->filter()->unique()->values();
-
-    $groupBuyerNames = MasterGroupBuyer::whereIn('id', $groupBuyerIds)
-        ->pluck('group_name', 'id'); // [idgroupbuyer => nama]
-
-    $data = $poList->map(function ($item) use ($buyerGroupMap, $groupBuyerNames) {
-        $groupBuyerId = $buyerGroupMap->get($item->idbuyer);
-        return [
-            'idpo'  => $item->idpo,
-            'po'    => $item->po,
-            'buyer' => $groupBuyerId ? ($groupBuyerNames->get($groupBuyerId) ?? '-') : '-',
-        ];
-    })->values();
-
-    // ===== Angka summary (tetap sama) =====
-    $today = Carbon::today()->startOfDay();
-
-    $needFinalFrom = $today->copy();
-    $needFinalTo   = $dtb->copy();
-
-    if ($needFinalFrom->lessThanOrEqualTo($needFinalTo)) {
-        $needFinalQuery = OutputDetailFinalInspection::query()
-            ->join($od, "$od.barcode", '=', "$fi.barcode")
-            ->join($po, "$po.idpo", '=', "$od.idpo")
-            ->whereExists(function ($query) use ($dbr, $od, $needFinalFrom, $needFinalTo) {
-                $query->select(DB::raw(1))
-                    ->from($dbr)
-                    ->whereColumn("$dbr.idpo", "$od.idpo")
-                    ->whereBetween("$dbr.deliverydate", [$needFinalFrom, $needFinalTo])
-                    ->where("$dbr.is_cutoff", "1")
-                    ->where("$dbr.production_status", "IH");
-            });
-        $excludeIfAnyFinal($needFinalQuery);
-        $applyCommonFilters($needFinalQuery);
-
-        $poNeedFinal = $needFinalQuery->count(DB::raw("DISTINCT $po.po"));
-    } else {
-        $poNeedFinal = 0;
-    }
-
-    $overdueFrom = $today->copy()->subDays(7)->startOfDay();
-    $overdueTo   = $today->copy()->endOfDay();
-
-    $overdueQuery = OutputDetailFinalInspection::query()
-        ->join($od, "$od.barcode", '=', "$fi.barcode")
-        ->join($po, "$po.idpo", '=', "$od.idpo")
-        ->whereExists(function ($query) use ($dbr, $od, $overdueFrom, $overdueTo) {
-            $query->select(DB::raw(1))
-                ->from($dbr)
-                ->whereColumn("$dbr.idpo", "$od.idpo")
-                ->whereBetween("$dbr.deliverydate", [$overdueFrom, $overdueTo])
-                ->where("$dbr.is_cutoff", "1")
-                ->where("$dbr.production_status", "IH");
-        });
-    $excludeIfAnyFinal($overdueQuery);
-    $applyCommonFilters($overdueQuery);
-
-    $overdue = $overdueQuery->count(DB::raw("DISTINCT $po.po"));
-
-    return response()->json([
-        'po_need_final' => $poNeedFinal,
-        'overdue'       => $overdue,
-        'data'          => $data,
-    ]);
-}
-
-
-
-<tbody class="text-center" id="tablePriorityFinalBody">
-    <tr>
-        <td colspan="12" class="text-center">No Data</td>
-    </tr>
-</tbody>
-
-
-function loadTable(filter) {
-    $.ajax({
-        url: "{{ route('monitoring_finalinspection_priorityfinal') }}",
-        type: "GET",
-        data: filter,
-        success: function (response) {
-            let rows = response.data || [];
-            let $body = $('#tablePriorityFinalBody');
-            $body.empty();
-
-            if (rows.length === 0) {
-                $body.append('<tr><td colspan="12" class="text-center">No Data</td></tr>');
-                return;
+                $query->whereIn("$po.idbuyer", $buyerIds);
             }
 
-            rows.forEach(function (row, idx) {
-                $body.append(`
-                    <tr>
-                        <td class="text-center">${idx + 1}</td>
-                        <td class="text-center">${row.po ?? '-'}</td>
-                        <td class="text-center">${row.buyer ?? '-'}</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                    </tr>
-                `);
+            if ($request->filled('po') && $request->po !== 'all') {
+                $query->where("$dbr.idpo", $request->po);
+            }
+
+            if ($request->filled('style') && $request->style !== 'all') {
+                $query->where("$po.idstyle", $request->style);
+            }
+
+            return $query;
+        };
+
+        // Exclude PO yang sudah punya final/output
+        $excludeIfAnyFinal = function ($query) use ($fi, $od, $dbr) {
+            $query->whereNotExists(function ($q) use ($fi, $od, $dbr) {
+                $q->select(DB::raw(1))
+                    ->from("$fi as fi2")
+                    ->join("$od as od2", "od2.barcode", '=', 'fi2.barcode')
+                    ->whereColumn('od2.idpo', "$dbr.idpo")
+                    ->where('fi2.is_output', 1);
             });
-        },
-        error: function (xhr) {
-            console.log(xhr.responseText);
-        }
-    });
-}
+            return $query;
+        };
+
+        $listQuery = HistoryDataBreakdown::query()
+            ->join($po, "$po.idpo", '=', "$dbr.idpo")
+            ->whereBetween(
+                "$dbr.deliverydate",
+                [$dta, $dtb]
+            )
+            ->where("$dbr.production_status", "IH")
+
+            ->whereNotExists(function ($q) use ($dbr) {
+                $q->from("$dbr as dbr2")
+                    ->whereColumn(
+                        "dbr2.combine_pro",
+                        "$dbr.combine_pro"
+                    )
+                    ->where("dbr2.revisi_kp", 1)
+                    ->whereNotNull("dbr2.kp_item_ref")
+                    ->whereColumn(
+                        "dbr2.idpo",
+                        ">",
+                        "$dbr.idpo"
+                    );
+            });
+
+
+        $excludeIfAnyFinal($listQuery);
+        $applyCommonFilters($listQuery);
+
+        $poList = $listQuery
+            ->select(
+                "$dbr.idpo",
+                "$po.po",
+                "$po.idbuyer",
+                "$po.idstyle"
+            )
+            ->distinct()
+            ->get();
+
+        $buyerIds = $poList->pluck('idbuyer')->filter()->unique()->values();
+
+        $buyerGroupMap = Buyer::whereIn('idbuyer', $buyerIds)
+            ->pluck('groupbuyer', 'idbuyer');
+
+        $groupBuyerIds = $buyerGroupMap->filter()->unique()->values();
+
+        $groupBuyerNames = MasterGroupBuyer::whereIn('id', $groupBuyerIds)
+            ->pluck('group_name', 'id');
+
+        $styleIds = $poList->pluck('idstyle')->filter()->unique()->values();
+
+        $styleMap = Style::whereIn('idstyle', $styleIds)
+            ->pluck('nmstyle', 'idstyle');
+
+
+        $data = $poList->map(function ($item) use (
+            $buyerGroupMap,
+            $groupBuyerNames,
+            $styleMap
+        ) {
+            $groupBuyerId = $buyerGroupMap->get($item->idbuyer);
+
+            return [
+                'idpo'  => $item->idpo,
+                'po'    => $item->po,
+
+                // Ambil style berdasarkan idstyle PO
+                'style' => $styleMap->get($item->idstyle) ?? '-',
+
+                // Ambil group buyer berdasarkan idbuyer
+                'buyer' => $groupBuyerId
+                    ? ($groupBuyerNames->get($groupBuyerId) ?? '-')
+                    : '-',
+            ];
+        })->values();
+
+        return response()->json([
+            'data' => $data,
+        ]);
+    }
