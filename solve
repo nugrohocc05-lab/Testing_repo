@@ -1,165 +1,59 @@
-<style>
-    .flex-fill.border-custom-datatable {
-        display: flex;
-        flex-direction: column;
-        min-height: 0;
-        min-width: 0;
-        width: 100%;
-        flex: 1 1 0;
-        overflow: hidden;
-    }
+$data = $poList->map(function ($item) use (
+        $buyerGroupMap,
+        $groupBuyerNames,
+        $styleMap,
+        $colorMap,
+        $qtyEtdRows,
+        $outputRows,
+        $today
+    ) {
+        $groupBuyerId = $buyerGroupMap->get($item->idbuyer);
+        $qtyEtd = $qtyEtdRows->get($item->idpo);
+        $outputRow = $outputRows->get($item->idpo);
 
-    .wrapper-sub {
-        display: flex;
-        flex-direction: column;
-        min-height: 0;
-        min-width: 0;
-        width: 100%;
-        flex: 1 1 auto;
-        overflow: hidden;
-    }
+        $etd = $qtyEtd ? $qtyEtd->etd : null;
+        $daysToEtd = null;
 
-    .table-scroll-wrapper {
-        flex: 1 1 auto;
-        min-height: 0;
-        min-width: 0;
-        width: 100%;
-        overflow-y: auto;
-        overflow-x: auto;
-    }
-
-    .table-res {
-        width: 100%;
-        margin-bottom: 0;
-        table-layout: fixed;
-        border-collapse: collapse;
-        min-width: 1050px;
-    }
-
-    .table-res thead th {
-        position: sticky;
-        top: 0;
-        z-index: 2;
-        background-color: #1B2331;
-        vertical-align: middle; 
-        word-wrap: break-word;
-        font-weight: 400;
-        font-size: 12px;
-        padding: 0.75rem 0.5rem;
-    }
-
-    .table-res tbody td {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        vertical-align: middle;
-        padding: 0.5rem;
-        font-weight: 400;
-        font-size: 12px;
-        line-height: 28px;
-    }
-
-    .table-res tfoot th {
-        position: sticky;
-        bottom: 0;
-        z-index: 2;
-        background-color: #1B2331;
-        font-weight: 600;
-        font-size: 14px;
-        line-height: 28px;
-        padding: 0.75rem 0.5rem;
-    }
-
-    @media (min-width: 992px) and (max-width: 1399.98px) {
-        .table-res thead th {
-            font-size: 11px;
-            padding: 0.4rem 0.25rem;
-        }
-        
-        .table-res tbody td {
-            font-size: 11px;
-            line-height: 24px;
-            padding: 0.4rem 0.25rem;
+        if ($etd) {
+            $etdDate = Carbon::parse($etd)->startOfDay();
+            $daysToEtd = $today->diffInDays($etdDate, false);
         }
 
-        .table-res tfoot th {
-            font-size: 12px;
-            line-height: 24px;
-            padding: 0.4rem 0.25rem;
-        }
-    }
+        $totalQty = (int) ($qtyEtd ? $qtyEtd->total_qty : 0);
+        $totalOutput = (int) ($outputRow ? $outputRow->total_output : 0);
 
-    @media (max-width: 991.98px) {
-        .wrapper-sub {
-            margin: 5px;
-        }
-        
-        .table-res thead th {
-            font-size: 11px;
-            padding: 0.5rem;
-        }
-        
-        .table-res tbody td {
-            font-size: 11px;
-            line-height: 22px;
-            padding: 0.5rem;
-        }
+        $progressOutput = $totalQty > 0
+            ? round(($totalOutput / $totalQty) * 100, 2)
+            : 0;
 
-        .table-res tfoot th {
-            font-size: 12px;
-            line-height: 22px;
-            padding: 0.5rem;
-        }
-    }
-</style>
+        return [
+            'idpo'            => $item->idpo,
+            'po'              => $item->po,
+            'style'           => $styleMap->get($item->idstyle) ?? '-',
+            'color'           => $colorMap->get($item->idcolor) ?? '-',
+            'buyer'           => $groupBuyerId ? ($groupBuyerNames->get($groupBuyerId) ?? '-') : '-',
+            'qty_order'       => $totalQty,
+            'output'          => $totalOutput,
+            'progress_output' => $progressOutput,
+            'etd'             => $etd ? Carbon::parse($etd)->format('d-m-Y') : '-',
+            'days_to_etd'     => $daysToEtd,
+        ];
+    })->values();
 
-<div class="flex-fill border-custom-datatable rounded-1">
-    <div class="wrapper-sub">
-        <h6 class="subheader mb-0 fw-normal text-truncate px-3 pt-2">
-            PO PRIORITY PROGRESS FINAL (BASED ON ETD)
-        </h6>
+    // ===== Total keseluruhan (footer tabel) =====
+    $totalQtyOrderAll = $data->sum('qty_order');
+    $totalOutputAll   = $data->sum('output');
 
-        <div class="table-wrapper table-scroll-wrapper rounded mt-2 px-2 pb-2">
-            <table class="table-res table-borderless w-100 table-hover">
-                <thead>
-                    <tr>
-                        <th class="text-center" style="width:5%;">Priority</th>
-                        <th class="text-center" style="width:9%;">PO No.</th>
-                        <th class="text-center" style="width:9%;">Buyer</th>
-                        <th class="text-center" style="width:9%;">Style</th>
-                        <th class="text-center" style="width:9%;">Article</th>
-                        <th class="text-center" style="width:9%;">Color</th>
-                        <th class="text-center" style="width:8%;">QTY Order<br>(Pcs)</th>
-                        <th class="text-center" style="width:8%;">Output<br>(Pcs)</th>
-                        <th class="text-center" style="width:9%;">Progress<br>Output</th>
-                        <th class="text-center" style="width:9%;">ETD<br>(Shipment Date)</th>
-                        <th class="text-center" style="width:8%;">Days to<br>ETD</th>
-                        <th class="text-center" style="width:8%;">Status<br>Final</th>
-                    </tr>
-                </thead>
-                <tbody class="text-center" id="tablePriorityFinalBody">
-                    <tr>
-                        <td colspan="12" class="text-center">No Data</td>
-                    </tr>
-                </tbody>
+    $totalProgressOutputAll = $totalQtyOrderAll > 0
+        ? round(($totalOutputAll / $totalQtyOrderAll) * 100, 2)
+        : 0;
 
-                <tfoot class="table-foot" id="tableInlineDefectFoot">
-                    <tr>
-                        <th style="color: #4C8CF2;">Total</th>
-                        <th></th>
-                        <th></th>
-                        <th></th>
-                        <th></th>
-                        <th></th>
-                        <th class="text-center" style="color: #4C8CF2;">940,416</th>
-                        <th class="text-center" style="color: #4C8CF2;">940,416</th>
-                        <th class="text-center" style="color: #4C8CF2;">75.55%</th>
-                        <th class="text-center"></th>
-                        <th class="text-center"></th>
-                        <th class="text-center"></th>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
-    </div>
-</div>
+    return response()->json([
+        'data'  => $data,
+        'total' => [
+            'qty_order'       => $totalQtyOrderAll,
+            'output'          => $totalOutputAll,
+            'progress_output' => $totalProgressOutputAll,
+        ],
+    ]);
+}
