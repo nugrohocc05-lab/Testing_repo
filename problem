@@ -1,15 +1,20 @@
-// Ambil idpo + idcolor yang tercatat di baris dengan kp_item TERBARU
-// (bukan sum semua histori revisi)
-$qtyEtdRows = DB::table("$dbr as d1")
-    ->whereIn('d1.idpo', $idpoList)
-    ->whereBetween('d1.deliverydate', [$dta, $dtb])
-    ->where('d1.production_status', 'IH')
-    ->whereRaw("d1.kp_item = (
-        SELECT MAX(d2.kp_item) FROM $dbr as d2
-        WHERE d2.idpo = d1.idpo
-          AND d2.idcolor = d1.idcolor
-    )")
-    ->selectRaw('d1.idpo, SUM(d1.qty_ori) as total_qty, MAX(d1.deliverydate) as etd')
-    ->groupBy('d1.idpo')
-    ->get()
-    ->keyBy('idpo');
+$rows = DB::table('historydbreakdown')
+    ->whereIn('idpo', [9451, 9452])
+    ->select(
+        'idpo',
+        'idcolor',
+        'qty_ori',
+        'kp_item',
+        'kp_item_ref',
+        'is_cutoff',
+        'original_pro',
+        'combine_pro',
+        'revisi_kp',
+        'production_status',
+        'deliverydate'
+    )
+    ->orderBy('idpo')
+    ->orderBy('idcolor')
+    ->get();
+
+dd($rows);
