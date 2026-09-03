@@ -1,152 +1,4 @@
-function priorityFinal(Request $request)
-{
-    preconnect(session('db'));
-
-    $fi  = (new OutputDetailFinalInspection())->getTable();
-    $od  = (new OutputDetail())->getTable();
-    $po  = (new PurchaseOrder())->getTable();
-    $dbr = (new HistoryDataBreakdown())->getTable();
-    $so  = (new SewingOutput())->getTable();
-
-    // ================= LEAF ROWS (reusable helper) =================
-    // Catatan: helper ini perlu return juga $deduped (bukan cuma leaf), jadi sedikit saya modif return-nya.
-    [$deduped, $leafRows] = $this->getLeafHistoryRowsWithAll($request, 'combine_pro', applyPoFilter: true);
-
-    $byIdpoLeaf = $leafRows->groupBy('idpo');
-
-    $qtyPerIdpo = [];
-    $etdPerIdpo = [];
-    foreach ($byIdpoLeaf as $idpo => $rows) {
-        $qtyPerIdpo[$idpo] = (int) $rows->sum('qty_ori');
-        $etdPerIdpo[$idpo] = $rows->max('deliverydate');
-    }
-
-    $qualifiedIdpo = collect($qtyPerIdpo)->filter(fn ($qty) => $qty > 0)->keys()->values();
-
-    // ================= EFFECTIVE SET PER IDPO (ganti effectiveIdpoSql lama) =================
-    $familyToAllIdpo = $deduped->groupBy('family_key')->map(fn ($g) => $g->pluck('idpo')->unique()->values());
-    $familyToActiveIdpo = $leafRows->groupBy('family_key')->map(fn ($g) => $g->pluck('idpo')->unique()->values());
-    $idpoToFamily = $leafRows->groupBy('idpo')->map(fn ($g) => $g->first()->family_key);
-
-    $effectiveSetPerIdpo = [];
-    foreach ($qualifiedIdpo as $idpo) {
-        $family = $idpoToFamily->get($idpo);
-        $activeInFamily = $familyToActiveIdpo->get($family, collect([$idpo]));
-
-        if ($activeInFamily->count() <= 1) {
-            // cuma 1 idpo aktif di family ini -> rollup semua idpo lama (full-replace)
-            $effectiveSetPerIdpo[$idpo] = $familyToAllIdpo->get($family, collect([$idpo]))->all();
-        } else {
-            // split -> murni idpo sendiri, tidak digabung
-            $effectiveSetPerIdpo[$idpo] = [$idpo];
-        }
-    }
-
-    $allEffectiveIdpos = collect($effectiveSetPerIdpo)->flatten()->unique()->values();
-
-    // ================= FINAL-INSPECTION CHECK (existence, per idpo) =================
-    $finalAnyIdpos = OutputDetailFinalInspection::query()
-        ->join($od, "$od.barcode", '=', "$fi.barcode")
-        ->whereIn("$od.idpo", $allEffectiveIdpos)
-        ->distinct()
-        ->pluck("$od.idpo")
-        ->flip();
-
-    $finalOutputIdpos = OutputDetailFinalInspection::query()
-        ->join($od, "$od.barcode", '=', "$fi.barcode")
-        ->whereIn("$od.idpo", $allEffectiveIdpos)
-        ->where("$fi.is_output", 1)
-        ->distinct()
-        ->pluck("$od.idpo")
-        ->flip();
-
-    $displayIdpo = $qualifiedIdpo->filter(function ($idpo) use ($effectiveSetPerIdpo, $finalAnyIdpos, $finalOutputIdpos) {
-        $set = $effectiveSetPerIdpo[$idpo];
-        $hasAny = collect($set)->contains(fn ($i) => $finalAnyIdpos->has($i));
-        $hasOutput = collect($set)->contains(fn ($i) => $finalOutputIdpos->has($i));
-        return $hasAny && !$hasOutput;
-    })->values();
-
-    // ================= OUTPUT COUNT (dari effective set, tidak dobel-hitung antar split) =================
-    $outputCountsByIdpo = OutputDetail::query()
-        ->join($so, "$so.barcode", '=', "$od.barcode")
-        ->whereIn("$od.idpo", $allEffectiveIdpos)
-        ->where("$so.is_output", 1)
-        ->selectRaw("$od.idpo as idpo, COUNT(DISTINCT $so.barcode) as cnt")
-        ->groupBy("$od.idpo")
-        ->pluck('cnt', 'idpo');
-
-    $totalOutputPerIdpo = [];
-    foreach ($displayIdpo as $idpo) {
-        $set = $effectiveSetPerIdpo[$idpo];
-        $totalOutputPerIdpo[$idpo] = collect($set)->sum(fn ($i) => (int) ($outputCountsByIdpo[$i] ?? 0));
-    }
-
-    // ================= BUILD PO LIST =================
-    $poList = $displayIdpo->map(function ($idpo) use ($byIdpoLeaf) {
-        $rows = $byIdpoLeaf->get($idpo);
-        $first = $rows->first();
-        return (object) [
-            'idpo' => $idpo, 'po' => $first->po, 'idbuyer' => $first->idbuyer,
-            'idstyle' => $first->idstyle, 'idcolor' => $first->idcolor,
-        ];
-    });
-
-    $buyerIds = $poList->pluck('idbuyer')->filter()->unique()->values();
-    $buyerGroupMap = Buyer::whereIn('idbuyer', $buyerIds)->pluck('groupbuyer', 'idbuyer');
-    $groupBuyerIds = $buyerGroupMap->filter()->unique()->values();
-    $groupBuyerNames = MasterGroupBuyer::whereIn('id', $groupBuyerIds)->pluck('group_name', 'id');
-    $styleIds = $poList->pluck('idstyle')->filter()->unique()->values();
-    $styleMap = Style::whereIn('idstyle', $styleIds)->pluck('nmstyle', 'idstyle');
-    $colorIds = $poList->pluck('idcolor')->filter()->unique()->values();
-    $colorMap = Color::whereIn('idcolor', $colorIds)->pluck('nmcolor', 'idcolor');
-
-    $today = Carbon::today()->startOfDay();
-
-    $data = $poList->map(function ($item) use (
-        $buyerGroupMap, $groupBuyerNames, $styleMap, $colorMap,
-        $qtyPerIdpo, $etdPerIdpo, $totalOutputPerIdpo, $today
-    ) {
-        $groupBuyerId = $buyerGroupMap->get($item->idbuyer);
-
-        $etd = $etdPerIdpo[$item->idpo] ?? null;
-        $daysToEtd = null;
-        if ($etd) {
-            $daysToEtd = $today->diffInDays(Carbon::parse($etd)->startOfDay(), false);
-        }
-
-        $totalQty = (int) ($qtyPerIdpo[$item->idpo] ?? 0);
-        $totalOutput = (int) ($totalOutputPerIdpo[$item->idpo] ?? 0);
-        $progressOutput = $totalQty > 0 ? round(($totalOutput / $totalQty) * 100, 2) : 0;
-
-        return [
-            'idpo' => $item->idpo, 'po' => $item->po,
-            'style' => $styleMap->get($item->idstyle) ?? '-',
-            'color' => $colorMap->get($item->idcolor) ?? '-',
-            'buyer' => $groupBuyerId ? ($groupBuyerNames->get($groupBuyerId) ?? '-') : '-',
-            'qty_order' => $totalQty, 'output' => $totalOutput,
-            'progress_output' => $progressOutput,
-            'etd' => $etd ? Carbon::parse($etd)->format('d-m-Y') : '-',
-            'days_to_etd' => $daysToEtd,
-        ];
-    })->values();
-
-    $totalQtyOrderAll = $data->sum('qty_order');
-    $totalOutputAll   = $data->sum('output');
-    $totalProgressOutputAll = $totalQtyOrderAll > 0
-        ? round(($totalOutputAll / $totalQtyOrderAll) * 100, 2) : 0;
-
-    return response()->json([
-        'data'  => $data,
-        'total' => [
-            'qty_order' => $totalQtyOrderAll, 'output' => $totalOutputAll,
-            'progress_output' => $totalProgressOutputAll,
-        ],
-    ]);
-}
-
-
-private function getLeafHistoryRowsWithAll(Request $request, string $familyColumn = 'combine_pro', bool $applyPoFilter = true): array
+private function getLeafHistoryRows(Request $request, $familyColumn = 'combine_pro', $applyPoFilter = true)
 {
     $po  = (new PurchaseOrder())->getTable();
     $dbr = (new HistoryDataBreakdown())->getTable();
@@ -160,7 +12,7 @@ private function getLeafHistoryRowsWithAll(Request $request, string $familyColum
         $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
         $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
         $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
-        $rawQuery->whereBetween("$dbr.deliverydate", [$dta, $dtb]);
+        $rawQuery->whereBetween("$dbr.deliverydate", array($dta, $dtb));
     }
 
     if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
@@ -182,19 +34,170 @@ private function getLeafHistoryRowsWithAll(Request $request, string $familyColum
     )->get();
 
     $deduped = $rawRows
-        ->groupBy(fn ($r) => $r->idpo . '|' . $r->idcolor . '|' . $r->kp_item)
-        ->map(fn ($group) => $group->sortByDesc('revisi_kp')->first())
+        ->groupBy(function ($r) {
+            return $r->idpo . '|' . $r->idcolor . '|' . $r->kp_item;
+        })
+        ->map(function ($group) {
+            return $group->sortByDesc('revisi_kp')->first();
+        })
         ->values();
 
     $refByFamily = $deduped
-        ->filter(fn ($r) => !is_null($r->kp_item_ref))
+        ->filter(function ($r) {
+            return !is_null($r->kp_item_ref);
+        })
         ->groupBy('family_key')
-        ->map(fn ($group) => $group->pluck('kp_item_ref')->unique()->values());
+        ->map(function ($group) {
+            return $group->pluck('kp_item_ref')->unique()->values();
+        });
 
     $leafRows = $deduped->filter(function ($row) use ($refByFamily) {
         $refs = $refByFamily->get($row->family_key);
         return !($refs && $refs->contains($row->kp_item));
     })->values();
 
-    return [$deduped, $leafRows];
+    return $leafRows;
+}
+
+function priorityFinal(Request $request)
+{
+    preconnect(session('db'));
+
+    $fi  = (new OutputDetailFinalInspection())->getTable();
+    $od  = (new OutputDetail())->getTable();
+    $po  = (new PurchaseOrder())->getTable();
+    $dbr = (new HistoryDataBreakdown())->getTable();
+    $so  = (new SewingOutput())->getTable();
+
+    // ================= LEAF ROWS (qty & list PO, SUDAH BENAR - tidak diubah) =================
+    $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true);
+
+    $byIdpoLeaf = $leafRows->groupBy('idpo');
+
+    $qtyPerIdpo = array();
+    $etdPerIdpo = array();
+    foreach ($byIdpoLeaf as $idpo => $rows) {
+        $qtyPerIdpo[$idpo] = (int) $rows->sum('qty_ori');
+        $etdPerIdpo[$idpo] = $rows->max('deliverydate');
+    }
+
+    $qualifiedIdpo = collect($qtyPerIdpo)->filter(function ($qty) {
+        return $qty > 0;
+    })->keys()->values();
+
+    // ================= FINAL-CHECK (existence saja, effectiveIdpoSql lama TIDAK masalah karena bukan sum) =================
+    $effectiveIdpoSql = function () use ($dbr) {
+        return "(CASE WHEN $dbr.revisi_kp = 1 AND $dbr.kp_item_ref IS NOT NULL
+            THEN (SELECT dbr_prev.idpo FROM $dbr as dbr_prev
+                WHERE dbr_prev.combine_pro = $dbr.combine_pro
+                    AND dbr_prev.idpo < $dbr.idpo
+                ORDER BY dbr_prev.idpo DESC LIMIT 1)
+            ELSE $dbr.idpo END)";
+    };
+
+    $requireHasFinalRecord = function ($query) use ($fi, $od, $effectiveIdpoSql) {
+        $expr = $effectiveIdpoSql();
+        $query->whereExists(function ($q) use ($fi, $od, $expr) {
+            $q->select(DB::raw(1))
+                ->from("$fi as fi3")
+                ->join("$od as od3", "od3.barcode", '=', 'fi3.barcode')
+                ->whereRaw("od3.idpo = $expr");
+        });
+        return $query;
+    };
+
+    $excludeIfAnyFinal = function ($query) use ($fi, $od, $effectiveIdpoSql) {
+        $expr = $effectiveIdpoSql();
+        $query->whereNotExists(function ($q) use ($fi, $od, $expr) {
+            $q->select(DB::raw(1))
+                ->from("$fi as fi2")
+                ->join("$od as od2", "od2.barcode", '=', 'fi2.barcode')
+                ->whereRaw("od2.idpo = $expr")
+                ->where('fi2.is_output', 1);
+        });
+        return $query;
+    };
+
+    $finalCheckQuery = HistoryDataBreakdown::query()
+        ->join($po, "$po.idpo", '=', "$dbr.idpo")
+        ->whereIn("$dbr.idpo", $qualifiedIdpo);
+
+    $requireHasFinalRecord($finalCheckQuery);
+    $excludeIfAnyFinal($finalCheckQuery);
+
+    $finalIdpoList = $finalCheckQuery->select("$dbr.idpo")->distinct()->pluck('idpo');
+
+    $poList = $finalIdpoList->map(function ($idpo) use ($byIdpoLeaf) {
+        $rows = $byIdpoLeaf->get($idpo);
+        $first = $rows->first();
+        return (object) array(
+            'idpo' => $idpo, 'po' => $first->po, 'idbuyer' => $first->idbuyer,
+            'idstyle' => $first->idstyle, 'idcolor' => $first->idcolor,
+        );
+    });
+
+    $idpoList = $poList->pluck('idpo')->unique()->values();
+
+    $buyerIds = $poList->pluck('idbuyer')->filter()->unique()->values();
+    $buyerGroupMap = Buyer::whereIn('idbuyer', $buyerIds)->pluck('groupbuyer', 'idbuyer');
+    $groupBuyerIds = $buyerGroupMap->filter()->unique()->values();
+    $groupBuyerNames = MasterGroupBuyer::whereIn('id', $groupBuyerIds)->pluck('group_name', 'id');
+    $styleIds = $poList->pluck('idstyle')->filter()->unique()->values();
+    $styleMap = Style::whereIn('idstyle', $styleIds)->pluck('nmstyle', 'idstyle');
+    $colorIds = $poList->pluck('idcolor')->filter()->unique()->values();
+    $colorMap = Color::whereIn('idcolor', $colorIds)->pluck('nmcolor', 'idcolor');
+
+    // ================= FIX: OUTPUT murni per idpo sendiri, TANPA CASE rollup =================
+    $outputRows = OutputDetail::query()
+        ->join("$so as so_out", 'so_out.barcode', '=', "$od.barcode")
+        ->whereIn("$od.idpo", $idpoList)
+        ->where('so_out.is_output', 1)
+        ->selectRaw("$od.idpo as idpo, COUNT(DISTINCT so_out.barcode) as total_output")
+        ->groupBy("$od.idpo")
+        ->get()
+        ->keyBy('idpo');
+
+    $today = Carbon::today()->startOfDay();
+
+    $data = $poList->map(function ($item) use (
+        $buyerGroupMap, $groupBuyerNames, $styleMap, $colorMap,
+        $qtyPerIdpo, $etdPerIdpo, $outputRows, $today
+    ) {
+        $groupBuyerId = $buyerGroupMap->get($item->idbuyer);
+        $outputRow = $outputRows->get($item->idpo);
+
+        $etd = isset($etdPerIdpo[$item->idpo]) ? $etdPerIdpo[$item->idpo] : null;
+        $daysToEtd = null;
+        if ($etd) {
+            $daysToEtd = $today->diffInDays(Carbon::parse($etd)->startOfDay(), false);
+        }
+
+        $totalQty = isset($qtyPerIdpo[$item->idpo]) ? (int) $qtyPerIdpo[$item->idpo] : 0;
+        $totalOutput = $outputRow ? (int) $outputRow->total_output : 0;
+        $progressOutput = $totalQty > 0 ? round(($totalOutput / $totalQty) * 100, 2) : 0;
+
+        return array(
+            'idpo' => $item->idpo, 'po' => $item->po,
+            'style' => $styleMap->get($item->idstyle) ? $styleMap->get($item->idstyle) : '-',
+            'color' => $colorMap->get($item->idcolor) ? $colorMap->get($item->idcolor) : '-',
+            'buyer' => $groupBuyerId ? ($groupBuyerNames->get($groupBuyerId) ? $groupBuyerNames->get($groupBuyerId) : '-') : '-',
+            'qty_order' => $totalQty, 'output' => $totalOutput,
+            'progress_output' => $progressOutput,
+            'etd' => $etd ? Carbon::parse($etd)->format('d-m-Y') : '-',
+            'days_to_etd' => $daysToEtd,
+        );
+    })->values();
+
+    $totalQtyOrderAll = $data->sum('qty_order');
+    $totalOutputAll   = $data->sum('output');
+    $totalProgressOutputAll = $totalQtyOrderAll > 0
+        ? round(($totalOutputAll / $totalQtyOrderAll) * 100, 2) : 0;
+
+    return response()->json(array(
+        'data'  => $data,
+        'total' => array(
+            'qty_order' => $totalQtyOrderAll, 'output' => $totalOutputAll,
+            'progress_output' => $totalProgressOutputAll,
+        ),
+    ));
 }
