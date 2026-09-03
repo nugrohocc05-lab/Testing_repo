@@ -1,51 +1,37 @@
-static function getReroutePO(string $idpo)
+    private function getTotalPoIdpoList(Request $request, Carbon $dta, Carbon $dtb)
     {
-        preconnect(session('db'));
+        $po  = (new PurchaseOrder())->getTable();
+        $dbr = (new HistoryDataBreakdown())->getTable();
 
-        try {
-            // Ambil original_pro dari PO lama
-            $originalPro = HistoryDataBreakdown::query()
-                ->where('idpo', $idpo)
-                ->whereNotNull('original_pro')
-                ->distinct()
-                ->pluck('original_pro');
+        $query = HistoryDataBreakdown::query()
+            ->join($po, "$po.idpo", '=', "$dbr.idpo")
+            ->where("$dbr.production_status", "IH")
+            ->whereBetween("$dbr.deliverydate", [$dta, $dtb]);
 
-            if ($originalPro->isEmpty()) {
-                return collect();
-            }
-
-            // Ambil kp_item dari data cutoff
-            $cutoffItems = HistoryDataBreakdown::query()
-                ->whereIn('original_pro', $originalPro)
-                ->where('is_cutoff', 1)
-                ->pluck('kp_item')
-                ->filter()
-                ->unique();
-
-            if ($cutoffItems->isEmpty()) {
-                return collect();
-            }
-
-            // Cari PO yang menggunakan kp_item_ref dari PO lama
-            return HistoryDataBreakdown::query()
-                ->whereIn('original_pro', $originalPro)
-                ->whereIn('kp_item_ref', $cutoffItems)
-                ->where('idpo', '!=', $idpo)
-                ->select([
-                    'idpo',
-                    'original_pro',
-                    'kp_item',
-                    'kp_item_ref',
-                    'qty_ori',
-                ])
-                ->distinct()
-                ->get();
-
-        } catch (\Throwable $e) {
-            return collect();
+        if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
+            $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
+            $query->whereIn("$po.idbuyer", $buyerIds);
         }
-    }
+        if ($request->filled('po') && $request->po !== 'all') {
+            $query->where("$dbr.idpo", $request->po);
+        }
+        if ($request->filled('style') && $request->style !== 'all') {
+            $query->where("$po.idstyle", $request->style);
+        }
 
+        $effectiveIdpoSql = "(CASE WHEN $dbr.revisi_kp = 1 AND $dbr.kp_item_ref IS NOT NULL
+            THEN (SELECT dbr_prev.idpo FROM $dbr as dbr_prev
+                WHERE dbr_prev.combine_pro = $dbr.combine_pro
+                    AND dbr_prev.idpo < $dbr.idpo
+                ORDER BY dbr_prev.idpo DESC LIMIT 1)
+            ELSE $dbr.idpo END)";
+
+        return $query
+            ->selectRaw("$effectiveIdpoSql as effective_idpo")
+            ->groupBy('effective_idpo')
+            ->havingRaw("SUM($dbr.qty_ori) > 0")
+            ->pluck('effective_idpo');
+    }
 
     function summaryFilter(Request $request)
     {
@@ -102,25 +88,11 @@ static function getReroutePO(string $idpo)
 
         $applyCommonFilters($headerQuery);
 
-        $leafRows = $this->getLeafHistoryRows(
-            $request,
-            'combine_pro',
-            true
-        );
+        // SESUDAH
+        $totalPoIdpoList = $this->getTotalPoIdpoList($request, $dta, $dtb);
+        $totalPo = $totalPoIdpoList->count();
 
-        $leafPoIds = $leafRows
-            ->pluck('idpo')
-            ->unique()
-            ->values();
-
-        $poIds = (clone $headerQuery)
-            ->select("$od.idpo")
-            ->distinct()
-            ->pluck("$od.idpo");
-
-        $totalPo = $leafPoIds->count();
-
-        $totalQty = HistoryDataBreakdown::whereIn('idpo', $poIds)
+        $totalQty = HistoryDataBreakdown::whereIn('idpo', $totalPo)
             ->where('is_cutoff', '1')
             ->sum('qty_ori');
 
@@ -135,164 +107,20 @@ static function getReroutePO(string $idpo)
         $needFinalTo   = $dtb->copy();
 
         if ($needFinalFrom->lessThanOrEqualTo($needFinalTo)) {
+            $poNeedFinalList = $this->getPoNeedFinalIdpoList($request);
+            $poNeedFinal = $poNeedFinalList->count();
 
-            $needFinalQuery = OutputDetailFinalInspection::query()
-                ->join($od, "$od.barcode", '=', "$fi.barcode")
-                ->join($po, "$po.idpo", '=', "$od.idpo")
-                ->whereExists(function ($query) use (
-                    $dbr,
-                    $od,
-                    $needFinalFrom,
-                    $needFinalTo
-                ) {
-                    $query->select(DB::raw(1))
-                        ->from($dbr)
-                        ->whereColumn("$dbr.idpo", "$od.idpo")
-                        ->whereBetween("$dbr.deliverydate", [
-                            $needFinalFrom,
-                            $needFinalTo
-                        ])
-                        ->where("$dbr.production_status", "IH");
-                });
-
-            $excludeIfAnyFinal($needFinalQuery);
-            $applyCommonFilters($needFinalQuery);
-
-            // PO awal yang masuk need final
-            $needFinalData = $needFinalQuery
-                ->select([
-                    "$po.po",
-                    "$po.idpo",
-                ])
-                ->distinct()
-                ->get();
-
-            $poNeedFinalList = $needFinalData->pluck('idpo')->unique()->values();
-
-            dd($poNeedFinalList);
-            // Cek reroute
-            $finalPOList = collect();
-
-            $idpoReroute = HistoryDataBreakdown::where('idpo', $poNeedFinalList)
-                // Cek idnya bagian kp_item_ref ada isinya tidak
-                // kalau ada cek combine_pro yang sama dengan idpo nya
-                // lalu cek revisi di HistoryPO terbesar dari id tersebut dengan idpo tersebut
-                // dan cek semisal nilai dari idpo itu dengan revisi terbesar itu nilai qtypo nya 0 maka gunakan idpo terbaru atau terbesar dalam combine pro yang sama
-                // dan kalau untuk qtypo nya tidak 0, maka ambil kedua idpo dengan combine pro yang sama
-
-                dd($idpoReroute);
-
-            foreach ($poNeedFinalList as $idpo) {
-            $finalPOList->push($idpo);
-
-                $reroutePOs = self::getReroutePO($idpo);
-                    foreach ($reroutePOs as $reroute) {
-                        $qtyOri = (float) ($reroute->qty_ori ?? 0);
-
-                        if ($qtyOri > 0) {
-                            $finalPOList->push($reroute->idpo);
-
-                        } else {
-                            $finalPOList->forget(
-                                $finalPOList->search($idpo)
-                            );
-                            $finalPOList->push($reroute->idpo);
-                        }
-                    }
-            }
-
-            $finalPOList = $finalPOList
-                ->filter()
-                ->unique()
-                ->values();
-
-            $poNeedFinal = $finalPOList->count();
         } else {
             $poNeedFinal = 0;
         }
 
-
-        // ===== Overdue: today-7 s/d today, TIDAK ADA barcode is_output=1 sama sekali di PO tsb =====
-        // $overdueFrom = $today->copy()->subDays(7)->startOfDay();
-        // $overdueTo   = $today->copy()->endOfDay();
-
-        // $overdueQuery = OutputDetailFinalInspection::query()
-        //     ->join($od, "$od.barcode", '=', "$fi.barcode")
-        //     ->join($po, "$po.idpo", '=', "$od.idpo")
-        //     ->whereExists(function ($query) use ($dbr, $od, $overdueFrom, $overdueTo) {
-        //         $query->select(DB::raw(1))
-        //             ->from($dbr)
-        //             ->whereColumn("$dbr.idpo", "$od.idpo")
-        //             ->whereBetween("$dbr.deliverydate", [$overdueFrom, $overdueTo])
-        //             ->where("$dbr.is_cutoff", "1")
-        //             ->where("$dbr.production_status", "IH");
-        //     });
-        // $excludeIfAnyFinal($overdueQuery);
-        // $applyCommonFilters($overdueQuery);
-
-        // $overdue = $overdueQuery->count(DB::raw("DISTINCT $po.po"));
-
-        // Overdue cek Reroute
+        // Overdue
         $overdueFrom = $today->copy()->subDays(7)->startOfDay();
         $overdueTo   = $today->copy()->endOfDay();
 
-        $overdueQuery = OutputDetailFinalInspection::query()
-            ->join($od, "$od.barcode", '=', "$fi.barcode")
-            ->join($po, "$po.idpo", '=', "$od.idpo")
-            ->whereExists(function ($query) use ($dbr, $od, $overdueFrom, $overdueTo) {
-                $query->select(DB::raw(1))
-                    ->from($dbr)
-                    ->whereColumn("$dbr.idpo", "$od.idpo")
-                    ->whereBetween("$dbr.deliverydate", [$overdueFrom, $overdueTo])
-                    ->where("$dbr.is_cutoff", "1")
-                    ->where("$dbr.production_status", "IH");
-            });
+        $overdueList = $this->getFinalCheckIdpoList($request, $overdueFrom, $overdueTo);
+        $overdue = $overdueList->count();
 
-        $excludeIfAnyFinal($overdueQuery);
-        $applyCommonFilters($overdueQuery);
-
-        // Ambil PO overdue terlebih dahulu
-        $overduePOs = $overdueQuery
-            ->select("$po.idpo", "$po.po")
-            ->distinct()
-            ->get();
-
-        $finalOverduePOs = collect();
-
-        foreach ($overduePOs as $overduePO) {
-
-            $idpo = $overduePO->idpo;
-
-            // Cek apakah PO ini reroute
-            $reroutePOs = self::getReroutePO($idpo);
-
-            // Tidak ada reroute
-            if ($reroutePOs->isEmpty()) {
-                $finalOverduePOs->push($idpo);
-                continue;
-            }
-
-            // Ada reroute
-            foreach ($reroutePOs as $reroutePO) {
-                if ((float) ($reroutePO->qty_ori ?? 0) > 0) {
-                    // PO lama masih punya qty
-                    // → ambil PO lama + PO baru
-                    $finalOverduePOs->push($idpo);
-                    $finalOverduePOs->push($reroutePO->idpo);
-
-                } else {
-                    // PO lama qty_ori sudah 0
-                    // → hanya ambil PO baru
-                    $finalOverduePOs->push($reroutePO->idpo);
-                }
-            }
-        }
-
-        $finalOverduePOs = $finalOverduePOs
-            ->unique()
-            ->values();
-
-        $overdue = $finalOverduePOs->count();
 
         // Final Completed: PO dengan is_output = 1, dalam range asli (dta - dtb)
         $finalCom = (clone $headerQuery)
