@@ -1,143 +1,143 @@
-function summaryFilter(Request $request)
-{
-    preconnect(session('db'));
-
-    [$dta, $dtb] = $this->parseDateRange($request->datea, $request->dateb);
-
-    $fi  = (new OutputDetailFinalInspection())->getTable();
-    $od  = (new OutputDetail())->getTable();
-    $po  = (new PurchaseOrder())->getTable();
-    $dbr = (new HistoryDataBreakdown())->getTable();
-
-    $applyCommonFilters = function ($query) use ($request, $po, $od) {
-        if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
-            $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
-            $query->whereIn("$po.idbuyer", $buyerIds);
-        }
-        if ($request->filled('po') && $request->po !== 'all') {
-            $query->where("$od.idpo", $request->po);
-        }
-        if ($request->filled('style') && $request->style !== 'all') {
-            $query->where("$po.idstyle", $request->style);
-        }
-        return $query;
-    };
-
-    $headerQuery = OutputDetailFinalInspection::query()
-        ->join($od, "$od.barcode", '=', "$fi.barcode")
-        ->join($po, "$po.idpo", '=', "$od.idpo")
-        ->whereExists(function ($query) use ($dbr, $od, $dta, $dtb) {
-            $query->select(DB::raw(1))
-                ->from($dbr)
-                ->whereBetween("$dbr.deliverydate", [$dta, $dtb])
-                ->whereColumn("$dbr.idpo", "$od.idpo")
-                ->where("$dbr.production_status", "IH");
-        });
-
-    $applyCommonFilters($headerQuery);
-
-    $poIds = (clone $headerQuery)
-        ->select("$od.idpo")
-        ->distinct()
-        ->pluck("$od.idpo");
-
-    $totalQty = HistoryDataBreakdown::whereIn('idpo', $poIds)
-        ->where('is_cutoff', '1')
-        ->sum('qty_ori');
-
-    $totalQtyInspect = (clone $headerQuery)
-        ->whereNotNull("$fi.date_output")
-        ->count(DB::raw("DISTINCT $fi.id"));
-
-    // ===== PO Need Final: today s/d dtb =====
-    $today = Carbon::today()->startOfDay();
-
-    $needFinalFrom = $today->copy();
-    $needFinalTo   = $dtb->copy();
-
-    if ($needFinalFrom->lessThanOrEqualTo($needFinalTo)) {
-        $poNeedFinalList = $this->getPoNeedFinalIdpoList(
-            $request,
-            $needFinalFrom,
-            $needFinalTo
-        );
-    } else {
-        $poNeedFinalList = collect();
     }
 
-    $poNeedFinal = $poNeedFinalList->count();
+    function summaryFilter(Request $request)
+    {
+        preconnect(session('db'));
 
-    // ===== Overdue =====
-    $overdueFrom = $today->copy()->subDays(7)->startOfDay();
-    $overdueTo   = $today->copy()->endOfDay();
+        [$dta, $dtb] = $this->parseDateRange($request->datea, $request->dateb);
 
-    $overdueList = $this->getFinalCheckIdpoList($request, $overdueFrom, $overdueTo);
-    $overdue = $overdueList->count();
+        $fi  = (new OutputDetailFinalInspection())->getTable();
+        $od  = (new OutputDetail())->getTable();
+        $po  = (new PurchaseOrder())->getTable();
+        $dbr = (new HistoryDataBreakdown())->getTable();
 
-    // ===== Final Completed =====
-    // FIX: distinct berdasarkan idpo (bukan po.po), karena satu nomor
-    // po bisa punya beberapa idpo (revisi/reroute) dan tiap idpo
-    // dihitung terpisah - konsisten dengan poNeedFinal & overdue.
-    $finalComIdpoList = (clone $headerQuery)
-        ->where("$fi.is_output", 1)
-        ->select("$po.idpo")
-        ->distinct()
-        ->pluck("$po.idpo");
+        $applyCommonFilters = function ($query) use ($request, $po, $od) {
+            if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
+                $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
+                $query->whereIn("$po.idbuyer", $buyerIds);
+            }
+            if ($request->filled('po') && $request->po !== 'all') {
+                $query->where("$od.idpo", $request->po);
+            }
+            if ($request->filled('style') && $request->style !== 'all') {
+                $query->where("$po.idstyle", $request->style);
+            }
+            return $query;
+        };
 
-    $finalCom = $finalComIdpoList->count();
+        $headerQuery = OutputDetailFinalInspection::query()
+            ->join($od, "$od.barcode", '=', "$fi.barcode")
+            ->join($po, "$po.idpo", '=', "$od.idpo")
+            ->whereExists(function ($query) use ($dbr, $od, $dta, $dtb) {
+                $query->select(DB::raw(1))
+                    ->from($dbr)
+                    ->whereBetween("$dbr.deliverydate", [$dta, $dtb])
+                    ->whereColumn("$dbr.idpo", "$od.idpo")
+                    ->where("$dbr.production_status", "IH");
+            });
 
-    // ===== Total PO =====
-    // FIX: union unique idpo dari ketiga list, BUKAN sum count.
-    // Satu idpo boleh saja qualify di lebih dari satu kategori
-    // (misal ada di rentang Need Final dan juga rentang Overdue
-    // karena beda item/beda tanggal dalam PO yang sama) - itu wajar
-    // untuk breakdown per kategori, tapi Total PO harus tetap
-    // menghitung idpo unik saja.
-    $totalPo = $poNeedFinalList
-        ->merge($overdueList)
-        ->merge($finalComIdpoList)
-        ->unique()
-        ->count();
+        $applyCommonFilters($headerQuery);
 
-    // OQL
-    $totDefect = (clone $headerQuery)
-        ->whereNotNull("$fi.date_output")
-        ->whereNotNull("$fi.defect_code")
-        ->count(DB::raw("DISTINCT $fi.id"));
+        $poIds = (clone $headerQuery)
+            ->select("$od.idpo")
+            ->distinct()
+            ->pluck("$od.idpo");
 
-    $oql = $totalQtyInspect > 0 ? round(($totDefect / $totalQtyInspect) * 100, 2) : 0;
+        $totalQty = HistoryDataBreakdown::whereIn('idpo', $poIds)
+            ->where('is_cutoff', '1')
+            ->sum('qty_ori');
 
-    // Passing / Reject Rate
-    // FIX: sebelumnya poNoDefect/poWithDefect menghitung DISTINCT fi.id
-    // (level BARCODE), tapi dibagi $totalPo (level PO/idpo) - beda satuan,
-    // jadi hasilnya ngaco. Sekarang dihitung di level idpo, basisnya
-    // cuma PO yang sudah Final Completed, dengan aturan:
-    // - Reject: idpo itu punya MINIMAL 1 barcode final inspection
-    //   dengan defect_code terisi.
-    // - Passing: idpo Final Completed lainnya (tidak reject).
-    $rejectIdpoList = (clone $headerQuery)
-        ->whereIn("$od.idpo", $finalComIdpoList)
-        ->whereNotNull("$fi.date_output")
-        ->whereNotNull("$fi.defect_code")
-        ->select("$od.idpo")
-        ->distinct()
-        ->pluck("$od.idpo");
+        $totalQtyInspect = (clone $headerQuery)
+            ->whereNotNull("$fi.date_output")
+            ->count(DB::raw("DISTINCT $fi.id"));
 
-    $poWithDefect = $rejectIdpoList->count();
-    $poNoDefect   = $finalCom - $poWithDefect;
+        // ===== PO Need Final: today s/d dtb =====
+        $today = Carbon::today()->startOfDay();
 
-    $passingRate = $finalCom > 0 ? round(($poNoDefect / $finalCom) * 100, 2) : 0;
-    $rejectRate  = $finalCom > 0 ? round(($poWithDefect / $finalCom) * 100, 2) : 0;
+        $needFinalFrom = $today->copy();
+        $needFinalTo   = $dtb->copy();
 
-    return response()->json([
-        'total_po'          => $totalPo,
-        'total_qty'         => $totalQty,
-        'total_qty_inspect' => $totalQtyInspect,
-        'po_need_final'     => $poNeedFinal,
-        'overdue'           => $overdue,
-        'final_completed'   => $finalCom,
-        'oql'               => $oql,
-        'passing_rate'      => $passingRate,
-        'reject_rate'       => $rejectRate,
-    ]);
-}
+        if ($needFinalFrom->lessThanOrEqualTo($needFinalTo)) {
+            $poNeedFinalList = $this->getPoNeedFinalIdpoList(
+                $request,
+                $needFinalFrom,
+                $needFinalTo
+            );
+        } else {
+            $poNeedFinalList = collect();
+        }
+
+        $poNeedFinal = $poNeedFinalList->count();
+
+        // ===== Overdue =====
+        $overdueFrom = $today->copy()->subDays(7)->startOfDay();
+        $overdueTo   = $today->copy()->endOfDay();
+
+        $overdueList = $this->getFinalCheckIdpoList($request, $overdueFrom, $overdueTo);
+        $overdue = $overdueList->count();
+
+        // ===== Final Completed =====
+        // FIX: distinct berdasarkan idpo (bukan po.po), karena satu nomor
+        // po bisa punya beberapa idpo (revisi/reroute) dan tiap idpo
+        // dihitung terpisah - konsisten dengan poNeedFinal & overdue.
+        $finalComIdpoList = (clone $headerQuery)
+            ->where("$fi.is_output", 1)
+            ->select("$po.idpo")
+            ->distinct()
+            ->pluck("$po.idpo");
+
+        $finalCom = $finalComIdpoList->count();
+
+        // ===== Total PO =====
+        // FIX: union unique idpo dari ketiga list, BUKAN sum count.
+        // Satu idpo boleh saja qualify di lebih dari satu kategori
+        // (misal ada di rentang Need Final dan juga rentang Overdue
+        // karena beda item/beda tanggal dalam PO yang sama) - itu wajar
+        // untuk breakdown per kategori, tapi Total PO harus tetap
+        // menghitung idpo unik saja.
+        $totalPo = $poNeedFinalList
+            ->merge($overdueList)
+            ->merge($finalComIdpoList)
+            ->unique()
+            ->count();
+
+        // OQL
+        $totDefect = (clone $headerQuery)
+            ->whereNotNull("$fi.date_output")
+            ->whereNotNull("$fi.defect_code")
+            ->count(DB::raw("DISTINCT $fi.id"));
+
+        $oql = $totalQtyInspect > 0 ? round(($totDefect / $totalQtyInspect) * 100, 2) : 0;
+
+        // Passing / Reject Rate
+        // FIX: sebelumnya poNoDefect/poWithDefect menghitung DISTINCT fi.id
+        // (level BARCODE), tapi dibagi $totalPo (level PO/idpo) - beda satuan,
+        // jadi hasilnya ngaco. Sekarang dihitung di level idpo, basisnya
+        // cuma PO yang sudah Final Completed, dengan aturan:
+        // - Reject: idpo itu punya MINIMAL 1 barcode final inspection
+        //   dengan defect_code terisi.
+        // - Passing: idpo Final Completed lainnya (tidak reject).
+        $rejectIdpoList = (clone $headerQuery)
+            ->whereIn("$od.idpo", $finalComIdpoList)
+            ->whereNotNull("$fi.date_output")
+            ->whereNotNull("$fi.defect_code")
+            ->select("$od.idpo")
+            ->distinct()
+            ->pluck("$od.idpo");
+
+        $poWithDefect = $rejectIdpoList->count();
+        $poNoDefect   = $finalCom - $poWithDefect;
+
+        $passingRate = $finalCom > 0 ? round(($poNoDefect / $finalCom) * 100, 2) : 0;
+        $rejectRate  = $finalCom > 0 ? round(($poWithDefect / $finalCom) * 100, 2) : 0;
+
+        return response()->json([
+            'total_po'          => $totalPo,
+            'total_qty'         => $totalQty,
+            'total_qty_inspect' => $totalQtyInspect,
+            'po_need_final'     => $poNeedFinal,
+            'overdue'           => $overdue,
+            'final_completed'   => $finalCom,
+            'oql'               => $oql,
+            'passing_rate'      => $passingRate,
+            'reject_rate'       => $rejectRate,
