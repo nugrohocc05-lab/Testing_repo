@@ -1,181 +1,143 @@
-<div class="flex-fill border-custom-datatable rounded-1">
-    <div class="wrapper-sub">
-        <h6 class="subheader mb-0 fw-normal text-truncate px-3 pt-2">
-            PO PRIORITY PROGRESS FINAL (BASED ON ETD)
-        </h6>
+function summaryFilter(Request $request)
+{
+    preconnect(session('db'));
 
-        <div class="table-scroll-wrapper rounded mt-2 px-2 w-100">
-            <table class="table-res table-progress table-borderless table-hover">
-                <thead class="w-100">
-                    <tr>
-                        <th class="text-center" style="width:6%;">Priority</th>
-                        <th class="text-center" style="width:9%;">PO No.</th>
-                        <th class="text-center" style="width:9%;">Buyer</th>
-                        <th class="text-center" style="width:9%;">Style</th>
-                        <th class="text-center" style="width:9%;">Article / Color</th>
-                        <th class="text-center" style="width:8%;">QTY Order<br>(Pcs)</th>
-                        <th class="text-center" style="width:8%;">Output<br>(Pcs)</th>
-                        <th class="text-center" style="width:9%;">Progress<br>Output</th>
-                        <th class="text-center" style="width:9%;">ETD<br>(Shipment Date)</th>
-                        <th class="text-center" style="width:8%;">Days to<br>ETD</th>
-                        <th class="text-center" style="width:8%;">Status<br>Final</th>
-                    </tr>
-                </thead>
-                <tbody class="text-center" id="tablePriorityFinalBody">
-                    <tr style="height: 120px;">
-                        <td colspan="11" class="text-center">Data Not Found</td>
-                    </tr>
-                </tbody>
+    [$dta, $dtb] = $this->parseDateRange($request->datea, $request->dateb);
 
-                <tfoot class="table-foot" id="tablePriorityFinalFooter">
-                    <tr>
-                        <th class="text-center" style="color: #4C8CF2;">Total</th>
-                        <th></th>
-                        <th></th>
-                        <th></th>
-                        <th></th>
-                        <th class="text-center" style="color: #4C8CF2;" id="footQtyOrder"></th>
-                        <th class="text-center" style="color: #4C8CF2;" id="footOutput" ></th>
-                        <th class="text-center" style="color: #4C8CF2;" id="footProgressOutput"></th>
-                        <th class="text-center"></th>
-                        <th class="text-center"></th>
-                        <th class="text-center"></th>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
-    </div>
-</div>
+    $fi  = (new OutputDetailFinalInspection())->getTable();
+    $od  = (new OutputDetail())->getTable();
+    $po  = (new PurchaseOrder())->getTable();
+    $dbr = (new HistoryDataBreakdown())->getTable();
 
+    $applyCommonFilters = function ($query) use ($request, $po, $od) {
+        if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
+            $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
+            $query->whereIn("$po.idbuyer", $buyerIds);
+        }
+        if ($request->filled('po') && $request->po !== 'all') {
+            $query->where("$od.idpo", $request->po);
+        }
+        if ($request->filled('style') && $request->style !== 'all') {
+            $query->where("$po.idstyle", $request->style);
+        }
+        return $query;
+    };
 
-<div class="flex-fill border-custom-datatable rounded-1">
-    <div class="wrapper-sub">
-        <h6 class="subheader mb-0 fw-normal text-truncate px-3 pt-2">
-            FINAL INSPECTION OVERVIEW
-        </h6>
+    $headerQuery = OutputDetailFinalInspection::query()
+        ->join($od, "$od.barcode", '=', "$fi.barcode")
+        ->join($po, "$po.idpo", '=', "$od.idpo")
+        ->whereExists(function ($query) use ($dbr, $od, $dta, $dtb) {
+            $query->select(DB::raw(1))
+                ->from($dbr)
+                ->whereBetween("$dbr.deliverydate", [$dta, $dtb])
+                ->whereColumn("$dbr.idpo", "$od.idpo")
+                ->where("$dbr.production_status", "IH");
+        });
 
-        <!-- Tambahkan .table-scroll-wrapper dan .w-100 di sini -->
-        <div class="table-scroll-wrapper rounded mt-2 px-2 pb-2 w-100">
-            <!-- Tambahkan .table-overview di sini -->
-            <table class="table-res table-overview table-borderless table-hover">
-                <thead>
-                    <tr>
-                        <th class="text-center" style="width:16%;">Status Final</th>
-                        <th class="text-center" style="width:16%;">PO (Count)</th>
-                        <th class="text-center" style="width:17%;">Buyer</th>
-                        <th class="text-center" style="width:17%;">Style</th>
-                        <th class="text-center" style="width:17%;">Article</th>
-                        <th class="text-center" style="width:17%;">Color</th>
-                    </tr>
-                </thead>
-                <tbody class="text-center" id="tablePriorityFinalBody">
-                    <tr style="height: 140px;">
-                        <td colspan="6" class="text-center">Data Not Found</td>
-                    </tr>
-                </tbody>
+    $applyCommonFilters($headerQuery);
 
-                <tfoot class="table-foot" id="tablePriorityFinalFooter">
-                    <tr>
-                        <th class="text-center" style="color: #4C8CF2;">Total</th>
-                        <th></th>
-                        <th></th>
-                        <th></th>
-                        <th></th>
-                        <th></th>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
-    </div>
-</div>
+    $poIds = (clone $headerQuery)
+        ->select("$od.idpo")
+        ->distinct()
+        ->pluck("$od.idpo");
 
+    $totalQty = HistoryDataBreakdown::whereIn('idpo', $poIds)
+        ->where('is_cutoff', '1')
+        ->sum('qty_ori');
 
-    /* =========================================
-       UNIFIED DATATABLE STYLES 
-       ========================================= */
-    .border-custom-datatable {
-        display: flex;
-        flex-direction: column;
-        min-height: 0;
-        min-width: 0;
-        width: 100%;
-        flex: 1 1 auto;
-        overflow: hidden;
+    $totalQtyInspect = (clone $headerQuery)
+        ->whereNotNull("$fi.date_output")
+        ->count(DB::raw("DISTINCT $fi.id"));
+
+    // ===== PO Need Final: today s/d dtb =====
+    $today = Carbon::today()->startOfDay();
+
+    $needFinalFrom = $today->copy();
+    $needFinalTo   = $dtb->copy();
+
+    if ($needFinalFrom->lessThanOrEqualTo($needFinalTo)) {
+        $poNeedFinalList = $this->getPoNeedFinalIdpoList(
+            $request,
+            $needFinalFrom,
+            $needFinalTo
+        );
+    } else {
+        $poNeedFinalList = collect();
     }
 
-    .wrapper-sub {
-        display: flex;
-        flex-direction: column;
-        min-height: 0;
-        min-width: 0;
-        width: 100%;
-        flex: 1 1 auto;
-        overflow: hidden;
-        margin: 5px; /* Margin default */
-    }
+    $poNeedFinal = $poNeedFinalList->count();
 
-    .table-scroll-wrapper {
-        flex: 1 1 auto;
-        min-height: 0;
-        min-width: 0;
-        width: 100%;
-        overflow-y: auto;
-        overflow-x: auto;
-    }
+    // ===== Overdue =====
+    $overdueFrom = $today->copy()->subDays(7)->startOfDay();
+    $overdueTo   = $today->copy()->endOfDay();
 
-    /* Lebar minimum agar tabel bisa di-scroll horizontal di layar kecil */
-    .table-progress { min-width: 1050px; }
-    .table-overview { min-width: 600px; }
+    $overdueList = $this->getFinalCheckIdpoList($request, $overdueFrom, $overdueTo);
+    $overdue = $overdueList->count();
 
-    .table-res {
-        width: 100%;
-        margin-bottom: 0;
-        table-layout: fixed;
-        border-collapse: collapse;
-    }
+    // ===== Final Completed =====
+    // FIX: distinct berdasarkan idpo (bukan po.po), karena satu nomor
+    // po bisa punya beberapa idpo (revisi/reroute) dan tiap idpo
+    // dihitung terpisah - konsisten dengan poNeedFinal & overdue.
+    $finalComIdpoList = (clone $headerQuery)
+        ->where("$fi.is_output", 1)
+        ->select("$po.idpo")
+        ->distinct()
+        ->pluck("$po.idpo");
 
-    .table-res thead th {
-        position: sticky;
-        top: 0;
-        z-index: 2;
-        background-color: #1B2331;
-        vertical-align: middle;
-        word-wrap: break-word;
-        font-weight: 400;
-        font-size: 12px;
-        padding: 0.75rem 0.5rem;
-        line-height: 12px !important;
-    }
+    $finalCom = $finalComIdpoList->count();
 
-    .table-res tbody td {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        vertical-align: middle;
-        padding: 0.5rem;
-        font-weight: 400;
-        font-size: 12px;
-        line-height: 25px !important;
-    }
+    // ===== Total PO =====
+    // FIX: union unique idpo dari ketiga list, BUKAN sum count.
+    // Satu idpo boleh saja qualify di lebih dari satu kategori
+    // (misal ada di rentang Need Final dan juga rentang Overdue
+    // karena beda item/beda tanggal dalam PO yang sama) - itu wajar
+    // untuk breakdown per kategori, tapi Total PO harus tetap
+    // menghitung idpo unik saja.
+    $totalPo = $poNeedFinalList
+        ->merge($overdueList)
+        ->merge($finalComIdpoList)
+        ->unique()
+        ->count();
 
-    .table-res tfoot th {
-        position: sticky;
-        bottom: 0;
-        z-index: 2;
-        background-color: #1B2331;
-        font-weight: 600;
-        font-size: 14px;
-        line-height: 12px !important;
-        padding: 0.75rem 0.5rem;
-    }
+    // OQL
+    $totDefect = (clone $headerQuery)
+        ->whereNotNull("$fi.date_output")
+        ->whereNotNull("$fi.defect_code")
+        ->count(DB::raw("DISTINCT $fi.id"));
 
-    @media (min-width: 992px) and (max-width: 1399.98px) {
-        .wrapper-sub { margin: 1px 2px; }
-        .table-res thead th { font-size: 11px; padding: 0.4rem 0.25rem; }
-        .table-res tbody td { font-size: 11px; line-height: 24px; padding: 0.4rem 0.25rem; }
-        .table-res tfoot th { font-size: 12px; line-height: 24px; padding: 0.4rem 0.25rem; }
-    }
+    $oql = $totalQtyInspect > 0 ? round(($totDefect / $totalQtyInspect) * 100, 2) : 0;
 
-    @media (min-width: 1400px) {
-        .wrapper-sub { margin: 10px 12px; }
-    }
+    // Passing / Reject Rate
+    // FIX: sebelumnya poNoDefect/poWithDefect menghitung DISTINCT fi.id
+    // (level BARCODE), tapi dibagi $totalPo (level PO/idpo) - beda satuan,
+    // jadi hasilnya ngaco. Sekarang dihitung di level idpo, basisnya
+    // cuma PO yang sudah Final Completed, dengan aturan:
+    // - Reject: idpo itu punya MINIMAL 1 barcode final inspection
+    //   dengan defect_code terisi.
+    // - Passing: idpo Final Completed lainnya (tidak reject).
+    $rejectIdpoList = (clone $headerQuery)
+        ->whereIn("$od.idpo", $finalComIdpoList)
+        ->whereNotNull("$fi.date_output")
+        ->whereNotNull("$fi.defect_code")
+        ->select("$od.idpo")
+        ->distinct()
+        ->pluck("$od.idpo");
+
+    $poWithDefect = $rejectIdpoList->count();
+    $poNoDefect   = $finalCom - $poWithDefect;
+
+    $passingRate = $finalCom > 0 ? round(($poNoDefect / $finalCom) * 100, 2) : 0;
+    $rejectRate  = $finalCom > 0 ? round(($poWithDefect / $finalCom) * 100, 2) : 0;
+
+    return response()->json([
+        'total_po'          => $totalPo,
+        'total_qty'         => $totalQty,
+        'total_qty_inspect' => $totalQtyInspect,
+        'po_need_final'     => $poNeedFinal,
+        'overdue'           => $overdue,
+        'final_completed'   => $finalCom,
+        'oql'               => $oql,
+        'passing_rate'      => $passingRate,
+        'reject_rate'       => $rejectRate,
+    ]);
+}
