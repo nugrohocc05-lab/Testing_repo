@@ -1,960 +1,861 @@
-<style>
-    .defect-card-body {
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-        min-height: 0;
+<?php
+
+namespace Modules\Monitoring\Http\Controllers;
+
+use DB;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Collection;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Schema;
+use App\Http\Controllers\Controller;
+use App\Http\Models\Color;
+use App\Http\Models\DataBreakdown;
+use App\Http\Models\FactoryParameter;
+use App\Http\Models\HistoryDataBreakdown;
+use App\Http\Models\HistoryPO;
+use App\Http\Models\Main\MasterEmployeeGroup;
+use App\Http\Models\Main\MasterEmployeeSection;
+use App\Http\Models\Main\MasterGroupBuyer;
+use App\Http\Models\PurchaseOrder;
+use App\Http\Models\Main\Buyer;
+use App\Http\Models\Main\EmployeeAttendance;
+use App\Http\Models\Main\Style;
+use App\Http\Models\Main\Param;
+use App\Http\Models\Main\QCDefect;
+use App\Http\Models\OutputDetail;
+use App\Http\Models\OutputDetailFinalInspection;
+use App\Http\Models\SewingOutput;
+use Illuminate\Support\Facades\Log;
+use Modules\Packing\Http\Controllers\OutputPackingController;
+use Modules\Sewing\Http\Controllers\WorktimeSettingController;
+use Symfony\Component\Console\Output\Output;
+
+class FinalInspectionController extends Controller
+{
+    protected $m_modul = 'report';
+
+    protected $perPage = 20;
+
+    function __construct()
+    {
+        $this->middleware('auth');
     }
 
-    .table-wrapper {
-        max-height: 300px;
-        overflow-y: auto;
-        overflow-x: auto;
-    }
-
-    .table-wrapper thead th {
-        position: sticky;
-        top: 0;
-        z-index: 10;
-    }
-
-    .table-wrapper tfoot th,
-    .table-wrapper tfoot td {
-        position: sticky;
-        bottom: 0;
-        z-index: 10;
-    }
-
-    .table-head {
-        table-layout: fixed;
-    }
-
-    .table-foot {
-        table-layout: fixed;
-    }
-
-    @media (max-width: 768px) {
-        .table-wrapper {
-            max-height: 280px;
-            overflow-y: auto;
-            overflow-x: hidden;
+    function index(Request $request)
+    {
+        if ($this->myaccess() == '0') {
+            return redirect()
+                ->back()
+                ->with('alert', [
+                    'title' => 'Unauthorized!',
+                    'message' => 'You Dont Have Any Access Here!',
+                    'status' => 'warning',
+                ]);
         }
 
-        .table-res {
-            font-size: 10px !important;
-        }
+        preconnect(session('db'));
+
+        return view('monitoring::finalinspection.index');
     }
 
-    .table-res {
-        font-size: 13px;
-    }
+    /*
+    |--------------------------------------------------------------------
+    | CASCADING FILTER ENDPOINTS
+    | Urutan baru: ETD (datea/dateb) -> Group Buyer -> Style -> PO
+    |
+    | Ketiga endpoint ini pakai qualifikasi "union" dari kedua leaf-row
+    | logic (getLeafHistoryRowsInRange & getLeafHistoryRows) supaya PO
+    | yang qualify di Overdue ATAU di PO Need Final tetap muncul sebagai
+    | pilihan. Sengaja TIDAK dipaginate karena rentang ETD sudah dibatasi
+    | maksimal 31 hari dari FE, jadi volume datanya wajar ditarik sekaligus.
+    |--------------------------------------------------------------------
+    */
 
-    .filter-chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        color: #FFFFFF;
-        font-size: 13px;
-        padding: 4px 10px;
-        border-radius: 20px;
-        cursor: pointer;
-        width: 100px;
-        flex-shrink: 0;
-    }
+    function groupbuyer(Request $request)
+    {
+        preconnect(session('db'));
 
-    .filter-chip .chip-name {
-        overflow: hidden;
-        white-space: nowrap;
-        text-overflow: ellipsis;
-        min-width: 0;
-        flex: 1 1 auto;
-    }
-
-    .filter-chip .chip-remove {
-        cursor: pointer;
-        font-size: 12px;
-        line-height: 1;
-        opacity: 0.85;
-        border: none;
-        background: transparent;
-        color: inherit;
-        padding: 0;
-        flex-shrink: 0;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .filter-chip .chip-remove:hover {
-        opacity: 1;
-    }
-
-    /* Dropdown filter defect: search input tetap (flex-shrink:0), daftar opsi yang scroll.
-       (versi ini yang dipertahankan karena cocok dengan struktur flex .filter-search-input + .filter-options-list) */
-    .filter-dropdown {
-        position: absolute;
-        top: calc(100% + 8px);
-        left: 0;
-        width: 280px;
-        max-height: 240px;
-        background-color: #1B2434;
-        border: 1px solid #3A4557;
-        border-radius: 10px;
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
-        z-index: 9999;
-        padding: 12px;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-    }
-
-    .filter-search-input {
-        width: 100%;
-        background-color: #242E3E;
-        border: 1px solid #3A4557;
-        color: #FFFFFF;
-        font-size: 13px;
-        padding: 6px 10px;
-        border-radius: 8px;
-        margin-bottom: 10px;
-        outline: none;
-        flex-shrink: 0;
-    }
-
-    .filter-search-input::placeholder {
-        color: #8A93A6;
-    }
-
-    .filter-search-input:focus {
-        border-color: #4C8CF2;
-    }
-
-    .filter-options-list {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        overflow-y: auto;
-        padding-right: 4px;
-    }
-
-    /* border pill memakai custom property --defect-color yang di-set lewat inline style JS */
-    .filter-option-pill {
-        display: inline-flex;
-        align-items: center;
-        background-color: #242E3E;
-        border: 1px solid var(--defect-color, #3A4557);
-        color: #FFFFFF;
-        font-size: 13px;
-        padding: 5px 12px;
-        border-radius: 20px;
-        cursor: pointer;
-        transition: all 0.15s ease;
-    }
-
-    .filter-option-pill.is-selected {
-        background-color: var(--defect-color);
-        color: #FFFFFF;
-    }
-
-    .filter-option-pill.is-disabled {
-        opacity: 0.4;
-        cursor: not-allowed;
-        pointer-events: none;
-    }
-
-    .filter-option-empty {
-        font-size: 13px;
-        color: #8A93A6;
-    }
-
-    .d-none {
-        display: none;
-    }
-
-    .chart-wrapper {
-        border-radius: 10px;
-        padding: 20px;
-        flex: 1 1 auto;
-        min-height: 0;
-        display: flex;
-        flex-direction: column;
-    }
-
-    #defectChart {
-        width: 100%;
-        height: 100%;
-        min-height: 0;
-    }
-
-    @media (max-width: 768px) {
-        .chart-wrapper {
-            min-height: 220px;
-            padding: 12px;
+        if (!$request->filled('datea') || !$request->filled('dateb')) {
+            return response()->json([
+                'results' => [],
+                'pagination' => ['more' => false],
+            ]);
         }
 
-        #defectChart {
-            min-height: 220px;
+        [$from, $to] = $this->parseDateRange($request->datea, $request->dateb);
+
+        $idpoList = $this->getQualifiedIdpoUnion($request, $from, $to);
+
+        if ($idpoList->isEmpty()) {
+            return response()->json([
+                'results' => [],
+                'pagination' => ['more' => false],
+            ]);
         }
+
+        $buyerIds = PurchaseOrder::whereIn('idpo', $idpoList)
+            ->pluck('idbuyer')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $groupBuyerIds = Buyer::whereIn('idbuyer', $buyerIds)
+            ->pluck('groupbuyer')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $query = MasterGroupBuyer::select('id', 'group_name')
+            ->whereIn('id', $groupBuyerIds);
+
+        if ($request->filled('q')) {
+            $query->where('group_name', 'like', '%' . $request->q . '%');
+        }
+
+        $results = $query->orderBy('group_name', 'asc')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->id,
+                    'text' => $item->group_name,
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'results' => $results,
+            'pagination' => ['more' => false],
+        ]);
     }
 
-    .toggle-wrapper {
-        display: inline-flex;
-        background-color: #212B3E;
-        border-radius: 8px;
-        gap: 0;
-        overflow: hidden;
+    function styleSelect(Request $request)
+    {
+        preconnect(session('db'));
+
+        if (!$request->filled('datea') || !$request->filled('dateb')) {
+            return response()->json([
+                'results' => [],
+                'pagination' => ['more' => false],
+            ]);
+        }
+
+        [$from, $to] = $this->parseDateRange($request->datea, $request->dateb);
+
+        $idpoList = $this->getQualifiedIdpoUnion($request, $from, $to);
+
+        if ($idpoList->isEmpty()) {
+            return response()->json([
+                'results' => [],
+                'pagination' => ['more' => false],
+            ]);
+        }
+
+        $styleIds = PurchaseOrder::whereIn('idpo', $idpoList)
+            ->pluck('idstyle')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $query = Style::whereIn('idstyle', $styleIds);
+
+        if ($request->filled('q')) {
+            $query->where('idstyle', 'like', '%' . $request->q . '%');
+        }
+
+        $results = $query->select('idstyle', 'nmstyle')
+            ->orderBy('nmstyle', 'asc')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->idstyle,
+                    'text' => $item->nmstyle,
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'results' => $results,
+            'pagination' => ['more' => false],
+        ]);
     }
 
-    .toggle-btn {
-        min-width: 70px;
-        padding: 5px 10px;
-        text-align: center;
-        color: #fff;
-        background-color: transparent;
-        cursor: pointer;
-        font-weight: 400;
-        transition: all 0.2s ease;
-        margin: 0;
+    function poSelect(Request $request)
+    {
+        preconnect(session('db'));
+
+        if (!$request->filled('datea') || !$request->filled('dateb')) {
+            return response()->json([
+                'results' => [],
+                'pagination' => ['more' => false],
+            ]);
+        }
+
+        [$from, $to] = $this->parseDateRange($request->datea, $request->dateb);
+
+        $idpoList = $this->getQualifiedIdpoUnion($request, $from, $to);
+
+        if ($idpoList->isEmpty()) {
+            return response()->json([
+                'results' => [],
+                'pagination' => ['more' => false],
+            ]);
+        }
+
+        $query = PurchaseOrder::whereIn('idpo', $idpoList);
+
+        if ($request->filled('q')) {
+            $query->where('po', 'like', '%' . $request->q . '%');
+        }
+
+        // Distinct per idpo (BUKAN per po), karena satu nomor po bisa
+        // punya beberapa idpo (revisi/reroute) dan tiap revisi harus
+        // tetap bisa dipilih terpisah.
+        $results = $query->select('idpo', 'po')
+            ->distinct()
+            ->orderBy('po', 'asc')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->idpo,
+                    'text' => $item->po,
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'results' => $results,
+            'pagination' => ['more' => false],
+        ]);
     }
 
-    #weekly:checked + .toggle-btn {
-        color: #fff;
-        background-color: #4C8CF2;
-        border-radius: 8px 0 0 8px;
+    /**
+     * Union idpo qualifikasi dari kedua leaf-row logic yang ada
+     * (getLeafHistoryRowsInRange & getLeafHistoryRows).
+     *
+     * Kedua fungsi itu sengaja TIDAK digabung jadi satu karena beda
+     * semantik penentuan leaf (lihat komentar di masing-masing fungsi),
+     * dan mengubah salah satunya berisiko mengubah hasil Overdue /
+     * PO Need Final yang sudah berjalan. Union dipakai di sini supaya
+     * dropdown tetap mencakup PO yang qualify di logic manapun.
+     */
+    private function getQualifiedIdpoUnion(Request $request, Carbon $from, Carbon $to)
+    {
+        $leafRowsA = $this->getLeafHistoryRowsInRange($request, $from, $to, 'combine_pro', true);
+        $leafRowsB = $this->getLeafHistoryRows($request, 'combine_pro', true, $from, $to);
+
+        return $leafRowsA->pluck('idpo')
+            ->merge($leafRowsB->pluck('idpo'))
+            ->unique()
+            ->values();
     }
 
-    #day:checked + .toggle-btn {
-        color: #fff;
-        background-color: #4C8CF2;
-        border-radius: 0 8px 8px 0;
+    /**
+     * Parse & normalisasi rentang tanggal d-m-Y dari request (swap kalau
+     * datea > dateb, endOfDay di sisi akhir). Dipakai bersama di beberapa
+     * tempat supaya logic parsing tanggal tidak diulang-ulang.
+     */
+    private function parseDateRange(string $datea, string $dateb): array
+    {
+        $dateA = Carbon::createFromFormat('d-m-Y', $datea)->startOfDay();
+        $dateB = Carbon::createFromFormat('d-m-Y', $dateb)->startOfDay();
+
+        $from = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
+        $to   = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+
+        return [$from, $to];
     }
 
-    .btn-check:checked + .toggle-btn:hover {
-        color: #fff;
-    }
+    static function getReroutePO(string $idpo)
+    {
+        preconnect(session('db'));
 
-    .defect-filter-container {
-        display: flex;
-        align-items: center;
-        width: 100%;
-        min-width: 0;
-        gap: 12px;
-    }
+        try {
+            // Ambil original_pro dari PO lama
+            $originalPro = HistoryDataBreakdown::query()
+                ->where('idpo', $idpo)
+                ->whereNotNull('original_pro')
+                ->distinct()
+                ->pluck('original_pro');
 
-    .defect-filter {
-        display: flex;
-        align-items: flex-start;
-        flex-wrap: nowrap;
-        gap: 8px;
-        flex: 0 1 auto;
-        min-width: 0;
-        overflow: visible;
-        justify-content: flex-start;
-    }
-
-    .defect-filter .position-relative {
-        flex: 0 0 auto;
-        width: 28px;
-        height: 28px;
-    }
-
-    .filter-label {
-        color: #FFFFFF;
-        font-size: 14px;
-        white-space: nowrap;
-        flex-shrink: 0;
-    }
-
-    #selectedChips {
-        display: flex;
-        align-items: center;
-        flex-wrap: nowrap;
-        gap: 8px;
-        min-width: 0;
-        flex: 0 1 auto;
-        max-width: 100%;
-        overflow-x: auto;
-        overflow-y: hidden;
-        white-space: nowrap;
-        scrollbar-width: thin;
-        scrollbar-color: #D9D9D9 var(--bg-dark-2);
-    }
-
-    #selectedChips::-webkit-scrollbar {
-        height: 8px;
-    }
-
-    #selectedChips::-webkit-scrollbar-track {
-        background: var(--bg-dark-2);
-        border-radius: 4px;
-    }
-
-    #selectedChips::-webkit-scrollbar-thumb {
-        background: #D9D9D9;
-        border-radius: 4px;
-    }
-
-    .add-filter-btn {
-        width: 28px;
-        height: 28px;
-        padding: 0;
-        border-radius: 50%;
-        border: 1px solid #3A4557;
-        background-color: #35476C;
-        color: #FFFFFF;
-        font-size: 16px;
-        line-height: 28px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        flex-shrink: 0;
-    }
-
-    .add-filter-btn:hover {
-        background-color: #242E3E;
-    }
-
-    .btn-find {
-        flex-shrink: 0;
-        white-space: nowrap;
-        margin-left: auto;
-    }
-
-    /* Breakpoint 992px - 1400px: satu blok gabungan (dulu terduplikasi di dua tempat terpisah) */
-    @media (min-width: 992px) and (max-width: 1400px) {
-        /* Table */
-        .table-wrapper {
-            max-height: 140px;
-            overflow-y: auto;
-            overflow-x: hidden;
-        }
-
-        .table-res {
-            font-size: 10px !important;
-        }
-
-        .subheader {
-            font-size: 15px;
-        }
-
-        /* Header */
-        .datatable-header-left h5 {
-            font-size: 12px !important;
-            line-height: 1.2;
-        }
-
-        .detailIcon {
-            width: 18px !important;
-            height: 18px !important;
-        }
-
-        .export-icon {
-            width: 18px !important;
-            height: 18px !important;
-        }
-
-        /* Toggle weekly/day */
-        .toggle-wrapper {
-            display: inline-flex;
-            background-color: #212B3E;
-            border-radius: 8px;
-            gap: 0;
-            overflow: hidden;
-        }
-
-        .toggle-btn {
-            min-width: 50px;
-            padding: 3px 8px;
-            font-size: 11px;
-            text-align: center;
-            color: #fff;
-            background-color: transparent;
-            cursor: pointer;
-            font-weight: 400;
-            transition: all 0.2s ease;
-            margin: 0;
-        }
-
-        /* Filter defect */
-        .defect-filter .position-relative {
-            width: 22px;
-            height: 22px;
-        }
-
-        .filter-label {
-            font-size: 11px;
-        }
-
-        .filter-chip {
-            font-size: 9px;
-            padding: 2px 8px;
-            gap: 4px;
-            width: 50px;
-        }
-
-        .filter-chip .chip-remove {
-            font-size: 10px;
-        }
-
-        .add-filter-btn {
-            width: 22px;
-            height: 22px;
-            font-size: 13px;
-            line-height: 22px;
-        }
-
-        .filter-dropdown {
-            width: 220px;
-            max-height: 180px;
-            padding: 8px;
-        }
-
-        .filter-option-pill {
-            font-size: 11px;
-            padding: 3px 9px;
-        }
-
-        .btn-find {
-            font-size: 11px;
-            padding: 3px 10px;
-        }
-
-        .defect-filter-container {
-            gap: 8px;
-        }
-
-        .defect-filter {
-            gap: 6px;
-        }
-
-        #selectedChips {
-            gap: 6px;
-        }
-
-        /* Chart */
-        .chart-wrapper {
-            min-height: 210px;
-            padding: 10px;
-        }
-
-        #defectChart {
-            min-height: 190px;
-        }
-    }
-</style>
-
-<div class="defect-card-body">
-    <div class="d-flex align-items-center wrapper-title justify-content-between">
-        <div class="datatable-header-left">
-            <img src="{{ _asset('svg/endlinePerformance/defect-monitor.svg') }}" style="width:25px;height:25px;" class="detailIcon" alt="">
-            <h5 class="mb-0 fw-normal text-nowrap">
-                DEFECT MONITORING (WFT%)
-            </h5>
-        </div>
-        <div class="datatable-header-right gap-4" style="justify-content: end;">
-            <div class="toggle-wrapper">
-                <input type="radio" name="schedule_type" id="weekly" value="weekly" class="btn-check" autocomplete="off" checked>
-                <label class="toggle-btn" for="weekly">Weekly</label>
-                <input type="radio" name="schedule_type" id="day" value="day" class="btn-check" autocomplete="off">
-                <label class="toggle-btn" for="day">Day</label>
-            </div>
-            <button class="export-btn bg-transparent border-0 p-0 d-flex align-items-center gap-1" id="export-datatable" aria-label="Export">
-                <img src="{{ _asset('svg/inlinePerformance/export.svg') }}" class="export-icon" style="width:27px; height:27px;" alt="Export">
-                <span class="custom-tooltip-bottom">Excel</span>
-            </button>
-        </div>
-    </div>
-
-    <div class="d-flex flex-column gap-3">
-        <div class="defect-filter-container my-2">
-            <div class="defect-filter">
-                <span class="filter-label">Filter Defect:</span>
-                <div id="selectedChips"></div>
-                <div class="position-relative">
-                    <button id="addFilterBtn" class="add-filter-btn" type="button" aria-label="Add filter">+</button>
-                    <div id="filterDropdown" class="filter-dropdown d-none">
-                        <input type="text" id="defectSearchInput" class="filter-search-input" placeholder="Search..." autocomplete="off">
-                        <div id="filterOptionsList" class="filter-options-list"></div>
-                    </div>
-                </div>
-            </div>
-            <button class="btn-find" id="findbtndefect">
-                <img src="{{ _asset('svg/inlinePerformance/search.svg') }}" style="width:20px;height:15px;" alt="">
-                Find
-            </button>
-        </div>
-    </div>
-
-    <div class="chart-wrapper">
-        <div id="defectChart"></div>
-    </div>
-</div>
-
-@push('scripts')
-<script>
-$(function () {
-    let allDefects = [];
-    let selectedDefects = [];
-    let hasFiltered = false;
-    let currentMode = 'weekly';
-    const MAX_DEFECT_SELECTION = 5;
-
-    const $chips = $('#selectedChips');
-    const $dropdown = $('#filterDropdown');
-    const $optionsList = $('#filterOptionsList');
-
-    const chartDom = document.getElementById('defectChart');
-    const myChart = echarts.init(chartDom);
-
-    let xAxisLabels = [];
-    let xAxisTimes = [];
-    let chartSeries = [];
-    let bucketMeta = [];
-    let highlightedCode = null;
-
-    function styleRange(worksheet, startRow, endRow, startCol, endCol, style) {
-        for (let row = startRow; row <= endRow; row++) {
-            for (let col = startCol; col <= endCol; col++) {
-                const cell = XLSX.utils.encode_cell({ r: row, c: col });
-                if (worksheet[cell]) {
-                    worksheet[cell].s = style;
-                }
+            if ($originalPro->isEmpty()) {
+                return collect();
             }
+
+            // Ambil kp_item dari data cutoff
+            $cutoffItems = HistoryDataBreakdown::query()
+                ->whereIn('original_pro', $originalPro)
+                ->where('is_cutoff', 1)
+                ->pluck('kp_item')
+                ->filter()
+                ->unique();
+
+            if ($cutoffItems->isEmpty()) {
+                return collect();
+            }
+
+            // Cari PO yang menggunakan kp_item_ref dari PO lama
+            return HistoryDataBreakdown::query()
+                ->whereIn('original_pro', $originalPro)
+                ->whereIn('kp_item_ref', $cutoffItems)
+                ->where('idpo', '!=', $idpo)
+                ->select([
+                    'idpo',
+                    'original_pro',
+                    'kp_item',
+                    'kp_item_ref',
+                    'qty_ori',
+                ])
+                ->distinct()
+                ->get();
+
+        } catch (\Throwable $e) {
+            return collect();
         }
     }
 
-    function exportExcel() {
-        if (!xAxisLabels || xAxisLabels.length === 0) {
-            swal('Warning!', `No data to export.`, 'warning');
-            return;
+    /*
+    |--------------------------------------------------------------------
+    | SHARED HELPERS: effective-idpo qualification
+    |
+    | Sebelumnya closure ini (effectiveIdpoSql, requireHasFinalRecord,
+    | excludeIfAnyFinalEffective) di-copy identik 3x di
+    | getFinalCheckIdpoList, getPoNeedFinalIdpoList, dan priorityFinal.
+    | Sekarang ditarik jadi 1 method supaya kalau logic-nya berubah,
+    | cukup diubah di 1 tempat. Behavior/hasil query TIDAK berubah.
+    |--------------------------------------------------------------------
+    */
+
+    private function effectiveIdpoExpr(string $dbr): string
+    {
+        return "(CASE WHEN $dbr.revisi_kp = 1 AND $dbr.kp_item_ref IS NOT NULL
+            THEN (SELECT dbr_prev.idpo FROM $dbr as dbr_prev
+                WHERE dbr_prev.combine_pro = $dbr.combine_pro
+                    AND dbr_prev.idpo < $dbr.idpo
+                ORDER BY dbr_prev.idpo DESC LIMIT 1)
+            ELSE $dbr.idpo END)";
+    }
+
+    private function applyRequireHasFinalRecord($query, string $fi, string $od, string $dbr)
+    {
+        $expr = $this->effectiveIdpoExpr($dbr);
+        $query->whereExists(function ($q) use ($fi, $od, $expr) {
+            $q->select(DB::raw(1))
+                ->from("$fi as fi3")
+                ->join("$od as od3", "od3.barcode", '=', 'fi3.barcode')
+                ->whereRaw("od3.idpo = $expr");
+        });
+        return $query;
+    }
+
+    private function applyExcludeIfAnyFinalEffective($query, string $fi, string $od, string $dbr)
+    {
+        $expr = $this->effectiveIdpoExpr($dbr);
+        $query->whereNotExists(function ($q) use ($fi, $od, $expr) {
+            $q->select(DB::raw(1))
+                ->from("$fi as fi2")
+                ->join("$od as od2", "od2.barcode", '=', 'fi2.barcode')
+                ->whereRaw("od2.idpo = $expr")
+                ->where('fi2.is_output', 1);
+        });
+        return $query;
+    }
+
+    /**
+     * Dari leaf rows, ambil idpo yang total qty_ori-nya > 0.
+     * Dipakai bersama di getFinalCheckIdpoList, getPoNeedFinalIdpoList,
+     * dan priorityFinal (sebelumnya logic ini juga diulang di 3 tempat).
+     */
+    private function qualifiedIdpoFromLeafRows($leafRows)
+    {
+        return $leafRows->groupBy('idpo')
+            ->map(function ($rows) {
+                return (int) $rows->sum('qty_ori');
+            })
+            ->filter(function ($qty) {
+                return $qty > 0;
+            })
+            ->keys()
+            ->values();
+    }
+
+    private function getFinalCheckIdpoList(Request $request, Carbon $from, Carbon $to)
+    {
+        $fi  = (new OutputDetailFinalInspection())->getTable();
+        $od  = (new OutputDetail())->getTable();
+        $po  = (new PurchaseOrder())->getTable();
+        $dbr = (new HistoryDataBreakdown())->getTable();
+
+        $leafRows = $this->getLeafHistoryRowsInRange($request, $from, $to, 'combine_pro', true);
+
+        $qualifiedIdpo = $this->qualifiedIdpoFromLeafRows($leafRows);
+
+        $query = HistoryDataBreakdown::query()
+            ->join($po, "$po.idpo", '=', "$dbr.idpo")
+            ->whereIn("$dbr.idpo", $qualifiedIdpo);
+
+        $this->applyRequireHasFinalRecord($query, $fi, $od, $dbr);
+        $this->applyExcludeIfAnyFinalEffective($query, $fi, $od, $dbr);
+
+        return $query->select("$dbr.idpo")->distinct()->pluck('idpo');
+    }
+
+    /**
+     * NOTE: sengaja TIDAK digabung dengan getLeafHistoryRows().
+     * Fungsi ini menentukan leaf berdasarkan SELURUH histori dulu
+     * (tanpa filter tanggal di SQL), baru filter tanggal diterapkan
+     * di akhir ke hasil leaf rows. Ini dipakai khusus untuk Overdue.
+     */
+    private function getLeafHistoryRowsInRange(Request $request, Carbon $from, Carbon $to, $familyColumn = 'combine_pro', $applyPoFilter = true)
+    {
+        $po  = (new PurchaseOrder())->getTable();
+        $dbr = (new HistoryDataBreakdown())->getTable();
+
+        $rawQuery = HistoryDataBreakdown::query()
+            ->join($po, "$po.idpo", '=', "$dbr.idpo")
+            ->where("$dbr.production_status", "IH");
+
+        if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
+            $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
+            $rawQuery->whereIn("$po.idbuyer", $buyerIds);
+        }
+        if ($applyPoFilter && $request->filled('po') && $request->po !== 'all') {
+            $rawQuery->where("$dbr.idpo", $request->po);
+        }
+        if ($request->filled('style') && $request->style !== 'all') {
+            $rawQuery->where("$po.idstyle", $request->style);
         }
 
-        const workbook = XLSX.utils.book_new();
-        const exportData = [];
+        $rawRows = $rawQuery->select(
+            "$dbr.idpo", "$dbr.idcolor", "$dbr.qty_ori", "$dbr.kp_item",
+            "$dbr.kp_item_ref", "$dbr.revisi_kp", "$dbr.deliverydate",
+            "$dbr.$familyColumn as family_key",
+            "$po.po", "$po.idbuyer", "$po.idstyle"
+        )->get();
 
-        const borderBase = { style: 'thin', color: { rgb: 'B7B7B7' } };
-        const border = { top: borderBase, bottom: borderBase, left: borderBase, right: borderBase };
+        $deduped = $rawRows
+            ->groupBy(fn ($r) => $r->idpo . '|' . $r->idcolor . '|' . $r->kp_item)
+            ->map(fn ($group) => $group->sortByDesc('revisi_kp')->first())
+            ->values();
 
-        const titleStyle = {
-            font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 12 },
-            fill: { fgColor: { rgb: '1B2433' } },
-            alignment: { horizontal: 'left', vertical: 'center' },
-            border: border
+        $refByFamily = $deduped
+            ->filter(fn ($r) => !is_null($r->kp_item_ref))
+            ->groupBy('family_key')
+            ->map(fn ($group) => $group->pluck('kp_item_ref')->unique()->values());
+
+        $leafRows = $deduped->filter(function ($row) use ($refByFamily) {
+            $refs = $refByFamily->get($row->family_key);
+            return !($refs && $refs->contains($row->kp_item));
+        })->values();
+
+        // Filter tanggal di akhir, ke leaf rows
+        return $leafRows->filter(function ($row) use ($from, $to) {
+            $dv = Carbon::parse($row->deliverydate);
+            return $dv->greaterThanOrEqualTo($from) && $dv->lessThanOrEqualTo($to);
+        })->values();
+    }
+
+    private function getPoNeedFinalIdpoList(Request $request, Carbon $fromDate, Carbon $toDate)
+    {
+        $fi  = (new OutputDetailFinalInspection())->getTable();
+        $od  = (new OutputDetail())->getTable();
+        $po  = (new PurchaseOrder())->getTable();
+        $dbr = (new HistoryDataBreakdown())->getTable();
+
+        $leafRows = $this->getLeafHistoryRows(
+            $request,
+            'combine_pro',
+            true,
+            $fromDate,
+            $toDate
+        );
+
+        $qualifiedIdpo = $this->qualifiedIdpoFromLeafRows($leafRows);
+
+        $query = HistoryDataBreakdown::query()
+            ->join($po, "$po.idpo", '=', "$dbr.idpo")
+            ->whereIn("$dbr.idpo", $qualifiedIdpo);
+
+        $this->applyRequireHasFinalRecord($query, $fi, $od, $dbr);
+        $this->applyExcludeIfAnyFinalEffective($query, $fi, $od, $dbr);
+
+        return $query->select("$dbr.idpo")->distinct()->pluck('idpo');
+    }
+
+    function summaryFilter(Request $request)
+    {
+        preconnect(session('db'));
+
+        [$dta, $dtb] = $this->parseDateRange($request->datea, $request->dateb);
+
+        $fi  = (new OutputDetailFinalInspection())->getTable();
+        $od  = (new OutputDetail())->getTable();
+        $po  = (new PurchaseOrder())->getTable();
+        $dbr = (new HistoryDataBreakdown())->getTable();
+
+        $applyCommonFilters = function ($query) use ($request, $po, $od) {
+            if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
+                $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
+                $query->whereIn("$po.idbuyer", $buyerIds);
+            }
+            if ($request->filled('po') && $request->po !== 'all') {
+                $query->where("$od.idpo", $request->po);
+            }
+            if ($request->filled('style') && $request->style !== 'all') {
+                $query->where("$po.idstyle", $request->style);
+            }
+            return $query;
         };
 
-        const headerStyle = {
-            font: { bold: true, color: { rgb: 'FFFFFF' } },
-            fill: { fgColor: { rgb: '242E3E' } },
-            alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
-            border: border
-        };
-
-        const bodyStyle = { alignment: { vertical: 'center' }, border: border };
-        const centerStyle = { alignment: { horizontal: 'center', vertical: 'center' }, border: border };
-
-        const titleRow = exportData.length;
-        let modeText = currentMode === 'weekly' ? 'Weekly' : 'Daily';
-        exportData.push([`DEFECT MONITORING (WFT%) - ${modeText}`]);
-
-        const filterRow = exportData.length;
-        let filterText = 'All Defect';
-
-        if (selectedDefects.length > 0) {
-            const selectedNames = selectedDefects.map(code => {
-                const defect = allDefects.find(o => String(o.code) === String(code));
-                return defect ? defect.name : code;
+        $headerQuery = OutputDetailFinalInspection::query()
+            ->join($od, "$od.barcode", '=', "$fi.barcode")
+            ->join($po, "$po.idpo", '=', "$od.idpo")
+            ->whereExists(function ($query) use ($dbr, $od, $dta, $dtb) {
+                $query->select(DB::raw(1))
+                    ->from($dbr)
+                    ->whereBetween("$dbr.deliverydate", [$dta, $dtb])
+                    ->whereColumn("$dbr.idpo", "$od.idpo")
+                    ->where("$dbr.production_status", "IH");
             });
-            filterText = selectedNames.join(', ');
+
+        $applyCommonFilters($headerQuery);
+
+        $poIds = (clone $headerQuery)
+            ->select("$od.idpo")
+            ->distinct()
+            ->pluck("$od.idpo");
+
+        $totalQty = HistoryDataBreakdown::whereIn('idpo', $poIds)
+            ->where('is_cutoff', '1')
+            ->sum('qty_ori');
+
+        $totalQtyInspect = (clone $headerQuery)
+            ->whereNotNull("$fi.date_output")
+            ->count(DB::raw("DISTINCT $fi.id"));
+
+        // ===== PO Need Final: today s/d dtb =====
+        $today = Carbon::today()->startOfDay();
+
+        $needFinalFrom = $today->copy();
+        $needFinalTo   = $dtb->copy();
+
+        if ($needFinalFrom->lessThanOrEqualTo($needFinalTo)) {
+            $poNeedFinalList = $this->getPoNeedFinalIdpoList(
+                $request,
+                $needFinalFrom,
+                $needFinalTo
+            );
+        } else {
+            $poNeedFinalList = collect();
         }
-        exportData.push(['Filter Defect:', filterText]);
 
-        const headerRow = exportData.length;
-        const header = [currentMode === 'weekly' ? 'Week / Periode' : 'Date'];
-        chartSeries.forEach(series => {
-            header.push(series.name + ' WFT (%)');
-        });
-        exportData.push(header);
+        $poNeedFinal = $poNeedFinalList->count();
 
-        const dataStartRow = exportData.length;
-        xAxisLabels.forEach((label, index) => {
-            const row = [label];
-            chartSeries.forEach(series => {
-                const value = series.data && series.data[index] !== undefined ? series.data[index] : 0;
-                row.push(value);
+        // ===== Overdue =====
+        $overdueFrom = $today->copy()->subDays(7)->startOfDay();
+        $overdueTo   = $today->copy()->endOfDay();
+
+        $overdueList = $this->getFinalCheckIdpoList($request, $overdueFrom, $overdueTo);
+        $overdue = $overdueList->count();
+
+        // ===== Final Completed =====
+        // FIX: distinct berdasarkan idpo (bukan po.po), karena satu nomor
+        // po bisa punya beberapa idpo (revisi/reroute) dan tiap idpo
+        // dihitung terpisah - konsisten dengan poNeedFinal & overdue.
+        $finalComIdpoList = (clone $headerQuery)
+            ->where("$fi.is_output", 1)
+            ->select("$po.idpo")
+            ->distinct()
+            ->pluck("$po.idpo");
+
+        $finalCom = $finalComIdpoList->count();
+
+        // ===== Total PO =====
+        // FIX: union unique idpo dari ketiga list, BUKAN sum count.
+        // Satu idpo boleh saja qualify di lebih dari satu kategori
+        // (misal ada di rentang Need Final dan juga rentang Overdue
+        // karena beda item/beda tanggal dalam PO yang sama) - itu wajar
+        // untuk breakdown per kategori, tapi Total PO harus tetap
+        // menghitung idpo unik saja.
+        $totalPo = $poNeedFinalList
+            ->merge($overdueList)
+            ->merge($finalComIdpoList)
+            ->unique()
+            ->count();
+
+        // OQL
+        $totDefect = (clone $headerQuery)
+            ->whereNotNull("$fi.date_output")
+            ->whereNotNull("$fi.defect_code")
+            ->count(DB::raw("DISTINCT $fi.id"));
+
+        $oql = $totalQtyInspect > 0 ? round(($totDefect / $totalQtyInspect) * 100, 2) : 0;
+
+        // Passing / Reject Rate
+        $poNoDefect = (clone $headerQuery)
+            ->whereNotNull("$fi.date_output")
+            ->whereNull("$fi.defect_code")
+            ->count(DB::raw("DISTINCT $fi.id"));
+
+        $poWithDefect = (clone $headerQuery)
+            ->whereNotNull("$fi.date_output")
+            ->whereNotNull("$fi.defect_code")
+            ->count(DB::raw("DISTINCT $fi.id"));
+
+        $passingRate = $totalPo > 0 ? round(($poNoDefect / $totalPo) * 100, 2) : 0;
+        $rejectRate  = $totalPo > 0 ? round(($poWithDefect / $totalPo) * 100, 2) : 0;
+
+        return response()->json([
+            'total_po'          => $totalPo,
+            'total_qty'         => $totalQty,
+            'total_qty_inspect' => $totalQtyInspect,
+            'po_need_final'     => $poNeedFinal,
+            'overdue'           => $overdue,
+            'final_completed'   => $finalCom,
+            'oql'               => $oql,
+            'passing_rate'      => $passingRate,
+            'reject_rate'       => $rejectRate,
+        ]);
+    }
+
+    /**
+     * NOTE: sengaja TIDAK digabung dengan getLeafHistoryRowsInRange().
+     * Fungsi ini menerapkan filter tanggal LANGSUNG di SQL (WHERE
+     * BETWEEN) sebelum dedup & penentuan leaf dilakukan. Ini dipakai
+     * khusus untuk PO Need Final. Behavior/hasil TIDAK diubah dari
+     * versi sebelumnya.
+     */
+    private function getLeafHistoryRows(
+        Request $request,
+        $familyColumn = 'combine_pro',
+        $applyPoFilter = true,
+        $fromDate = null,
+        $toDate = null
+    ) {
+        $po  = (new PurchaseOrder())->getTable();
+        $dbr = (new HistoryDataBreakdown())->getTable();
+
+        $rawQuery = HistoryDataBreakdown::query()
+            ->join($po, "$po.idpo", '=', "$dbr.idpo")
+            ->where("$dbr.production_status", "IH");
+
+        if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
+            $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)
+                ->pluck('idbuyer');
+
+            $rawQuery->whereIn("$po.idbuyer", $buyerIds);
+        }
+
+        if ($applyPoFilter && $request->filled('po') && $request->po !== 'all') {
+            $rawQuery->where("$dbr.idpo", $request->po);
+        }
+
+        if ($request->filled('style') && $request->style !== 'all') {
+            $rawQuery->where("$po.idstyle", $request->style);
+        }
+
+        if ($fromDate && $toDate) {
+
+            // Dipakai kalau caller memberikan tanggal khusus
+            $dta = $fromDate->copy()->startOfDay();
+            $dtb = $toDate->copy()->endOfDay();
+
+        } elseif ($request->filled('datea') && $request->filled('dateb')) {
+
+            [$dta, $dtb] = $this->parseDateRange($request->datea, $request->dateb);
+
+        } else {
+            $dta = null;
+            $dtb = null;
+        }
+
+        // Kalau ada range tanggal, filter DBR dari awal
+        if ($dta && $dtb) {
+            $rawQuery->whereBetween(
+                "$dbr.deliverydate",
+                [$dta, $dtb]
+            );
+        }
+
+        $rawRows = $rawQuery->select(
+            "$dbr.idpo",
+            "$dbr.idcolor",
+            "$dbr.qty_ori",
+            "$dbr.kp_item",
+            "$dbr.kp_item_ref",
+            "$dbr.revisi_kp",
+            "$dbr.deliverydate",
+            "$dbr.$familyColumn as family_key",
+            "$po.po",
+            "$po.idbuyer",
+            "$po.idstyle"
+        )->get();
+
+        $deduped = $rawRows
+            ->groupBy(function ($r) {
+                return $r->idpo . '|' . $r->idcolor . '|' . $r->kp_item;
+            })
+            ->map(function ($group) {
+                return $group
+                    ->sortByDesc('revisi_kp')
+                    ->first();
+            })
+            ->values();
+
+        $refByFamily = $deduped
+            ->filter(fn ($r) => !is_null($r->kp_item_ref))
+            ->groupBy('family_key')
+            ->map(function ($group) {
+                return $group
+                    ->pluck('kp_item_ref')
+                    ->unique()
+                    ->values();
             });
-            exportData.push(row);
-        });
-        const dataEndRow = exportData.length - 1;
 
-        const worksheet = XLSX.utils.aoa_to_sheet(exportData);
-        const totalColumns = Math.max(chartSeries.length + 1, 4);
-        const cols = [];
+        $leafRows = $deduped
+            ->filter(function ($row) use ($refByFamily) {
+                $refs = $refByFamily->get($row->family_key);
 
-        for (let i = 0; i < totalColumns; i++) {
-            cols.push({ wch: i === 0 ? 25 : 20 });
+                return !(
+                    $refs &&
+                    $refs->contains($row->kp_item)
+                );
+            })
+            ->values();
+
+        return $leafRows;
+    }
+
+    function priorityFinal(Request $request)
+    {
+        preconnect(session('db'));
+
+        $fi  = (new OutputDetailFinalInspection())->getTable();
+        $od  = (new OutputDetail())->getTable();
+        $po  = (new PurchaseOrder())->getTable();
+        $dbr = (new HistoryDataBreakdown())->getTable();
+
+        // LEAF ROWS (qty & list PO)
+        $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true);
+
+        $byIdpoLeaf = $leafRows->groupBy('idpo');
+
+        $qtyPerIdpo = array();
+        $etdPerIdpo = array();
+        foreach ($byIdpoLeaf as $idpo => $rows) {
+            $qtyPerIdpo[$idpo] = (int) $rows->sum('qty_ori');
+            $etdPerIdpo[$idpo] = $rows->max('deliverydate');
         }
-        worksheet['!cols'] = cols;
 
-        worksheet['!merges'] = [
-            { s: { r: titleRow, c: 0 }, e: { r: titleRow, c: totalColumns - 1 } }
-        ];
+        $qualifiedIdpo = $this->qualifiedIdpoFromLeafRows($leafRows);
 
-        if (dataEndRow >= dataStartRow) {
-            styleRange(worksheet, dataStartRow, dataEndRow, 0, chartSeries.length, bodyStyle);
-            styleRange(worksheet, dataStartRow, dataEndRow, 0, 0, centerStyle);
-            if (chartSeries.length > 0) {
-                styleRange(worksheet, dataStartRow, dataEndRow, 1, chartSeries.length, centerStyle);
+        $finalCheckQuery = HistoryDataBreakdown::query()
+            ->join($po, "$po.idpo", '=', "$dbr.idpo")
+            ->whereIn("$dbr.idpo", $qualifiedIdpo);
+
+        $this->applyRequireHasFinalRecord($finalCheckQuery, $fi, $od, $dbr);
+        $this->applyExcludeIfAnyFinalEffective($finalCheckQuery, $fi, $od, $dbr);
+
+        $finalIdpoList = $finalCheckQuery->select("$dbr.idpo")->distinct()->pluck('idpo');
+
+        $poList = $finalIdpoList->map(function ($idpo) use ($byIdpoLeaf) {
+            $rows = $byIdpoLeaf->get($idpo);
+            $first = $rows->first();
+            return (object) array(
+                'idpo' => $idpo, 'po' => $first->po, 'idbuyer' => $first->idbuyer,
+                'idstyle' => $first->idstyle, 'idcolor' => $first->idcolor,
+            );
+        });
+
+        $idpoList = $poList->pluck('idpo')->unique()->values();
+
+        $buyerIds = $poList->pluck('idbuyer')->filter()->unique()->values();
+        $buyerGroupMap = Buyer::whereIn('idbuyer', $buyerIds)->pluck('groupbuyer', 'idbuyer');
+        $groupBuyerIds = $buyerGroupMap->filter()->unique()->values();
+        $groupBuyerNames = MasterGroupBuyer::whereIn('id', $groupBuyerIds)->pluck('group_name', 'id');
+        $styleIds = $poList->pluck('idstyle')->filter()->unique()->values();
+        $styleMap = Style::whereIn('idstyle', $styleIds)->pluck('nmstyle', 'idstyle');
+        $colorIds = $poList->pluck('idcolor')->filter()->unique()->values();
+        $colorMap = Color::whereIn('idcolor', $colorIds)->pluck('nmcolor', 'idcolor');
+
+        // FIX: Output dihitung dari OutputDetailFinalInspection.is_output
+        // (bukan SewingOutput), dan ditelusuri lewat EFFECTIVE IDPO
+        // (mengikuti chain revisi_kp/kp_item_ref), karena kalau idpo ini
+        // hasil revisi, barcode final inspection-nya kemungkinan masih
+        // tercatat di idpo versi sebelumnya, bukan di idpo yang sedang
+        // ditampilkan.
+        //
+        // Langkah:
+        // 1. Hitung effective_idpo per baris dbr (subquery bernama "eff").
+        // 2. Join effective_idpo itu ke OutputDetail -> OutputDetailFinalInspection
+        //    dengan syarat is_output = 1.
+        // 3. Group balik ke idpo ASLI (raw_idpo), bukan idpo efektifnya,
+        //    supaya angka output tetap nempel ke baris PO yang tampil di tabel.
+        $effectiveIdpoExpr = $this->effectiveIdpoExpr($dbr);
+
+        $effectiveIdpoMap = HistoryDataBreakdown::query()
+            ->whereIn("$dbr.idpo", $idpoList)
+            ->selectRaw("$dbr.idpo as raw_idpo, $effectiveIdpoExpr as effective_idpo")
+            ->distinct();
+
+        $outputRows = DB::query()
+            ->fromSub($effectiveIdpoMap, 'eff')
+            ->join("$od as od_out", 'od_out.idpo', '=', 'eff.effective_idpo')
+            ->join("$fi as fi_out", 'fi_out.barcode', '=', 'od_out.barcode')
+            ->where('fi_out.is_output', 1)
+            ->selectRaw('eff.raw_idpo as idpo, COUNT(DISTINCT fi_out.barcode) as total_output')
+            ->groupBy('eff.raw_idpo')
+            ->get()
+            ->keyBy('idpo');
+
+        $today = Carbon::today()->startOfDay();
+
+        $data = $poList->map(function ($item) use (
+            $buyerGroupMap, $groupBuyerNames, $styleMap, $colorMap,
+            $qtyPerIdpo, $etdPerIdpo, $outputRows, $today
+        ) {
+            $groupBuyerId = $buyerGroupMap->get($item->idbuyer);
+            $outputRow = $outputRows->get($item->idpo);
+
+            $etd = isset($etdPerIdpo[$item->idpo]) ? $etdPerIdpo[$item->idpo] : null;
+            $daysToEtd = null;
+            if ($etd) {
+                $daysToEtd = $today->diffInDays(Carbon::parse($etd)->startOfDay(), false);
             }
-        }
 
-        worksheet['!rows'] = [];
-        worksheet['!rows'][titleRow] = { hpt: 24 };
-        worksheet['!rows'][headerRow] = { hpt: 28 };
+            $totalQty = isset($qtyPerIdpo[$item->idpo]) ? (int) $qtyPerIdpo[$item->idpo] : 0;
+            $totalOutput = $outputRow ? (int) $outputRow->total_output : 0;
 
-        worksheet['!freeze'] = { xSplit: 0, ySplit: headerRow + 1 };
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Defect Monitoring');
+            $progressOutput = $totalQty > 0 ? round(($totalOutput / $totalQty) * 100, 2) : 0;
 
-        const fileName = `Report_Defect_Endline_${modeText}.xlsx`;
-        XLSX.writeFile(workbook, fileName);
+
+            return array(
+                'idpo' => $item->idpo,
+                'po' => $item->po,
+                'style' => $styleMap->get($item->idstyle) ? $styleMap->get($item->idstyle) : '-',
+                'color' => $colorMap->get($item->idcolor) ? $colorMap->get($item->idcolor) : '-',
+                'buyer' => $groupBuyerId ? ($groupBuyerNames->get($groupBuyerId) ? $groupBuyerNames->get($groupBuyerId) : '-') : '-',
+                'qty_order' => $totalQty,
+                'output' => $totalOutput,
+                'progress_output' => $progressOutput,
+                'etd' => $etd ? Carbon::parse($etd)->format('d-m-Y') : '-',
+                'days_to_etd' => $daysToEtd,
+            );
+        })->values();
+
+
+        $totalQtyOrderAll = $data->sum('qty_order');
+        $totalOutputAll   = $data->sum('output');
+        $totalProgressOutputAll = $totalQtyOrderAll > 0
+            ? round(($totalOutputAll / $totalQtyOrderAll) * 100, 2) : 0;
+
+        return response()->json(array(
+            'data'  => $data,
+            'total' => array(
+                'qty_order' => $totalQtyOrderAll, 'output' => $totalOutputAll,
+                'progress_output' => $totalProgressOutputAll,
+            ),
+        ));
     }
-
-    function fetchDefectOptions() {
-        return $.get("{{ route('monitoring_endlineperformance_defectoptions') }}", { mode: currentMode }, function (res) {
-            allDefects = res.options;
-            const validCodes = allDefects.map(o => o.code);
-            selectedDefects = selectedDefects.filter(c => validCodes.includes(c));
-        });
-    }
-
-    function fetchChartData() {
-        const params = {
-            mode: currentMode,
-            defects: selectedDefects,
-        };
-
-        $.get("{{ route('monitoring_endlineperformance_defectdata') }}", params, function (res) {
-            xAxisLabels = res.labels;
-            xAxisTimes = res.times || [];
-            chartSeries = res.series;
-            bucketMeta = res.bucketMeta || [];
-            renderChart();
-            $('#loading').hide();
-        });
-    }
-
-    function changeSchedule(type) {
-        currentMode = type;
-        selectedDefects = [];
-        hasFiltered = false;
-
-        // reset highlight supaya tidak "nyangkut" ke defect code lama saat mode diganti
-        highlightedCode = null;
-        myChart.dispatchAction({ type: 'downplay' });
-
-        $('#loading').show();
-        fetchDefectOptions().then(function () {
-            renderChips();
-            renderOptions();
-            fetchChartData();
-        });
-    }
-
-    $('#weekly').on('change', function () { changeSchedule('weekly'); });
-    $('#day').on('change', function () { changeSchedule('day'); });
-
-    function buildChartOption() {
-        const series = chartSeries.map(s => ({
-            name: s.name,
-            code: s.code,
-            type: 'line',
-            smooth: false,
-            symbol: 'circle',
-            symbolSize: 15,
-            data: s.data,
-            itemStyle: { color: s.color },
-            lineStyle: { width: 3, color: s.color },
-            emphasis: {
-                lineStyle: { width: 5 },
-                focus: 'series'
-            },
-            blur: {
-                lineStyle: { opacity: 0.15 },
-                itemStyle: { opacity: 0.15 }
-            }
-        }));
-
-        const xAxisConfig = {
-            type: 'category',
-            boundaryGap: true,
-            data: xAxisLabels,
-            axisLine: { lineStyle: { color: '#3A4557' } },
-            axisTick: { show: false },
-            axisLabel: { color: '#8A93A6', fontSize: 12 },
-            splitLine: { show: false }
-        };
-
-        return {
-            backgroundColor: 'transparent',
-            textStyle: { color: '#8A93A6' },
-            toolbox: {
-                show: true,
-                right: 10,
-                top: 10,
-                feature: {
-                    saveAsImage: {
-                        show: true,
-                        title: 'Download',
-                        type: 'png',
-                        name: `Chart_Defect_Endline_${currentMode === 'weekly' ? 'Weekly' : 'Daily'}`
-                    }
-                }
-            },
-            tooltip: {
-                trigger: 'item',
-                backgroundColor: '#1B2434',
-                borderColor: '#3A4557',
-                borderWidth: 1,
-                padding: 12,
-                textStyle: { color: '#FFFFFF' },
-                formatter: function (params) {
-                    if (!params) return '';
-                    const dataIndex = params.dataIndex;
-                    const dateLabel = xAxisLabels[dataIndex] ?? params.axisValueLabel ?? params.name;
-                    const wft = params.data || 0; // category axis -> data langsung berupa angka
-
-                    const seriesObj = chartSeries[params.seriesIndex];
-                    const seriesCode = seriesObj?.code;
-                    const defectPcs = seriesObj?.qty?.[dataIndex] ?? 0;
-
-                    const topStyles = bucketMeta[dataIndex]?.topStyles?.[seriesCode] || [];
-
-                    const isSmallScreen = window.innerWidth <= 768;
-                    const tooltipWidth = isSmallScreen ? 'min(85vw, 280px)' : 'clamp(220px, 24vw, 340px)';
-                    const fontSize = isSmallScreen ? '11px' : '13px';
-
-                    const rowStyle = `display:flex; align-items:flex-start; gap:6px; margin-bottom:4px;`;
-                    const nameColStyle = `flex:1 1 auto; min-width:0; overflow-wrap:break-word; word-break:break-word; white-space:normal; line-height:1.3;`;
-                    const pcsColStyle = `flex:0 0 55px; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums;`;
-                    const pctColStyle = `flex:0 0 55px; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums;`;
-
-                    const headerRowStyle = `${rowStyle} font-weight:500; color:#8A93A6; border-bottom:1px solid #3A4557; padding-bottom:4px;`;
-
-                    let html = `
-                        <div style="width:${tooltipWidth}; max-width:90vw; box-sizing:border-box; font-size:${fontSize};">
-                            <div style="font-weight:600; margin-bottom:8px; overflow-wrap:break-word;">
-                                ${dateLabel}
-                            </div>
-
-                            <div style="${headerRowStyle}">
-                                <span style="${nameColStyle}">Defect</span>
-                                <span style="${pcsColStyle}">Qty</span>
-                                <span style="${pctColStyle}">WFT %</span>
-                            </div>
-                            <div style="${rowStyle}">
-                                <span style="${nameColStyle}">${params.seriesName}</span>
-                                <span style="${pcsColStyle}">${defectPcs}</span>
-                                <span style="${pctColStyle}">${wft.toFixed(2)}%</span>
-                            </div>
-
-                            <hr style="border-color:#3A4557; margin:8px 0;">
-                            <div style="margin-bottom:4px; font-weight:500;">Top Style Contribute</div>
-                    `;
-
-                    if (topStyles.length) {
-                        html += `
-                            <div style="${headerRowStyle}">
-                                <span style="${nameColStyle}">Style</span>
-                                <span style="${pcsColStyle}">Qty</span>
-                                <span style="${pctColStyle}">WFT %</span>
-                            </div>
-                        `;
-                        topStyles.forEach((s, i) => {
-                            html += `
-                                <div style="${rowStyle}">
-                                    <span style="${nameColStyle}" title="${s.style}">${i + 1}. ${s.style}</span>
-                                    <span style="${pcsColStyle}">${s.qty}</span>
-                                    <span style="${pctColStyle}">${s.wft.toFixed(2)}%</span>
-                                </div>
-                            `;
-                        });
-                    } else {
-                        html += `<div style="color:#8A93A6;">Style Not Found</div>`;
-                    }
-
-                    html += `</div>`;
-                    return html;
-                }
-            },
-            grid: { left: 55, right: 25, top: 45, bottom: 35, containLabel: false },
-            xAxis: xAxisConfig,
-            yAxis: {
-                type: 'value',
-                name: 'WFT (%)',
-                nameLocation: 'end',
-                nameGap: 20,
-                nameTextStyle: { color: '#8A93A6', fontSize: 11, align: 'left' },
-                min: 0,
-                max: 100,
-                interval: 20,
-                axisLine: { show: false },
-                axisTick: { show: false },
-                axisLabel: { color: '#8A93A6', fontSize: 11, formatter: (val) => `${val.toFixed(2)}%` },
-                splitLine: { lineStyle: { color: '#2A3446', type: 'solid' } }
-            },
-            series: series
-        };
-    }
-
-    function renderChart() {
-        myChart.setOption(buildChartOption(), true);
-    }
-
-    window.addEventListener('resize', function () { myChart.resize(); });
-    if (window.ResizeObserver) {
-        const ro = new ResizeObserver(() => myChart.resize());
-        ro.observe(chartDom.parentElement);
-    }
-
-    function renderChips() {
-        $chips.empty();
-        selectedDefects.forEach(code => {
-            code = String(code);
-            const opt = allDefects.find(o => String(o.code) === code);
-            const name = opt ? opt.name : code;
-            const color = opt ? opt.color : '#999';
-            const isActive = highlightedCode === code;
-
-            $chips.append(`
-                <span class="filter-chip ${isActive ? 'is-active' : ''}" data-code="${code}" style="background-color: ${color}; border-color: ${color}; color: #fff; ${isActive ? 'box-shadow: 0 0 0 2px #fff inset;' : ''}" title="${name}">
-                    <span class="chip-name">${name}</span>
-                    <button type="button" class="chip-remove" data-code="${code}">✕</button>
-                </span>
-            `);
-        });
-    }
-
-    function renderOptions(searchKeyword = '') {
-        $optionsList.empty();
-
-        if (allDefects.length === 0) {
-            $optionsList.append('<span class="filter-option-empty">No defect data</span>');
-            return;
-        }
-
-        const keyword = searchKeyword.trim().toLowerCase();
-        const filteredDefects = keyword
-            ? allDefects.filter(opt => opt.name.toLowerCase().includes(keyword))
-            : allDefects;
-
-        if (filteredDefects.length === 0) {
-            $optionsList.append('<span class="filter-option-empty">No defects found</span>');
-            return;
-        }
-
-        const limitReached = selectedDefects.length >= MAX_DEFECT_SELECTION;
-
-        filteredDefects.forEach(opt => {
-            const code = String(opt.code);
-            const isSelected = selectedDefects.includes(code);
-            const color = opt.color || '#999';
-            const disabledClass = (!isSelected && limitReached) ? 'is-disabled' : '';
-
-            $optionsList.append(`
-                <span class="filter-option-pill ${isSelected ? 'is-selected' : ''} ${disabledClass}" data-code="${code}" data-color="${color}" style="--defect-color: ${color};">
-                    ${opt.name}
-                </span>
-            `);
-        });
-    }
-
-    $(document).on('input', '#defectSearchInput', function () {
-        renderOptions($(this).val());
-    });
-
-    $('#addFilterBtn').on('click', function (e) {
-        e.stopPropagation();
-        $('#defectSearchInput').val('');
-        renderOptions();
-        $dropdown.toggleClass('d-none');
-    });
-
-    $optionsList.on('click', '.filter-option-pill', function () {
-        const code = String($(this).attr('data-code'));
-        if (selectedDefects.includes(code)) {
-            selectedDefects = selectedDefects.filter(c => c !== code);
-        } else {
-            if (selectedDefects.length >= MAX_DEFECT_SELECTION) {
-                swal('Warning!', `Maximum can only choose ${MAX_DEFECT_SELECTION} defect`, 'warning');
-                return;
-            }
-            selectedDefects.push(code);
-        }
-        renderChips();
-        renderOptions();
-    });
-
-    $chips.on('click', '.filter-chip', function (e) {
-        if ($(e.target).hasClass('chip-remove')) return;
-
-        const code = String($(this).attr('data-code'));
-        const opt = allDefects.find(o => String(o.code) === code);
-        if (!opt) return;
-
-        if (highlightedCode === code) {
-            highlightedCode = null;
-            myChart.dispatchAction({ type: 'downplay' });
-        } else {
-            highlightedCode = code;
-            myChart.dispatchAction({ type: 'downplay' });
-            myChart.dispatchAction({ type: 'highlight', seriesName: opt.name });
-        }
-        renderChips();
-    });
-
-    $(document).on('click', function (e) {
-        if (!$(e.target).closest('.defect-filter').length) {
-            $dropdown.addClass('d-none');
-        }
-    });
-
-    $('#findbtndefect').on('click', function () {
-        fetchChartData();
-        hasFiltered = true;
-        $('#loading').show();
-    });
-
-    fetchDefectOptions().then(function () {
-        renderChips();
-        renderOptions();
-    });
-
-    fetchChartData();
-
-    $('#export-datatable').on('click', function (e) {
-        e.preventDefault();
-
-        if (!hasFiltered) {
-            swal('Warning!', 'Please click Find first before exporting!', 'warning');
-            return;
-        }
-
-        exportExcel();
-    });
-
-    $chips.on('click', '.chip-remove', function (e) {
-        e.stopPropagation();
-        const code = String($(this).attr('data-code'));
-        selectedDefects = selectedDefects.filter(c => c !== code);
-        if (highlightedCode === code) {
-            highlightedCode = null;
-            myChart.dispatchAction({ type: 'downplay' });
-        }
-        renderChips();
-        renderOptions();
-    });
-
-});
-</script>
-@include('layouts.loading')
-@endpush
+}
