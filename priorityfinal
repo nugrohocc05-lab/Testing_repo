@@ -1,0 +1,108 @@
+function priorityFinal(Request $request)
+{
+    preconnect(session('db'));
+
+    $fi  = (new OutputDetailFinalInspection())->getTable();
+    $od  = (new OutputDetail())->getTable();
+    $po  = (new PurchaseOrder())->getTable();
+    $dbr = (new HistoryDataBreakdown())->getTable();
+
+    // LEAF ROWS (qty & list PO)
+    $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true);
+
+    $byIdpoLeaf = $leafRows->groupBy('idpo');
+
+    $qtyPerIdpo = array();
+    $etdPerIdpo = array();
+    foreach ($byIdpoLeaf as $idpo => $rows) {
+        $qtyPerIdpo[$idpo] = (int) $rows->sum('qty_ori');
+        $etdPerIdpo[$idpo] = $rows->max('deliverydate');
+    }
+
+    $qualifiedIdpo = $this->qualifiedIdpoFromLeafRows($leafRows);
+
+    $finalCheckQuery = HistoryDataBreakdown::query()
+        ->join($po, "$po.idpo", '=', "$dbr.idpo")
+        ->whereIn("$dbr.idpo", $qualifiedIdpo);
+
+    $this->applyRequireHasFinalRecord($finalCheckQuery, $fi, $od, $dbr);
+    $this->applyExcludeIfAnyFinalEffective($finalCheckQuery, $fi, $od, $dbr);
+
+    $finalIdpoList = $finalCheckQuery->select("$dbr.idpo")->distinct()->pluck('idpo');
+
+    $poList = $finalIdpoList->map(function ($idpo) use ($byIdpoLeaf) {
+        $rows = $byIdpoLeaf->get($idpo);
+        $first = $rows->first();
+        return (object) array(
+            'idpo' => $idpo, 'po' => $first->po, 'idbuyer' => $first->idbuyer,
+            'idstyle' => $first->idstyle, 'idcolor' => $first->idcolor,
+        );
+    });
+
+    $idpoList = $poList->pluck('idpo')->unique()->values();
+
+    $buyerIds = $poList->pluck('idbuyer')->filter()->unique()->values();
+    $buyerGroupMap = Buyer::whereIn('idbuyer', $buyerIds)->pluck('groupbuyer', 'idbuyer');
+    $groupBuyerIds = $buyerGroupMap->filter()->unique()->values();
+    $groupBuyerNames = MasterGroupBuyer::whereIn('id', $groupBuyerIds)->pluck('group_name', 'id');
+    $styleIds = $poList->pluck('idstyle')->filter()->unique()->values();
+    $styleMap = Style::whereIn('idstyle', $styleIds)->pluck('nmstyle', 'idstyle');
+    $colorIds = $poList->pluck('idcolor')->filter()->unique()->values();
+    $colorMap = Color::whereIn('idcolor', $colorIds)->pluck('nmcolor', 'idcolor');
+
+    // Output diambil dari qtypo di HistoryPO (revisi_kp paling besar per idpo),
+    // bukan dari join OutputDetail/SewingOutput.
+    $outputRows = HistoryPO::whereIn('idpo', $idpoList)
+        ->get(['idpo', 'revisi_kp', 'qtypo'])
+        ->groupBy('idpo')
+        ->map(function ($rows) {
+            return $rows->sortByDesc('revisi_kp')->first();
+        });
+
+    $today = Carbon::today()->startOfDay();
+
+    $data = $poList->map(function ($item) use (
+        $buyerGroupMap, $groupBuyerNames, $styleMap, $colorMap,
+        $qtyPerIdpo, $etdPerIdpo, $outputRows, $today
+    ) {
+        $groupBuyerId = $buyerGroupMap->get($item->idbuyer);
+        $outputRow = $outputRows->get($item->idpo);
+
+        $etd = isset($etdPerIdpo[$item->idpo]) ? $etdPerIdpo[$item->idpo] : null;
+        $daysToEtd = null;
+        if ($etd) {
+            $daysToEtd = $today->diffInDays(Carbon::parse($etd)->startOfDay(), false);
+        }
+
+        $totalQty = isset($qtyPerIdpo[$item->idpo]) ? (int) $qtyPerIdpo[$item->idpo] : 0;
+        $totalOutput = $outputRow ? (int) $outputRow->qtypo : 0;
+
+        $progressOutput = $totalQty > 0 ? round(($totalOutput / $totalQty) * 100, 2) : 0;
+
+        return array(
+            'idpo' => $item->idpo,
+            'po' => $item->po,
+            'style' => $styleMap->get($item->idstyle) ? $styleMap->get($item->idstyle) : '-',
+            'color' => $colorMap->get($item->idcolor) ? $colorMap->get($item->idcolor) : '-',
+            'buyer' => $groupBuyerId ? ($groupBuyerNames->get($groupBuyerId) ? $groupBuyerNames->get($groupBuyerId) : '-') : '-',
+            'qty_order' => $totalQty,
+            'output' => $totalOutput,
+            'progress_output' => $progressOutput,
+            'etd' => $etd ? Carbon::parse($etd)->format('d-m-Y') : '-',
+            'days_to_etd' => $daysToEtd,
+        );
+    })->values();
+
+    $totalQtyOrderAll = $data->sum('qty_order');
+    $totalOutputAll   = $data->sum('output');
+    $totalProgressOutputAll = $totalQtyOrderAll > 0
+        ? round(($totalOutputAll / $totalQtyOrderAll) * 100, 2) : 0;
+
+    return response()->json(array(
+        'data'  => $data,
+        'total' => array(
+            'qty_order' => $totalQtyOrderAll, 'output' => $totalOutputAll,
+            'progress_output' => $totalProgressOutputAll,
+        ),
+    ));
+}
