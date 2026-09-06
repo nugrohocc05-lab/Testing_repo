@@ -1,0 +1,66 @@
+# Konteks: Fix Reroute-Aware Logic di FinalInspectionController
+
+Saya sedang memperbaiki `FinalInspectionController.php` (Laravel, module Monitoring) supaya perhitungan PO Need Final, Overdue, Final Completed, dan Priority Final ikut memperhitungkan kasus **reroute PO** (perpindahan quantity antar idpo). Percakapan sebelumnya (dengan Claude lain) sudah menghasilkan analisis & kode lengkap. Tolong pahami konteks ini dulu sebelum bantu saya debug pakai data asli di database kantor.
+
+## Masalah awal
+
+Sebelum diperbaiki, kode lama menentukan "leaf row" (baris quantity yang valid) di `HistoryDataBreakdown` murni dari relasi `kp_item` vs `kp_item_ref` — kalau suatu `kp_item` pernah dijadikan `kp_item_ref` oleh baris lain di `combine_pro` yang sama, baris itu otomatis dianggap "bukan leaf" (di-exclude), TANPA cek apakah quantity-nya masih tersisa atau sudah 0.
+
+Ini salah untuk 2 skenario reroute:
+
+1. **Full reroute**: PO lama (misal idpo 91) qty-nya habis (0) karena semua dipindah ke PO baru (92). → Yang benar: 91 di-drop, cuma 92 yang dipakai.
+2. **Split reroute**: PO lama (91) awalnya qty 4, direroute SEBAGIAN, sisa qty 91 masih ada (misal 2), PO baru (92) dapat qty 2. → Yang benar: 91 DAN 92 dua-duanya tetap dipakai sebagai entitas terpisah (analoginya: satu batch dikirim ke 2 tujuan berbeda, masing-masing jalan finalnya sendiri).
+
+Kode lama tidak bisa membedakan 2 skenario ini — expression lama (`effectiveIdpoExpr`, sudah dihapus dari kode final) selalu redirect ke idpo lama tanpa cek qty, sehingga salah di skenario split.
+
+## Solusi yang disepakati
+
+**Sumber kebenaran untuk qty pasca-reroute bukan dari `qty_ori` di `HistoryDataBreakdown`** (karena tidak reliable ter-update), **tapi dari tabel `HistoryPO`** — kolom pentingnya: `idpo`, `revisi_kp`, `qtypo`. Satu idpo bisa punya banyak baris di `HistoryPO` (satu per revisi: revisi_kp 0, 1, 2, dst — makin besar makin banyak reroute terjadi).
+
+**Alur keputusan:**
+1. Dari `HistoryDataBreakdown`, deteksi pasangan reroute: baris dengan `revisi_kp=1` dan `kp_item_ref` tidak null (misal row idpo=92) dipasangkan ke baris lain di `combine_pro` yang sama, dengan `kp_item` row itu = `kp_item_ref` row 92, dan `idpo` lebih kecil (ketemu row idpo=91).
+2. Begitu ketemu pasangan (91, 92), query ke `HistoryPO` untuk idpo=91, ambil baris dengan `revisi_kp` PALING BESAR, lihat `qtypo`-nya:
+   - **`qtypo = 0`** → full reroute → baris idpo 91 (untuk kombinasi kp_item itu) di-DROP, cuma idpo 92 yang dipakai.
+   - **`qtypo > 0`** → split → baris idpo 91 TETAP dipakai, tapi `qty_ori`-nya di-**override** jadi `qtypo` tsb. Idpo 92 tetap dipakai dengan qty aslinya sendiri.
+3. `qtypo` ini murni untuk row/kp_item spesifik yang kena reroute — row lain di idpo yang sama (beda kp_item, tidak ikut reroute) tidak disentuh sama sekali.
+4. Karena baik 91 maupun 92 (hasil split) dianggap entitas berdiri sendiri, pengecekan "apakah sudah ada final inspection record" untuk masing-masing dilakukan LANGSUNG ke idpo-nya sendiri (`od.idpo = dbr.idpo`), TIDAK di-redirect ke idpo lain manapun.
+
+## Status kode
+
+2 file sudah dibuat:
+- `FinalInspectionController.php` (**versi bersih**, tanpa komentar, tanpa kode debug) — ini yang mau dites duluan.
+- Versi lain dengan `?debug=1` support (belum dikirim ke kamu di sesi ini — beri tahu saya kalau perlu saya buatkan lagi) yang meng-attach key `_debug` ke response JSON berisi trace lengkap tiap tahap (leaf rows, pairing reroute, qtypo yang kebaca, qualified idpo, hasil akhir).
+
+**Function-function kunci** (semua private methods di controller):
+- `resolveReroutePairs($dedupedRows)` — cari pasangan idpo lama↔baru
+- `getMaxRevisiQtyPoMap($oldIdpoList)` — query `HistoryPO`, ambil `qtypo` di `revisi_kp` terbesar per idpo
+- `buildReroundAwareQualifiedRows($dedupedRows)` — gabungkan 2 di atas, keputusan drop/override qty
+- `getLeafHistoryRows(...)` / `getLeafHistoryRowsInRange(...)` — ambil & dedup raw rows dari `HistoryDataBreakdown`, lalu panggil `buildReroundAwareQualifiedRows`
+- `qualifiedIdpoFromLeafRows($leafRows)` — filter idpo yang total qty-nya > 0
+- `getPoNeedFinalIdpoList`, `getFinalCheckIdpoList` (overdue) — orkestrator: leaf rows → qualified idpo → cek exists final record & belum ada is_output=1
+- `getFinalCompletedMetrics($request, $dta, $dtb)` — helper terpusat baru untuk `final_completed`, `total_qty`, `total_qty_inspect`, `oql`, `passing_rate`, `reject_rate` di `summaryFilter`/`finalOverview`, berbasis leaf+reroute-aware, window tanggal `dta`–`dtb` (BUKAN today-based seperti overdue/need-final)
+
+**Endpoint yang dipakai:**
+- `summaryFilter` — angka ringkasan (total_po, total_qty, po_need_final, overdue, final_completed, oql, passing_rate, reject_rate)
+- `priorityFinal` — daftar detail PO yang masih "ngantri final" (gabungan konsep need-final + overdue), dengan progress output per PO
+- `finalOverview` — pass/reject/not_final count
+
+## Masalah yang SUDAH diketahui tapi BELUM di-fix
+
+1. **Bug `resolveReroutePairs`**: filter `revisi_kp == 1` (persis 1, bukan `>= 1`) dan syarat `idpo < current` tidak akan mendeteksi reroute berantai DALAM idpo yang sama (kalau idpo tidak berubah, cuma kp_item yang gonta-ganti berkali-kali, revisi_kp naik 0→1→2 dst tapi tetap satu nomor idpo). Ini belum diperbaiki — user bilang "ditinggal dulu" karena fokus ke masalah lain dulu.
+
+2. **Split-output** (masalah PALING BESAR yang belum di-fix): Data fisik barcode/output (`OutputDetail`, `OutputDetailFinalInspection`) **semuanya masih tercatat dengan idpo LAMA**, tidak ikut ter-split otomatis mengikuti split reroute. Contoh: kalau 91 displit jadi 91(qty2) + 92(qty2), tapi 4 barcode fisik yang sudah `is_output=1` semuanya tercatat `od.idpo=91`, maka:
+   - `final_completed` (COUNT DISTINCT idpo where is_output=1) akan UNDER-COUNT — cuma dapat idpo 91, idpo 92 tidak pernah muncul karena tidak ada row `od` dengan idpo=92.
+   - Kolom `output` di `priorityFinal` juga salah — 91 dapat semua output (double-count), 92 dapat 0.
+   - Ini merembet ke `total_po`, `passing_rate`, `reject_rate` di summary (semua turunan dari `finalCom`).
+   - **Dampak paling parah**: idpo hasil split (92) bisa **hilang total** dari semua laporan (tidak muncul di final_completed, po_need_final, maupun overdue) karena belum pernah ada barcode tercatat `idpo=92` — padahal secara qty planning dia valid.
+
+3. **Solusi yang lagi dieksplorasi untuk masalah #2**: user mendapat saran dari rekan kerja bahwa mungkin tabel **`SewingOutput`** (sudah di-import di controller tapi belum pernah dipakai) mencatat output per-idpo secara natural sesuai waktu kejadian reroute (jadi otomatis "terpecah" dengan benar tanpa perlu logic alokasi manual). **INI YANG PERLU DICEK DI DATABASE KANTOR** — struktur kolom `SewingOutput` (idpo, qty, tanggal, kp_item, dll), dan apakah `idpo` di situ benar-benar ter-update mengikuti idpo aktif saat itu atau ikut pola sama seperti `OutputDetail` (semua nempel ke satu idpo, tidak ter-split).
+
+## Yang saya butuh bantuan sekarang
+
+1. Cek struktur tabel `SewingOutput` di database asli (kolom apa saja, terutama soal `idpo`, waktu, qty) — laporkan ke saya strukturnya.
+2. Jalankan endpoint dengan `?debug=1` (kalau versi debug sudah ada) untuk minimal 1 kasus PO yang diketahui mengalami reroute, kirim hasil JSON `_debug`-nya — supaya saya bisa verifikasi apakah pairing reroute, `qtypo`, dan hasil akhir semuanya sesuai data asli.
+3. Kalau ketemu error SQL (misal nama kolom `qtypo`/`revisi_kp` di `HistoryPO` ternyata beda), laporkan pesan errornya persis.
+
+Tolong jangan asumsikan apapun sudah benar sebelum diverifikasi ke data asli — banyak logic ini masih murni hasil analisis di atas kertas, belum pernah dites ke database sungguhan.
