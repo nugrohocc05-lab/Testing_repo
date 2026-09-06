@@ -1,0 +1,1012 @@
+<?php
+
+namespace Modules\Monitoring\Http\Controllers;
+
+use DB;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Collection;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Schema;
+use App\Http\Controllers\Controller;
+use App\Http\Models\Color;
+use App\Http\Models\DataBreakdown;
+use App\Http\Models\FactoryParameter;
+use App\Http\Models\HistoryDataBreakdown;
+use App\Http\Models\HistoryPO;
+use App\Http\Models\Main\MasterEmployeeGroup;
+use App\Http\Models\Main\MasterEmployeeSection;
+use App\Http\Models\Main\MasterGroupBuyer;
+use App\Http\Models\PurchaseOrder;
+use App\Http\Models\Main\Buyer;
+use App\Http\Models\Main\EmployeeAttendance;
+use App\Http\Models\Main\Style;
+use App\Http\Models\Main\Param;
+use App\Http\Models\Main\QCDefect;
+use App\Http\Models\OutputDetail;
+use App\Http\Models\OutputDetailFinalInspection;
+use App\Http\Models\SewingOutput;
+use Illuminate\Support\Facades\Log;
+use Modules\Packing\Http\Controllers\OutputPackingController;
+use Modules\Sewing\Http\Controllers\WorktimeSettingController;
+use Symfony\Component\Console\Output\Output;
+
+class FinalInspectionController extends Controller
+{
+    protected $m_modul = 'report';
+
+    protected $perPage = 20;
+
+    function __construct()
+    {
+        $this->middleware('auth');
+    }
+
+    function index(Request $request)
+    {
+        if ($this->myaccess() == '0') {
+            return redirect()
+                ->back()
+                ->with('alert', [
+                    'title' => 'Unauthorized!',
+                    'message' => 'You Dont Have Any Access Here!',
+                    'status' => 'warning',
+                ]);
+        }
+
+        preconnect(session('db'));
+
+        return view('monitoring::finalinspection.index');
+    }
+
+    /*
+    |--------------------------------------------------------------------
+    | CASCADING FILTER ENDPOINTS
+    | Urutan baru: ETD (datea/dateb) -> Group Buyer -> Style -> PO
+    |
+    | Ketiga endpoint ini pakai qualifikasi "union" dari kedua leaf-row
+    | logic (getLeafHistoryRowsInRange & getLeafHistoryRows) supaya PO
+    | yang qualify di Overdue ATAU di PO Need Final tetap muncul sebagai
+    | pilihan. Sengaja TIDAK dipaginate karena rentang ETD sudah dibatasi
+    | maksimal 31 hari dari FE, jadi volume datanya wajar ditarik sekaligus.
+    |--------------------------------------------------------------------
+    */
+
+    function groupbuyer(Request $request)
+    {
+        preconnect(session('db'));
+
+        if (!$request->filled('datea') || !$request->filled('dateb')) {
+            return response()->json([
+                'results' => [],
+                'pagination' => ['more' => false],
+            ]);
+        }
+
+        [$from, $to] = $this->parseDateRange($request->datea, $request->dateb);
+
+        $idpoList = $this->getQualifiedIdpoUnion($request, $from, $to);
+
+        if ($idpoList->isEmpty()) {
+            return response()->json([
+                'results' => [],
+                'pagination' => ['more' => false],
+            ]);
+        }
+
+        $buyerIds = PurchaseOrder::whereIn('idpo', $idpoList)
+            ->pluck('idbuyer')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $groupBuyerIds = Buyer::whereIn('idbuyer', $buyerIds)
+            ->pluck('groupbuyer')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $query = MasterGroupBuyer::select('id', 'group_name')
+            ->whereIn('id', $groupBuyerIds);
+
+        if ($request->filled('q')) {
+            $query->where('group_name', 'like', '%' . $request->q . '%');
+        }
+
+        $results = $query->orderBy('group_name', 'asc')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->id,
+                    'text' => $item->group_name,
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'results' => $results,
+            'pagination' => ['more' => false],
+        ]);
+    }
+
+    function styleSelect(Request $request)
+    {
+        preconnect(session('db'));
+
+        if (!$request->filled('datea') || !$request->filled('dateb')) {
+            return response()->json([
+                'results' => [],
+                'pagination' => ['more' => false],
+            ]);
+        }
+
+        [$from, $to] = $this->parseDateRange($request->datea, $request->dateb);
+
+        $idpoList = $this->getQualifiedIdpoUnion($request, $from, $to);
+
+        if ($idpoList->isEmpty()) {
+            return response()->json([
+                'results' => [],
+                'pagination' => ['more' => false],
+            ]);
+        }
+
+        $styleIds = PurchaseOrder::whereIn('idpo', $idpoList)
+            ->pluck('idstyle')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $query = Style::whereIn('idstyle', $styleIds);
+
+        if ($request->filled('q')) {
+            $query->where('idstyle', 'like', '%' . $request->q . '%');
+        }
+
+        $results = $query->select('idstyle', 'nmstyle')
+            ->orderBy('nmstyle', 'asc')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->idstyle,
+                    'text' => $item->nmstyle,
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'results' => $results,
+            'pagination' => ['more' => false],
+        ]);
+    }
+
+    function poSelect(Request $request)
+    {
+        preconnect(session('db'));
+
+        if (!$request->filled('datea') || !$request->filled('dateb')) {
+            return response()->json([
+                'results' => [],
+                'pagination' => ['more' => false],
+            ]);
+        }
+
+        [$from, $to] = $this->parseDateRange($request->datea, $request->dateb);
+
+        $idpoList = $this->getQualifiedIdpoUnion($request, $from, $to);
+
+        if ($idpoList->isEmpty()) {
+            return response()->json([
+                'results' => [],
+                'pagination' => ['more' => false],
+            ]);
+        }
+
+        $query = PurchaseOrder::whereIn('idpo', $idpoList);
+
+        if ($request->filled('q')) {
+            $query->where('po', 'like', '%' . $request->q . '%');
+        }
+
+        // Distinct per idpo (BUKAN per po), karena satu nomor po bisa
+        // punya beberapa idpo (revisi/reroute) dan tiap revisi harus
+        // tetap bisa dipilih terpisah.
+        $results = $query->select('idpo', 'po')
+            ->distinct()
+            ->orderBy('po', 'asc')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->idpo,
+                    'text' => $item->po,
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'results' => $results,
+            'pagination' => ['more' => false],
+        ]);
+    }
+
+    /**
+     * Union idpo qualifikasi dari kedua leaf-row logic yang ada
+     * (getLeafHistoryRowsInRange & getLeafHistoryRows).
+     *
+     * Kedua fungsi itu sengaja TIDAK digabung jadi satu karena beda
+     * semantik penentuan leaf (lihat komentar di masing-masing fungsi),
+     * dan mengubah salah satunya berisiko mengubah hasil Overdue /
+     * PO Need Final yang sudah berjalan. Union dipakai di sini supaya
+     * dropdown tetap mencakup PO yang qualify di logic manapun.
+     */
+    private function getQualifiedIdpoUnion(Request $request, Carbon $from, Carbon $to)
+    {
+        $leafRowsA = $this->getLeafHistoryRowsInRange($request, $from, $to, 'combine_pro', true);
+        $leafRowsB = $this->getLeafHistoryRows($request, 'combine_pro', true, $from, $to);
+
+        return $leafRowsA->pluck('idpo')
+            ->merge($leafRowsB->pluck('idpo'))
+            ->unique()
+            ->values();
+    }
+
+    /**
+     * Parse & normalisasi rentang tanggal d-m-Y dari request (swap kalau
+     * datea > dateb, endOfDay di sisi akhir). Dipakai bersama di beberapa
+     * tempat supaya logic parsing tanggal tidak diulang-ulang.
+     */
+    private function parseDateRange(string $datea, string $dateb): array
+    {
+        $dateA = Carbon::createFromFormat('d-m-Y', $datea)->startOfDay();
+        $dateB = Carbon::createFromFormat('d-m-Y', $dateb)->startOfDay();
+
+        $from = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
+        $to   = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+
+        return [$from, $to];
+    }
+
+    static function getReroutePO(string $idpo)
+    {
+        preconnect(session('db'));
+
+        try {
+            // Ambil original_pro dari PO lama
+            $originalPro = HistoryDataBreakdown::query()
+                ->where('idpo', $idpo)
+                ->whereNotNull('original_pro')
+                ->distinct()
+                ->pluck('original_pro');
+
+            if ($originalPro->isEmpty()) {
+                return collect();
+            }
+
+            // Ambil kp_item dari data cutoff
+            $cutoffItems = HistoryDataBreakdown::query()
+                ->whereIn('original_pro', $originalPro)
+                ->where('is_cutoff', 1)
+                ->pluck('kp_item')
+                ->filter()
+                ->unique();
+
+            if ($cutoffItems->isEmpty()) {
+                return collect();
+            }
+
+            // Cari PO yang menggunakan kp_item_ref dari PO lama
+            return HistoryDataBreakdown::query()
+                ->whereIn('original_pro', $originalPro)
+                ->whereIn('kp_item_ref', $cutoffItems)
+                ->where('idpo', '!=', $idpo)
+                ->select([
+                    'idpo',
+                    'original_pro',
+                    'kp_item',
+                    'kp_item_ref',
+                    'qty_ori',
+                ])
+                ->distinct()
+                ->get();
+        } catch (\Throwable $e) {
+            return collect();
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------
+    | REROUTE-AWARE QUALIFICATION (dbr + HistoryPO)
+    |
+    | Dulu penentuan "leaf" murni dari HistoryDataBreakdown: kp_item yang
+    | pernah jadi kp_item_ref row lain di combine_pro yang sama otomatis
+    | dianggap bukan leaf (di-exclude). Itu salah untuk kasus SPLIT:
+    |
+    |   - FULL REROUTE: idpo lama (91) qty abis (0) karena semua qty
+    |     pindah ke idpo baru (92). -> 91 di-drop, ambil 92 saja.
+    |   - SPLIT: idpo lama (91) awalnya qty 4, direroute sebagian, sisa
+    |     qty 91 masih > 0 (misal 2), idpo baru (92) dapat sisanya (2).
+    |     -> 91 DAN 92 dua-duanya tetap diambil, masing-masing punya
+    |     qty sendiri (analoginya: satu batch dikirim ke 2 tujuan
+    |     terpisah, masing-masing jalan final-nya sendiri).
+    |
+    | Penentu FULL REROUTE vs SPLIT bukan dari qty_ori di dbr (yang tidak
+    | ter-update reliable), tapi dari HistoryPO: ambil row HistoryPO milik
+    | idpo lama dengan revisi_kp PALING BESAR, lihat qtypo-nya:
+    |   qtypo = 0   -> full reroute (drop idpo lama)
+    |   qtypo > 0   -> split (idpo lama tetap diambil, qty_ori row itu
+    |                  di-override jadi qtypo tsb -- qtypo murni utk
+    |                  row/kp_item yang kena reroute, row lain di idpo
+    |                  yang sama (beda kp_item) tidak disentuh)
+    |--------------------------------------------------------------------
+    */
+
+    /**
+     * Cari pasangan idpo lama -> idpo baru hasil reroute dari deduped rows.
+     * Row baru dikenali dari revisi_kp = 1 dan kp_item_ref tidak null.
+     * Pasangannya dicari di combine_pro (family_key) yang sama, dengan
+     * kp_item row lama = kp_item_ref row baru (match presisi, bukan
+     * sekadar idpo terdekat di bawahnya).
+     */
+    private function resolveReroutePairs(Collection $dedupedRows): Collection
+    {
+        $pairs = collect();
+
+        foreach ($dedupedRows as $row) {
+            if ($row->revisi_kp == 1 && !is_null($row->kp_item_ref)) {
+                $oldRow = $dedupedRows
+                    ->filter(function ($r) use ($row) {
+                        return $r->family_key === $row->family_key
+                            && $r->kp_item === $row->kp_item_ref
+                            && $r->idpo < $row->idpo;
+                    })
+                    ->sortByDesc('idpo')
+                    ->first();
+
+                if ($oldRow) {
+                    $pairs->push((object) [
+                        'old_idpo'    => $oldRow->idpo,
+                        'old_kp_item' => $oldRow->kp_item,
+                        'new_idpo'    => $row->idpo,
+                    ]);
+                }
+            }
+        }
+
+        return $pairs->values();
+    }
+
+    /**
+     * Untuk tiap idpo lama, ambil row HistoryPO dengan revisi_kp PALING
+     * BESAR (revisi terakhir untuk idpo itu), lalu jadikan map idpo => row
+     * (row punya field qtypo yang jadi penentu full-replace vs split).
+     */
+    private function getMaxRevisiQtyPoMap(Collection $oldIdpoList): Collection
+    {
+        if ($oldIdpoList->isEmpty()) {
+            return collect();
+        }
+
+        return HistoryPO::whereIn('idpo', $oldIdpoList)
+            ->get(['idpo', 'revisi_kp', 'qtypo'])
+            ->groupBy('idpo')
+            ->map(function ($rows) {
+                return $rows->sortByDesc('revisi_kp')->first();
+            });
+    }
+
+    /**
+     * Pengganti exclude-logic lama (refByFamily/leafRows filter) di
+     * getLeafHistoryRows & getLeafHistoryRowsInRange. Bekerja pada
+     * deduped rows (1 row per idpo|idcolor|kp_item, revisi_kp terbesar).
+     *
+     * - Row (idpo, kp_item) yang tidak terlibat reroute apapun -> lolos
+     *   apa adanya.
+     * - Row (idpo lama, kp_item) yang match pasangan reroute:
+     *     qtypo (HistoryPO, revisi_kp terbesar) = 0 -> row di-drop
+     *     qtypo > 0                              -> row tetap lolos,
+     *         qty_ori-nya di-override jadi qtypo tsb
+     * - Row idpo baru (hasil reroute) selalu tetap lolos apa adanya,
+     *   qty_ori-nya pakai punya dia sendiri (dari dbr).
+     */
+    private function buildReroundAwareQualifiedRows(Collection $dedupedRows): Collection
+    {
+        $pairs = $this->resolveReroutePairs($dedupedRows);
+
+        if ($pairs->isEmpty()) {
+            return $dedupedRows;
+        }
+
+        $oldIdpoList = $pairs->pluck('old_idpo')->unique()->values();
+        $qtyPoMap    = $this->getMaxRevisiQtyPoMap($oldIdpoList);
+
+        $excludedKeys    = collect(); // idpo|kp_item -> full-replace, drop row ini
+        $qtyOverrideKeys = collect(); // idpo|kp_item -> qtypo (split, override qty)
+
+        foreach ($pairs as $pair) {
+            $hpo   = $qtyPoMap->get($pair->old_idpo);
+            $qtypo = $hpo ? (int) $hpo->qtypo : 0;
+
+            $key = $pair->old_idpo . '|' . $pair->old_kp_item;
+
+            if ($qtypo <= 0) {
+                $excludedKeys->push($key);
+            } else {
+                $qtyOverrideKeys->put($key, $qtypo);
+            }
+        }
+
+        return $dedupedRows
+            ->reject(function ($row) use ($excludedKeys) {
+                return $excludedKeys->contains($row->idpo . '|' . $row->kp_item);
+            })
+            ->map(function ($row) use ($qtyOverrideKeys) {
+                $key = $row->idpo . '|' . $row->kp_item;
+                if ($qtyOverrideKeys->has($key)) {
+                    $row = clone $row;
+                    $row->qty_ori = $qtyOverrideKeys->get($key);
+                }
+                return $row;
+            })
+            ->values();
+    }
+
+    /**
+     * Dari leaf rows, ambil idpo yang total qty_ori-nya > 0.
+     * Dipakai bersama di getFinalCheckIdpoList, getPoNeedFinalIdpoList,
+     * dan priorityFinal (sebelumnya logic ini juga diulang di 3 tempat).
+     */
+    private function qualifiedIdpoFromLeafRows($leafRows)
+    {
+        return $leafRows->groupBy('idpo')
+            ->map(function ($rows) {
+                return (int) $rows->sum('qty_ori');
+            })
+            ->filter(function ($qty) {
+                return $qty > 0;
+            })
+            ->keys()
+            ->values();
+    }
+
+    private function getFinalCheckIdpoList(Request $request, Carbon $from, Carbon $to)
+    {
+        $fi  = (new OutputDetailFinalInspection())->getTable();
+        $od  = (new OutputDetail())->getTable();
+        $po  = (new PurchaseOrder())->getTable();
+        $dbr = (new HistoryDataBreakdown())->getTable();
+
+        $leafRows = $this->getLeafHistoryRowsInRange($request, $from, $to, 'combine_pro', true);
+
+        $qualifiedIdpo = $this->qualifiedIdpoFromLeafRows($leafRows);
+
+        if ($qualifiedIdpo->isEmpty()) {
+            return collect();
+        }
+
+        $query = HistoryDataBreakdown::query()
+            ->join($po, "$po.idpo", '=', "$dbr.idpo")
+            ->whereIn("$dbr.idpo", $qualifiedIdpo);
+
+        $this->applyRequireHasFinalRecord($query, $fi, $od, $dbr);
+        $this->applyExcludeIfAnyFinalEffective($query, $fi, $od, $dbr);
+
+        return $query->select("$dbr.idpo")->distinct()->pluck('idpo');
+    }
+
+    /**
+     * NOTE: sengaja TIDAK digabung dengan getLeafHistoryRows().
+     * Fungsi ini menentukan leaf berdasarkan SELURUH histori dulu
+     * (tanpa filter tanggal di SQL), baru filter tanggal diterapkan
+     * di akhir ke hasil leaf rows. Ini dipakai khusus untuk Overdue.
+     */
+    private function getLeafHistoryRowsInRange(Request $request, Carbon $from, Carbon $to, $familyColumn = 'combine_pro', $applyPoFilter = true)
+    {
+        $po  = (new PurchaseOrder())->getTable();
+        $dbr = (new HistoryDataBreakdown())->getTable();
+
+        $rawQuery = HistoryDataBreakdown::query()
+            ->join($po, "$po.idpo", '=', "$dbr.idpo")
+            ->where("$dbr.production_status", "IH");
+
+        if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
+            $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
+            $rawQuery->whereIn("$po.idbuyer", $buyerIds);
+        }
+        if ($applyPoFilter && $request->filled('po') && $request->po !== 'all') {
+            $rawQuery->where("$dbr.idpo", $request->po);
+        }
+        if ($request->filled('style') && $request->style !== 'all') {
+            $rawQuery->where("$po.idstyle", $request->style);
+        }
+
+        $rawRows = $rawQuery->select(
+            "$dbr.idpo",
+            "$dbr.idcolor",
+            "$dbr.qty_ori",
+            "$dbr.kp_item",
+            "$dbr.kp_item_ref",
+            "$dbr.revisi_kp",
+            "$dbr.deliverydate",
+            "$dbr.$familyColumn as family_key",
+            "$po.po",
+            "$po.idbuyer",
+            "$po.idstyle"
+        )->get();
+
+        $deduped = $rawRows
+            ->groupBy(fn($r) => $r->idpo . '|' . $r->idcolor . '|' . $r->kp_item)
+            ->map(fn($group) => $group->sortByDesc('revisi_kp')->first())
+            ->values();
+
+        $leafRows = $this->buildReroundAwareQualifiedRows($deduped);
+
+        // Filter tanggal di akhir, ke leaf rows
+        return $leafRows->filter(function ($row) use ($from, $to) {
+            $dv = Carbon::parse($row->deliverydate);
+            return $dv->greaterThanOrEqualTo($from) && $dv->lessThanOrEqualTo($to);
+        })->values();
+    }
+
+    private function getPoNeedFinalIdpoList(Request $request, Carbon $fromDate, Carbon $toDate)
+    {
+        $fi  = (new OutputDetailFinalInspection())->getTable();
+        $od  = (new OutputDetail())->getTable();
+        $po  = (new PurchaseOrder())->getTable();
+        $dbr = (new HistoryDataBreakdown())->getTable();
+
+        $leafRows = $this->getLeafHistoryRows(
+            $request,
+            'combine_pro',
+            true,
+            $fromDate,
+            $toDate
+        );
+
+        $qualifiedIdpo = $this->qualifiedIdpoFromLeafRows($leafRows);
+
+        if ($qualifiedIdpo->isEmpty()) {
+            return collect();
+        }
+
+        $query = HistoryDataBreakdown::query()
+            ->join($po, "$po.idpo", '=', "$dbr.idpo")
+            ->whereIn("$dbr.idpo", $qualifiedIdpo);
+
+        $this->applyRequireHasFinalRecord($query, $fi, $od, $dbr);
+        $this->applyExcludeIfAnyFinalEffective($query, $fi, $od, $dbr);
+
+        return $query->select("$dbr.idpo")->distinct()->pluck('idpo');
+    }
+
+    /**
+     * Cek "apakah idpo ini sudah pernah masuk final inspection (ada
+     * barcode tercatat)". Dicek LANGSUNG ke idpo-nya sendiri (od.idpo =
+     * dbr.idpo), TIDAK lagi redirect via effectiveIdpoExpr.
+     *
+     * Alasan: qualified idpo yang masuk ke sini sudah melalui
+     * buildReroundAwareQualifiedRows, yang sudah menentukan idpo mana
+     * saja yang valid berdiri sendiri (termasuk kasus split, di mana
+     * idpo lama & idpo baru dua-duanya valid dan masing-masing punya
+     * jalur final/barcode sendiri -- analoginya satu batch dikirim ke
+     * dua tujuan terpisah). Redirect ke idpo lain lewat effectiveIdpoExpr
+     * justru akan salah menggabungkan dua pengiriman yang sebenarnya
+     * terpisah.
+     */
+    private function applyRequireHasFinalRecord($query, string $fi, string $od, string $dbr)
+    {
+        $query->whereExists(function ($q) use ($fi, $od, $dbr) {
+            $q->select(DB::raw(1))
+                ->from("$fi as fi3")
+                ->join("$od as od3", "od3.barcode", '=', 'fi3.barcode')
+                ->whereColumn('od3.idpo', "$dbr.idpo");
+        });
+        return $query;
+    }
+
+    private function applyExcludeIfAnyFinalEffective($query, string $fi, string $od, string $dbr)
+    {
+        $query->whereNotExists(function ($q) use ($fi, $od, $dbr) {
+            $q->select(DB::raw(1))
+                ->from("$fi as fi2")
+                ->join("$od as od2", "od2.barcode", '=', 'fi2.barcode')
+                ->whereColumn('od2.idpo', "$dbr.idpo")
+                ->where('fi2.is_output', 1);
+        });
+        return $query;
+    }
+
+    /**
+     * Metrics final-completed / qty / inspect / defect, berbasis leaf
+     * rows yang sudah reroute-aware (buildReroundAwareQualifiedRows),
+     * window dta-dtb (bukan today-based seperti overdue/need-final).
+     *
+     * Menggantikan headerQuery lama yang match dbr.idpo = od.idpo
+     * langsung tanpa mempertimbangkan reroute/split sama sekali.
+     * Filter groupbuyer/po/style sudah otomatis kepakai lewat
+     * getLeafHistoryRows($request, ...).
+     */
+    private function getFinalCompletedMetrics(Request $request, Carbon $dta, Carbon $dtb)
+    {
+        $fi = (new OutputDetailFinalInspection())->getTable();
+        $od = (new OutputDetail())->getTable();
+
+        $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true, $dta, $dtb);
+        $qualifiedIdpo = $this->qualifiedIdpoFromLeafRows($leafRows);
+
+        $totalQty = $leafRows->groupBy('idpo')
+            ->map(fn($rows) => (int) $rows->sum('qty_ori'))
+            ->filter(fn($qty) => $qty > 0)
+            ->sum();
+
+        $empty = (object) [
+            'totalQty' => $totalQty,
+            'totalQtyInspect' => 0,
+            'totDefect' => 0,
+            'finalComIdpoList' => collect(),
+            'finalCom' => 0,
+            'poWithDefect' => 0,
+            'poNoDefect' => 0,
+        ];
+
+        if ($qualifiedIdpo->isEmpty()) {
+            return $empty;
+        }
+
+        $baseQuery = DB::table("$od as od_fc")
+            ->join("$fi as fi_fc", 'fi_fc.barcode', '=', 'od_fc.barcode')
+            ->whereIn('od_fc.idpo', $qualifiedIdpo);
+
+        $totalQtyInspect = (clone $baseQuery)
+            ->whereNotNull('fi_fc.date_output')
+            ->count(DB::raw('DISTINCT fi_fc.id'));
+
+        $totDefect = (clone $baseQuery)
+            ->whereNotNull('fi_fc.date_output')
+            ->whereNotNull('fi_fc.defect_code')
+            ->count(DB::raw('DISTINCT fi_fc.id'));
+
+        $finalComIdpoList = (clone $baseQuery)
+            ->where('fi_fc.is_output', 1)
+            ->select('od_fc.idpo')
+            ->distinct()
+            ->pluck('idpo');
+
+        $finalCom = $finalComIdpoList->count();
+
+        $rejectIdpoList = (clone $baseQuery)
+            ->whereIn('od_fc.idpo', $finalComIdpoList)
+            ->whereNotNull('fi_fc.date_output')
+            ->whereNotNull('fi_fc.defect_code')
+            ->select('od_fc.idpo')
+            ->distinct()
+            ->pluck('idpo');
+
+        $poWithDefect = $rejectIdpoList->count();
+        $poNoDefect   = $finalCom - $poWithDefect;
+
+        return (object) [
+            'totalQty' => $totalQty,
+            'totalQtyInspect' => $totalQtyInspect,
+            'totDefect' => $totDefect,
+            'finalComIdpoList' => $finalComIdpoList,
+            'finalCom' => $finalCom,
+            'poWithDefect' => $poWithDefect,
+            'poNoDefect' => $poNoDefect,
+        ];
+    }
+
+    function summaryFilter(Request $request)
+    {
+        preconnect(session('db'));
+
+        [$dta, $dtb] = $this->parseDateRange($request->datea, $request->dateb);
+
+        $metrics = $this->getFinalCompletedMetrics($request, $dta, $dtb);
+
+        $today = Carbon::today()->startOfDay();
+
+        // ===== PO Need Final: today s/d dtb =====
+        $needFinalFrom = $today->copy();
+        $needFinalTo   = $dtb->copy();
+
+        if ($needFinalFrom->lessThanOrEqualTo($needFinalTo)) {
+            $poNeedFinalList = $this->getPoNeedFinalIdpoList(
+                $request,
+                $needFinalFrom,
+                $needFinalTo
+            );
+        } else {
+            $poNeedFinalList = collect();
+        }
+
+        $poNeedFinal = $poNeedFinalList->count();
+
+        // ===== Overdue =====
+        $overdueFrom = $today->copy()->subDays(7)->startOfDay();
+        $overdueTo   = $today->copy()->endOfDay();
+
+        $overdueList = $this->getFinalCheckIdpoList($request, $overdueFrom, $overdueTo);
+        $overdue = $overdueList->count();
+
+        $totalPo = $poNeedFinalList
+            ->merge($overdueList)
+            ->merge($metrics->finalComIdpoList)
+            ->unique()
+            ->count();
+
+        // OQL
+        $oql = $metrics->totalQtyInspect > 0
+            ? round(($metrics->totDefect / $metrics->totalQtyInspect) * 100, 2)
+            : 0;
+
+        $passingRate = $metrics->finalCom > 0 ? round(($metrics->poNoDefect / $metrics->finalCom) * 100, 2) : 0;
+        $rejectRate  = $metrics->finalCom > 0 ? round(($metrics->poWithDefect / $metrics->finalCom) * 100, 2) : 0;
+
+        return response()->json([
+            'total_po'          => $totalPo,
+            'total_qty'         => $metrics->totalQty,
+            'total_qty_inspect' => $metrics->totalQtyInspect,
+            'po_need_final'     => $poNeedFinal,
+            'overdue'           => $overdue,
+            'final_completed'   => $metrics->finalCom,
+            'oql'               => $oql,
+            'passing_rate'      => $passingRate,
+            'reject_rate'       => $rejectRate,
+        ]);
+    }
+
+    private function getLeafHistoryRows(
+        Request $request,
+        $familyColumn = 'combine_pro',
+        $applyPoFilter = true,
+        $fromDate = null,
+        $toDate = null
+    ) {
+        $po  = (new PurchaseOrder())->getTable();
+        $dbr = (new HistoryDataBreakdown())->getTable();
+
+        $rawQuery = HistoryDataBreakdown::query()
+            ->join($po, "$po.idpo", '=', "$dbr.idpo")
+            ->where("$dbr.production_status", "IH");
+
+        if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
+            $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)
+                ->pluck('idbuyer');
+
+            $rawQuery->whereIn("$po.idbuyer", $buyerIds);
+        }
+
+        if ($applyPoFilter && $request->filled('po') && $request->po !== 'all') {
+            $rawQuery->where("$dbr.idpo", $request->po);
+        }
+
+        if ($request->filled('style') && $request->style !== 'all') {
+            $rawQuery->where("$po.idstyle", $request->style);
+        }
+
+        if ($fromDate && $toDate) {
+
+            // Dipakai kalau caller memberikan tanggal khusus
+            $dta = $fromDate->copy()->startOfDay();
+            $dtb = $toDate->copy()->endOfDay();
+        } elseif ($request->filled('datea') && $request->filled('dateb')) {
+
+            [$dta, $dtb] = $this->parseDateRange($request->datea, $request->dateb);
+        } else {
+            $dta = null;
+            $dtb = null;
+        }
+
+        // Kalau ada range tanggal, filter DBR dari awal
+        if ($dta && $dtb) {
+            $rawQuery->whereBetween(
+                "$dbr.deliverydate",
+                [$dta, $dtb]
+            );
+        }
+
+        $rawRows = $rawQuery->select(
+            "$dbr.idpo",
+            "$dbr.idcolor",
+            "$dbr.qty_ori",
+            "$dbr.kp_item",
+            "$dbr.kp_item_ref",
+            "$dbr.revisi_kp",
+            "$dbr.deliverydate",
+            "$dbr.$familyColumn as family_key",
+            "$po.po",
+            "$po.idbuyer",
+            "$po.idstyle"
+        )->get();
+
+        $deduped = $rawRows
+            ->groupBy(function ($r) {
+                return $r->idpo . '|' . $r->idcolor . '|' . $r->kp_item;
+            })
+            ->map(function ($group) {
+                return $group
+                    ->sortByDesc('revisi_kp')
+                    ->first();
+            })
+            ->values();
+
+        $leafRows = $this->buildReroundAwareQualifiedRows($deduped);
+
+        return $leafRows;
+    }
+
+    function priorityFinal(Request $request)
+    {
+        preconnect(session('db'));
+
+        $fi  = (new OutputDetailFinalInspection())->getTable();
+        $od  = (new OutputDetail())->getTable();
+        $po  = (new PurchaseOrder())->getTable();
+        $dbr = (new HistoryDataBreakdown())->getTable();
+
+        // LEAF ROWS (qty & list PO)
+        $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true);
+
+        $byIdpoLeaf = $leafRows->groupBy('idpo');
+
+        $qtyPerIdpo = array();
+        $etdPerIdpo = array();
+        foreach ($byIdpoLeaf as $idpo => $rows) {
+            $qtyPerIdpo[$idpo] = (int) $rows->sum('qty_ori');
+            $etdPerIdpo[$idpo] = $rows->max('deliverydate');
+        }
+
+        $qualifiedIdpo = $this->qualifiedIdpoFromLeafRows($leafRows);
+
+        $finalCheckQuery = HistoryDataBreakdown::query()
+            ->join($po, "$po.idpo", '=', "$dbr.idpo")
+            ->whereIn("$dbr.idpo", $qualifiedIdpo);
+
+        $this->applyRequireHasFinalRecord($finalCheckQuery, $fi, $od, $dbr);
+        $this->applyExcludeIfAnyFinalEffective($finalCheckQuery, $fi, $od, $dbr);
+
+        $finalIdpoList = $finalCheckQuery->select("$dbr.idpo")->distinct()->pluck('idpo');
+
+        $poList = $finalIdpoList->map(function ($idpo) use ($byIdpoLeaf) {
+            $rows = $byIdpoLeaf->get($idpo);
+            $first = $rows->first();
+            return (object) array(
+                'idpo' => $idpo,
+                'po' => $first->po,
+                'idbuyer' => $first->idbuyer,
+                'idstyle' => $first->idstyle,
+                'idcolor' => $first->idcolor,
+            );
+        });
+
+        $idpoList = $poList->pluck('idpo')->unique()->values();
+
+        $buyerIds = $poList->pluck('idbuyer')->filter()->unique()->values();
+        $buyerGroupMap = Buyer::whereIn('idbuyer', $buyerIds)->pluck('groupbuyer', 'idbuyer');
+        $groupBuyerIds = $buyerGroupMap->filter()->unique()->values();
+        $groupBuyerNames = MasterGroupBuyer::whereIn('id', $groupBuyerIds)->pluck('group_name', 'id');
+        $styleIds = $poList->pluck('idstyle')->filter()->unique()->values();
+        $styleMap = Style::whereIn('idstyle', $styleIds)->pluck('nmstyle', 'idstyle');
+        $colorIds = $poList->pluck('idcolor')->filter()->unique()->values();
+        $colorMap = Color::whereIn('idcolor', $colorIds)->pluck('nmcolor', 'idcolor');
+
+        // Output rows dihitung LANGSUNG per idpo (od.idpo IN idpoList),
+        // TIDAK lagi lewat effectiveIdpoExpr/redirect. idpoList sudah
+        // hasil buildReroundAwareQualifiedRows, jadi idpo lama & baru
+        // hasil split sudah masing-masing berdiri sendiri.
+        $outputRows = DB::table("$od as od_out")
+            ->join("$fi as fi_out", 'fi_out.barcode', '=', 'od_out.barcode')
+            ->whereIn('od_out.idpo', $idpoList)
+            ->where('fi_out.is_output', 1)
+            ->selectRaw('od_out.idpo, COUNT(DISTINCT fi_out.barcode) as total_output')
+            ->groupBy('od_out.idpo')
+            ->get()
+            ->keyBy('idpo');
+
+        $today = Carbon::today()->startOfDay();
+
+        $data = $poList->map(function ($item) use (
+            $buyerGroupMap,
+            $groupBuyerNames,
+            $styleMap,
+            $colorMap,
+            $qtyPerIdpo,
+            $etdPerIdpo,
+            $outputRows,
+            $today
+        ) {
+            $groupBuyerId = $buyerGroupMap->get($item->idbuyer);
+            $outputRow = $outputRows->get($item->idpo);
+
+            $etd = isset($etdPerIdpo[$item->idpo]) ? $etdPerIdpo[$item->idpo] : null;
+            $daysToEtd = null;
+            if ($etd) {
+                $daysToEtd = $today->diffInDays(Carbon::parse($etd)->startOfDay(), false);
+            }
+
+            $totalQty = isset($qtyPerIdpo[$item->idpo]) ? (int) $qtyPerIdpo[$item->idpo] : 0;
+            $totalOutput = $outputRow ? (int) $outputRow->total_output : 0;
+
+            $progressOutput = $totalQty > 0 ? round(($totalOutput / $totalQty) * 100, 2) : 0;
+
+
+            return array(
+                'idpo' => $item->idpo,
+                'po' => $item->po,
+                'style' => $styleMap->get($item->idstyle) ? $styleMap->get($item->idstyle) : '-',
+                'color' => $colorMap->get($item->idcolor) ? $colorMap->get($item->idcolor) : '-',
+                'buyer' => $groupBuyerId ? ($groupBuyerNames->get($groupBuyerId) ? $groupBuyerNames->get($groupBuyerId) : '-') : '-',
+                'qty_order' => $totalQty,
+                'output' => $totalOutput,
+                'progress_output' => $progressOutput,
+                'etd' => $etd ? Carbon::parse($etd)->format('d-m-Y') : '-',
+                'days_to_etd' => $daysToEtd,
+            );
+        })->values();
+
+
+        $totalQtyOrderAll = $data->sum('qty_order');
+        $totalOutputAll   = $data->sum('output');
+        $totalProgressOutputAll = $totalQtyOrderAll > 0
+            ? round(($totalOutputAll / $totalQtyOrderAll) * 100, 2) : 0;
+
+        return response()->json(array(
+            'data'  => $data,
+            'total' => array(
+                'qty_order' => $totalQtyOrderAll,
+                'output' => $totalOutputAll,
+                'progress_output' => $totalProgressOutputAll,
+            ),
+        ));
+    }
+
+    function finalOverview(Request $request)
+    {
+        preconnect(session('db'));
+
+        [$dta, $dtb] = $this->parseDateRange($request->datea, $request->dateb);
+
+        $metrics = $this->getFinalCompletedMetrics($request, $dta, $dtb);
+
+        $today = Carbon::today()->startOfDay();
+
+        $needFinalFrom = $today->copy();
+        $needFinalTo   = $dtb->copy();
+
+        if ($needFinalFrom->lessThanOrEqualTo($needFinalTo)) {
+            $poNeedFinalList = $this->getPoNeedFinalIdpoList(
+                $request,
+                $needFinalFrom,
+                $needFinalTo
+            );
+        } else {
+            $poNeedFinalList = collect();
+        }
+
+        $poNeedFinal = $poNeedFinalList->count();
+
+        // ===== Overdue =====
+        $overdueFrom = $today->copy()->subDays(7)->startOfDay();
+        $overdueTo   = $today->copy()->endOfDay();
+
+        $overdueList = $this->getFinalCheckIdpoList($request, $overdueFrom, $overdueTo);
+        $overdue = $overdueList->count();
+
+        $notFinal = $poNeedFinal + $overdue;
+
+        return response()->json([
+            'data' => [[
+                'pass' => [
+                    'count' => $metrics->poNoDefect,
+                ],
+                'reject' => [
+                    'count' => $metrics->poWithDefect,
+                ],
+                'not_final' => [
+                    'count' => $notFinal,
+                ],
+            ]]
+        ]);
+    }
+}
