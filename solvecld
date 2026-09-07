@@ -1,33 +1,20 @@
-// ===== Final Completed: PO dengan is_output = 1 =====
-$finalComIdpoList = (clone $headerQuery)
-    ->where("$fi.is_output", 1)
-    ->select("$od.idpo")
-    ->distinct()
-    ->pluck("$od.idpo");
+$finalCheckQuery = HistoryDataBreakdown::query()
+    ->join($po, "$po.idpo", '=', "$dbr.idpo")
+    ->whereIn("$dbr.idpo", $qualifiedIdpo);
 
-$finalCom = $finalComIdpoList->count();
+$requireHasFinalRecord($finalCheckQuery);
+$excludeIfAnyFinal($finalCheckQuery);
 
-$totalPo = $poNeedFinal + $overdue + $finalCom;
+$finalIdpoList = $finalCheckQuery->select("$dbr.idpo")->distinct()->pluck('idpo');
 
-// ===== OQL (tetap di level record/barcode, populasi semua yang sudah diinspeksi) =====
-$totDefect = (clone $headerQuery)
-    ->whereNotNull("$fi.date_output")
-    ->whereNotNull("$fi.defect_code")
-    ->count(DB::raw("DISTINCT $fi.id"));
+// ===== Buang duplikat reroute (sama seperti po_need_final & overdue) =====
+$finalIdpoList = $this->resolveRerouteDuplicates($finalIdpoList);
 
-$oql = $totalQtyInspect > 0 ? round(($totDefect / $totalQtyInspect) * 100, 2) : 0;
-
-// ===== Passing / Reject Rate: level PO, populasi HANYA yang Final Completed (is_output=1) =====
-// PO dianggap reject kalau minimal 1 barcode-nya punya defect_code
-$rejectIdpoList = (clone $headerQuery)
-    ->whereIn("$od.idpo", $finalComIdpoList)
-    ->whereNotNull("$fi.defect_code")
-    ->select("$od.idpo")
-    ->distinct()
-    ->pluck("$od.idpo");
-
-$poWithDefect = $rejectIdpoList->count();
-$poNoDefect   = $finalCom - $poWithDefect;
-
-$passingRate = $finalCom > 0 ? round(($poNoDefect / $finalCom) * 100, 2) : 0;
-$rejectRate  = $finalCom > 0 ? round(($poWithDefect / $finalCom) * 100, 2) : 0;
+$poList = $finalIdpoList->map(function ($idpo) use ($byIdpoLeaf) {
+    $rows = $byIdpoLeaf->get($idpo);
+    $first = $rows->first();
+    return (object) array(
+        'idpo' => $idpo, 'po' => $first->po, 'idbuyer' => $first->idbuyer,
+        'idstyle' => $first->idstyle, 'idcolor' => $first->idcolor,
+    );
+});
