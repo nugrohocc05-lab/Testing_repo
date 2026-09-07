@@ -1,112 +1,53 @@
-function summaryFilter(Request $request)
-{
-    preconnect(session('db'));
+// ===== STEP 1-2 (sama seperti priorityFinal): leaf rows -> qty per idpo =====
+$leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true, $dta, $dtb);
 
-    $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
-    $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+$qtyPerIdpo = $leafRows->groupBy('idpo')->map(function ($rows) {
+    return (int) $rows->sum('qty_ori');
+});
 
-    $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
-    $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+$qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
 
-    $fi = (new OutputDetailFinalInspection())->getTable();
-    $od = (new OutputDetail())->getTable();
-    $po = (new PurchaseOrder())->getTable();
+// ===== DEBUG: bandingkan leaf vs raw (sebelum dedup) =====
+$dbr = (new HistoryDataBreakdown())->getTable();
+$po  = (new PurchaseOrder())->getTable();
 
-    // ===== STEP 1-2 (sama seperti priorityFinal): leaf rows -> qty per idpo =====
-    $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true, $dta, $dtb);
+// Semua idpo yang PUNYA row dalam range tanggal & IH, TANPA dedup leaf
+$rawIdpoInRange = HistoryDataBreakdown::query()
+    ->join($po, "$po.idpo", '=', "$dbr.idpo")
+    ->where("$dbr.production_status", "IH")
+    ->whereBetween("$dbr.deliverydate", [$dta, $dtb])
+    ->when($request->filled('groupbuyer') && $request->groupbuyer !== 'all', function ($q) use ($request) {
+        $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
+        $q->whereIn("$po.idbuyer", $buyerIds);
+    })
+    ->select("$dbr.idpo")
+    ->distinct()
+    ->pluck('idpo');
 
-    $qtyPerIdpo = $leafRows->groupBy('idpo')->map(function ($rows) {
-        return (int) $rows->sum('qty_ori');
-    });
+// Idpo yang hilang gara-gara qty leaf = 0 atau ke-dedup habis
+$missingFromLeaf = $rawIdpoInRange->diff($qtyPerIdpo->keys());
 
-    $qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
+// Idpo yang qty-nya 0 (lolos jadi row leaf tapi qty_ori totalnya 0)
+$zeroQtyIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty <= 0)->keys()->values();
 
-    // ===== STEP 3: qualifiedIdpo -> barcode (OutputDetail) =====
-    $barcodes = OutputDetail::whereIn('idpo', $qualifiedIdpo)
-        ->pluck('barcode');
+// Untuk tiap idpo yang hilang, tampilkan raw row-nya biar kelihatan kenapa dibuang
+$missingRawRows = HistoryDataBreakdown::query()
+    ->join($po, "$po.idpo", '=', "$dbr.idpo")
+    ->whereIn("$dbr.idpo", $missingFromLeaf)
+    ->select(
+        "$dbr.idpo", "$dbr.idcolor", "$dbr.kp_item", "$dbr.kp_item_ref",
+        "$dbr.revisi_kp", "$dbr.combine_pro", "$dbr.production_status",
+        "$dbr.qty_ori", "$dbr.deliverydate"
+    )
+    ->orderBy("$dbr.idpo")
+    ->get();
 
-    // ===== headerQuery baru: berbasis barcode leaf, gantikan whereExists($dbr) =====
-    $headerQuery = OutputDetailFinalInspection::query()
-        ->join($od, "$od.barcode", '=', "$fi.barcode")
-        ->join($po, "$po.idpo", '=', "$od.idpo")
-        ->whereIn("$fi.barcode", $barcodes);
-
-    $poIds = (clone $headerQuery)
-        ->select("$od.idpo")
-        ->distinct()
-        ->pluck("$od.idpo");
-
-    $totalQty = HistoryDataBreakdown::whereIn('idpo', $poIds)
-        ->where('is_cutoff', '1')
-        ->sum('qty_ori');
-
-    $totalQtyInspect = (clone $headerQuery)
-        ->whereNotNull("$fi.date_output")
-        ->count(DB::raw("DISTINCT $fi.id"));
-
-    // ===== PO Need Final: today s/d today+7, belum ada barcode is_output=1 =====
-    $today = Carbon::today()->startOfDay();
-
-    $needFinalFrom = $today->copy();
-    $needFinalTo = $today->copy()->addDays(7)->startOfDay();
-
-    if ($needFinalFrom->lessThanOrEqualTo($needFinalTo)) {
-        $poNeedFinalList = $this->getPoNeedFinalIdpoList(
-            $request,
-            $needFinalFrom,
-            $needFinalTo
-        );
-
-        $poNeedFinal = $poNeedFinalList->count();
-    } else {
-        $poNeedFinal = 0;
-    }
-
-    // ===== Overdue =====
-    $overdueFrom = $today->copy()->subDays(7)->startOfDay();
-    $overdueTo   = $today->copy()->endOfDay();
-
-    $overdueList = $this->getFinalCheckIdpoList($request, $overdueFrom, $overdueTo);
-    $overdue = $overdueList->count();
-
-    // ===== Final Completed: PO dengan is_output = 1, dari barcode leaf =====
-    $finalCom = (clone $headerQuery)
-        ->where("$fi.is_output", 1)
-        ->count(DB::raw("DISTINCT $po.po"));
-
-    $totalPo = $poNeedFinal + $overdue + $finalCom;
-
-    // ===== OQL =====
-    $totDefect = (clone $headerQuery)
-        ->whereNotNull("$fi.date_output")
-        ->whereNotNull("$fi.defect_code")
-        ->count(DB::raw("DISTINCT $fi.id"));
-
-    $oql = $totalQtyInspect > 0 ? round(($totDefect / $totalQtyInspect) * 100, 2) : 0;
-
-    // ===== Passing / Reject Rate =====
-    $poNoDefect = (clone $headerQuery)
-        ->whereNotNull("$fi.date_output")
-        ->whereNull("$fi.defect_code")
-        ->count(DB::raw("DISTINCT $fi.id"));
-
-    $poWithDefect = (clone $headerQuery)
-        ->whereNotNull("$fi.date_output")
-        ->whereNotNull("$fi.defect_code")
-        ->count(DB::raw("DISTINCT $fi.id"));
-
-    $passingRate = $totalPo > 0 ? round(($poNoDefect / $totalPo) * 100, 2) : 0;
-    $rejectRate  = $totalPo > 0 ? round(($poWithDefect / $totalPo) * 100, 2) : 0;
-
-    return response()->json([
-        'total_po'          => $totalPo,
-        'total_qty'         => $totalQty,
-        'total_qty_inspect' => $totalQtyInspect,
-        'po_need_final'     => $poNeedFinal,
-        'overdue'           => $overdue,
-        'final_completed'   => $finalCom,
-        'oql'               => $oql,
-        'passing_rate'      => $passingRate,
-        'reject_rate'       => $rejectRate,
-    ]);
-}
+dd([
+    'total_raw_idpo_in_range'   => $rawIdpoInRange->count(),
+    'total_qualified_idpo'      => $qualifiedIdpo->count(),
+    'raw_idpo_list'             => $rawIdpoInRange->sort()->values(),
+    'qualified_idpo_list'       => $qualifiedIdpo->sort()->values(),
+    'missing_idpo'              => $missingFromLeaf->sort()->values(),
+    'zero_qty_idpo'             => $zeroQtyIdpo,
+    'missing_raw_rows'          => $missingRawRows,
+]);
