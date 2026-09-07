@@ -1,53 +1,235 @@
-// ===== STEP 1-2 (sama seperti priorityFinal): leaf rows -> qty per idpo =====
-$leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true, $dta, $dtb);
-
-$qtyPerIdpo = $leafRows->groupBy('idpo')->map(function ($rows) {
-    return (int) $rows->sum('qty_ori');
-});
-
-$qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
-
-// ===== DEBUG: bandingkan leaf vs raw (sebelum dedup) =====
-$dbr = (new HistoryDataBreakdown())->getTable();
-$po  = (new PurchaseOrder())->getTable();
-
-// Semua idpo yang PUNYA row dalam range tanggal & IH, TANPA dedup leaf
-$rawIdpoInRange = HistoryDataBreakdown::query()
-    ->join($po, "$po.idpo", '=', "$dbr.idpo")
-    ->where("$dbr.production_status", "IH")
-    ->whereBetween("$dbr.deliverydate", [$dta, $dtb])
-    ->when($request->filled('groupbuyer') && $request->groupbuyer !== 'all', function ($q) use ($request) {
-        $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
-        $q->whereIn("$po.idbuyer", $buyerIds);
-    })
-    ->select("$dbr.idpo")
-    ->distinct()
-    ->pluck('idpo');
-
-// Idpo yang hilang gara-gara qty leaf = 0 atau ke-dedup habis
-$missingFromLeaf = $rawIdpoInRange->diff($qtyPerIdpo->keys());
-
-// Idpo yang qty-nya 0 (lolos jadi row leaf tapi qty_ori totalnya 0)
-$zeroQtyIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty <= 0)->keys()->values();
-
-// Untuk tiap idpo yang hilang, tampilkan raw row-nya biar kelihatan kenapa dibuang
-$missingRawRows = HistoryDataBreakdown::query()
-    ->join($po, "$po.idpo", '=', "$dbr.idpo")
-    ->whereIn("$dbr.idpo", $missingFromLeaf)
-    ->select(
-        "$dbr.idpo", "$dbr.idcolor", "$dbr.kp_item", "$dbr.kp_item_ref",
-        "$dbr.revisi_kp", "$dbr.combine_pro", "$dbr.production_status",
-        "$dbr.qty_ori", "$dbr.deliverydate"
-    )
-    ->orderBy("$dbr.idpo")
-    ->get();
-
-dd([
-    'total_raw_idpo_in_range'   => $rawIdpoInRange->count(),
-    'total_qualified_idpo'      => $qualifiedIdpo->count(),
-    'raw_idpo_list'             => $rawIdpoInRange->sort()->values(),
-    'qualified_idpo_list'       => $qualifiedIdpo->sort()->values(),
-    'missing_idpo'              => $missingFromLeaf->sort()->values(),
-    'zero_qty_idpo'             => $zeroQtyIdpo,
-    'missing_raw_rows'          => $missingRawRows,
-]);
+array:7 [
+  "total_raw_idpo_in_range" => 19
+  "total_qualified_idpo" => 16
+  "raw_idpo_list" => Illuminate\Support\Collection {#6539
+    #items: array:19 [
+      0 => "0051916"
+      1 => "0051917"
+      2 => "0051918"
+      3 => "0051919"
+      4 => "0051920"
+      5 => "0051921"
+      6 => "0051922"
+      7 => "0051931"
+      8 => "0051932"
+      9 => "0051934"
+      10 => "0051935"
+      11 => "0051936"
+      12 => "0051939"
+      13 => "0051940"
+      14 => "0051941"
+      15 => "0051943"
+      16 => "0051944"
+      17 => "0051945"
+      18 => "0051946"
+    ]
+  }
+  "qualified_idpo_list" => Illuminate\Support\Collection {#6514
+    #items: array:16 [
+      0 => "0051916"
+      1 => "0051917"
+      2 => "0051918"
+      3 => "0051919"
+      4 => "0051920"
+      5 => "0051921"
+      6 => "0051922"
+      7 => "0051932"
+      8 => "0051934"
+      9 => "0051936"
+      10 => "0051939"
+      11 => "0051940"
+      12 => "0051941"
+      13 => "0051943"
+      14 => "0051944"
+      15 => "0051946"
+    ]
+  }
+  "missing_idpo" => Illuminate\Support\Collection {#6562
+    #items: array:3 [
+      0 => "0051931"
+      1 => "0051935"
+      2 => "0051945"
+    ]
+  }
+  "zero_qty_idpo" => Illuminate\Support\Collection {#6504
+    #items: []
+  }
+  "missing_raw_rows" => Illuminate\Database\Eloquent\Collection {#6535
+    #items: array:3 [
+      0 => App\Http\Models\HistoryDataBreakdown {#6554
+        #connection: "mysql"
+        #table: "historydbreakdown"
+        #primaryKey: "hist_id"
+        #guarded: []
+        #perPage: 15
+        -rules: array:8 [
+          "idpo" => "required|max:7|string"
+          "revisi" => "max:2|string"
+          "idcolor" => "required|max:6|string"
+          "idsize" => "required|max:6|string"
+          "qtysize" => "required|digits_between:1,8"
+          "systemcode" => "max:30|string"
+          "id" => "required|max:20|string"
+          "setcode" => "nullable|max:20|string"
+        ]
+        #keyType: "int"
+        +incrementing: true
+        #with: []
+        #withCount: []
+        +exists: true
+        +wasRecentlyCreated: false
+        #attributes: array:9 [
+          "idpo" => "0051931"
+          "idcolor" => 4504
+          "kp_item" => "000010"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "120007064021"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-01"
+        ]
+        #original: array:9 [
+          "idpo" => "0051931"
+          "idcolor" => 4504
+          "kp_item" => "000010"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "120007064021"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-01"
+        ]
+        #changes: []
+        #casts: []
+        #dates: []
+        #dateFormat: null
+        #appends: []
+        #dispatchesEvents: []
+        #observables: []
+        #relations: []
+        #touches: []
+        +timestamps: true
+        #hidden: []
+        #visible: []
+        #fillable: []
+      }
+      1 => App\Http\Models\HistoryDataBreakdown {#6559
+        #connection: "mysql"
+        #table: "historydbreakdown"
+        #primaryKey: "hist_id"
+        #guarded: []
+        #perPage: 15
+        -rules: array:8 [
+          "idpo" => "required|max:7|string"
+          "revisi" => "max:2|string"
+          "idcolor" => "required|max:6|string"
+          "idsize" => "required|max:6|string"
+          "qtysize" => "required|digits_between:1,8"
+          "systemcode" => "max:30|string"
+          "id" => "required|max:20|string"
+          "setcode" => "nullable|max:20|string"
+        ]
+        #keyType: "int"
+        +incrementing: true
+        #with: []
+        #withCount: []
+        +exists: true
+        +wasRecentlyCreated: false
+        #attributes: array:9 [
+          "idpo" => "0051935"
+          "idcolor" => 4541
+          "kp_item" => "000010"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "120007064951"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-07"
+        ]
+        #original: array:9 [
+          "idpo" => "0051935"
+          "idcolor" => 4541
+          "kp_item" => "000010"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "120007064951"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-07"
+        ]
+        #changes: []
+        #casts: []
+        #dates: []
+        #dateFormat: null
+        #appends: []
+        #dispatchesEvents: []
+        #observables: []
+        #relations: []
+        #touches: []
+        +timestamps: true
+        #hidden: []
+        #visible: []
+        #fillable: []
+      }
+      2 => App\Http\Models\HistoryDataBreakdown {#6558
+        #connection: "mysql"
+        #table: "historydbreakdown"
+        #primaryKey: "hist_id"
+        #guarded: []
+        #perPage: 15
+        -rules: array:8 [
+          "idpo" => "required|max:7|string"
+          "revisi" => "max:2|string"
+          "idcolor" => "required|max:6|string"
+          "idsize" => "required|max:6|string"
+          "qtysize" => "required|digits_between:1,8"
+          "systemcode" => "max:30|string"
+          "id" => "required|max:20|string"
+          "setcode" => "nullable|max:20|string"
+        ]
+        #keyType: "int"
+        +incrementing: true
+        #with: []
+        #withCount: []
+        +exists: true
+        +wasRecentlyCreated: false
+        #attributes: array:9 [
+          "idpo" => "0051945"
+          "idcolor" => 842
+          "kp_item" => "000010"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "120007064811"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-08"
+        ]
+        #original: array:9 [
+          "idpo" => "0051945"
+          "idcolor" => 842
+          "kp_item" => "000010"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "120007064811"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-08"
+        ]
+        #changes: []
+        #casts: []
+        #dates: []
+        #dateFormat: null
+        #appends: []
+        #dispatchesEvents: []
+        #observables: []
+        #relations: []
+        #touches: []
+        +timestamps: true
+        #hidden: []
+        #visible: []
+        #fillable: []
+      }
+    ]
+  }
+]
