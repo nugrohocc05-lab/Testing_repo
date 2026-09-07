@@ -1,10 +1,131 @@
-$rejectIdpoList = (clone $headerQuery)
-    ->where("$fi.is_output", 1)              // <-- tambahan ini kuncinya
-    ->whereIn("$od.idpo", $finalComIdpoList)
-    ->whereNotNull("$fi.date_output")
-    ->whereNotNull("$fi.defect_code")
-    ->select("$od.idpo")
-    ->distinct()
-    ->pluck("$od.idpo");
+function finalOverview(Request $request)
+{
+    preconnect(session('db'));
 
-$passIdpoList = $finalComIdpoList->diff($rejectIdpoList)->values();
+    $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
+    $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+
+    $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
+    $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+
+    $fi = (new OutputDetailFinalInspection())->getTable();
+    $od = (new OutputDetail())->getTable();
+    $po = (new PurchaseOrder())->getTable();
+
+    // ===== STEP 1: leaf rows -> qualifiedIdpo =====
+    $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true, $dta, $dtb);
+
+    $qtyPerIdpo = $leafRows->groupBy('idpo')->map(function ($rows) {
+        return (int) $rows->sum('qty_ori');
+    });
+
+    $qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
+
+    // ===== STEP 2: qualifiedIdpo -> barcode (OutputDetail) =====
+    $barcodes = OutputDetail::whereIn('idpo', $qualifiedIdpo)
+        ->pluck('barcode');
+
+    $headerQuery = OutputDetailFinalInspection::query()
+        ->join($od, "$od.barcode", '=', "$fi.barcode")
+        ->join($po, "$po.idpo", '=', "$od.idpo")
+        ->whereIn("$fi.barcode", $barcodes);
+
+    // ===== Final Completed =====
+    $finalComIdpoList = (clone $headerQuery)
+        ->where("$fi.is_output", 1)
+        ->select("$od.idpo")
+        ->distinct()
+        ->pluck("$od.idpo");
+
+    $finalCom = $finalComIdpoList->count();
+
+    // ===== Reject (basis is_output = 1) =====
+    $rejectIdpoList = (clone $headerQuery)
+        ->where("$fi.is_output", 1)
+        ->whereIn("$od.idpo", $finalComIdpoList)
+        ->whereNotNull("$fi.date_output")
+        ->whereNotNull("$fi.defect_code")
+        ->select("$od.idpo")
+        ->distinct()
+        ->pluck("$od.idpo");
+
+    // ===== Pass (eksklusif dari reject) =====
+    $passIdpoList = $finalComIdpoList->diff($rejectIdpoList)->values();
+
+    $poWithDefect = $rejectIdpoList->count();
+    $poNoDefect   = $passIdpoList->count();
+
+    $qtyPass = HistoryDataBreakdown::whereIn('idpo', $passIdpoList)
+        ->where('is_cutoff', '1')
+        ->sum('qty_ori');
+
+    $qtyReject = HistoryDataBreakdown::whereIn('idpo', $rejectIdpoList)
+        ->where('is_cutoff', '1')
+        ->sum('qty_ori');
+
+    // ===== Total Qty Inspect (sama formula seperti summaryFilter, jadi acuan total) =====
+    $totalQtyInspect = (clone $headerQuery)
+        ->whereNotNull("$fi.date_output")
+        ->count(DB::raw("DISTINCT $fi.id"));
+
+    // ===== Pecah qty_inspect per bucket berdasarkan idpo =====
+    $qtyInspectPass = (clone $headerQuery)
+        ->whereIn("$od.idpo", $passIdpoList)
+        ->whereNotNull("$fi.date_output")
+        ->count(DB::raw("DISTINCT $fi.id"));
+
+    $qtyInspectReject = (clone $headerQuery)
+        ->whereIn("$od.idpo", $rejectIdpoList)
+        ->whereNotNull("$fi.date_output")
+        ->count(DB::raw("DISTINCT $fi.id"));
+
+    // Sisa -> not_final, supaya pass + reject + not_final SELALU = total_qty_inspect
+    $qtyInspectNotFinal = $totalQtyInspect - $qtyInspectPass - $qtyInspectReject;
+
+    // ===== PO Need Final =====
+    $today = Carbon::today()->startOfDay();
+
+    $needFinalFrom = $today->copy();
+    $needFinalTo   = $dtb->copy();
+
+    if ($needFinalFrom->lessThanOrEqualTo($needFinalTo)) {
+        $poNeedFinalList = $this->getPoNeedFinalIdpoList(
+            $request,
+            $needFinalFrom,
+            $needFinalTo
+        );
+    } else {
+        $poNeedFinalList = collect();
+    }
+
+    $poNeedFinal = $poNeedFinalList->count();
+
+    // ===== Overdue =====
+    $overdueFrom = $today->copy()->subDays(7)->startOfDay();
+    $overdueTo   = $today->copy()->endOfDay();
+
+    $overdueList = $this->getFinalCheckIdpoList($request, $overdueFrom, $overdueTo);
+    $overdue = $overdueList->count();
+
+    $notFinal = $poNeedFinal + $overdue;
+
+    return response()->json([
+        'data' => [[
+            'pass' => [
+                'count'      => $poNoDefect,
+                'qty'        => $qtyPass,
+                'qty_inspect'=> $qtyInspectPass,
+            ],
+            'reject' => [
+                'count'      => $poWithDefect,
+                'qty'        => $qtyReject,
+                'qty_inspect'=> $qtyInspectReject,
+            ],
+            'not_final' => [
+                'count'      => $notFinal,
+                'qty_inspect'=> $qtyInspectNotFinal,
+            ],
+            'total_qty_inspect' => $totalQtyInspect,
+        ]]
+    ]);
+}
