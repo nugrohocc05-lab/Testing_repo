@@ -1,38 +1,24 @@
-$so = (new SewingOutput())->getTable();
-
-// ===== idpo untuk not_final: qualifiedIdpo yang belum completed =====
-$notFinalIdpoList = $qualifiedIdpo->diff($finalComIdpoList)->values();
-
-// ===== Helper: hitung total output (barcode unik is_output=1) untuk sebuah list idpo =====
-$getOutputCount = function ($idpoList) use ($od, $so) {
-    return OutputDetail::query()
-        ->whereIn("$od.idpo", $idpoList)
-        ->whereNotNull("$od.barcode")
-        ->join("$so", "$so.barcode", '=', "$od.barcode")
-        ->where("$so.is_output", 1)
-        ->select("$od.barcode")
-        ->distinct()
-        ->count();
-};
-
-$outputPass     = $getOutputCount($passIdpoList);
-$outputReject   = $getOutputCount($rejectIdpoList);
-$outputNotFinal = $getOutputCount($notFinalIdpoList);
-
-// ===== Qty untuk not_final (buat pembagi progress) =====
-$qtyNotFinal = HistoryDataBreakdown::whereIn('idpo', $notFinalIdpoList)
-    ->where('is_cutoff', '1')
-    ->sum('qty_ori');
-
-// ===== Progress output per bucket =====
-$progressPass = $qtyPass > 0
-    ? round(($outputPass / $qtyPass) * 100, 2)
-    : 0;
-
-$progressReject = $qtyReject > 0
-    ? round(($outputReject / $qtyReject) * 100, 2)
-    : 0;
-
-$progressNotFinal = $qtyNotFinal > 0
-    ? round(($outputNotFinal / $qtyNotFinal) * 100, 2)
-    : 0;
+return response()->json([
+    'data' => [[
+        'pass' => [
+            'count'           => $poNoDefect,
+            'qty'             => $qtyPass,
+            'qty_inspect'     => $qtyInspectPass,
+            'output'          => $outputPass,
+            'progress_output' => $progressPass,
+        ],
+        'reject' => [
+            'count'           => $poWithDefect,
+            'qty'             => $qtyReject,
+            'qty_inspect'     => $qtyInspectReject,
+            'output'          => $outputReject,
+            'progress_output' => $progressReject,
+        ],
+        'not_final' => [
+            'count'           => $notFinal,
+            'qty'             => $qtyNotFinal,
+            'output'          => $outputNotFinal,
+            'progress_output' => $progressNotFinal,
+        ],
+    ]]
+]);
