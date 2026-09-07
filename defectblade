@@ -1,50 +1,42 @@
-  function loadTableTopDefect(filter) {
-            $.ajax({
-                url: "{{ route('monitoring_finalinspection_topdefect') }}",
-                type: "GET",
-                data: filter,
+function loadTableTopDefect(filter) {
+    $.ajax({
+        url: "{{ route('monitoring_finalinspection_topdefect') }}",
+        type: "GET",
+        data: filter,
 
-                success: function (response) {
-                    let rows = response.data || [];
-                    let total = response.total || {};
+        success: function (response) {
+            let rows = response.data || [];
+            let totalDefect = response.total_defect || 0;
 
-                    let $body = $('#tableDefectFinalBody');
-                    $body.empty();
+            let $body = $('#tableDefectFinalBody');
+            $body.empty();
 
-                    if (rows.length === 0) {
-                        $body.append(
-                            '<tr><td colspan="12" class="text-center">No Data</td></tr>'
-                        );
-                    } else {
-                        rows.forEach(function (row, idx) {
-                            $body.append(`
-                                <tr>
-                                    <td class="text-center">${idx + 1}</td>
-                                    <td class="text-center">${row.data ?? '-'}</td>
-                                    <td class="text-center">-</td>
-                                    <td class="text-center">-</td>
-                                    <td class="text-center">-</td>
-                                </tr>
-                            `);
-                        });
-                    }
+            if (rows.length === 0) {
+                $body.append(
+                    '<tr><td colspan="5" class="text-center">No Data</td></tr>'
+                );
+            } else {
+                rows.forEach(function (row, idx) {
+                    $body.append(`
+                        <tr>
+                            <td class="text-center">${idx + 1}</td>
+                            <td class="text-center">${row.defect_code ?? '-'}</td>
+                            <td class="text-left">${row.defect_name ?? '-'}</td>
+                            <td class="text-center">${(row.qty ?? 0).toLocaleString()}</td>
+                            <td class="text-center">${row.percentage ?? 0}%</td>
+                        </tr>
+                    `);
+                });
+            }
 
-                    // Update footer
-                    $('#footQtyOrder').text(
-                        (total.qty_order ?? 0).toLocaleString()
-                    );
+            // Update footer
+            $('#footTotalDefect').text(
+                totalDefect.toLocaleString()
+            );
+        },
 
-                    $('#footOutput').text(
-                        (total.output ?? 0).toLocaleString()
-                    );
-
-                    $('#footProgressOutput').text(
-                        (total.progress_output ?? 0) + '%'
-                    );
-                },
-
-                error: function (xhr) {
-                    console.log(xhr.responseText);
-                }
-            });
+        error: function (xhr) {
+            console.log(xhr.responseText);
         }
+    });
+}
