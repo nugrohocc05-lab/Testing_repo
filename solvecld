@@ -1,10 +1,54 @@
-$refByFamily = $deduped
-    ->filter(fn ($r) => !is_null($r->kp_item_ref))
-    ->groupBy(fn ($r) => $r->idpo . '|' . $r->family_key)   // <-- tambah idpo
-    ->map(fn ($group) => $group->pluck('kp_item_ref')->unique()->values());
+$today = Carbon::today()->startOfDay();
+$needFinalFrom = $today->copy();
+$needFinalTo = $today->copy()->addDays(7)->startOfDay();
 
-$leafRows = $deduped->filter(function ($row) use ($refByFamily) {
-    $key = $row->idpo . '|' . $row->family_key;             // <-- samakan key
-    $refs = $refByFamily->get($key);
-    return !($refs && $refs->contains($row->kp_item));
-})->values();
+$leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true, $needFinalFrom, $needFinalTo);
+$qtyPerIdpo = $leafRows->groupBy('idpo')->map(fn ($rows) => (int) $rows->sum('qty_ori'));
+$qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
+
+$fi  = (new OutputDetailFinalInspection())->getTable();
+$od  = (new OutputDetail())->getTable();
+$po  = (new PurchaseOrder())->getTable();
+$dbr = (new HistoryDataBreakdown())->getTable();
+
+$effectiveIdpoSql = function () use ($dbr) {
+    return "(CASE WHEN $dbr.revisi_kp = 1 AND $dbr.kp_item_ref IS NOT NULL
+        THEN (SELECT dbr_prev.idpo FROM $dbr as dbr_prev
+            WHERE dbr_prev.combine_pro = $dbr.combine_pro
+                AND dbr_prev.idpo < $dbr.idpo
+            ORDER BY dbr_prev.idpo DESC LIMIT 1)
+        ELSE $dbr.idpo END)";
+};
+
+$expr = $effectiveIdpoSql();
+
+// Step A: setelah requireHasFinalRecord saja
+$afterRequire = HistoryDataBreakdown::query()
+    ->join($po, "$po.idpo", '=', "$dbr.idpo")
+    ->whereIn("$dbr.idpo", $qualifiedIdpo)
+    ->whereExists(function ($q) use ($fi, $od, $expr) {
+        $q->select(DB::raw(1))
+            ->from("$fi as fi3")
+            ->join("$od as od3", "od3.barcode", '=', 'fi3.barcode')
+            ->whereRaw("od3.idpo = $expr");
+    })
+    ->select("$dbr.idpo")
+    ->distinct()
+    ->pluck('idpo');
+
+// Step B: hasil akhir (setelah exclude juga) -- ini yang jadi po_need_final
+$afterExclude = $this->getPoNeedFinalIdpoList($request, $needFinalFrom, $needFinalTo);
+
+// Untuk tiap idpo yang lolos, tunjukkan SEMUA raw row-nya (bukan cuma leaf)
+// supaya kelihatan revisi_kp=1 mana yang memicu effectiveIdpoSql
+$rawRowsPerQualified = HistoryDataBreakdown::whereIn('idpo', $qualifiedIdpo)
+    ->select('idpo', 'idcolor', 'kp_item', 'kp_item_ref', 'revisi_kp', 'combine_pro', 'production_status', 'qty_ori', 'deliverydate')
+    ->orderBy('idpo')
+    ->get();
+
+dd([
+    'qualified_idpo'   => $qualifiedIdpo->sort()->values(),
+    'after_require'    => $afterRequire->sort()->values(),
+    'after_exclude'    => $afterExclude->sort()->values(),
+    'raw_rows'         => $rawRowsPerQualified,
+]);
