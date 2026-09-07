@@ -1,114 +1,33 @@
-function summaryFilter(Request $request)
-{
-    preconnect(session('db'));
+// ===== Final Completed: PO dengan is_output = 1 =====
+$finalComIdpoList = (clone $headerQuery)
+    ->where("$fi.is_output", 1)
+    ->select("$od.idpo")
+    ->distinct()
+    ->pluck("$od.idpo");
 
-    $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
-    $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+$finalCom = $finalComIdpoList->count();
 
-    $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
-    $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+$totalPo = $poNeedFinal + $overdue + $finalCom;
 
-    $fi = (new OutputDetailFinalInspection())->getTable();
-    $od = (new OutputDetail())->getTable();
-    $po = (new PurchaseOrder())->getTable();
+// ===== OQL (tetap di level record/barcode, populasi semua yang sudah diinspeksi) =====
+$totDefect = (clone $headerQuery)
+    ->whereNotNull("$fi.date_output")
+    ->whereNotNull("$fi.defect_code")
+    ->count(DB::raw("DISTINCT $fi.id"));
 
-    // ===== STEP 1-2: leaf rows -> qty per idpo =====
-    $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true, $dta, $dtb);
+$oql = $totalQtyInspect > 0 ? round(($totDefect / $totalQtyInspect) * 100, 2) : 0;
 
-    $qtyPerIdpo = $leafRows->groupBy('idpo')->map(function ($rows) {
-        return (int) $rows->sum('qty_ori');
-    });
+// ===== Passing / Reject Rate: level PO, populasi HANYA yang Final Completed (is_output=1) =====
+// PO dianggap reject kalau minimal 1 barcode-nya punya defect_code
+$rejectIdpoList = (clone $headerQuery)
+    ->whereIn("$od.idpo", $finalComIdpoList)
+    ->whereNotNull("$fi.defect_code")
+    ->select("$od.idpo")
+    ->distinct()
+    ->pluck("$od.idpo");
 
-    $qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
+$poWithDefect = $rejectIdpoList->count();
+$poNoDefect   = $finalCom - $poWithDefect;
 
-    // ===== STEP 3: buang idpo yang sudah di-reroute penuh (qtypo revisi terbesar = 0) =====
-    $resolvedIdpo = $this->resolveRerouteDuplicates($qualifiedIdpo);
-
-    // ===== STEP 4: resolvedIdpo -> barcode (OutputDetail) =====
-    $barcodes = OutputDetail::whereIn('idpo', $resolvedIdpo)
-        ->pluck('barcode');
-
-    // ===== headerQuery: berbasis barcode leaf yang sudah di-resolve =====
-    $headerQuery = OutputDetailFinalInspection::query()
-        ->join($od, "$od.barcode", '=', "$fi.barcode")
-        ->join($po, "$po.idpo", '=', "$od.idpo")
-        ->whereIn("$fi.barcode", $barcodes);
-
-    $poIds = (clone $headerQuery)
-        ->select("$od.idpo")
-        ->distinct()
-        ->pluck("$od.idpo");
-
-    $totalQty = HistoryDataBreakdown::whereIn('idpo', $poIds)
-        ->where('is_cutoff', '1')
-        ->sum('qty_ori');
-
-    $totalQtyInspect = (clone $headerQuery)
-        ->whereNotNull("$fi.date_output")
-        ->count(DB::raw("DISTINCT $fi.id"));
-
-    // ===== PO Need Final: today s/d today+7 =====
-    $today = Carbon::today()->startOfDay();
-
-    $needFinalFrom = $today->copy();
-    $needFinalTo = $today->copy()->addDays(7)->startOfDay();
-
-    if ($needFinalFrom->lessThanOrEqualTo($needFinalTo)) {
-        $poNeedFinalList = $this->getPoNeedFinalIdpoList(
-            $request,
-            $needFinalFrom,
-            $needFinalTo
-        );
-        $poNeedFinal = $poNeedFinalList->count();
-    } else {
-        $poNeedFinal = 0;
-    }
-
-    // ===== Overdue =====
-    $overdueFrom = $today->copy()->subDays(7)->startOfDay();
-    $overdueTo   = $today->copy()->endOfDay();
-
-    $overdueList = $this->getFinalCheckIdpoList($request, $overdueFrom, $overdueTo);
-    $overdue = $overdueList->count();
-
-    // ===== Final Completed: PO dengan is_output = 1, dari barcode leaf yang sudah di-resolve =====
-    $finalCom = (clone $headerQuery)
-        ->where("$fi.is_output", 1)
-        ->count(DB::raw("DISTINCT $po.po"));
-
-    $totalPo = $poNeedFinal + $overdue + $finalCom;
-
-    // ===== OQL =====
-    $totDefect = (clone $headerQuery)
-        ->whereNotNull("$fi.date_output")
-        ->whereNotNull("$fi.defect_code")
-        ->count(DB::raw("DISTINCT $fi.id"));
-
-    $oql = $totalQtyInspect > 0 ? round(($totDefect / $totalQtyInspect) * 100, 2) : 0;
-
-    // ===== Passing / Reject Rate =====
-    $poNoDefect = (clone $headerQuery)
-        ->whereNotNull("$fi.date_output")
-        ->whereNull("$fi.defect_code")
-        ->count(DB::raw("DISTINCT $fi.id"));
-
-    $poWithDefect = (clone $headerQuery)
-        ->whereNotNull("$fi.date_output")
-        ->whereNotNull("$fi.defect_code")
-        ->count(DB::raw("DISTINCT $fi.id"));
-
-    $passingRate = $totalPo > 0 ? round(($poNoDefect / $totalPo) * 100, 2) : 0;
-    $rejectRate  = $totalPo > 0 ? round(($poWithDefect / $totalPo) * 100, 2) : 0;
-
-    return response()->json([
-        'total_po'          => $totalPo,
-        'total_qty'         => $totalQty,
-        'total_qty_inspect' => $totalQtyInspect,
-        'po_need_final'     => $poNeedFinal,
-        'overdue'           => $overdue,
-        'final_completed'   => $finalCom,
-        'oql'               => $oql,
-        'passing_rate'      => $passingRate,
-        'reject_rate'       => $rejectRate,
-    ]);
-}
+$passingRate = $finalCom > 0 ? round(($poNoDefect / $finalCom) * 100, 2) : 0;
+$rejectRate  = $finalCom > 0 ? round(($poWithDefect / $finalCom) * 100, 2) : 0;
