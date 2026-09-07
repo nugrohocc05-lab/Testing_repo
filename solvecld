@@ -1,3 +1,17 @@
+// ===== Total keseluruhan (pass + reject + not_final) =====
+$totalPoAll = $poNoDefect + $poWithDefect + $notFinalIdpoList->count();
+
+$totalQtyOrderAll = $qtyPass + $qtyReject + $qtyNotFinal;
+
+$totalQtyInspectAll = $qtyInspectPass + $qtyInspectReject; // not_final belum diinspeksi final, jadi 0 kontribusinya
+
+$totalOutputAll = $outputPass + $outputReject + $outputNotFinal;
+
+$totalProgressOutputAll = $totalQtyOrderAll > 0
+    ? round(($totalOutputAll / $totalQtyOrderAll) * 100, 2)
+    : 0;
+
+
 return response()->json([
     'data' => [[
         'pass' => [
@@ -15,10 +29,17 @@ return response()->json([
             'progress_output' => $progressReject,
         ],
         'not_final' => [
-            'count'           => $notFinal,
+            'count'           => $notFinalIdpoList->count(),
             'qty'             => $qtyNotFinal,
             'output'          => $outputNotFinal,
             'progress_output' => $progressNotFinal,
+        ],
+        'total' => [
+            'total_po'        => $totalPoAll,
+            'qty_order'       => $totalQtyOrderAll,
+            'qty_inspect'     => $totalQtyInspectAll,
+            'output'          => $totalOutputAll,
+            'progress_output' => $totalProgressOutputAll,
         ],
     ]]
 ]);
