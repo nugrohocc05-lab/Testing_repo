@@ -1,50 +1,72 @@
-i_id	int	10	0	0	0	-1	0									0	0	0	0	-1	-1	0
-id	int	11	0	-1	0	0	0									0	0	0	0	0	0	0
-idstyle	int	11	0	-1	0	0	0									0	0	0	0	0	0	0
-mdname	varchar	255	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-samplestep	varchar	255	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-idpo	char	7	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-kpno	varchar	30	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-username	varchar	25	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-idfactory	char	2	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-po	varchar	50	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-cust_no	varchar	255	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-revisi	int	11	0	-1	0	0	0									0	0	0	0	0	0	0
-revisi_kp	int	11	0	-1	0	0	0									0	0	0	0	0	0	0
-tglrevisi	date	0	0	-1	0	0	0									0	0	0	0	0	0	0
-tglterima	date	0	0	-1	0	0	0									0	0	0	0	0	0	0
-idbuyer	int	11	0	-1	0	0	0									0	0	0	0	0	0	0
-description	varchar	100	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-shipby	varchar	50	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-qtypo	int	11	0	-1	0	0	0									0	0	0	0	0	0	0
-overship	int	11	0	-1	0	0	0									0	0	0	0	0	0	0
-total	int	11	0	-1	0	0	0									0	0	0	0	0	0	0
-printnumber	char	10	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-useupc	char	5	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-usengc	char	5	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-twicescan	char	5	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-season	varchar	100	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-postatus	varchar	10	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-closedate	date	0	0	-1	0	0	0									0	0	0	0	0	0	0
-nikclose	char	15	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-itemcode	varchar	255	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-tahun	varchar	255	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-mfc	varchar	255	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-bfc	varchar	255	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-samplecode	varchar	50	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-etawh	date	0	0	-1	0	0	0									0	0	0	0	0	0	0
-import_completed	tinyint	4	0	-1	0	0	0									0	0	0	0	0	0	0
-is_inner_outer	tinyint	4	0	-1	0	0	0			0						0	0	0	0	0	0	0
-idcountry	int	11	0	-1	0	0	0									0	0	0	0	0	0	0
-kp_ref_cmt	varchar	30	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-po_original	varchar	50	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-idbuyer_original	int	11	0	-1	0	0	0									0	0	0	0	0	0	0
-factory_original	char	2	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-shipment_status	char	2	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
-created_at	datetime	0	0	-1	0	0	0									0	0	0	0	0	0	0
-user_id	varchar	10	0	-1	0	0	0							utf8mb4	utf8mb4_unicode_ci	0	0	0	0	0	0	0
+use App\Http\Models\HistoryPO;
+
+/**
+ * Kalau idpo X sudah di-reroute ke idpo Y (via kp_item_ref, combine_pro sama),
+ * cek qtypo di revisi terbesar HistoryPO milik X:
+ * - qtypo = 0  -> buang X dari list, pakai Y saja
+ * - qtypo != 0 -> X dan Y tetap dua-duanya
+ */
+private function resolveRerouteDuplicates(Collection $idpoList): Collection
+{
+    if ($idpoList->isEmpty()) {
+        return $idpoList;
+    }
+
+    $rows = HistoryDataBreakdown::whereIn('idpo', $idpoList)
+        ->select('idpo', 'combine_pro', 'kp_item', 'kp_item_ref', 'revisi_kp')
+        ->get();
+
+    // Siapa "pemilik asli" tiap kp_item dalam combine_pro yang sama (idpo terkecil)
+    $ownerByCombineKpItem = $rows
+        ->groupBy(fn ($r) => $r->combine_pro . '|' . $r->kp_item)
+        ->map(fn ($group) => $group->sortBy('idpo')->first()->idpo);
+
+    // Pasangan reroute: idpo baru (revisi_kp=1, ada ref) -> idpo asli
+    $reroutedPairs = $rows
+        ->filter(fn ($r) => $r->revisi_kp == 1 && !is_null($r->kp_item_ref))
+        ->map(function ($r) use ($ownerByCombineKpItem) {
+            $originalIdpo = $ownerByCombineKpItem->get($r->combine_pro . '|' . $r->kp_item_ref);
+            return ($originalIdpo && $originalIdpo != $r->idpo)
+                ? ['original' => $originalIdpo, 'rerouted' => $r->idpo]
+                : null;
+        })
+        ->filter()
+        ->unique(fn ($p) => $p['original'] . '|' . $p['rerouted'])
+        ->values();
+
+    $excludedOriginals = collect();
+
+    foreach ($reroutedPairs as $pair) {
+        $maxRevisiRow = HistoryPO::where('idpo', $pair['original'])
+            ->orderByDesc('revisi')
+            ->first();
+
+        if ($maxRevisiRow && (int) $maxRevisiRow->qtypo === 0) {
+            $excludedOriginals->push($pair['original']);
+        }
+    }
+
+    return $idpoList->diff($excludedOriginals)->values();
+}
 
 
-63589	55291	13098	Hamidah Maulida K		0051935	AD40004951		06	121380044951	eCom adi@Wiethe	0	0	2026-09-02	2026-09-02	5	ADIDAS TERREX	Air Collect	2	0	2			0		F26										1	0							2026-09-02 09:17:19	
-63590	55291	13098	Hamidah Maulida K		0051935	AD40004951		06	121380044951	eCom adi@Wiethe	1	1	2026-09-02	2026-09-02	5	ADIDAS TERREX	Air Collect	0	0	0			0		F26										1	0							2026-09-02 09:17:19	
-63591	55292	13098	Hamidah Maulida K		0051936	AD40004951		06	121380044952	eCom adi@Wiethe	0	1	2026-09-02	2026-09-02	5	ADIDAS TERREX	Air Collect	2	0	2			0		F26										1	0							2026-09-02 09:30:12	
+
+private function getPoNeedFinalIdpoList(Request $request, Carbon $fromDate, Carbon $toDate)
+{
+    // ... (semua isi tetap sama sampai)
+
+    $result = $finalCheckQuery->select("$dbr.idpo")->distinct()->pluck('idpo');
+
+    return $this->resolveRerouteDuplicates($result);
+}
+
+
+
+private function getFinalCheckIdpoList(Request $request, Carbon $from, Carbon $to)
+{
+    // ... (semua isi tetap sama sampai)
+
+    $result = $query->select("$dbr.idpo")->distinct()->pluck('idpo');
+
+    return $this->resolveRerouteDuplicates($result);
+}
