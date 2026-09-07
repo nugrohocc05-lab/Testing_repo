@@ -1,54 +1,1152 @@
-$today = Carbon::today()->startOfDay();
-$needFinalFrom = $today->copy();
-$needFinalTo = $today->copy()->addDays(7)->startOfDay();
-
-$leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true, $needFinalFrom, $needFinalTo);
-$qtyPerIdpo = $leafRows->groupBy('idpo')->map(fn ($rows) => (int) $rows->sum('qty_ori'));
-$qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
-
-$fi  = (new OutputDetailFinalInspection())->getTable();
-$od  = (new OutputDetail())->getTable();
-$po  = (new PurchaseOrder())->getTable();
-$dbr = (new HistoryDataBreakdown())->getTable();
-
-$effectiveIdpoSql = function () use ($dbr) {
-    return "(CASE WHEN $dbr.revisi_kp = 1 AND $dbr.kp_item_ref IS NOT NULL
-        THEN (SELECT dbr_prev.idpo FROM $dbr as dbr_prev
-            WHERE dbr_prev.combine_pro = $dbr.combine_pro
-                AND dbr_prev.idpo < $dbr.idpo
-            ORDER BY dbr_prev.idpo DESC LIMIT 1)
-        ELSE $dbr.idpo END)";
-};
-
-$expr = $effectiveIdpoSql();
-
-// Step A: setelah requireHasFinalRecord saja
-$afterRequire = HistoryDataBreakdown::query()
-    ->join($po, "$po.idpo", '=', "$dbr.idpo")
-    ->whereIn("$dbr.idpo", $qualifiedIdpo)
-    ->whereExists(function ($q) use ($fi, $od, $expr) {
-        $q->select(DB::raw(1))
-            ->from("$fi as fi3")
-            ->join("$od as od3", "od3.barcode", '=', 'fi3.barcode')
-            ->whereRaw("od3.idpo = $expr");
-    })
-    ->select("$dbr.idpo")
-    ->distinct()
-    ->pluck('idpo');
-
-// Step B: hasil akhir (setelah exclude juga) -- ini yang jadi po_need_final
-$afterExclude = $this->getPoNeedFinalIdpoList($request, $needFinalFrom, $needFinalTo);
-
-// Untuk tiap idpo yang lolos, tunjukkan SEMUA raw row-nya (bukan cuma leaf)
-// supaya kelihatan revisi_kp=1 mana yang memicu effectiveIdpoSql
-$rawRowsPerQualified = HistoryDataBreakdown::whereIn('idpo', $qualifiedIdpo)
-    ->select('idpo', 'idcolor', 'kp_item', 'kp_item_ref', 'revisi_kp', 'combine_pro', 'production_status', 'qty_ori', 'deliverydate')
-    ->orderBy('idpo')
-    ->get();
-
-dd([
-    'qualified_idpo'   => $qualifiedIdpo->sort()->values(),
-    'after_require'    => $afterRequire->sort()->values(),
-    'after_exclude'    => $afterExclude->sort()->values(),
-    'raw_rows'         => $rawRowsPerQualified,
-]);
+array:4 [
+  "qualified_idpo" => Illuminate\Support\Collection {#6552
+    #items: array:12 [
+      0 => "0051921"
+      1 => "0051922"
+      2 => "0051934"
+      3 => "0051935"
+      4 => "0051936"
+      5 => "0051939"
+      6 => "0051940"
+      7 => "0051941"
+      8 => "0051943"
+      9 => "0051944"
+      10 => "0051945"
+      11 => "0051946"
+    ]
+  }
+  "after_require" => Illuminate\Support\Collection {#6508
+    #items: array:12 [
+      0 => "0051921"
+      1 => "0051922"
+      2 => "0051934"
+      3 => "0051935"
+      4 => "0051936"
+      5 => "0051939"
+      6 => "0051940"
+      7 => "0051941"
+      8 => "0051943"
+      9 => "0051944"
+      10 => "0051945"
+      11 => "0051946"
+    ]
+  }
+  "after_exclude" => Illuminate\Support\Collection {#6592
+    #items: array:8 [
+      0 => "0051921"
+      1 => "0051935"
+      2 => "0051936"
+      3 => "0051939"
+      4 => "0051940"
+      5 => "0051941"
+      6 => "0051943"
+      7 => "0051944"
+    ]
+  }
+  "raw_rows" => Illuminate\Database\Eloquent\Collection {#6520
+    #items: array:19 [
+      0 => App\Http\Models\HistoryDataBreakdown {#6564
+        #connection: "mysql"
+        #table: "historydbreakdown"
+        #primaryKey: "hist_id"
+        #guarded: []
+        #perPage: 15
+        -rules: array:8 [
+          "idpo" => "required|max:7|string"
+          "revisi" => "max:2|string"
+          "idcolor" => "required|max:6|string"
+          "idsize" => "required|max:6|string"
+          "qtysize" => "required|digits_between:1,8"
+          "systemcode" => "max:30|string"
+          "id" => "required|max:20|string"
+          "setcode" => "nullable|max:20|string"
+        ]
+        #keyType: "int"
+        +incrementing: true
+        #with: []
+        #withCount: []
+        +exists: true
+        +wasRecentlyCreated: false
+        #attributes: array:9 [
+          "idpo" => "0051921"
+          "idcolor" => 4566
+          "kp_item" => "000010"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "150000023184"
+          "production_status" => "IH"
+          "qty_ori" => 5
+          "deliverydate" => "2026-09-08"
+        ]
+        #original: array:9 [
+          "idpo" => "0051921"
+          "idcolor" => 4566
+          "kp_item" => "000010"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "150000023184"
+          "production_status" => "IH"
+          "qty_ori" => 5
+          "deliverydate" => "2026-09-08"
+        ]
+        #changes: []
+        #casts: []
+        #dates: []
+        #dateFormat: null
+        #appends: []
+        #dispatchesEvents: []
+        #observables: []
+        #relations: []
+        #touches: []
+        +timestamps: true
+        #hidden: []
+        #visible: []
+        #fillable: []
+      }
+      1 => App\Http\Models\HistoryDataBreakdown {#6571
+        #connection: "mysql"
+        #table: "historydbreakdown"
+        #primaryKey: "hist_id"
+        #guarded: []
+        #perPage: 15
+        -rules: array:8 [
+          "idpo" => "required|max:7|string"
+          "revisi" => "max:2|string"
+          "idcolor" => "required|max:6|string"
+          "idsize" => "required|max:6|string"
+          "qtysize" => "required|digits_between:1,8"
+          "systemcode" => "max:30|string"
+          "id" => "required|max:20|string"
+          "setcode" => "nullable|max:20|string"
+        ]
+        #keyType: "int"
+        +incrementing: true
+        #with: []
+        #withCount: []
+        +exists: true
+        +wasRecentlyCreated: false
+        #attributes: array:9 [
+          "idpo" => "0051922"
+          "idcolor" => 4579
+          "kp_item" => "000020"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "150000023184"
+          "production_status" => "IH"
+          "qty_ori" => 5
+          "deliverydate" => "2026-09-08"
+        ]
+        #original: array:9 [
+          "idpo" => "0051922"
+          "idcolor" => 4579
+          "kp_item" => "000020"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "150000023184"
+          "production_status" => "IH"
+          "qty_ori" => 5
+          "deliverydate" => "2026-09-08"
+        ]
+        #changes: []
+        #casts: []
+        #dates: []
+        #dateFormat: null
+        #appends: []
+        #dispatchesEvents: []
+        #observables: []
+        #relations: []
+        #touches: []
+        +timestamps: true
+        #hidden: []
+        #visible: []
+        #fillable: []
+      }
+      2 => App\Http\Models\HistoryDataBreakdown {#6516
+        #connection: "mysql"
+        #table: "historydbreakdown"
+        #primaryKey: "hist_id"
+        #guarded: []
+        #perPage: 15
+        -rules: array:8 [
+          "idpo" => "required|max:7|string"
+          "revisi" => "max:2|string"
+          "idcolor" => "required|max:6|string"
+          "idsize" => "required|max:6|string"
+          "qtysize" => "required|digits_between:1,8"
+          "systemcode" => "max:30|string"
+          "id" => "required|max:20|string"
+          "setcode" => "nullable|max:20|string"
+        ]
+        #keyType: "int"
+        +incrementing: true
+        #with: []
+        #withCount: []
+        +exists: true
+        +wasRecentlyCreated: false
+        #attributes: array:9 [
+          "idpo" => "0051934"
+          "idcolor" => 3162
+          "kp_item" => "000010"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "251000013895"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-07"
+        ]
+        #original: array:9 [
+          "idpo" => "0051934"
+          "idcolor" => 3162
+          "kp_item" => "000010"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "251000013895"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-07"
+        ]
+        #changes: []
+        #casts: []
+        #dates: []
+        #dateFormat: null
+        #appends: []
+        #dispatchesEvents: []
+        #observables: []
+        #relations: []
+        #touches: []
+        +timestamps: true
+        #hidden: []
+        #visible: []
+        #fillable: []
+      }
+      3 => App\Http\Models\HistoryDataBreakdown {#6588
+        #connection: "mysql"
+        #table: "historydbreakdown"
+        #primaryKey: "hist_id"
+        #guarded: []
+        #perPage: 15
+        -rules: array:8 [
+          "idpo" => "required|max:7|string"
+          "revisi" => "max:2|string"
+          "idcolor" => "required|max:6|string"
+          "idsize" => "required|max:6|string"
+          "qtysize" => "required|digits_between:1,8"
+          "systemcode" => "max:30|string"
+          "id" => "required|max:20|string"
+          "setcode" => "nullable|max:20|string"
+        ]
+        #keyType: "int"
+        +incrementing: true
+        #with: []
+        #withCount: []
+        +exists: true
+        +wasRecentlyCreated: false
+        #attributes: array:9 [
+          "idpo" => "0051934"
+          "idcolor" => 3162
+          "kp_item" => "000010"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "252000013891"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-07"
+        ]
+        #original: array:9 [
+          "idpo" => "0051934"
+          "idcolor" => 3162
+          "kp_item" => "000010"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "252000013891"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-07"
+        ]
+        #changes: []
+        #casts: []
+        #dates: []
+        #dateFormat: null
+        #appends: []
+        #dispatchesEvents: []
+        #observables: []
+        #relations: []
+        #touches: []
+        +timestamps: true
+        #hidden: []
+        #visible: []
+        #fillable: []
+      }
+      4 => App\Http\Models\HistoryDataBreakdown {#6524
+        #connection: "mysql"
+        #table: "historydbreakdown"
+        #primaryKey: "hist_id"
+        #guarded: []
+        #perPage: 15
+        -rules: array:8 [
+          "idpo" => "required|max:7|string"
+          "revisi" => "max:2|string"
+          "idcolor" => "required|max:6|string"
+          "idsize" => "required|max:6|string"
+          "qtysize" => "required|digits_between:1,8"
+          "systemcode" => "max:30|string"
+          "id" => "required|max:20|string"
+          "setcode" => "nullable|max:20|string"
+        ]
+        #keyType: "int"
+        +incrementing: true
+        #with: []
+        #withCount: []
+        +exists: true
+        +wasRecentlyCreated: false
+        #attributes: array:9 [
+          "idpo" => "0051934"
+          "idcolor" => 3162
+          "kp_item" => "000010"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "253000013892"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-07"
+        ]
+        #original: array:9 [
+          "idpo" => "0051934"
+          "idcolor" => 3162
+          "kp_item" => "000010"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "253000013892"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-07"
+        ]
+        #changes: []
+        #casts: []
+        #dates: []
+        #dateFormat: null
+        #appends: []
+        #dispatchesEvents: []
+        #observables: []
+        #relations: []
+        #touches: []
+        +timestamps: true
+        #hidden: []
+        #visible: []
+        #fillable: []
+      }
+      5 => App\Http\Models\HistoryDataBreakdown {#6543
+        #connection: "mysql"
+        #table: "historydbreakdown"
+        #primaryKey: "hist_id"
+        #guarded: []
+        #perPage: 15
+        -rules: array:8 [
+          "idpo" => "required|max:7|string"
+          "revisi" => "max:2|string"
+          "idcolor" => "required|max:6|string"
+          "idsize" => "required|max:6|string"
+          "qtysize" => "required|digits_between:1,8"
+          "systemcode" => "max:30|string"
+          "id" => "required|max:20|string"
+          "setcode" => "nullable|max:20|string"
+        ]
+        #keyType: "int"
+        +incrementing: true
+        #with: []
+        #withCount: []
+        +exists: true
+        +wasRecentlyCreated: false
+        #attributes: array:9 [
+          "idpo" => "0051935"
+          "idcolor" => 4541
+          "kp_item" => "000010"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "120007064951"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-07"
+        ]
+        #original: array:9 [
+          "idpo" => "0051935"
+          "idcolor" => 4541
+          "kp_item" => "000010"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "120007064951"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-07"
+        ]
+        #changes: []
+        #casts: []
+        #dates: []
+        #dateFormat: null
+        #appends: []
+        #dispatchesEvents: []
+        #observables: []
+        #relations: []
+        #touches: []
+        +timestamps: true
+        #hidden: []
+        #visible: []
+        #fillable: []
+      }
+      6 => App\Http\Models\HistoryDataBreakdown {#6570
+        #connection: "mysql"
+        #table: "historydbreakdown"
+        #primaryKey: "hist_id"
+        #guarded: []
+        #perPage: 15
+        -rules: array:8 [
+          "idpo" => "required|max:7|string"
+          "revisi" => "max:2|string"
+          "idcolor" => "required|max:6|string"
+          "idsize" => "required|max:6|string"
+          "qtysize" => "required|digits_between:1,8"
+          "systemcode" => "max:30|string"
+          "id" => "required|max:20|string"
+          "setcode" => "nullable|max:20|string"
+        ]
+        #keyType: "int"
+        +incrementing: true
+        #with: []
+        #withCount: []
+        +exists: true
+        +wasRecentlyCreated: false
+        #attributes: array:9 [
+          "idpo" => "0051936"
+          "idcolor" => 4541
+          "kp_item" => "000020"
+          "kp_item_ref" => "000010"
+          "revisi_kp" => 1
+          "combine_pro" => "120007064951"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-09"
+        ]
+        #original: array:9 [
+          "idpo" => "0051936"
+          "idcolor" => 4541
+          "kp_item" => "000020"
+          "kp_item_ref" => "000010"
+          "revisi_kp" => 1
+          "combine_pro" => "120007064951"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-09"
+        ]
+        #changes: []
+        #casts: []
+        #dates: []
+        #dateFormat: null
+        #appends: []
+        #dispatchesEvents: []
+        #observables: []
+        #relations: []
+        #touches: []
+        +timestamps: true
+        #hidden: []
+        #visible: []
+        #fillable: []
+      }
+      7 => App\Http\Models\HistoryDataBreakdown {#6574
+        #connection: "mysql"
+        #table: "historydbreakdown"
+        #primaryKey: "hist_id"
+        #guarded: []
+        #perPage: 15
+        -rules: array:8 [
+          "idpo" => "required|max:7|string"
+          "revisi" => "max:2|string"
+          "idcolor" => "required|max:6|string"
+          "idsize" => "required|max:6|string"
+          "qtysize" => "required|digits_between:1,8"
+          "systemcode" => "max:30|string"
+          "id" => "required|max:20|string"
+          "setcode" => "nullable|max:20|string"
+        ]
+        #keyType: "int"
+        +incrementing: true
+        #with: []
+        #withCount: []
+        +exists: true
+        +wasRecentlyCreated: false
+        #attributes: array:9 [
+          "idpo" => "0051939"
+          "idcolor" => 763
+          "kp_item" => "000010"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "120000028945"
+          "production_status" => "IH"
+          "qty_ori" => 4
+          "deliverydate" => "2026-09-08"
+        ]
+        #original: array:9 [
+          "idpo" => "0051939"
+          "idcolor" => 763
+          "kp_item" => "000010"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "120000028945"
+          "production_status" => "IH"
+          "qty_ori" => 4
+          "deliverydate" => "2026-09-08"
+        ]
+        #changes: []
+        #casts: []
+        #dates: []
+        #dateFormat: null
+        #appends: []
+        #dispatchesEvents: []
+        #observables: []
+        #relations: []
+        #touches: []
+        +timestamps: true
+        #hidden: []
+        #visible: []
+        #fillable: []
+      }
+      8 => App\Http\Models\HistoryDataBreakdown {#6590
+        #connection: "mysql"
+        #table: "historydbreakdown"
+        #primaryKey: "hist_id"
+        #guarded: []
+        #perPage: 15
+        -rules: array:8 [
+          "idpo" => "required|max:7|string"
+          "revisi" => "max:2|string"
+          "idcolor" => "required|max:6|string"
+          "idsize" => "required|max:6|string"
+          "qtysize" => "required|digits_between:1,8"
+          "systemcode" => "max:30|string"
+          "id" => "required|max:20|string"
+          "setcode" => "nullable|max:20|string"
+        ]
+        #keyType: "int"
+        +incrementing: true
+        #with: []
+        #withCount: []
+        +exists: true
+        +wasRecentlyCreated: false
+        #attributes: array:9 [
+          "idpo" => "0051939"
+          "idcolor" => 763
+          "kp_item" => "000020"
+          "kp_item_ref" => "000010"
+          "revisi_kp" => 1
+          "combine_pro" => "120000028945"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-08"
+        ]
+        #original: array:9 [
+          "idpo" => "0051939"
+          "idcolor" => 763
+          "kp_item" => "000020"
+          "kp_item_ref" => "000010"
+          "revisi_kp" => 1
+          "combine_pro" => "120000028945"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-08"
+        ]
+        #changes: []
+        #casts: []
+        #dates: []
+        #dateFormat: null
+        #appends: []
+        #dispatchesEvents: []
+        #observables: []
+        #relations: []
+        #touches: []
+        +timestamps: true
+        #hidden: []
+        #visible: []
+        #fillable: []
+      }
+      9 => App\Http\Models\HistoryDataBreakdown {#6535
+        #connection: "mysql"
+        #table: "historydbreakdown"
+        #primaryKey: "hist_id"
+        #guarded: []
+        #perPage: 15
+        -rules: array:8 [
+          "idpo" => "required|max:7|string"
+          "revisi" => "max:2|string"
+          "idcolor" => "required|max:6|string"
+          "idsize" => "required|max:6|string"
+          "qtysize" => "required|digits_between:1,8"
+          "systemcode" => "max:30|string"
+          "id" => "required|max:20|string"
+          "setcode" => "nullable|max:20|string"
+        ]
+        #keyType: "int"
+        +incrementing: true
+        #with: []
+        #withCount: []
+        +exists: true
+        +wasRecentlyCreated: false
+        #attributes: array:9 [
+          "idpo" => "0051939"
+          "idcolor" => 763
+          "kp_item" => "000020"
+          "kp_item_ref" => "000010"
+          "revisi_kp" => 2
+          "combine_pro" => "120000028945"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-08"
+        ]
+        #original: array:9 [
+          "idpo" => "0051939"
+          "idcolor" => 763
+          "kp_item" => "000020"
+          "kp_item_ref" => "000010"
+          "revisi_kp" => 2
+          "combine_pro" => "120000028945"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-08"
+        ]
+        #changes: []
+        #casts: []
+        #dates: []
+        #dateFormat: null
+        #appends: []
+        #dispatchesEvents: []
+        #observables: []
+        #relations: []
+        #touches: []
+        +timestamps: true
+        #hidden: []
+        #visible: []
+        #fillable: []
+      }
+      10 => App\Http\Models\HistoryDataBreakdown {#6537
+        #connection: "mysql"
+        #table: "historydbreakdown"
+        #primaryKey: "hist_id"
+        #guarded: []
+        #perPage: 15
+        -rules: array:8 [
+          "idpo" => "required|max:7|string"
+          "revisi" => "max:2|string"
+          "idcolor" => "required|max:6|string"
+          "idsize" => "required|max:6|string"
+          "qtysize" => "required|digits_between:1,8"
+          "systemcode" => "max:30|string"
+          "id" => "required|max:20|string"
+          "setcode" => "nullable|max:20|string"
+        ]
+        #keyType: "int"
+        +incrementing: true
+        #with: []
+        #withCount: []
+        +exists: true
+        +wasRecentlyCreated: false
+        #attributes: array:9 [
+          "idpo" => "0051940"
+          "idcolor" => 763
+          "kp_item" => "000030"
+          "kp_item_ref" => "000010"
+          "revisi_kp" => 1
+          "combine_pro" => "120000028945"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-08"
+        ]
+        #original: array:9 [
+          "idpo" => "0051940"
+          "idcolor" => 763
+          "kp_item" => "000030"
+          "kp_item_ref" => "000010"
+          "revisi_kp" => 1
+          "combine_pro" => "120000028945"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-08"
+        ]
+        #changes: []
+        #casts: []
+        #dates: []
+        #dateFormat: null
+        #appends: []
+        #dispatchesEvents: []
+        #observables: []
+        #relations: []
+        #touches: []
+        +timestamps: true
+        #hidden: []
+        #visible: []
+        #fillable: []
+      }
+      11 => App\Http\Models\HistoryDataBreakdown {#6561
+        #connection: "mysql"
+        #table: "historydbreakdown"
+        #primaryKey: "hist_id"
+        #guarded: []
+        #perPage: 15
+        -rules: array:8 [
+          "idpo" => "required|max:7|string"
+          "revisi" => "max:2|string"
+          "idcolor" => "required|max:6|string"
+          "idsize" => "required|max:6|string"
+          "qtysize" => "required|digits_between:1,8"
+          "systemcode" => "max:30|string"
+          "id" => "required|max:20|string"
+          "setcode" => "nullable|max:20|string"
+        ]
+        #keyType: "int"
+        +incrementing: true
+        #with: []
+        #withCount: []
+        +exists: true
+        +wasRecentlyCreated: false
+        #attributes: array:9 [
+          "idpo" => "0051940"
+          "idcolor" => 763
+          "kp_item" => "000030"
+          "kp_item_ref" => "000010"
+          "revisi_kp" => 2
+          "combine_pro" => "120000028945"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-08"
+        ]
+        #original: array:9 [
+          "idpo" => "0051940"
+          "idcolor" => 763
+          "kp_item" => "000030"
+          "kp_item_ref" => "000010"
+          "revisi_kp" => 2
+          "combine_pro" => "120000028945"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-08"
+        ]
+        #changes: []
+        #casts: []
+        #dates: []
+        #dateFormat: null
+        #appends: []
+        #dispatchesEvents: []
+        #observables: []
+        #relations: []
+        #touches: []
+        +timestamps: true
+        #hidden: []
+        #visible: []
+        #fillable: []
+      }
+      12 => App\Http\Models\HistoryDataBreakdown {#6515
+        #connection: "mysql"
+        #table: "historydbreakdown"
+        #primaryKey: "hist_id"
+        #guarded: []
+        #perPage: 15
+        -rules: array:8 [
+          "idpo" => "required|max:7|string"
+          "revisi" => "max:2|string"
+          "idcolor" => "required|max:6|string"
+          "idsize" => "required|max:6|string"
+          "qtysize" => "required|digits_between:1,8"
+          "systemcode" => "max:30|string"
+          "id" => "required|max:20|string"
+          "setcode" => "nullable|max:20|string"
+        ]
+        #keyType: "int"
+        +incrementing: true
+        #with: []
+        #withCount: []
+        +exists: true
+        +wasRecentlyCreated: false
+        #attributes: array:9 [
+          "idpo" => "0051941"
+          "idcolor" => 1
+          "kp_item" => "000010"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "150000024871"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-10"
+        ]
+        #original: array:9 [
+          "idpo" => "0051941"
+          "idcolor" => 1
+          "kp_item" => "000010"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "150000024871"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-10"
+        ]
+        #changes: []
+        #casts: []
+        #dates: []
+        #dateFormat: null
+        #appends: []
+        #dispatchesEvents: []
+        #observables: []
+        #relations: []
+        #touches: []
+        +timestamps: true
+        #hidden: []
+        #visible: []
+        #fillable: []
+      }
+      13 => App\Http\Models\HistoryDataBreakdown {#6598
+        #connection: "mysql"
+        #table: "historydbreakdown"
+        #primaryKey: "hist_id"
+        #guarded: []
+        #perPage: 15
+        -rules: array:8 [
+          "idpo" => "required|max:7|string"
+          "revisi" => "max:2|string"
+          "idcolor" => "required|max:6|string"
+          "idsize" => "required|max:6|string"
+          "qtysize" => "required|digits_between:1,8"
+          "systemcode" => "max:30|string"
+          "id" => "required|max:20|string"
+          "setcode" => "nullable|max:20|string"
+        ]
+        #keyType: "int"
+        +incrementing: true
+        #with: []
+        #withCount: []
+        +exists: true
+        +wasRecentlyCreated: false
+        #attributes: array:9 [
+          "idpo" => "0051943"
+          "idcolor" => 9
+          "kp_item" => "000010"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "150000022185"
+          "production_status" => "IH"
+          "qty_ori" => 5
+          "deliverydate" => "2026-09-09"
+        ]
+        #original: array:9 [
+          "idpo" => "0051943"
+          "idcolor" => 9
+          "kp_item" => "000010"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "150000022185"
+          "production_status" => "IH"
+          "qty_ori" => 5
+          "deliverydate" => "2026-09-09"
+        ]
+        #changes: []
+        #casts: []
+        #dates: []
+        #dateFormat: null
+        #appends: []
+        #dispatchesEvents: []
+        #observables: []
+        #relations: []
+        #touches: []
+        +timestamps: true
+        #hidden: []
+        #visible: []
+        #fillable: []
+      }
+      14 => App\Http\Models\HistoryDataBreakdown {#6599
+        #connection: "mysql"
+        #table: "historydbreakdown"
+        #primaryKey: "hist_id"
+        #guarded: []
+        #perPage: 15
+        -rules: array:8 [
+          "idpo" => "required|max:7|string"
+          "revisi" => "max:2|string"
+          "idcolor" => "required|max:6|string"
+          "idsize" => "required|max:6|string"
+          "qtysize" => "required|digits_between:1,8"
+          "systemcode" => "max:30|string"
+          "id" => "required|max:20|string"
+          "setcode" => "nullable|max:20|string"
+        ]
+        #keyType: "int"
+        +incrementing: true
+        #with: []
+        #withCount: []
+        +exists: true
+        +wasRecentlyCreated: false
+        #attributes: array:9 [
+          "idpo" => "0051944"
+          "idcolor" => 908
+          "kp_item" => "000010"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "BL0000160021"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-09"
+        ]
+        #original: array:9 [
+          "idpo" => "0051944"
+          "idcolor" => 908
+          "kp_item" => "000010"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "BL0000160021"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-09"
+        ]
+        #changes: []
+        #casts: []
+        #dates: []
+        #dateFormat: null
+        #appends: []
+        #dispatchesEvents: []
+        #observables: []
+        #relations: []
+        #touches: []
+        +timestamps: true
+        #hidden: []
+        #visible: []
+        #fillable: []
+      }
+      15 => App\Http\Models\HistoryDataBreakdown {#6600
+        #connection: "mysql"
+        #table: "historydbreakdown"
+        #primaryKey: "hist_id"
+        #guarded: []
+        #perPage: 15
+        -rules: array:8 [
+          "idpo" => "required|max:7|string"
+          "revisi" => "max:2|string"
+          "idcolor" => "required|max:6|string"
+          "idsize" => "required|max:6|string"
+          "qtysize" => "required|digits_between:1,8"
+          "systemcode" => "max:30|string"
+          "id" => "required|max:20|string"
+          "setcode" => "nullable|max:20|string"
+        ]
+        #keyType: "int"
+        +incrementing: true
+        #with: []
+        #withCount: []
+        +exists: true
+        +wasRecentlyCreated: false
+        #attributes: array:9 [
+          "idpo" => "0051944"
+          "idcolor" => 908
+          "kp_item" => "000020"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "BL0000160021"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-09"
+        ]
+        #original: array:9 [
+          "idpo" => "0051944"
+          "idcolor" => 908
+          "kp_item" => "000020"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "BL0000160021"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-09"
+        ]
+        #changes: []
+        #casts: []
+        #dates: []
+        #dateFormat: null
+        #appends: []
+        #dispatchesEvents: []
+        #observables: []
+        #relations: []
+        #touches: []
+        +timestamps: true
+        #hidden: []
+        #visible: []
+        #fillable: []
+      }
+      16 => App\Http\Models\HistoryDataBreakdown {#6601
+        #connection: "mysql"
+        #table: "historydbreakdown"
+        #primaryKey: "hist_id"
+        #guarded: []
+        #perPage: 15
+        -rules: array:8 [
+          "idpo" => "required|max:7|string"
+          "revisi" => "max:2|string"
+          "idcolor" => "required|max:6|string"
+          "idsize" => "required|max:6|string"
+          "qtysize" => "required|digits_between:1,8"
+          "systemcode" => "max:30|string"
+          "id" => "required|max:20|string"
+          "setcode" => "nullable|max:20|string"
+        ]
+        #keyType: "int"
+        +incrementing: true
+        #with: []
+        #withCount: []
+        +exists: true
+        +wasRecentlyCreated: false
+        #attributes: array:9 [
+          "idpo" => "0051944"
+          "idcolor" => 908
+          "kp_item" => "000030"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "BL0000160021"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-09"
+        ]
+        #original: array:9 [
+          "idpo" => "0051944"
+          "idcolor" => 908
+          "kp_item" => "000030"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "BL0000160021"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-09"
+        ]
+        #changes: []
+        #casts: []
+        #dates: []
+        #dateFormat: null
+        #appends: []
+        #dispatchesEvents: []
+        #observables: []
+        #relations: []
+        #touches: []
+        +timestamps: true
+        #hidden: []
+        #visible: []
+        #fillable: []
+      }
+      17 => App\Http\Models\HistoryDataBreakdown {#6602
+        #connection: "mysql"
+        #table: "historydbreakdown"
+        #primaryKey: "hist_id"
+        #guarded: []
+        #perPage: 15
+        -rules: array:8 [
+          "idpo" => "required|max:7|string"
+          "revisi" => "max:2|string"
+          "idcolor" => "required|max:6|string"
+          "idsize" => "required|max:6|string"
+          "qtysize" => "required|digits_between:1,8"
+          "systemcode" => "max:30|string"
+          "id" => "required|max:20|string"
+          "setcode" => "nullable|max:20|string"
+        ]
+        #keyType: "int"
+        +incrementing: true
+        #with: []
+        #withCount: []
+        +exists: true
+        +wasRecentlyCreated: false
+        #attributes: array:9 [
+          "idpo" => "0051945"
+          "idcolor" => 842
+          "kp_item" => "000010"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "120007064811"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-08"
+        ]
+        #original: array:9 [
+          "idpo" => "0051945"
+          "idcolor" => 842
+          "kp_item" => "000010"
+          "kp_item_ref" => null
+          "revisi_kp" => 0
+          "combine_pro" => "120007064811"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-08"
+        ]
+        #changes: []
+        #casts: []
+        #dates: []
+        #dateFormat: null
+        #appends: []
+        #dispatchesEvents: []
+        #observables: []
+        #relations: []
+        #touches: []
+        +timestamps: true
+        #hidden: []
+        #visible: []
+        #fillable: []
+      }
+      18 => App\Http\Models\HistoryDataBreakdown {#6603
+        #connection: "mysql"
+        #table: "historydbreakdown"
+        #primaryKey: "hist_id"
+        #guarded: []
+        #perPage: 15
+        -rules: array:8 [
+          "idpo" => "required|max:7|string"
+          "revisi" => "max:2|string"
+          "idcolor" => "required|max:6|string"
+          "idsize" => "required|max:6|string"
+          "qtysize" => "required|digits_between:1,8"
+          "systemcode" => "max:30|string"
+          "id" => "required|max:20|string"
+          "setcode" => "nullable|max:20|string"
+        ]
+        #keyType: "int"
+        +incrementing: true
+        #with: []
+        #withCount: []
+        +exists: true
+        +wasRecentlyCreated: false
+        #attributes: array:9 [
+          "idpo" => "0051946"
+          "idcolor" => 842
+          "kp_item" => "000020"
+          "kp_item_ref" => "000010"
+          "revisi_kp" => 1
+          "combine_pro" => "120007064811"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-08"
+        ]
+        #original: array:9 [
+          "idpo" => "0051946"
+          "idcolor" => 842
+          "kp_item" => "000020"
+          "kp_item_ref" => "000010"
+          "revisi_kp" => 1
+          "combine_pro" => "120007064811"
+          "production_status" => "IH"
+          "qty_ori" => 2
+          "deliverydate" => "2026-09-08"
+        ]
+        #changes: []
+        #casts: []
+        #dates: []
+        #dateFormat: null
+        #appends: []
+        #dispatchesEvents: []
+        #observables: []
+        #relations: []
+        #touches: []
+        +timestamps: true
+        #hidden: []
+        #visible: []
+        #fillable: []
+      }
+    ]
+  }
+]
