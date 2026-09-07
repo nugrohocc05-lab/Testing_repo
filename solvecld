@@ -1,72 +1,114 @@
-use App\Http\Models\HistoryPO;
-
-/**
- * Kalau idpo X sudah di-reroute ke idpo Y (via kp_item_ref, combine_pro sama),
- * cek qtypo di revisi terbesar HistoryPO milik X:
- * - qtypo = 0  -> buang X dari list, pakai Y saja
- * - qtypo != 0 -> X dan Y tetap dua-duanya
- */
-private function resolveRerouteDuplicates(Collection $idpoList): Collection
+function summaryFilter(Request $request)
 {
-    if ($idpoList->isEmpty()) {
-        return $idpoList;
+    preconnect(session('db'));
+
+    $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
+    $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+
+    $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
+    $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+
+    $fi = (new OutputDetailFinalInspection())->getTable();
+    $od = (new OutputDetail())->getTable();
+    $po = (new PurchaseOrder())->getTable();
+
+    // ===== STEP 1-2: leaf rows -> qty per idpo =====
+    $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true, $dta, $dtb);
+
+    $qtyPerIdpo = $leafRows->groupBy('idpo')->map(function ($rows) {
+        return (int) $rows->sum('qty_ori');
+    });
+
+    $qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
+
+    // ===== STEP 3: buang idpo yang sudah di-reroute penuh (qtypo revisi terbesar = 0) =====
+    $resolvedIdpo = $this->resolveRerouteDuplicates($qualifiedIdpo);
+
+    // ===== STEP 4: resolvedIdpo -> barcode (OutputDetail) =====
+    $barcodes = OutputDetail::whereIn('idpo', $resolvedIdpo)
+        ->pluck('barcode');
+
+    // ===== headerQuery: berbasis barcode leaf yang sudah di-resolve =====
+    $headerQuery = OutputDetailFinalInspection::query()
+        ->join($od, "$od.barcode", '=', "$fi.barcode")
+        ->join($po, "$po.idpo", '=', "$od.idpo")
+        ->whereIn("$fi.barcode", $barcodes);
+
+    $poIds = (clone $headerQuery)
+        ->select("$od.idpo")
+        ->distinct()
+        ->pluck("$od.idpo");
+
+    $totalQty = HistoryDataBreakdown::whereIn('idpo', $poIds)
+        ->where('is_cutoff', '1')
+        ->sum('qty_ori');
+
+    $totalQtyInspect = (clone $headerQuery)
+        ->whereNotNull("$fi.date_output")
+        ->count(DB::raw("DISTINCT $fi.id"));
+
+    // ===== PO Need Final: today s/d today+7 =====
+    $today = Carbon::today()->startOfDay();
+
+    $needFinalFrom = $today->copy();
+    $needFinalTo = $today->copy()->addDays(7)->startOfDay();
+
+    if ($needFinalFrom->lessThanOrEqualTo($needFinalTo)) {
+        $poNeedFinalList = $this->getPoNeedFinalIdpoList(
+            $request,
+            $needFinalFrom,
+            $needFinalTo
+        );
+        $poNeedFinal = $poNeedFinalList->count();
+    } else {
+        $poNeedFinal = 0;
     }
 
-    $rows = HistoryDataBreakdown::whereIn('idpo', $idpoList)
-        ->select('idpo', 'combine_pro', 'kp_item', 'kp_item_ref', 'revisi_kp')
-        ->get();
+    // ===== Overdue =====
+    $overdueFrom = $today->copy()->subDays(7)->startOfDay();
+    $overdueTo   = $today->copy()->endOfDay();
 
-    // Siapa "pemilik asli" tiap kp_item dalam combine_pro yang sama (idpo terkecil)
-    $ownerByCombineKpItem = $rows
-        ->groupBy(fn ($r) => $r->combine_pro . '|' . $r->kp_item)
-        ->map(fn ($group) => $group->sortBy('idpo')->first()->idpo);
+    $overdueList = $this->getFinalCheckIdpoList($request, $overdueFrom, $overdueTo);
+    $overdue = $overdueList->count();
 
-    // Pasangan reroute: idpo baru (revisi_kp=1, ada ref) -> idpo asli
-    $reroutedPairs = $rows
-        ->filter(fn ($r) => $r->revisi_kp == 1 && !is_null($r->kp_item_ref))
-        ->map(function ($r) use ($ownerByCombineKpItem) {
-            $originalIdpo = $ownerByCombineKpItem->get($r->combine_pro . '|' . $r->kp_item_ref);
-            return ($originalIdpo && $originalIdpo != $r->idpo)
-                ? ['original' => $originalIdpo, 'rerouted' => $r->idpo]
-                : null;
-        })
-        ->filter()
-        ->unique(fn ($p) => $p['original'] . '|' . $p['rerouted'])
-        ->values();
+    // ===== Final Completed: PO dengan is_output = 1, dari barcode leaf yang sudah di-resolve =====
+    $finalCom = (clone $headerQuery)
+        ->where("$fi.is_output", 1)
+        ->count(DB::raw("DISTINCT $po.po"));
 
-    $excludedOriginals = collect();
+    $totalPo = $poNeedFinal + $overdue + $finalCom;
 
-    foreach ($reroutedPairs as $pair) {
-        $maxRevisiRow = HistoryPO::where('idpo', $pair['original'])
-            ->orderByDesc('revisi')
-            ->first();
+    // ===== OQL =====
+    $totDefect = (clone $headerQuery)
+        ->whereNotNull("$fi.date_output")
+        ->whereNotNull("$fi.defect_code")
+        ->count(DB::raw("DISTINCT $fi.id"));
 
-        if ($maxRevisiRow && (int) $maxRevisiRow->qtypo === 0) {
-            $excludedOriginals->push($pair['original']);
-        }
-    }
+    $oql = $totalQtyInspect > 0 ? round(($totDefect / $totalQtyInspect) * 100, 2) : 0;
 
-    return $idpoList->diff($excludedOriginals)->values();
-}
+    // ===== Passing / Reject Rate =====
+    $poNoDefect = (clone $headerQuery)
+        ->whereNotNull("$fi.date_output")
+        ->whereNull("$fi.defect_code")
+        ->count(DB::raw("DISTINCT $fi.id"));
 
+    $poWithDefect = (clone $headerQuery)
+        ->whereNotNull("$fi.date_output")
+        ->whereNotNull("$fi.defect_code")
+        ->count(DB::raw("DISTINCT $fi.id"));
 
+    $passingRate = $totalPo > 0 ? round(($poNoDefect / $totalPo) * 100, 2) : 0;
+    $rejectRate  = $totalPo > 0 ? round(($poWithDefect / $totalPo) * 100, 2) : 0;
 
-private function getPoNeedFinalIdpoList(Request $request, Carbon $fromDate, Carbon $toDate)
-{
-    // ... (semua isi tetap sama sampai)
-
-    $result = $finalCheckQuery->select("$dbr.idpo")->distinct()->pluck('idpo');
-
-    return $this->resolveRerouteDuplicates($result);
-}
-
-
-
-private function getFinalCheckIdpoList(Request $request, Carbon $from, Carbon $to)
-{
-    // ... (semua isi tetap sama sampai)
-
-    $result = $query->select("$dbr.idpo")->distinct()->pluck('idpo');
-
-    return $this->resolveRerouteDuplicates($result);
+    return response()->json([
+        'total_po'          => $totalPo,
+        'total_qty'         => $totalQty,
+        'total_qty_inspect' => $totalQtyInspect,
+        'po_need_final'     => $poNeedFinal,
+        'overdue'           => $overdue,
+        'final_completed'   => $finalCom,
+        'oql'               => $oql,
+        'passing_rate'      => $passingRate,
+        'reject_rate'       => $rejectRate,
+    ]);
 }
