@@ -1,34 +1,32 @@
-// ===== DEBUG SEMENTARA — cek apakah ada revisi_kp=1+kp_item_ref yang SEBENARNYA
-// masih di idpo yang sama (revisi internal, BUKAN reroute lintas idpo) =====
-\Log::info('DEBUG getNetCutoffQty - familyRows', $familyRows->map(function ($r) {
-    return [
-        'idpo'        => $r->idpo,
-        'combine_pro' => $r->combine_pro,
-        'kp_item'     => $r->kp_item,
-        'kp_item_ref' => $r->kp_item_ref,
-        'revisi_kp'   => $r->revisi_kp,
-        'qty_ori'     => $r->qty_ori,
-        'is_cutoff'   => $r->is_cutoff,
-    ];
-})->toArray());
-
+// ===== DEBUG SEMENTARA =====
 $sameIdpoRevisions = $familyRows->filter(function ($r) use ($familyRows) {
     if ($r->revisi_kp != 1 || is_null($r->kp_item_ref)) {
         return false;
     }
-    // Cari baris pemilik asli kp_item_ref ini
     $ownerRow = $familyRows->first(function ($o) use ($r) {
         return $o->combine_pro === $r->combine_pro && $o->kp_item === $r->kp_item_ref;
     });
-    // Flag kalau pemilik aslinya ternyata idpo YANG SAMA (bukan lintas idpo)
     return $ownerRow && (string) $ownerRow->idpo === (string) $r->idpo;
 });
 
-\Log::info('DEBUG getNetCutoffQty - baris revisi INTERNAL (idpo sama, salah kepotong?)',
-    $sameIdpoRevisions->map(function ($r) {
+dd([
+    'familyRows_all' => $familyRows->map(function ($r) {
         return [
-            'idpo' => $r->idpo, 'kp_item' => $r->kp_item,
-            'kp_item_ref' => $r->kp_item_ref, 'qty_ori' => $r->qty_ori,
+            'idpo'        => $r->idpo,
+            'combine_pro' => $r->combine_pro,
+            'kp_item'     => $r->kp_item,
+            'kp_item_ref' => $r->kp_item_ref,
+            'revisi_kp'   => $r->revisi_kp,
+            'qty_ori'     => $r->qty_ori,
+            'is_cutoff'   => $r->is_cutoff,
         ];
-    })->toArray()
-);
+    })->values()->toArray(),
+    'baris_revisi_internal_idpo_sama' => $sameIdpoRevisions->map(function ($r) {
+        return [
+            'idpo'        => $r->idpo,
+            'kp_item'     => $r->kp_item,
+            'kp_item_ref' => $r->kp_item_ref,
+            'qty_ori'     => $r->qty_ori,
+        ];
+    })->values()->toArray(),
+]);
