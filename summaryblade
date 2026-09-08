@@ -1,154 +1,63 @@
-Berikut adalah perbaikan kode Blade Anda agar responsif secara optimal di seluruh ukuran layar—mulai dari Mobile (< 768px), Tablet (768px – 991px), Desktop Mid/Laptop (992px – 1399px), hingga Desktop Besar (≥ 1400px).
-Perbaikan Utama yang Dilakukan:
- * Layout di Bawah Summary Card:
-   * Menghapus pembatasan height: 100% dan min-height: 0 kaku yang sebelumnya menyebabkan tampilan terpotong atau overflow di layar seluler/tablet.
-   * Menggunakan flexbox & CSS Grid modern dengan pembagian responsif col-12 col-lg-7 (kiri) dan col-12 col-lg-5 (kanan) yang menumpuk secara alami (stacking) di layar HP/Tablet dan berjajar rapi di Desktop.
- * Summary Cards Grid (8 Kartu):
-   * Memperbaiki pembagian kolom kartu ringkasan dari yang tadinya acak menjadi col-6 col-sm-4 col-md-3 col-xl sehingga di HP tampil 2 kolom, Tablet 3-4 kolom, dan di Desktop berjajar 8 kolom secara presisi tanpa ada yang menggantung.
- * Pembersihan & Pengorganisasian CSS Media Queries:
-   * Mengelompokkan ulang Breakpoints CSS (< 768px, 768px–991px, 992px–1399px, dan ≥ 1400px).
-   * Penyesuaian ukuran font, padding, dan tinggi kartu secara dinamis agar rasio visual tetap seimbang di monitor kecil (laptop) maupun monitor besar.
- * Header & Footer Dashboard:
-   * Memastikan judul dan tombol aksi di header fleksibel (wrap) jika dibuka di layar sempit.
-Kode Lengkap Terperinci
+Mohon maaf atas ketidaknyamanan sebelumnya. Jika desain desktop besar sudah presisi dan tidak ingin diubah, saya akan mengembalikan seluruh struktur HTML dan CSS persis seperti kode asli Anda untuk versi Desktop.
+Kerusakan di layar kecil (Mobile & Tablet) pada kode awal Anda terjadi karena adanya paksaan height: 100%, h-100, dan min-height: 0 pada flexbox utama. Di layar desktop itu berfungsi sempurna untuk membuat layout full-screen, tetapi di layar kecil membuat konten menjadi saling bertumpuk (terpotong) karena layar tidak cukup tinggi.
+Solusinya: Saya hanya menambahkan kode CSS @media (max-width: 991.98px) untuk menonaktifkan penguncian tinggi (height lock) khusus untuk HP & Tablet, dan membuat kolom di HP menjadi 2 ke samping (col-6) agar tidak terlalu panjang ke bawah. Desktop tidak ada yang diubah sedikit pun.
+Berikut adalah kodenya:
 @extends('layouts.masternonavbar')
 
 @section('extracss')
 <style>
-    /* Base Container Setup */
-    .dashboard-wrap {
-        display: flex;
-        flex-direction: column;
-        min-height: 100vh;
-        padding: 1rem;
-    }
-
-    /* Header Styling */
-    .dashboard-title {
-        font-size: 1.35rem;
-        font-weight: 700;
-    }
-    .dashboard-subtitle {
-        font-size: 0.85rem;
-        opacity: 0.8;
-    }
-
-    /* Summary Card Base Styling */
+    /* =======================================================
+       KODE ASLI DESKTOP (TIDAK DIUBAH SAMA SEKALI)
+       ======================================================= */
     .stat-card {
-        min-height: 140px;
-        height: 100%;
-        padding: 0.75rem !important;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        text-align: center;
-        border-radius: 6px;
-        transition: all 0.2s ease;
+        height: 160px !important;
+        min-height: 160px !important;
+        padding: 0 !important;
     }
 
     .stat-card img {
-        width: 36px !important;
-        height: 36px !important;
-        margin-bottom: 0.35rem !important;
+        width: 40px !important;
+        height: 40px !important;
+        margin-bottom: .45rem !important;
     }
 
     .stat-card h6 {
-        font-size: 0.85rem;
-        margin-bottom: 0.2rem !important;
+        font-size: 1rem;
+        margin-bottom: .25rem !important;
     }
 
     .stat-card h2 {
-        font-size: 1.35rem;
+        font-size: 1.5rem;
         line-height: 1;
     }
 
     .stat-card small {
-        font-size: 0.8rem;
+        font-size: 1rem;
+    }
+
+    .stat-card-defect {
+        height: auto;
+    }
+
+    .stat-card-defect > div {
+        width: 100%;
     }
 
     .subtitle {
-        font-size: 11px;
-        color: rgba(255, 255, 255, 0.8);
+        font-size: 13px;
+        color: white;
     }
 
-    /* Final Inspection Bar Card */
-    .final-inspection-card {
-        border-radius: 6px;
-        padding: 12px;
-        background-color: #212B3E;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        height: 100%;
-        box-sizing: border-box;
-        border: 1px solid rgba(255, 255, 255, 0.05);
+    .defect-header {
+        width: 100%;
     }
 
-    .fi-title {
-        text-align: center;
-        color: #ffffff;
-        font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 0.5px;
-        margin-bottom: 10px;
+    .defect-list {
+        width: 100%;
+        font-size: 13px;
+        gap: 2px;
     }
 
-    .fi-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 8px;
-    }
-
-    .fi-row:last-child {
-        margin-bottom: 0;
-    }
-
-    .fi-label {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        width: 95px;
-        flex: 0 0 95px;
-    }
-
-    .fi-percent {
-        color: #ffffff;
-        font-size: 14px;
-        font-weight: 700;
-        line-height: 1.1;
-    }
-
-    .fi-text {
-        color: #9ca3af;
-        font-size: 9px;
-        letter-spacing: 0.3px;
-        white-space: nowrap;
-        margin-top: 2px;
-    }
-
-    .fi-bar-wrapper {
-        flex: 1;
-        height: 24px;
-        background: #1a2332;
-        border-radius: 3px;
-        overflow: hidden;
-        position: relative;
-        min-width: 0;
-    }
-
-    .fi-bar {
-        height: 100%;
-        transition: width 0.6s ease;
-        min-width: 4px;
-    }
-
-    .fi-bar-green { background: #2ecc71; }
-    .fi-bar-red { background: #e74c3c; }
-    .fi-bar-orange { background: #F27D01; }
-
-    /* Defect List Item Styles */
     #topDefectList {
         max-height: 110px;
         width: 100%;
@@ -157,7 +66,10 @@ Kode Lengkap Terperinci
         -webkit-overflow-scrolling: touch;
     }
 
-    #topDefectList::-webkit-scrollbar { width: 4px; }
+    #topDefectList::-webkit-scrollbar {
+        width: 3px;
+    }
+
     #topDefectList::-webkit-scrollbar-thumb {
         background: rgba(255, 255, 255, 0.3);
         border-radius: 4px;
@@ -167,14 +79,16 @@ Kode Lengkap Terperinci
         display: flex;
         align-items: center;
         width: 100%;
-        margin-bottom: 3px;
+        margin-bottom: 1px;
+    }
+
+    #topDefectList .defect-item:last-child {
+        margin-bottom: 0;
     }
 
     .defect-circle {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        flex-shrink: 0;
+        width: 12px;
+        height: 12px;
     }
 
     .defect-name {
@@ -194,32 +108,278 @@ Kode Lengkap Terperinci
     }
 
     .defect-percent {
-        flex: 0 0 50px;
+        flex: 0 0 55px;
         margin-left: 8px;
         text-align: right;
         white-space: nowrap;
     }
 
-    /* Main Section Below Summary */
-    .main-content-section {
-        flex: 1 1 auto;
-        width: 100%;
+    .icon-summary {
+        width: 25px;
+        height: 25px;
     }
 
-    .content-box {
-        background: #1B2331;
-        border-radius: 6px;
-        width: 100%;
+    @media (min-width: 992px) and (max-width: 1400px) {
+        #topDefectList {
+            max-height: 83px;
+        }
+
+        .stat-card {
+            height: 120px !important;
+            min-height: 120px !important;
+        }
+
+        .stat-card img {
+            width: 24px !important;
+            height: 24px !important;
+            margin-bottom: .35rem !important;
+        }
+
+        .stat-card h6 {
+            font-size: 13px;
+            margin-bottom: .25rem !important;
+        }
+
+        .stat-card h2 {
+            font-size: 15px;
+            line-height: 1;
+        }
+
+        .stat-card small {
+            font-size: 10px;
+        }
+
+        .stat-card-defect {
+            height: auto;
+        }
+
+        .stat-card-defect > div {
+            width: 100%;
+        }
+
+        .defect-header {
+            width: 100%;
+        }
+
+        .defect-list {
+            width: 100%;
+            font-size: 10px;
+        }
+
+        .flatpickr-calendar {
+            max-width: 315px;
+            padding: 4px;
+            border-radius: 4px;
+        }
+
+        .flatpickr-day {
+            width: 30px;
+            height: 30px;
+            line-height: 30px;
+            font-size: 0.68rem;
+        }
+
+        .flatpickr-current-month {
+            font-size: 0.95rem;
+        }
+
+        span.flatpickr-weekday {
+            font-size: 0.75rem;
+        }
+
+        .text-title {
+            font-size: 12px;
+        }
+
+        .margin-cstm {
+            margin-top: 10px !important;
+            padding: 6px 0 !important;
+        }
     }
 
-    .content-box.border-custom {
-        border: 1px solid #242E3E;
+    @media (max-width: 768px) {
+        #topDefectList {
+            max-height: 110px;
+        }
+
+        .defect-header {
+            flex-direction: column;
+            gap: 0.5rem !important;
+        }
+
+        .footer-title {
+            font-size: 12px;
+        }
+
+        .img-foot {
+            width: 15px;
+            height: 15px;
+        }
+
+        .title-pcs {
+            font-size: 10px !important;
+        }
     }
 
-    /* Tables Responsiveness */
-    .table-scroll-tbl {
+    .title-pcs {
+        font-size: 12px !important;
+    }
+
+    .subheader {
+        font-size: 15px;
+    }
+
+    .flex-lg-grow-7,
+    .flex-lg-grow-5 {
+        flex: 1 1 100%;
+    }
+
+    /* Desktop 992–1400 */
+    @media (min-width: 992px) and (max-width: 1399.98px) {
+        .flex-lg-grow-7 { flex: 7; }
+        .flex-lg-grow-5 { flex: 5; }
+
+        .subheader { font-size: 0.60rem; }
+
+        .wrapper-sub {
+            margin: 1px 2px;
+        }
+    }
+
+    /* Desktop besar >= 1400 */
+    @media (min-width: 1400px) {
+        .flex-lg-grow-7 { flex: 7; }
+        .flex-lg-grow-5 { flex: 5; }
+
+        .subheader { font-size: 0.9rem; }
+    }
+
+    .wrapper-sub {
+        margin: 10px 12px;
+    }
+
+    .final-inspection-card {
+        border-radius: 5px;
+        padding: 16px;
+        background-color: #212B3E;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        box-sizing: border-box;
+    }
+
+    .fi-title {
+        text-align: center;
+        color: #ffffff;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        margin-bottom: 14px;
+    }
+
+    .fi-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+
+    .fi-row:last-child {
+        margin-bottom: 0;
+    }
+
+    .fi-label {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        width: 110px;
+        flex: 0 0 110px;
+    }
+    .fi-percent {
+        color: #ffffff;
+        font-size: 16px;
+        font-weight: 700;
+        line-height: 1.1;
+    }
+
+    .fi-text {
+        color: #9ca3af;
+        font-size: 10px;
+        letter-spacing: 0.3px;
+        white-space: nowrap;
+        margin-top: 2px;
+    }
+
+    .fi-bar-wrapper {
         flex: 1;
+        height: 32px;
+        background: #1a2332;
+        overflow: hidden;
+        position: relative;
+        min-width: 0;
+    }
+
+    .fi-bar {
+        height: 100%;
+        transition: width 0.6s ease;
+        min-width: 6px;
+    }
+
+    .fi-bar-green {
+        background: #2ecc71;
+    }
+
+    .fi-bar-red {
+        background: #e74c3c;
+    }
+
+    .fi-bar-orange {
+        background: #F27D01;
+    }
+
+    @media (min-width: 992px) and (max-width: 1399.98px) {
+        .fi-title { font-size: 11px; margin-bottom: 8px; }
+        .fi-percent { font-size: 13px; }
+        .fi-text { font-size: 8px; }
+        .fi-bar-wrapper { height: 24px; }
+        .fi-row { margin-bottom: 8px; gap: 8px; }
+        .final-inspection-card { padding: 12px; }
+         .fi-label { width: 90px; flex: 0 0 90px; }
+    }
+
+     .flex-fill.border-custom-datatable {
+        display: flex;
+        flex-direction: column;
         min-height: 0;
+        min-width: 0;
+        width: 100%;
+        height: 100%;
+        flex: 1 1 0;
+        overflow: hidden;
+    }
+
+    .wrapper-sub {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        min-width: 0;
+        width: 100%;
+        height: 100%;
+        flex: 1 1 auto;
+        overflow: hidden;
+        padding: 10px;
+        margin: 0;
+    }
+
+    .sub-header {
+        padding: 8px 16px;
+        margin-bottom: 4px
+    }
+
+    .table-scroll-tbl {
+        flex: 1 1 0;
+        min-height: 0;
+        min-width: 0;
         width: 100%;
         overflow: auto;
     }
@@ -227,6 +387,7 @@ Kode Lengkap Terperinci
     .table-res {
         width: 100%;
         margin-bottom: 0;
+        table-layout: fixed;
         border-collapse: collapse;
     }
 
@@ -236,10 +397,11 @@ Kode Lengkap Terperinci
         z-index: 2;
         background-color: #1B2331;
         vertical-align: middle;
-        font-weight: 500;
-        font-size: 11px;
-        padding: 0.6rem 0.4rem;
-        white-space: nowrap;
+        word-wrap: break-word;
+        font-weight: 400;
+        font-size: 12px;
+        padding: 0.75rem 0.5rem;
+        line-height: 12px !important;
     }
 
     .table-res tbody td {
@@ -247,8 +409,10 @@ Kode Lengkap Terperinci
         overflow: hidden;
         text-overflow: ellipsis;
         vertical-align: middle;
-        padding: 0.5rem 0.4rem;
-        font-size: 11px;
+        padding: 0.5rem;
+        font-weight: 400;
+        font-size: 12px;
+        line-height: 25px !important;
     }
 
     .table-res tfoot th {
@@ -257,124 +421,143 @@ Kode Lengkap Terperinci
         z-index: 2;
         background-color: #1B2331;
         font-weight: 600;
-        font-size: 12px;
-        padding: 0.6rem 0.4rem;
+        font-size: 14px;
+        line-height: 12px !important;
+        padding: 0.75rem 0.5rem;
     }
 
-    /* Status Color Helpers */
-    .title-pass { color: #2ecc71; font-weight: 700; text-align: start; }
-    .title-reject { color: #e74c3c; font-weight: 700; text-align: start; }
-    .title-notfinal { color: #F27D01; font-weight: 700; text-align: start; }
-
-    /* Custom Scrollbar */
-    .table-scroll-tbl::-webkit-scrollbar { height: 6px; width: 6px; }
-    .table-scroll-tbl::-webkit-scrollbar-track { background: #151c28; border-radius: 4px; }
-    .table-scroll-tbl::-webkit-scrollbar-thumb { background: #3a4b68; border-radius: 4px; }
-
-    /* ==========================================================================
-       MEDIA QUERIES (RESPONSIVE RULES)
-       ========================================================================== */
-
-    /* Large Desktop (>= 1400px) */
-    @media (min-width: 1400px) {
-        .stat-card { min-height: 155px; }
-        .stat-card h6 { font-size: 0.95rem; }
-        .stat-card h2 { font-size: 1.5rem; }
-        .fi-title { font-size: 13px; }
-        .fi-percent { font-size: 16px; }
-        .fi-text { font-size: 10px; }
-        .fi-bar-wrapper { height: 28px; }
+    .table-res tbody .empty-row {
+        height: 120px;
     }
 
-    /* Mid Desktop / Laptop (992px - 1399.98px) */
+    .table-res tbody .empty-row td {
+        text-align: center;
+        white-space: normal;
+        overflow: visible;
+        text-overflow: unset;
+    }
+
     @media (min-width: 992px) and (max-width: 1399.98px) {
-        .stat-card {
-            min-height: 125px !important;
-            padding: 0.5rem !important;
+        .table-res thead th {
+            font-size: 11px;
+            padding: 0.4rem 0.25rem;
         }
 
-        .stat-card img {
-            width: 28px !important;
-            height: 28px !important;
-            margin-bottom: 0.25rem !important;
+        .table-res tbody td {
+            font-size: 11px;
+            line-height: 24px;
+            padding: 0.4rem 0.25rem;
         }
 
-        .stat-card h6 { font-size: 12px; }
-        .stat-card h2 { font-size: 16px; }
-        .stat-card small { font-size: 10px; }
-        .subtitle { font-size: 9px; }
-
-        .fi-title { font-size: 11px; margin-bottom: 6px; }
-        .fi-percent { font-size: 13px; }
-        .fi-label { width: 85px; flex: 0 0 85px; }
-        .fi-bar-wrapper { height: 22px; }
-
-        .table-res thead th, 
-        .table-res tbody td { 
-            font-size: 10px; 
-            padding: 0.35rem 0.25rem; 
+        .table-res tfoot th {
+            font-size: 12px;
+            line-height: 24px;
+            padding: 0.4rem 0.25rem;
         }
-
-        #topDefectList { max-height: 85px; }
     }
 
-    /* Tablet (768px - 991.98px) */
     @media (max-width: 991.98px) {
-        .dashboard-title { font-size: 1.15rem !important; }
-        .dashboard-subtitle { font-size: 0.8rem !important; }
-        .stat-card { min-height: 120px; }
+        .wrapper-sub {
+            margin: 5px;
+        }
+
+        .table-res thead th {
+            font-size: 11px;
+            padding: 0.5rem;
+        }
+
+        .table-res tbody td {
+            font-size: 11px;
+            line-height: 22px;
+            padding: 0.5rem;
+        }
+
+        .table-res tfoot th {
+            font-size: 12px;
+            line-height: 22px;
+            padding: 0.5rem;
+        }
     }
 
-    /* Mobile (< 768px) */
-    @media (max-width: 767.98px) {
-        .dashboard-wrap { padding: 0.5rem; }
-        .dashboard-title { font-size: 1rem !important; }
-        .dashboard-subtitle { font-size: 0.75rem !important; }
+    .title-pass {
+        color: #327932 ;
+        font-weight: 700 !important;
+        text-align: start;
+    }
+    .title-reject {
+        color: #F24C4C ;
+        font-weight: 700 !important;
+        text-align: start;
+    }
+    .title-notfinal {
+        color: #F27D01 ;
+        font-weight: 700 !important;
+        text-align: start;
+    }
 
-        .stat-card {
-            min-height: 110px !important;
-            padding: 0.5rem !important;
-        }
+    .table-scroll-tbl::-webkit-scrollbar { height: 8px; width: 8px; }
+    .table-scroll-tbl::-webkit-scrollbar-track { background: var(--bg-dark-2); border-radius: 4px; }
+    .table-scroll-tbl::-webkit-scrollbar-thumb { background: #D9D9D9; border-radius: 4px; }
+    .table-scroll-tbl { scrollbar-width: thin; scrollbar-color: #D9D9D9 var(--bg-dark-2); }
+    .table-responsive { -webkit-overflow-scrolling: touch; }
 
-        .stat-card img {
-            width: 24px !important;
-            height: 24px !important;
-            margin-bottom: 0.2rem !important;
-        }
+    /* =======================================================
+       PERBAIKAN KHUSUS UNTUK HP & TABLET (< 992px)
+       Melepaskan kuncian height:100% agar tabel & layout bisa di-scroll
+       ======================================================= */
+    @media (max-width: 991.98px) {
+        /* Container Dashboard biarkan mengikuti tinggi konten */
+        .dashboard-wrap { height: auto !important; min-height: 100vh; display: block !important; overflow-y: auto !important; }
+        
+        /* Lepas tinggi kaku pada layout utama bawah */
+        .flex-min-h-0, .row-bottom-h { height: auto !important; min-height: unset !important; }
+        
+        /* Lepas flex-grow yang kaku pada kolom Kiri & Kanan */
+        .col-lg-7, .col-lg-5 { display: block !important; height: auto !important; }
+        .col-lg-7 > div, .col-lg-5 > div { height: auto !important; min-height: unset !important; display: block !important; }
 
+        /* Lepas tinggi kaku pada wrapper tabel agar tidak terpotong (overlap) */
+        .flex-fill.border-custom-datatable { height: auto !important; min-height: unset !important; flex: none !important; display: block !important; margin-bottom: 15px; }
+        .wrapper-sub { height: auto !important; min-height: unset !important; flex: none !important; display: block !important; }
+        
+        /* Berikan area scroll khusus untuk tabel di HP */
+        .table-scroll-tbl { min-height: 250px; overflow-x: auto; overflow-y: auto; }
+        
+        /* Ukuran judul disesuaikan di layar kecil */
+        .dashboard-title { font-size: 16px !important; }
+        .dashboard-subtitle { font-size: 11px !important; }
+        
+        /* Summary card sedikit diperkecil dan dirapikan tingginya */
+        .stat-card { height: 110px !important; min-height: 110px !important; padding: 0.5rem !important; }
+        .stat-card img { width: 25px !important; height: 25px !important; margin-bottom: .25rem !important; }
         .stat-card h6 { font-size: 11px; }
-        .stat-card h2 { font-size: 14px; }
-        .stat-card small { font-size: 9px; }
-
-        .final-inspection-card { padding: 10px; }
-        .footer-title { font-size: 11px; }
+        .stat-card h2 { font-size: 15px; }
+        .final-inspection-card { padding: 12px; }
     }
 </style>
 @endsection
 
 @section('content')
 <div class="container-fluid dashboard-wrap">
-    <!-- Header Dashboard -->
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
         <div class="d-flex align-items-center gap-3 text-decoration-none">
             <img src="{{ _asset('svg/finalInspection/final.svg') }}" class="icon-dashboard flex-shrink-0" alt="Endline Performance">
             <div class="d-flex flex-column justify-content-center">
-                <h2 class="text-white mb-0 dashboard-title">FINAL INSPECTION DASHBOARD - {{ str_replace('GMS ', '', session('factoryname')) }}</h2>
-                <p class="text-white mb-0 dashboard-subtitle">Monitoring Final Inspection and Shipment Readiness</p>
+                <h2 class="text-white mb-1 dashboard-title">FINAL INSPECTION DASHBOARD - {{ str_replace('GMS ', '', session('factoryname')) }}</h2>
+                <p class="text-white fs-6 mb-0 dashboard-subtitle">Monitoring Final Inspection and Shipment Readiness</p>
             </div>
         </div>
 
-        <div class="button-inline d-flex align-items-center gap-2">
-            <a href="{{ route('home') }}" class="d-flex align-items-center gap-2 text-decoration-none px-2" aria-label="Home">
+        <div class="button-inline d-flex">
+            <a href="{{ route('home') }}" class="d-flex align-items-center gap-3 text-decoration-none px-3">
                 <img src="{{ _asset('svg/inlinePerformance/home.svg') }}" class="icon-button-inline flex-shrink-0" alt="Home">
             </a>
 
-            <button class="export-btn bg-transparent border-0 p-0 position-relative" id="export-btn" aria-label="Export">
+            <button class="export-btn bg-transparent border-0 p-0" id="export-btn" aria-label="Export">
                 <img src="{{ _asset('svg/inlinePerformance/export.svg') }}" alt="Export" class="export-icon">
                 <span class="custom-tooltip">Excel</span>
             </button>
-
-            <button type="button" class="export-btn px-2 border-0 bg-transparent p-0 position-relative" onclick="location.reload()" aria-label="Refresh">
+            <button type="button" class="export-btn px-3" style="border: none; background: transparent; outline: none; box-shadow: none; padding: 0;" onclick="location.reload()" aria-label="Refresh">
                 <img src="{{ _asset('svg/inlinePerformance/reload.svg') }}" alt="Refresh" class="icon-refresh">
                 <span class="custom-tooltip-bottom">Refresh</span>
             </button>
@@ -384,95 +567,94 @@ Kode Lengkap Terperinci
     <!-- Summary Filter -->
     @include('monitoring::finalinspection.partials.summary')
 
-    <!-- Summary Cards Row (8 Items Responsive Grid) -->
-    <div class="row g-2 g-xl-3 card-wrapper mb-3">
-        <div class="col-6 col-sm-4 col-md-3 col-xl">
-            <div class="stat-card color-box-blue">
-                <img src="{{ _asset('svg/endlinePerformance/total-output.svg') }}" alt="Total PO">
-                <h6 class="fw-bold text-blue mb-0">TOTAL</h6>
-                <p class="fw-bold text-blue mb-0">PO</p>
-                <div class="d-flex align-items-end text-white my-1">
+    <!-- Summary Cards (Diubah col-6 agar di HP berjejer 2 menyamping) -->
+    <div class="row g-3 card-wrapper">
+        <div class="col-6 col-sm-4 col-lg">
+            <div class="stat-card color-box-blue h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                <img src="{{ _asset('svg/endlinePerformance/total-output.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
+                <h6 class="fw-bold text-blue mb-0" style="line-height:1;">TOTAL</h6>
+                <p class="fw-bold text-blue mb-0" style="line-height:1;">PO</p>
+                <div class="d-flex align-items-end text-white mt-2 mb-2">
                     <h2 class="fw-bold mb-0" id="totalpo">-</h2>
                 </div>
-                <small class="title-pcs text-white">PO</small>
+                <small class="title-pcs ms-1 text-white">PO</small>
             </div>
         </div>
 
-        <div class="col-6 col-sm-4 col-md-3 col-xl">
-            <div class="stat-card color-box-yellow">
-                <img src="{{ _asset('svg/inlinePerformance/qty-inspect.svg') }}" alt="Total QTY">
-                <h6 class="fw-bold text-yellow mb-0">TOTAL</h6>
-                <p class="fw-bold text-yellow mb-0">QTY</p>
-                <div class="d-flex align-items-end text-white my-1">
+        <div class="col-6 col-sm-4 col-lg">
+            <div class="stat-card color-box-yellow h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                <img src="{{ _asset('svg/inlinePerformance/qty-inspect.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
+                <h6 class="fw-bold text-yellow mb-0" style="line-height:1;" >TOTAL</h6>
+                <p class="fw-bold text-yellow mb-0" style="line-height:1;" >QTY</p>
+                <div class="d-flex align-items-end text-white mt-2 mb-2">
                     <h2 class="fw-bold mb-0" id="totalqty">-</h2>
                 </div>
-                <small class="title-pcs text-white">pcs</small>
+                <small class="title-pcs ms-1 text-white">pcs</small>
             </div>
         </div>
 
-        <div class="col-6 col-sm-4 col-md-3 col-xl">
-            <div class="stat-card color-box-red">
-                <img src="{{ _asset('svg/finalInspection/qty-inspect.svg') }}" alt="Total QTY Inspect">
-                <h6 id="defectText" class="fw-bold text-red mb-0">TOTAL QTY</h6>
-                <p class="fw-bold text-red mb-0">INSPECT</p>
-                <div class="d-flex align-items-end text-white my-1">
+        <div class="col-6 col-sm-4 col-lg">
+            <div class="stat-card color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                <img src="{{ _asset('svg/finalInspection/qty-inspect.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
+                <h6 id="defectText" class="fw-bold text-red mb-0" style="line-height:1;" >TOTAL QTY</h6>
+                <p class="fw-bold text-red mb-0" style="line-height:1;" >INSPECT</p>
+                <div class="d-flex align-items-end text-white mt-2 mb-2">
                     <h2 class="fw-bold mb-0" id="totalqtyinspect">-</h2>
                 </div>
-                <small class="title-pcs text-white">pcs</small>
+                <small class="title-pcs ms-1 text-white">pcs</small>
             </div>
         </div>
 
-        <div class="col-6 col-sm-4 col-md-3 col-xl">
-            <div class="stat-card color-box-green">
-                <img src="{{ _asset('svg/finalInspection/po-need-final.svg') }}" alt="PO Need Final">
-                <h6 class="fw-bold text-green mb-0">PO NEED FINAL</h6>
-                <p class="subtitle text-blue mb-0">(Final ≥ H - 1 ETD)</p>
-                <div class="d-flex align-items-end text-white my-1">
+        <div class="col-6 col-sm-4 col-lg">
+            <div class="stat-card color-box-green h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                <img src="{{ _asset('svg/finalInspection/po-need-final.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
+                <h6 class="fw-bold text-green mb-0" style="line-height:1;" >PO NEED FINAL</h6>
+                <p class="subtitle text-blue mb-0" style="line-height:1;" >(Final ≥ H - 1 ETD )</p>
+                <div class="d-flex align-items-end text-white mt-2 mb-2">
                     <h2 class="fw-bold mb-0" id="poneedfinal">-</h2>
                 </div>
-                <small class="title-pcs text-white">PO</small>
+                <small class="title-pcs ms-1 text-white">PO</small>
             </div>
         </div>
 
-        <div class="col-6 col-sm-4 col-md-3 col-xl">
-            <div class="stat-card color-box-red">
-                <img src="{{ _asset('svg/finalInspection/overdue.svg') }}" alt="Overdue">
-                <h6 class="fw-bold text-red mb-0">OVERDUE</h6>
-                <p class="subtitle text-blue mb-0">(ETD &lt; Today)</p>
-                <div class="d-flex align-items-end text-white my-1">
+        <div class="col-6 col-sm-4 col-lg">
+            <div class="stat-card color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                <img src="{{ _asset('svg/finalInspection/overdue.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
+                <h6 class="fw-bold text-red mb-0" style="line-height:1;" >OVERDUE</h6>
+                <p class="subtitle text-blue mb-0" style="line-height:1;" >(ETD < Today)</p>
+                <div class="d-flex align-items-end text-white mt-2 mb-2">
                     <h2 class="fw-bold mb-0" id="overdue">-</h2>
                 </div>
-                <small class="title-pcs text-white">PO</small>
+                <small class="title-pcs ms-1 text-white">PO</small>
             </div>
         </div>
 
-        <div class="col-6 col-sm-4 col-md-3 col-xl">
-            <div id="targetColor" class="stat-card color-box-green">
-                <img src="{{ _asset('svg/finalInspection/final-completed.svg') }}" alt="Final Completed">
-                <h6 id="targetText" class="fw-bold text-green mb-0">FINAL</h6>
-                <p class="text-green fw-bold mb-0">COMPLETED</p>
-                <div class="d-flex align-items-end text-white my-1">
-                    <h2 class="fw-bold mb-0 text-white" id="final">-</h2>
+        <div class="col-6 col-sm-4 col-lg">
+            <div id="targetColor" class="stat-card color-box-green h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                <img src="{{ _asset('svg/finalInspection/final-completed.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
+                <h6 id="targetText" class="fw-bold text-green mb-0" style="line-height:1;" >FINAL</h6>
+                <p class="text-green fw-bold mb-0" style="line-height:1;" >COMPLETED</p>
+                <div class="d-flex align-items-end text-white mt-2 mb-2">
+                    <h2 class="fw-bold mb-0 text-white" id="final" >-</h2>
                 </div>
-                <small class="title-pcs text-white">PO</small>
+                <small class="title-pcs ms-1 text-white">PO</small>
             </div>
         </div>
 
-        <div class="col-6 col-sm-4 col-md-3 col-xl">
-            <div id="targetColor" class="stat-card color-box-purple">
-                <img src="{{ _asset('svg/finalInspection/oql.svg') }}" alt="OQL">
-                <h6 id="targetText" class="fw-bold text-purple mb-0">OQL</h6>
-                <div class="d-flex align-items-end text-white my-1">
+        <div class="col-6 col-sm-4 col-lg">
+            <div id="targetColor" class="stat-card color-box-purple h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                <img src="{{ _asset('svg/finalInspection/oql.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
+                <h6 id="targetText" class="fw-bold text-purple mb-0" style="line-height:1;" >OQL</h6>
+                <div class="d-flex align-items-end text-white mt-2 mb-2">
                     <h2 class="fw-bold mb-0 text-white" id="oql">-</h2>
                     <h2 class="fw-bold mb-0 text-white">%</h2>
                 </div>
-                <small class="title-pcs text-white">Defect Rate</small>
+                <small class="title-pcs ms-1 text-white">Defect Rate</small>
             </div>
         </div>
 
-        <!-- Kartu Hasil Inspeksi Akhir -->
-        <div class="col-12 col-sm-8 col-md-6 col-xl-2">
-            <div class="final-inspection-card">
+        <div class="col-12 col-sm-12 col-lg-2">
+            <div class="final-inspection-card h-100 border-custom-datatable">
                 <div class="fi-title">FINAL INSPECTION RESULT</div>
 
                 <div class="fi-row">
@@ -498,36 +680,37 @@ Kode Lengkap Terperinci
         </div>
     </div>
 
-    <!-- Layout Utama di Bawah Summary Cards -->
-    <div class="main-content-section">
-        <div class="row g-2 g-lg-3 text-white">
-            <!-- Kolom Kiri: Progress Final & Chart -->
-            <div class="col-12 col-lg-7 d-flex flex-column gap-2 gap-lg-3">
-                <div class="content-box">
+    <!-- Weekly Defect -->
+    <div class="flex-grow-1 flex-min-h-0">
+        <div class="pt-3 row row-bottom-h text-white g-2">
+            <!-- Left -->
+            <div class="col-12 col-lg-7 d-flex">
+                <div class="rounded d-flex flex-column w-100 gap-2 flex-min-h-0">
+                    <!-- Top -->
                     @include('monitoring::finalinspection.partials.progress-final')
-                </div>
-                <div class="content-box">
+
+                    <!-- Botttom Chart 3 Card-->
                     @include('monitoring::finalinspection.partials.chart')
                 </div>
             </div>
 
-            <!-- Kolom Kanan: Final Overview & Category Defect -->
-            <div class="col-12 col-lg-5 d-flex flex-column gap-2 gap-lg-3">
-                <div class="content-box border-custom">
+            <!-- Right -->
+            <div class="col-12 col-lg-5 d-flex">
+                <div class="rounded d-flex flex-column w-100 gap-2 flex-min-h-0" style="border:1px solid #242E3E;">
+                    <!-- Top -->
                     @include('monitoring::finalinspection.partials.final-overview')
-                </div>
-                <div class="content-box border-custom">
+
+                    <!-- Bottom Defect 2 card -->
                     @include('monitoring::finalinspection.partials.category-defect')
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Footer Live Clock -->
-    <div class="footer-title text-white d-flex flex-wrap justify-content-between align-items-center gap-2 pt-3 mt-auto">
+    <div class="footer-title text-white d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0 pt-2">
         <div class="d-flex align-items-center gap-2">
-            <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" class="img-foot" alt="Clock">
-            Data Update:
+            <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" class="img-foot" alt="">
+            Data Update
             <span id="liveClock"></span>
         </div>
     </div>
@@ -537,6 +720,7 @@ Kode Lengkap Terperinci
 <script>
     $(document).on('click', '.loading-target', function (e) {
         e.preventDefault();
+
         const targetUrl = $(this).attr('href');
 
         $('#loading').show();
@@ -556,4 +740,3 @@ Kode Lengkap Terperinci
 
 @include('layouts.loading')
 @endsection
-
