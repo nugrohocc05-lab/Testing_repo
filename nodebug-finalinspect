@@ -272,6 +272,106 @@ class FinalInspectionController extends Controller
         ];
     }
 
+    /**
+     * Menghitung kandidat idpo "belum final" untuk SELURUH rentang [dta, dtb] sekaligus
+     * (tidak dipecah overdue/need_final dulu), lalu jalankan resolveRerouteDuplicates()
+     * SEKALI di batch gabungan ini, baru dipecah ke overdue/need_final berdasarkan ETD.
+     *
+     * Ini WAJIB dilakukan begini (bukan panggil getFinalCheckIdpoList/getPoNeedFinalIdpoList
+     * terpisah dengan rentang berbeda), karena resolveRerouteDuplicates() butuh melihat
+     * idpo LAMA dan idpo BARU hasil reroute dalam satu batch yang sama untuk bisa
+     * mendeteksi pasangannya. Kalau idpo lama (ETD sudah lewat -> overdue) dan idpo baru
+     * (ETD masih ke depan -> need_final) dipisah ke 2 panggilan berbeda, pasangan reroute
+     * itu tidak akan pernah terdeteksi bersama, sehingga idpo lama yang seharusnya
+     * DIBUANG (qtypo=0) malah tetap ikut terhitung -> overdue kelebihan hitung.
+     */
+    private function getSplitFinalCheckIdpoList(Request $request, Carbon $dta, Carbon $dtb, Carbon $today): array
+    {
+        $fi  = (new OutputDetailFinalInspection())->getTable();
+        $od  = (new OutputDetail())->getTable();
+        $po  = (new PurchaseOrder())->getTable();
+        $dbr = (new HistoryDataBreakdown())->getTable();
+
+        // Leaf rows dihitung SEKALI atas seluruh [dta, dtb], bukan per sub-rentang.
+        $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true, $dta, $dtb);
+
+        $qtyPerIdpo = $leafRows->groupBy('idpo')->map(function ($rows) {
+            return (int) $rows->sum('qty_ori');
+        });
+
+        $etdPerIdpo = $leafRows->groupBy('idpo')->map(function ($rows) {
+            return $rows->max('deliverydate');
+        });
+
+        $qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
+
+        $effectiveIdpoSql = function () use ($dbr) {
+            return "(CASE WHEN $dbr.revisi_kp = 1 AND $dbr.kp_item_ref IS NOT NULL
+                THEN (SELECT dbr_prev.idpo FROM $dbr as dbr_prev
+                    WHERE dbr_prev.combine_pro = $dbr.combine_pro
+                        AND dbr_prev.idpo < $dbr.idpo
+                    ORDER BY dbr_prev.idpo DESC LIMIT 1)
+                ELSE $dbr.idpo END)";
+        };
+
+        $requireHasFinalRecord = function ($query) use ($fi, $od, $effectiveIdpoSql) {
+            $expr = $effectiveIdpoSql();
+            $query->whereExists(function ($q) use ($fi, $od, $expr) {
+                $q->select(DB::raw(1))
+                    ->from("$fi as fi3")
+                    ->join("$od as od3", "od3.barcode", '=', 'fi3.barcode')
+                    ->whereRaw("od3.idpo = $expr");
+            });
+            return $query;
+        };
+
+        $excludeIfAnyFinalEffective = function ($query) use ($fi, $od, $effectiveIdpoSql) {
+            $expr = $effectiveIdpoSql();
+            $query->whereNotExists(function ($q) use ($fi, $od, $expr) {
+                $q->select(DB::raw(1))
+                    ->from("$fi as fi2")
+                    ->join("$od as od2", "od2.barcode", '=', 'fi2.barcode')
+                    ->whereRaw("od2.idpo = $expr")
+                    ->where('fi2.is_output', 1);
+            });
+            return $query;
+        };
+
+        $query = HistoryDataBreakdown::query()
+            ->join($po, "$po.idpo", '=', "$dbr.idpo")
+            ->whereIn("$dbr.idpo", $qualifiedIdpo);
+
+        $requireHasFinalRecord($query);
+        $excludeIfAnyFinalEffective($query);
+
+        $candidateIdpoList = $query->select("$dbr.idpo")->distinct()->pluck('idpo');
+
+        // ===== Reroute dedup SEKALI di batch gabungan (bukan per sub-rentang) =====
+        $dedupedIdpoList = $this->resolveRerouteDuplicates($candidateIdpoList);
+
+        // ===== Baru sekarang dipecah overdue vs need_final berdasarkan ETD masing2 idpo =====
+        $overdue   = collect();
+        $needFinal = collect();
+
+        foreach ($dedupedIdpoList as $idpo) {
+            $etd = $etdPerIdpo->get($idpo);
+            if (!$etd) {
+                continue;
+            }
+            $etdDate = Carbon::parse($etd)->startOfDay();
+            if ($etdDate->lessThanOrEqualTo($today)) {
+                $overdue->push($idpo);
+            } else {
+                $needFinal->push($idpo);
+            }
+        }
+
+        return [
+            'overdue'    => $overdue->values(),
+            'need_final' => $needFinal->values(),
+        ];
+    }
+
     private function getFinalCheckIdpoList(Request $request, Carbon $from, Carbon $to)
     {
         $fi  = (new OutputDetailFinalInspection())->getTable();
@@ -558,27 +658,13 @@ class FinalInspectionController extends Controller
             ->whereNotNull("$fi.date_output")
             ->count(DB::raw("DISTINCT $fi.id"));
 
-        // ===== PO Need Final & Overdue: irisan [dta, dtb] dipecah oleh $today =====
-        // Acuan: baris 35-37 "Based on ETD" -> Overdue = ETD <= today, Need Final = ETD > today
+        // ===== PO Need Final & Overdue: gabungan [dta, dtb] dulu, dedup reroute SEKALI,
+        // baru dipecah berdasarkan ETD (supaya pasangan reroute lintas today ikut terdeteksi) =====
         $today = Carbon::today()->startOfDay();
 
-        $ranges = $this->splitOverdueNeedFinalRange($dta, $dtb, $today);
-
-        if ($ranges['overdue']) {
-            [$overdueFrom, $overdueTo] = $ranges['overdue'];
-            $overdueList = $this->getFinalCheckIdpoList($request, $overdueFrom, $overdueTo);
-            $overdue = $overdueList->count();
-        } else {
-            $overdue = 0;
-        }
-
-        if ($ranges['need_final']) {
-            [$needFinalFrom, $needFinalTo] = $ranges['need_final'];
-            $poNeedFinalList = $this->getPoNeedFinalIdpoList($request, $needFinalFrom, $needFinalTo);
-            $poNeedFinal = $poNeedFinalList->count();
-        } else {
-            $poNeedFinal = 0;
-        }
+        $split = $this->getSplitFinalCheckIdpoList($request, $dta, $dtb, $today);
+        $overdue     = $split['overdue']->count();
+        $poNeedFinal = $split['need_final']->count();
 
         // ===== Final Completed: PO dengan is_output = 1 =====
         $finalComIdpoList = (clone $headerQuery)
@@ -760,21 +846,13 @@ class FinalInspectionController extends Controller
             $etdPerIdpo[$idpo] = $rows->max('deliverydate');
         }
 
-        // ===== Overdue & Need Final: PAKAI ULANG fungsi yang sama persis dengan summaryFilter,
-        // supaya list di sini dijamin match dengan angka di summary (po_need_final + overdue) =====
+        // ===== Overdue & Need Final: gabungan [dta, dtb] dulu, dedup reroute SEKALI,
+        // baru dipecah -> supaya total match persis dengan summaryFilter =====
         $today = Carbon::today()->startOfDay();
-        $ranges = $this->splitOverdueNeedFinalRange($dta, $dtb, $today);
-
-        $overdueIdpoList = $ranges['overdue']
-            ? $this->getFinalCheckIdpoList($request, $ranges['overdue'][0], $ranges['overdue'][1])
-            : collect();
-
-        $needFinalIdpoList = $ranges['need_final']
-            ? $this->getPoNeedFinalIdpoList($request, $ranges['need_final'][0], $ranges['need_final'][1])
-            : collect();
+        $split = $this->getSplitFinalCheckIdpoList($request, $dta, $dtb, $today);
 
         // Gabungan idpo yang tampil di list priority = detail dari po_need_final + overdue
-        $finalIdpoList = $overdueIdpoList->merge($needFinalIdpoList)->unique()->values();
+        $finalIdpoList = $split['overdue']->merge($split['need_final'])->unique()->values();
 
         $poList = $finalIdpoList->map(function ($idpo) use ($byIdpoLeaf) {
             $rows = $byIdpoLeaf->get($idpo);
