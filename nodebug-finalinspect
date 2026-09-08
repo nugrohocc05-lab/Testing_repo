@@ -573,22 +573,39 @@ class FinalInspectionController extends Controller
             return $idpoList;
         }
 
-        $rows = HistoryDataBreakdown::whereIn('idpo', $idpoList)
+        // Ambil combine_pro milik idpo-idpo kandidat kita
+        $combineProList = HistoryDataBreakdown::whereIn('idpo', $idpoList)
+            ->pluck('combine_pro')
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($combineProList->isEmpty()) {
+            return $idpoList;
+        }
+
+        // PENTING: cari berdasarkan combine_pro (BUKAN whereIn('idpo', $idpoList)) supaya
+        // pasangan reroute (idpo lama <-> idpo baru) selalu ketemu, meskipun salah satunya
+        // (biasanya idpo baru, dengan ETD/tanggal berbeda dari idpo lama) berada DI LUAR
+        // filter tanggal yang sedang aktif atau di luar $idpoList yang sedang kita proses.
+        $rows = HistoryDataBreakdown::whereIn('combine_pro', $combineProList)
             ->select('idpo', 'combine_pro', 'kp_item', 'kp_item_ref', 'revisi_kp')
             ->get();
 
         // Siapa "pemilik asli" tiap kp_item dalam combine_pro yang sama (idpo terkecil)
+        // NOTE: cast eksplisit ke string supaya perbandingan/exclude di bawah tidak gagal
+        // gara-gara idpo ke-pluck dengan tipe beda (int vs string) dari query yang berbeda.
         $ownerByCombineKpItem = $rows
             ->groupBy(fn ($r) => $r->combine_pro . '|' . $r->kp_item)
-            ->map(fn ($group) => $group->sortBy('idpo')->first()->idpo);
+            ->map(fn ($group) => (string) $group->sortBy('idpo')->first()->idpo);
 
         // Pasangan reroute: idpo baru (revisi_kp=1, ada ref) -> idpo asli
         $reroutedPairs = $rows
             ->filter(fn ($r) => $r->revisi_kp == 1 && !is_null($r->kp_item_ref))
             ->map(function ($r) use ($ownerByCombineKpItem) {
                 $originalIdpo = $ownerByCombineKpItem->get($r->combine_pro . '|' . $r->kp_item_ref);
-                return ($originalIdpo && $originalIdpo != $r->idpo)
-                    ? ['original' => $originalIdpo, 'rerouted' => $r->idpo]
+                return ($originalIdpo && $originalIdpo !== (string) $r->idpo)
+                    ? ['original' => $originalIdpo, 'rerouted' => (string) $r->idpo]
                     : null;
             })
             ->filter()
@@ -607,7 +624,68 @@ class FinalInspectionController extends Controller
             }
         }
 
-        return $idpoList->diff($excludedOriginals)->values();
+        // Bandingkan sebagai string di sini juga, biar tidak lolos gara-gara tipe beda
+        return $idpoList->reject(function ($idpo) use ($excludedOriginals) {
+            return $excludedOriginals->contains(function ($excluded) use ($idpo) {
+                return (string) $excluded === (string) $idpo;
+            });
+        })->values();
+    }
+
+    /**
+     * Hitung qty_ori (is_cutoff=1) untuk sekumpulan idpo, dengan MENGURANGI qty yang
+     * sudah "pindah" ke idpo lain hasil reroute. Raw sum(is_cutoff=1) bisa dobel-hitung
+     * kalau sebagian qty milik idpo ini sebenarnya sudah direroute ke idpo lain (baris baru
+     * di idpo lain, revisi_kp=1, kp_item_ref -> kp_item milik idpo ini, dengan qty_ori sendiri).
+     *
+     * Sama seperti resolveRerouteDuplicates(), pencarian pasangan reroute di sini HARUS
+     * berdasarkan combine_pro (bukan dibatasi ke $idpoList saja), karena idpo pasangannya
+     * (biasanya idpo baru) bisa saja berada di luar $idpoList / filter tanggal yang aktif.
+     */
+    private function getNetCutoffQty(Collection $idpoList): int
+    {
+        if ($idpoList->isEmpty()) {
+            return 0;
+        }
+
+        $combineProList = HistoryDataBreakdown::whereIn('idpo', $idpoList)
+            ->pluck('combine_pro')
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($combineProList->isEmpty()) {
+            // Fallback: tidak ada info combine_pro sama sekali, pakai raw sum seperti semula
+            return (int) HistoryDataBreakdown::whereIn('idpo', $idpoList)
+                ->where('is_cutoff', '1')
+                ->sum('qty_ori');
+        }
+
+        // Ambil SEMUA baris dalam family combine_pro yang sama, tanpa batas idpo,
+        // supaya baris hasil reroute (revisi_kp=1, kp_item_ref) selalu ketemu.
+        $familyRows = HistoryDataBreakdown::whereIn('combine_pro', $combineProList)
+            ->select('idpo', 'combine_pro', 'kp_item', 'kp_item_ref', 'revisi_kp', 'qty_ori', 'is_cutoff')
+            ->get();
+
+        // Qty yang sudah "diklaim pindah" oleh idpo lain, per (combine_pro, kp_item) yang dirujuk
+        $movedQtyByRef = $familyRows
+            ->filter(fn ($r) => $r->revisi_kp == 1 && !is_null($r->kp_item_ref))
+            ->groupBy(fn ($r) => $r->combine_pro . '|' . $r->kp_item_ref)
+            ->map(fn ($group) => $group->sum('qty_ori'));
+
+        // Baris is_cutoff=1 milik idpo-idpo kita sendiri
+        $ownCutoffRows = $familyRows->filter(function ($r) use ($idpoList) {
+            return $idpoList->contains($r->idpo) && (string) $r->is_cutoff === '1';
+        });
+
+        $netQty = 0;
+        foreach ($ownCutoffRows as $row) {
+            $key = $row->combine_pro . '|' . $row->kp_item;
+            $moved = (int) $movedQtyByRef->get($key, 0);
+            $netQty += max(0, (int) $row->qty_ori - $moved);
+        }
+
+        return $netQty;
     }
 
     function summaryFilter(Request $request)
@@ -650,9 +728,7 @@ class FinalInspectionController extends Controller
             ->distinct()
             ->pluck("$od.idpo");
 
-        $totalQty = HistoryDataBreakdown::whereIn('idpo', $poIds)
-            ->where('is_cutoff', '1')
-            ->sum('qty_ori');
+        $totalQty = $this->getNetCutoffQty($poIds);
 
         $totalQtyInspect = (clone $headerQuery)
             ->whereNotNull("$fi.date_output")
@@ -1024,14 +1100,10 @@ class FinalInspectionController extends Controller
         $poWithDefect = $rejectIdpoList->count();
         $poNoDefect   = $passIdpoList->count();
 
-        // ===== Qty pass/reject: pakai is_cutoff = 1, sama seperti summaryFilter =====
-        $qtyPass = HistoryDataBreakdown::whereIn('idpo', $passIdpoList)
-            ->where('is_cutoff', '1')
-            ->sum('qty_ori');
+        // ===== Qty pass/reject: net setelah kurangi qty yang direroute ke idpo lain =====
+        $qtyPass = $this->getNetCutoffQty($passIdpoList);
 
-        $qtyReject = HistoryDataBreakdown::whereIn('idpo', $rejectIdpoList)
-            ->where('is_cutoff', '1')
-            ->sum('qty_ori');
+        $qtyReject = $this->getNetCutoffQty($rejectIdpoList);
 
         $qtyInspectPass = (clone $headerQuery)
             ->whereIn("$od.idpo", $passIdpoList)
@@ -1065,9 +1137,7 @@ class FinalInspectionController extends Controller
         $outputNotFinal = $getOutputCount($notFinalIdpoList);
 
         // ===== Qty untuk not_final (buat pembagi progress) =====
-        $qtyNotFinal = HistoryDataBreakdown::whereIn('idpo', $notFinalIdpoList)
-            ->where('is_cutoff', '1')
-            ->sum('qty_ori');
+        $qtyNotFinal = $this->getNetCutoffQty($notFinalIdpoList);
 
         // ===== Progress output per bucket =====
         $progressPass = $qtyPass > 0
@@ -1186,19 +1256,13 @@ class FinalInspectionController extends Controller
         $poWithDefect = $rejectIdpoList->count();
         $poNoDefect   = $passIdpoList->count();
 
-        $qtyPass = HistoryDataBreakdown::whereIn('idpo', $passIdpoList)
-            ->where('is_cutoff', '1')
-            ->sum('qty_ori');
+        $qtyPass = $this->getNetCutoffQty($passIdpoList);
 
-        $qtyReject = HistoryDataBreakdown::whereIn('idpo', $rejectIdpoList)
-            ->where('is_cutoff', '1')
-            ->sum('qty_ori');
+        $qtyReject = $this->getNetCutoffQty($rejectIdpoList);
 
         $notFinalIdpoList = $qualifiedIdpo->diff($finalComIdpoList)->values();
 
-        $qtyNotFinal = HistoryDataBreakdown::whereIn('idpo', $notFinalIdpoList)
-            ->where('is_cutoff', '1')
-            ->sum('qty_ori');
+        $qtyNotFinal = $this->getNetCutoffQty($notFinalIdpoList);
 
         $totalQtyOrder = $qtyPass + $qtyReject + $qtyNotFinal;
 
