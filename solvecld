@@ -1,32 +1,40 @@
-@media (min-width: 992px) and (max-width: 1399.98px) {
-        .subheader { font-size: 0.60rem; }
-
-        .wrapper-sub {
-            margin: 1px 2px;
-        }
+private function remapToReroutedIdpo(Collection $idpoList): Collection
+{
+    if ($idpoList->isEmpty()) {
+        return $idpoList;
     }
 
-    @media (min-width: 1400px) {
-        .subheader { font-size: 0.9rem; }
+    $combineProList = HistoryDataBreakdown::whereIn('idpo', $idpoList)
+        ->pluck('combine_pro')
+        ->filter()
+        ->unique()
+        ->values();
+
+    if ($combineProList->isEmpty()) {
+        return $idpoList;
     }
 
-    /* Kunci ukuran filter, stat cards, footer agar tidak ikut terkompres.
-       Hanya area tengah (tabel + chart) yang boleh menyusut & scroll sendiri. */
-    .dashboard-wrap > .row.margin-cstm,
-    .dashboard-wrap > .row.card-wrapper,
-    .dashboard-wrap > .footer-title {
-        flex-shrink: 0;
-    }
+    $rows = HistoryDataBreakdown::whereIn('combine_pro', $combineProList)
+        ->select('idpo', 'combine_pro', 'kp_item', 'kp_item_ref', 'revisi_kp')
+        ->get();
 
-    /* Tinggi chart donut responsif per breakpoint */
-    .chart-donut { height: 158px; }
+    $ownerByCombineKpItem = $rows
+        ->groupBy(fn ($r) => $r->combine_pro . '|' . $r->kp_item)
+        ->map(fn ($group) => (string) $group->sortBy('idpo')->first()->idpo);
 
-    @media (min-width: 992px) and (max-width: 1399.98px) {
-        .chart-donut { height: 120px; }
-    }
+    // original idpo (PO lama) => idpo baru (hasil reroute)
+    $newIdpoByOriginal = $rows
+        ->filter(fn ($r) => $r->revisi_kp == 1 && !is_null($r->kp_item_ref))
+        ->mapWithKeys(function ($r) use ($ownerByCombineKpItem) {
+            $original = $ownerByCombineKpItem->get($r->combine_pro . '|' . $r->kp_item_ref);
+            return $original ? [$original => (string) $r->idpo] : [];
+        });
 
-    @media (max-width: 768px) {
-        .chart-donut { height: 180px; }
-    }
+    return $idpoList->map(function ($idpo) use ($newIdpoByOriginal) {
+        return $newIdpoByOriginal->get((string) $idpo, (string) $idpo);
+    })->unique()->values();
+}
 
-
+$finalComIdpoList = $this->remapToReroutedIdpo($finalComIdpoList);
+$rejectIdpoList   = $this->remapToReroutedIdpo($rejectIdpoList);
+$passIdpoList     = $finalComIdpoList->diff($rejectIdpoList)->values();
