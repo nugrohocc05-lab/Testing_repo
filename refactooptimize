@@ -33,14 +33,11 @@ use Modules\Packing\Http\Controllers\OutputPackingController;
 use Modules\Sewing\Http\Controllers\WorktimeSettingController;
 use Symfony\Component\Console\Output\Output;
 
-// Urutan file: endpoint publik dulu (index -> topDefects), private helper
-// di bawah (dari yang paling sering dipakai ke yang paling spesifik).
 class FinalInspectionController extends Controller
 {
     protected $m_modul = 'report';
     protected $perPage = 20;
 
-    // Cache in-memory per-request untuk getLeafHistoryRows()
     private $leafRowsCache = [];
 
     function __construct()
@@ -825,10 +822,6 @@ class FinalInspectionController extends Controller
         ]);
     }
 
-    // ===== PRIVATE HELPERS (inti -> spesifik) =====
-
-    // Dipakai hampir semua endpoint, langsung atau via getSplitFinalCheckIdpoList().
-    // Di-cache per-request supaya tidak query ulang dengan parameter yang sama.
     private function getLeafHistoryRows(
         Request $request,
         $familyColumn = 'combine_pro',
@@ -936,8 +929,6 @@ class FinalInspectionController extends Controller
         return $activeIdpo->isNotEmpty() ? $activeIdpo : collect([$idpo]);
     }
 
-    // Batch-fetch revisi terakhir HistoryPO (1 query), pengganti pola N+1
-    // "foreach ($list as $idpo) { HistoryPO::where('idpo',$idpo)->first(); }"
     // Dipakai: resolveRerouteIdpo, getActiveRerouteIdpoList, getRerouteIdpoList,
     // resolveRerouteDuplicates, getNetCutoffQty.
     private function getLastHistoryPoRevisi(Collection $idpoList): Collection
