@@ -1,0 +1,135 @@
+private function getFinalIdpoList(Request $request, Carbon $dta, Carbon $dtb): Collection
+{
+    $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true, $dta, $dtb);
+    $qtyPerIdpo = $leafRows->groupBy('idpo')->map(fn ($rows) => (int) $rows->sum('qty_ori'));
+    $qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
+
+    $today = Carbon::today()->startOfDay();
+    $split = $this->getSplitFinalCheckIdpoList($request, $dta, $dtb, $today);
+
+    $fi = (new OutputDetailFinalInspection())->getTable();
+    $od = (new OutputDetail())->getTable();
+    $po = (new PurchaseOrder())->getTable();
+
+    $barcodesForHeader = OutputDetail::whereIn('idpo', $qualifiedIdpo)->pluck('barcode');
+    $headerQuery = OutputDetailFinalInspection::query()
+        ->join($od, "$od.barcode", '=', "$fi.barcode")
+        ->join($po, "$po.idpo", '=', "$od.idpo")
+        ->whereIn("$fi.barcode", $barcodesForHeader);
+
+    $finalComIdpoList = (clone $headerQuery)
+        ->where("$fi.is_output", 1)
+        ->select("$od.idpo")->distinct()->pluck("$od.idpo");
+
+    $finalIdpoList = $split['overdue']->merge($split['need_final'])
+        ->merge($finalComIdpoList)->unique()->values();
+
+    return $this->getActiveRerouteIdpoList($finalIdpoList);
+}
+
+function groupbuyer(Request $request)
+{
+    preconnect(session('db'));
+    $q = $request->get('q');
+    $page = (int) $request->get('page', 1);
+
+    $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
+    $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+    $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
+    $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+
+    // applyPoFilter=false: belum ada style/po yang dipilih di tahap ini
+    $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', false, $dta, $dtb);
+    // kriteria qualified idpo sekarang sama persis dgn poSelect
+    $qualifiedIdpo = $this->getFinalIdpoList($request, $dta, $dtb);
+
+    $qualifiedBuyerIds = $leafRows->whereIn('idpo', $qualifiedIdpo)
+        ->pluck('idbuyer')->filter()->unique()->values();
+    $qualifiedGroupBuyerIds = Buyer::whereIn('idbuyer', $qualifiedBuyerIds)
+        ->pluck('groupbuyer')->filter()->unique()->values();
+
+    $paginator = MasterGroupBuyer::select('id', 'group_name')
+        ->whereIn('id', $qualifiedGroupBuyerIds)
+        ->when($q, fn ($query) => $query->where('group_name', 'like', '%' . $q . '%'))
+        ->orderBy('group_name', 'asc')
+        ->paginate($this->perPage, ['id', 'group_name'], 'page', $page);
+
+    $data = collect($paginator->items())->map(fn ($item) => [
+        'id' => $item->id,
+        'text' => $item->group_name,
+    ]);
+
+    return response()->json([
+        'results' => $data,
+        'pagination' => ['more' => $paginator->hasMorePages()],
+    ]);
+}
+
+function styleSelect(Request $request)
+{
+    preconnect(session('db'));
+    $page = (int) $request->get('page', 1);
+
+    $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
+    $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+    $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
+    $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+
+    $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', false, $dta, $dtb);
+    // kriteria qualified idpo sekarang sama persis dgn poSelect
+    $qualifiedIdpo = $this->getFinalIdpoList($request, $dta, $dtb);
+
+    $styleIds = $leafRows->whereIn('idpo', $qualifiedIdpo)
+        ->pluck('idstyle')->filter()->unique()->values();
+
+    $query = Style::whereIn('idstyle', $styleIds);
+    if ($request->filled('q')) {
+        $query->where('nmstyle', 'like', '%' . $request->q . '%');
+    }
+
+    $paginator = $query->select('idstyle', 'nmstyle')
+        ->paginate($this->perPage, ['idstyle', 'nmstyle'], 'page', $page);
+    $styles = collect($paginator->items());
+
+    return response()->json([
+        'results' => $styles->map(fn ($item) => [
+            'id' => $item->idstyle,
+            'text' => $item->nmstyle,
+        ])->values(),
+        'pagination' => ['more' => $paginator->hasMorePages()],
+    ]);
+}
+
+function poSelect(Request $request)
+{
+    preconnect(session('db'));
+    $page = (int) $request->get('page', 1);
+
+    $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
+    $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+    $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
+    $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+
+    // applyPoFilter=true: HARUS sama dengan priorityFinal
+    $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true, $dta, $dtb);
+
+    // PO yang ditampilkan harus sama dengan priorityFinal / groupbuyer / styleSelect
+    $finalIdpoList = $this->getFinalIdpoList($request, $dta, $dtb);
+
+    $poRows = $leafRows->whereIn('idpo', $finalIdpoList)->unique('idpo')->values();
+
+    if ($request->filled('q')) {
+        $poRows = $poRows->filter(fn ($row) => stripos($row->po, $request->q) !== false)->values();
+    }
+
+    $total = $poRows->count();
+    $items = $poRows->forPage($page, $this->perPage)->values();
+
+    return response()->json([
+        'results' => $items->map(fn ($item) => [
+            'id' => $item->idpo,
+            'text' => $item->po,
+        ])->values(),
+        'pagination' => ['more' => ($page * $this->perPage) < $total],
+    ]);
+}
