@@ -1,7 +1,3018 @@
-    @extends('layouts.masternonavbar')
+index 
+@extends('layouts.masternonavbar')
 
-    @section('extracss')
+@section('extracss')
+<style>
+    .stat-card {
+        height: 160px !important;
+        min-height: 160px !important;
+        padding: 0 !important;
+    }
+
+    .stat-card img {
+        width: 40px !important;
+        height: 40px !important;
+        margin-bottom: .45rem !important;
+    }
+
+    .stat-card h6 {
+        font-size: 1rem;
+        margin-bottom: .25rem !important;
+    }
+
+    .stat-card h2 {
+        font-size: 1.5rem;
+        line-height: 1;
+    }
+
+    .stat-card small {
+        font-size: 1rem;
+    }
+
+    .stat-card-defect {
+        height: auto;
+    }
+
+    .stat-card-defect > div {
+        width: 100%;
+    }
+
+    .subtitle {
+        font-size: 13px;
+        color: white;
+    }
+
+    .defect-header {
+        width: 100%;
+    }
+
+    .defect-list {
+        width: 100%;
+        font-size: 13px;
+        gap: 2px;
+    }
+
+    #topDefectList {
+        max-height: 110px;
+        width: 100%;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #topDefectList::-webkit-scrollbar {
+        width: 3px;
+    }
+
+    #topDefectList::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 4px;
+    }
+
+    #topDefectList .defect-item {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        margin-bottom: 1px;
+    }
+
+    #topDefectList .defect-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .defect-circle {
+        width: 12px;
+        height: 12px;
+    }
+
+    .defect-name {
+        flex: 1;
+        min-width: 0;
+        margin-left: 8px;
+        text-align: left;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .defect-total {
+        flex: 0 0 auto;
+        margin-left: 8px;
+        white-space: nowrap;
+    }
+
+    .defect-percent {
+        flex: 0 0 55px;
+        margin-left: 8px;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .icon-summary {
+        width: 25px;
+        height: 25px;
+    }
+
+    @media (min-width: 992px) and (max-width: 1400px) {
+        #topDefectList {
+            max-height: 83px;
+        }
+
+        .stat-card {
+            height: 100px !important;
+            min-height: 100px !important;
+        }
+
+        .stat-card img {
+            width: 20px !important;
+            height: 20px !important;
+            margin-bottom: .30rem !important;
+        }
+
+        .stat-card h6 {
+            font-size: 10px;
+            margin-bottom: .20rem !important;
+        }
+
+        .stat-card h2 {
+            font-size: 12px;
+            line-height: 1;
+        }
+
+        .stat-card p {
+            font-size: 10px;
+            line-height: 0.5;
+        }
+
+        .stat-card small {
+            font-size: 10px !important;
+        }
+
+        .stat-card-defect {
+            height: auto;
+        }
+
+        .stat-card-defect > div {
+            width: 100%;
+        }
+
+        .defect-header {
+            width: 100%;
+        }
+
+        .defect-list {
+            width: 100%;
+            font-size: 10px;
+        }
+
+        .flatpickr-calendar {
+            max-width: 315px;
+            padding: 4px;
+            border-radius: 4px;
+        }
+
+        .flatpickr-day {
+            width: 30px;
+            height: 30px;
+            line-height: 30px;
+            font-size: 0.68rem;
+        }
+
+        .flatpickr-current-month {
+            font-size: 0.95rem;
+        }
+
+        span.flatpickr-weekday {
+            font-size: 0.75rem;
+        }
+
+        .text-title {
+            font-size: 12px;
+        }
+
+        .margin-cstm {
+            margin-top: 10px !important;
+            padding: 6px 0 !important;
+        }
+
+         .wrapper-layout {
+            gap: 4px;
+        }
+    }
+
+    @media (max-width: 768px) {
+        #topDefectList {
+            max-height: 110px;
+        }
+
+        .defect-header {
+            flex-direction: column;
+            gap: 0.5rem !important;
+        }
+
+        .footer-title {
+            font-size: 12px;
+        }
+
+        .img-foot {
+            width: 15px;
+            height: 15px;
+        }
+
+        .title-pcs {
+            font-size: 10px !important;
+        }
+    }
+
+    .title-pcs {
+        font-size: 12px !important;
+    }
+
+    .subheader {
+        font-size: 15px;
+    }
+
+    .flex-lg-grow-7,
+    .flex-lg-grow-5 {
+        flex: 1 1 100%;
+    }
+
+    /* Desktop 992–1400 */
+    @media (min-width: 992px) and (max-width: 1399.98px) {
+        .flex-lg-grow-7 { flex: 7; }
+        .flex-lg-grow-5 { flex: 5; }
+
+        .subheader { font-size: 0.60rem; }
+
+        .wrapper-sub {
+            height: 180px;
+            max-height: 180px;
+            /* margin: 0 !important;
+            padding: 0 !important; */
+        }
+    }
+
+    /* Desktop besar >= 1400 */
+    @media (min-width: 1400px) {
+        .flex-lg-grow-7 { flex: 7; }
+        .flex-lg-grow-5 { flex: 5; }
+
+        .subheader { font-size: 0.9rem; }
+    }
+
+
+    .final-inspection-card {
+        border-radius: 5px;
+        padding: 16px;
+        background-color: #212B3E;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        box-sizing: border-box;
+    }
+
+    .fi-title {
+        text-align: center;
+        color: #ffffff;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        margin-bottom: 14px;
+    }
+
+    .fi-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+
+    .fi-row:last-child {
+        margin-bottom: 0;
+    }
+
+    .fi-label {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        width: 110px;
+        flex: 0 0 110px;
+    }
+    .fi-percent {
+        color: #ffffff;
+        font-size: 16px;
+        font-weight: 700;
+        line-height: 1.1;
+    }
+
+    .fi-text {
+        color: #9ca3af;
+        font-size: 10px;
+        letter-spacing: 0.3px;
+        white-space: nowrap;
+        margin-top: 2px;
+    }
+
+    .fi-bar-wrapper {
+        flex: 1;
+        height: 32px;
+        background: #1a2332;
+        overflow: hidden;
+        position: relative;
+        min-width: 0;
+    }
+
+    .fi-bar {
+        height: 100%;
+        transition: width 0.6s ease;
+        min-width: 6px;
+    }
+
+    .fi-bar-green {
+        background: #2ecc71;
+    }
+
+    .fi-bar-red {
+        background: #e74c3c;
+    }
+
+    .fi-bar-orange {
+        background: #F27D01;
+    }
+
+    @media (min-width: 992px) and (max-width: 1399.98px) {
+        .fi-title { font-size: 11px; margin-bottom: 8px; }
+        .fi-percent { font-size: 13px; }
+        .fi-text { font-size: 8px; }
+        .fi-bar-wrapper { height: 24px; }
+        .fi-row { margin-bottom: 8px; gap: 8px; }
+        .final-inspection-card { padding: 12px; height: 100px !important; }
+         .fi-label { width: 90px; flex: 0 0 90px; }
+    }
+
+    .flex-fill.border-custom-datatable, .flex-fill.panel-slot {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        min-width: 0;
+        width: 100%;
+        height: 100%;
+        flex: 1 1 0;
+        overflow: hidden;
+    }
+
+    .wrapper-sub {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        min-width: 0;
+        min-height: 0;
+        padding: 10px;
+        box-sizing: border-box;
+        overflow: hidden;
+    }
+
+    .sub-header {
+        padding: 8px 16px;
+        margin-bottom: 4px
+    }
+
+    .table-scroll-tbl {
+        flex: 1 1 0;
+        min-height: 0;
+        min-width: 0;
+        width: 100%;
+        overflow: auto;
+    }
+
+    .table-res {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        table-layout: fixed;
+        border-collapse: collapse;
+    }
+
+    .table-res thead th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background-color: #1B2331;
+        vertical-align: middle;
+        word-wrap: break-word;
+        font-weight: 400;
+        font-size: 12px;
+        padding: 0.75rem 0.5rem;
+        line-height: 12px !important;
+    }
+
+    .table-res tbody td {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        vertical-align: middle;
+        padding: 0.5rem;
+        font-weight: 400;
+        font-size: 12px;
+        line-height: 15px !important;
+    }
+
+    .table-res tfoot th {
+        position: sticky;
+        bottom: 0;
+        z-index: 2;
+        background-color: #1B2331;
+        font-weight: 600;
+        font-size: 14px;
+        line-height: 12px !important;
+        padding: 0.75rem 0.5rem;
+    }
+
+    /* EMPTY STATE */
+    .table-res tbody .empty-row {
+        height: 120px;
+    }
+
+    .table-res tbody .empty-row td {
+        text-align: center;
+        white-space: normal;
+        overflow: visible;
+        text-overflow: unset;
+    }
+
+    @media (min-width: 992px) and (max-width: 1399.98px) {
+        .table-res thead th {
+            font-size: 10px;
+            padding: 3px 5px !important;
+            line-height: 1;
+        }
+
+        .table-res tbody td {
+            font-size: 10px;
+            padding: 3px 5px !important;
+            line-height: 1;
+        }
+
+        .table-res tfoot th {
+            font-size: 10px;
+            padding: 3px 5px !important;
+            line-height: 1.5;
+        }
+
+        .flex-fill.border-custom-datatable, .flex-fill.panel-slot {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        .border-custom-datatable {
+            padding: 0.20rem !important;
+        }
+    }
+
+    .title-pass {
+        color: #327932 ;
+        font-weight: 700 !important;
+        text-align: start;
+    }
+    .title-reject {
+        color: #F24C4C ;
+        font-weight: 700 !important;
+        text-align: start;
+    }
+    .title-notfinal {
+        color: #F27D01 ;
+        font-weight: 700 !important;
+        text-align: start;
+    }
+
+    .dashboard-wrap .flex-grow-1 {
+        min-height: 0;
+    }
+
+    .table-scroll-tbl::-webkit-scrollbar { height: 8px; width: 8px; }
+    .table-scroll-tbl::-webkit-scrollbar-track { background: var(--bg-dark-2); border-radius: 4px; }
+    .table-scroll-tbl::-webkit-scrollbar-thumb { background: #D9D9D9; border-radius: 4px; }
+    .table-scroll-tbl { scrollbar-width: thin; scrollbar-color: #D9D9D9 var(--bg-dark-2); }
+    .table-responsive { -webkit-overflow-scrolling: touch; }
+
+    .wrapper-layout {
+        gap: 8px;
+    }
+
+    @media (min-width: 992px) and (max-width: 1399.98px) {
+
+        html,
+        body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .dashboard-wrap {
+            height: 100vh;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .dashboard-wrap > .flex-grow-1 {
+            flex: 1 1 0 !important;
+            min-height: 0 !important;
+            overflow: hidden;
+        }
+
+        .dashboard-wrap > .flex-grow-1 > .row {
+            height: 100%;
+            min-height: 0;
+        }
+
+        .dashboard-wrap > .flex-grow-1 > .row > [class*="col-"] {
+            min-height: 0;
+        }
+
+        .wrapper-layout {
+            height: 100%;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .panel-slot {
+            min-height: 0;
+            height: auto;
+            overflow: hidden;
+        }
+    }
+
+    .wrapper-layout {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        height: 100%;
+    }
+
+    .panel-top {
+        flex: 0 0 auto;
+        min-height: 0;
+    }
+
+    .panel-bottom {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    @media (min-width: 992px) and (max-width: 1399.98px) {
+        .wrapper-layout {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .panel-top {
+            flex: 0 0 auto;
+            min-height: 0;
+        }
+
+        .panel-bottom {
+            flex: 1 1 0;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .panel-bottom > .row {
+            height: 100%;
+            min-height: 0;
+        }
+
+        .wrapper-sub {
+            height: 100%;
+            min-height: 0;
+            max-height: none;
+        }
+    }
+
+    .final-overview-table {
+        flex: 1 1 auto;
+        min-height: 0;
+        min-width: 0;
+        width: 100%;
+        overflow: auto;
+    }
+
+    .table-res {
+        width: 100%;
+        margin: 0;
+        table-layout: fixed;
+        border-collapse: collapse;
+    }
+
+    .panel-bottom {
+        flex: 1 1 0;
+        min-height: 0;
+        height: 0;
+        overflow: hidden;
+    }
+
+    .panel-bottom > .row {
+        height: 100%;
+        min-height: 0;
+    }
+
+    .panel-bottom > .row > .col {
+        min-height: 0;
+        height: 100%;
+    }
+
+    .panel-bottom .border-custom-datatable {
+        height: 100%;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .panel-bottom .wrapper-sub {
+        display: flex;
+        flex-direction: column;
+
+        width: 100%;
+        height: 100%;
+
+        min-width: 0;
+        min-height: 0;
+
+        padding: 10px;
+        box-sizing: border-box;
+
+        overflow: hidden;
+    }
+
+    .panel-bottom .subheader {
+        flex: 0 0 auto;
+    }
+
+    .chart-donut {
+        width: 100%;
+        flex: 1 1 0;
+        height: 0;
+        min-height: 0;
+    }
+
+    .chart-title {
+        flex: 0 0 auto;
+        font-size: 13px;
+        margin-top: 8px !important;
+    }
+</style>
+@endsection
+
+@section('content')
+<div class="container-fluid dashboard-wrap">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div class="d-flex align-items-center gap-3 text-decoration-none">
+            <img src="{{ _asset('svg/finalInspection/final.svg') }}" class="icon-dashboard flex-shrink-0" alt="Endline Performance">
+            <div class="d-flex flex-column justify-content-center">
+                <h2 class="text-white mb-1 dashboard-title">FINAL INSPECTION DASHBOARD - {{ str_replace('GMS ', '', session('factoryname')) }}</h2>
+                <p class="text-white fs-6 mb-0 dashboard-subtitle">Monitoring Final Inspection and Shipment Readiness</p>
+            </div>
+        </div>
+
+        <div class="button-inline d-flex">
+            <a href="{{ route('home') }}" class="d-flex align-items-center gap-3 text-decoration-none px-3">
+                <img src="{{ _asset('svg/inlinePerformance/home.svg') }}" class="icon-button-inline flex-shrink-0" alt="Home">
+            </a>
+
+            <button class="export-btn bg-transparent border-0 p-0" id="export-btn" aria-label="Export">
+                        <img src="{{ _asset('svg/inlinePerformance/export.svg') }}" alt="Export"
+                        class="export-icon"
+                        >
+                        <span class="custom-tooltip">Excel</span>
+                    </button>
+            <button type="button" class="export-btn px-3" style="border: none; background: transparent; outline: none; box-shadow: none; padding: 0;" onclick="location.reload()" aria-label="Refresh">
+                <img src="{{ _asset('svg/inlinePerformance/reload.svg') }}" alt="Refresh" class="icon-refresh">
+                <span class="custom-tooltip-bottom">Refresh</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Summary Filter -->
+    @include('monitoring::finalinspection.partials.summary')
+
+    <!-- Summary Cards -->
+    <div class="row g-3 card-wrapper">
+            <div class="col-12 col-sm-4 col-lg">
+                <div class="stat-card color-box-blue h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                    <img src="{{ _asset('svg/endlinePerformance/total-output.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
+                    <h6 class="fw-bold text-blue mb-0" style="line-height:1;">TOTAL</h6>
+                    <p class="fw-bold text-blue mb-0" style="line-height:1;">PO</p>
+                    <div class="d-flex align-items-end text-white mt-2 mb-2 mt-2 mb-2">
+                        <h2 class="fw-bold mb-0" id="totalpo">-</h2>
+                    </div>
+                    <small class="title-pcs ms-1 text-white">PO</small>
+                </div>
+            </div>
+
+            <div class="col-12 col-sm-4 col-lg">
+                <div class="stat-card color-box-yellow h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                    <img src="{{ _asset('svg/inlinePerformance/qty-inspect.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
+                    <h6 class="fw-bold text-yellow mb-0" style="line-height:1;" >TOTAL</h6>
+                    <p class="fw-bold text-yellow mb-0" style="line-height:1;" >QTY</p>
+                    <div class="d-flex align-items-end text-white mt-2 mb-2">
+                        <h2 class="fw-bold mb-0" id="totalqty">-</h2>
+                    </div>
+                    <small class="title-pcs ms-1 text-white">pcs</small>
+                </div>
+            </div>
+
+            <div class="col-12 col-sm-4 col-lg">
+                <div class="stat-card color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                    <img src="{{ _asset('svg/finalInspection/qty-inspect.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
+                    <h6 id="defectText" class="fw-bold text-red mb-0" style="line-height:1;" >TOTAL QTY</h6>
+                    <p class="fw-bold text-red mb-0" style="line-height:1;" >INSPECT</p>
+                    <div class="d-flex align-items-end text-white mt-2 mb-2">
+                        <h2 class="fw-bold mb-0" id="totalqtyinspect">-</h2>
+                    </div>
+                    <small class="title-pcs ms-1 text-white">pcs</small>
+                </div>
+            </div>
+
+            <div class="col-12 col-sm-4 col-lg">
+                <div class="stat-card color-box-green h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                    <img src="{{ _asset('svg/finalInspection/po-need-final.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
+                    <h6 class="fw-bold text-green mb-0" style="line-height:1;" >PO NEED FINAL</h6>
+                    <p class="subtitle text-blue mb-0" style="line-height:1;" >(Final ≥ H - 1 ETD )</p>
+                    <div class="d-flex align-items-end text-white mt-2 mb-2">
+                        <h2 class="fw-bold mb-0" id="poneedfinal">-</h2>
+                    </div>
+                    <small class="title-pcs ms-1 text-white">PO</small>
+                </div>
+            </div>
+
+            <div class="col-12 col-sm-4 col-lg">
+                <div class="stat-card color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                    <img src="{{ _asset('svg/finalInspection/overdue.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
+                    <h6 class="fw-bold text-red mb-0" style="line-height:1;" >OVERDUE</h6>
+                    <p class="subtitle text-blue mb-0" style="line-height:1;" >(ETD < Today)</p>
+                    <div class="d-flex align-items-end text-white mt-2 mb-2">
+                        <h2 class="fw-bold mb-0" id="overdue">-</h2>
+                    </div>
+                    <small class="title-pcs ms-1 text-white">PO</small>
+                </div>
+            </div>
+
+            <div class="col-12 col-sm-4 col-lg">
+                <div id="targetColor" class="stat-card color-box-green h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                    <img src="{{ _asset('svg/finalInspection/final-completed.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
+                    <h6 id="targetText" class="fw-bold text-green mb-0" style="line-height:1;" >FINAL</h6>
+                    <p class="text-green fw-bold mb-0" style="line-height:1;" >COMPLETED</p>
+                    <div class="d-flex align-items-end text-white mt-2 mb-2">
+                        <h2 class="fw-bold mb-0 text-white" id="final" >-</h2>
+                    </div>
+                    <small class="title-pcs ms-1 text-white">PO</small>
+                </div>
+            </div>
+
+            <div class="col-12 col-sm-4 col-lg">
+                <div id="targetColor" class="stat-card color-box-purple h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                    <img src="{{ _asset('svg/finalInspection/oql.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
+                    <h6 id="targetText" class="fw-bold text-purple mb-0" style="line-height:1;" >OQL</h6>
+                    <div class="d-flex align-items-end text-white mt-2 mb-2">
+                        <h2 class="fw-bold mb-0 text-white" id="oql">-</h2>
+                        <h2 class="fw-bold mb-0 text-white">%</h2>
+                    </div>
+                    <small class="title-pcs ms-1 text-white">Defect Rate</small>
+                </div>
+            </div>
+
+            <div class="col-12 col-sm-12 col-lg-2">
+                <div class="final-inspection-card h-100 border-custom-datatable">
+                    <div class="fi-title">FINAL INSPECTION RESULT</div>
+
+                    <div class="fi-row">
+                        <div class="fi-label">
+                            <span id="passingRateValue" class="fi-percent">-%</span>
+                            <span class="fi-text">PASSING RATE</span>
+                        </div>
+                        <div class="fi-bar-wrapper">
+                            <div id="passingRateBar" class="fi-bar fi-bar-green" style="width: 0%;"></div>
+                        </div>
+                    </div>
+
+                    <div class="fi-row">
+                        <div class="fi-label">
+                            <span id="rejectRateValue" class="fi-percent">-%</span>
+                            <span class="fi-text">REJECT RATE</span>
+                        </div>
+                        <div class="fi-bar-wrapper">
+                            <div id="rejectRateBar" class="fi-bar fi-bar-red" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    <!-- Weekly Defect -->
+    <div class="flex-grow-1" style="min-height: 0;" >
+        <div class="pt-3 row h-100 text-white g-2">
+            <!-- Left -->
+            <div class="col-12 col-lg-7 d-flex">
+                <div class="wrapper-layout rounded d-flex flex-column w-100" style="min-height:0;">
+                    <!-- Top -->
+                    @include('monitoring::finalinspection.partials.progress-final')
+
+                    <!-- Botttom Chart 3 Card-->
+                    @include('monitoring::finalinspection.partials.chart')
+                </div>
+            </div>
+
+            <!-- Right -->
+            <div class="col-12 col-lg-5 d-flex">
+                <div class="wrapper-layout rounded d-flex flex-column w-100" style="min-height:0; border:1px solid #242E3E;">
+                    <!-- Top -->
+                    @include('monitoring::finalinspection.partials.final-overview')
+
+                    <!-- Bottom Defect 2 card -->
+                    @include('monitoring::finalinspection.partials.category-defect')
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer-title text-white d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0">
+        <div class="d-flex align-items-center gap-2">
+            <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" class="img-foot" alt="">
+            Data Update
+            <span id="liveClock"></span>
+        </div>
+    </div>
+</div>
+
+@section('extrascript')
+<script>
+    $(document).on('click', '.loading-target', function (e) {
+        e.preventDefault();
+
+        const targetUrl = $(this).attr('href');
+
+        $('#loading').show();
+
+        setTimeout(function () {
+            window.location.href = targetUrl;
+        }, 100);
+
+        window.addEventListener('pageshow', function (event) {
+            if (event.persisted) {
+                $('#loading').hide();
+            }
+        });
+    });
+</script>
+@endsection
+
+@include('layouts.loading')
+@endsection
+
+summary
+<style>
+     @media (max-width: 768px) {
+        .action-btn {
+            display: flex !important;
+            justify-content: flex-start !important;
+            align-items: center !important;
+            width: 100%;
+            gap: 10px;
+        }
+
+        .btn-find {
+            width: auto !important;
+            margin-left: 0 !important;
+        }
+
+        .export-btn {
+            margin-left: 0 !important;
+        }
+    }
+
+    .select2-container--default.select2-container--disabled .select2-selection--single {
+        background-color: #242E3E;
+        border-color: #d1d5db;
+        cursor: not-allowed;
+    }
+
+    .select2-container--default.select2-container--disabled .select2-selection__rendered {
+        color: #9ca3af;
+    }
+</style>
+
+<div class="row margin-cstm border-custom rounded px-2 py-2 text-white" style="margin: 0 1px 0 1px;">
+
+    <!-- Periode Date (SEKARANG DI DEPAN) -->
+    <div class="col-12 col-md-5 border-end-custom d-flex mb-3 mb-md-0">
+        <div class="icon-filter">
+            <div class="box-custom bg-transparent" style="height: 31px;"></div>
+            <div>
+                <img src="{{ _asset('svg/inlinePerformance/calendar.svg') }}"
+                    class="icon-summary" alt="">
+            </div>
+        </div>
+
+        <div class="w-100">
+            <label class="mb-1 text-title">
+                ETD (Shipment Date)
+            </label>
+            <div class="wrapper-date d-flex align-items-center gap-2 w-100 flex-nowrap period-date">
+                <div class="position-relative flex-grow-1 date-input-col">
+                    <input
+                        type="text"
+                        id="datea"
+                        class="form-control pe-5"
+                        placeholder="Pilih tanggal">
+                    <img
+                        src="{{ _asset('svg/inlinePerformance/calendar-flat.svg') }}"
+                        class="position-absolute top-50 end-0 translate-middle-y me-3"
+                        style="width:18px; height:18px; pointer-events:none;" alt="">
+                </div>
+
+                <span class="to px-2">to</span>
+                <div class="position-relative flex-grow-1 date-input-col">
+                    <input
+                        type="text"
+                        id="dateb"
+                        class="form-control pe-5"
+                        placeholder="Pilih tanggal">
+                    <img
+                        src="{{ _asset('svg/inlinePerformance/calendar-flat.svg') }}"
+                        class="position-absolute top-50 end-0 translate-middle-y me-3"
+                        style="width:18px; height:18px; pointer-events:none;" alt="">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Group Buyer -->
+    <div class="col-12 col-md border-end-custom d-flex mb-3 mb-md-0">
+        <div class="icon-filter">
+            <div class="box-custom" style="height: 31px;"></div>
+            <div class="">
+                <img src="{{ _asset('svg/inlinePerformance/user.svg') }}"
+                    class="icon-summary" alt="">
+            </div>
+        </div>
+
+        <div class="w-100">
+            <label class="mb-1 text-title">
+                Group Buyer
+            </label>
+                <div class="flex-grow-1">
+                    <select id="groupbuyer" class="form-select select2 w-100" disabled>
+                        <option></option>
+                    </select>
+                </div>
+        </div>
+    </div>
+
+    <!-- Style (SEKARANG SEBELUM PO) -->
+    <div class="col-12 col-md border-end-custom d-flex mb-3 mb-md-0">
+        <div class="icon-filter">
+            <div class="box-custom" style="height: 31px;"></div>
+            <div class="">
+                <img src="{{ _asset('svg/finalInspection/style.svg') }}"
+                    class="icon-summary" alt="">
+            </div>
+        </div>
+
+        <div class="w-100">
+            <label class="mb-1 text-title">
+                Style
+            </label>
+                <div class="flex-grow-1">
+                    <select id="selectstyle" class="form-select select2 w-100" disabled>
+                        <option></option>
+                    </select>
+                </div>
+        </div>
+    </div>
+
+    <!-- PO (SEKARANG SETELAH STYLE) -->
+    <div class="col-12 col-md border-end-custom d-flex mb-3 mb-md-0 align-items-center">
+        <div class="icon-filter">
+            <div class="box-custom" style="height: 31px;"></div>
+            <div class="">
+                <img src="{{ _asset('svg/finalInspection/po.svg') }}"
+                    class="icon-summary" alt="">
+            </div>
+        </div>
+
+        <div class="w-100">
+            <label class="mb-1 text-title">
+                PO
+            </label>
+                <div class="flex-grow-1">
+                    <select id="selectpo" class="form-select select2 w-100" disabled>
+                        <option></option>
+                    </select>
+                </div>
+        </div>
+        <div class="action-btn d-flex h-100">
+            <button class="btn-find" id="findbtn">
+                <img src="{{ _asset('svg/inlinePerformance/search.svg') }}" style="width:20px;height:15px;margin-right:2px;" alt="">
+                    Find
+            </button>
+        </div>
+    </div>
+
+</div>
+@push('scripts')
+<script>
+    $(function () {
+        function parseDMY(str) {
+            const [d, m, y] = str.split('-');
+            return new Date(`${y}-${m}-${d}`);
+        }
+
+        // Urutan cascading baru: ETD -> Group Buyer -> Style -> PO
+        function checkDateSelection() {
+            let datea = $('#datea').val();
+            let dateb = $('#dateb').val();
+
+            $('#groupbuyer').val(null).trigger('change');
+            $('#selectstyle').val(null).trigger('change');
+            $('#selectpo').val(null).trigger('change');
+
+            $('#selectstyle').prop('disabled', true).trigger('change.select2');
+            $('#selectpo').prop('disabled', true).trigger('change.select2');
+
+            if (!datea || !dateb) {
+                $('#groupbuyer').prop('disabled', true).trigger('change.select2');
+                return;
+            }
+
+            const start = parseDMY(datea);
+            const end = parseDMY(dateb);
+
+            // if (start > end) {
+            //     swal('Warning!', 'Start date cannot be later than end date!', 'warning');
+            //     $('#groupbuyer').prop('disabled', true).trigger('change.select2');
+            //     return;
+            // }
+
+            const diffDays = (end - start) / (1000 * 60 * 60 * 24);
+
+            if (diffDays > 31) {
+                swal('Warning!', 'Date Has More Than 31 Days in Range, Cannot View Data.', 'warning');
+                $('#groupbuyer').prop('disabled', true).trigger('change.select2');
+                return;
+            }
+
+            $('#groupbuyer').prop('disabled', false).trigger('change.select2');
+        }
+
+        const dateOpt = {
+            dateFormat: "d-m-Y",
+            altInput: true,
+            altFormat: "d F Y",
+            allowInput: false,
+            monthSelectorType: "static",
+            disableMobile: true,
+            defaultDate: "today",
+            onChange: function () {
+                checkDateSelection();
+            }
+        };
+        flatpickr("#datea", dateOpt);
+        flatpickr("#dateb", dateOpt);
+
+        $('#groupbuyer').select2({
+            placeholder: 'Select Buyer',
+            width: '100%',
+            ajax: {
+                url: "{{ route('monitoring_finalinspection_groupbuyer') }}",
+                type: "GET",
+                dataType: "json",
+                delay: 500,
+                data: function (params) {
+                    return {
+                        q: params.term || '',
+                        page: params.page || 1,
+                        datea: $('#datea').val(),
+                        dateb: $('#dateb').val()
+                    };
+                },
+                processResults: function (data, params) {
+                    params.page = params.page || 1;
+                    let results = data.results || [];
+                    if (params.page === 1 && !params.term) {
+                        results = [
+                            { id: 'all', text: 'All Buyer' },
+                            ...results
+                        ];
+                    }
+                    return {
+                        results: results
+                    };
+                },
+                cache: true
+            }
+        });
+
+        // Style sekarang bergantung ke ETD + Group Buyer (bukan PO lagi)
+        $('#selectstyle').select2({
+            placeholder: 'Select Style',
+            width: '100%',
+            ajax: {
+                url: "{{ route('monitoring_finalinspection_selectstyle') }}",
+                type: "GET",
+                dataType: "json",
+                delay: 500,
+                data: function (params) {
+                    return {
+                        q: params.term || '',
+                        page: params.page || 1,
+                        datea: $('#datea').val(),
+                        dateb: $('#dateb').val(),
+                        groupbuyer: $('#groupbuyer').val()
+                    };
+                },
+                processResults: function (data, params) {
+                    params.page = params.page || 1;
+                    let results = data.results || [];
+
+                    if (params.page === 1 && !params.term && results.length > 0) {
+                        results = [
+                            { id: 'all', text: 'All Style' },
+                            ...results
+                        ];
+                    }
+
+                    return { results: results };
+                },
+                cache: true
+            },
+            language: {
+                noResults: function () {
+                    return 'Style Not Found';
+                }
+            }
+        });
+
+        // PO sekarang bergantung ke ETD + Group Buyer + Style
+        $('#selectpo').select2({
+            placeholder: 'Select PO',
+            width: '100%',
+            ajax: {
+                url: "{{ route('monitoring_finalinspection_selectpo') }}",
+                type: "GET",
+                dataType: "json",
+                delay: 500,
+                data: function (params) {
+                    return {
+                        q: params.term || '',
+                        page: params.page || 1,
+                        datea: $('#datea').val(),
+                        dateb: $('#dateb').val(),
+                        groupbuyer: $('#groupbuyer').val(),
+                        style: $('#selectstyle').val()
+                    };
+                },
+                processResults: function (data, params) {
+                    params.page = params.page || 1;
+                    let results = data.results || [];
+
+                    if (params.page === 1 && !params.term && results.length > 0) {
+                        results = [
+                            { id: 'all', text: 'All PO' },
+                            ...results
+                        ];
+                    }
+
+                    return {
+                        results: results
+                    };
+                },
+                cache: true
+            },
+            language: {
+                noResults: function () {
+                    return 'PO Not Found';
+                }
+            }
+        });
+
+        $('#groupbuyer').prop('disabled', true).trigger('change.select2');
+        $('#selectstyle').prop('disabled', true).trigger('change.select2');
+        $('#selectpo').prop('disabled', true).trigger('change.select2');
+
+        checkDateSelection();
+
+        // Group Buyer berubah -> reset & enable Style (bukan PO lagi)
+        $('#groupbuyer').on('change', function () {
+            let buyer = $(this).val();
+
+            $('#selectstyle').val(null).trigger('change');
+            $('#selectpo').val(null).trigger('change');
+
+            $('#selectstyle').prop('disabled', !buyer).trigger('change.select2');
+            $('#selectpo').prop('disabled', true).trigger('change.select2');
+        });
+
+        // Style berubah -> reset & enable PO (posisi ini yang baru)
+        $('#selectstyle').on('change', function () {
+            let style = $(this).val();
+
+            $('#selectpo').val(null).trigger('change');
+            $('#selectpo').prop('disabled', !style).trigger('change.select2');
+        });
+
+        window.currentFilter = {
+            line: 'all',
+            datea: $('#datea').val(),
+            dateb: $('#dateb').val(),
+            groupbuyer: 'all',
+        };
+
+        let hasFiltered = false;
+
+        $('#groupbuyer, #selectstyle, #selectpo, #datea, #dateb').on('change input', function () {
+            hasFiltered = false;
+        });
+
+        function loadCards(filter) {
+            $.ajax({
+                url: "{{ route('monitoring_finalinspection_summaryfilter') }}",
+                type: "GET",
+                data: filter,
+
+                beforeSend: function () {
+                    $('#loading').show();
+                },
+
+                success: function (response) {
+
+                    $('#totalpo').text(response.total_po ?? '-');
+                    $('#totalqty').text(response.total_qty ?? '-');
+                    $('#totalqtyinspect').text(response.total_qty_inspect ?? '-');
+                    $('#poneedfinal').text(response.po_need_final ?? '-');
+                    $('#overdue').text(response.overdue ?? '-');
+                    $('#final').text(response.final_completed ?? '-');
+                    $('#oql').text(response.oql ?? '-');
+
+                    let passingRate = Number(response.passing_rate ?? 0);
+                    let rejectRate = Number(response.reject_rate ?? 0);
+
+                    // Text
+                    $('#passingRateValue').text(
+                        passingRate.toLocaleString('id-ID') + '%'
+                    );
+
+                    $('#rejectRateValue').text(
+                        rejectRate.toLocaleString('id-ID') + '%'
+                    );
+
+                    // Bar width
+                    $('#passingRateBar')
+                        .css('width', passingRate + '%')
+                        .attr('title', 'Passing Rate: ' + passingRate.toLocaleString('id-ID') + '%');
+
+                    $('#rejectRateBar')
+                        .css('width', rejectRate + '%')
+                        .attr('title', 'Reject Rate: ' + rejectRate.toLocaleString('id-ID') + '%');
+
+                    updateDataTime();
+                },
+
+                error: function (xhr) {
+                    console.log(xhr.responseText);
+                },
+
+                complete: function () {
+                    $('#loading').hide();
+                }
+            });
+        }
+
+
+        function loadTable(filter) {
+            $.ajax({
+                url: "{{ route('monitoring_finalinspection_priorityfinal') }}",
+                type: "GET",
+                data: filter,
+
+                success: function (response) {
+                    let rows = response.data || [];
+                    let total = response.total || {};
+
+                    let $body = $('#tablePriorityFinalBody');
+                    $body.empty();
+
+                    if (rows.length === 0) {
+                        $body.append(
+                            '<tr><td colspan="11" class="text-center">No Data</td></tr>'
+                        );
+                    } else {
+                        rows.forEach(function (row, idx) {
+                            $body.append(`
+                                <tr>
+                                    <td class="text-center">${idx + 1}</td>
+                                    <td class="text-center">${row.po ?? '-'}</td>
+                                    <td class="text-center">${row.buyer ?? '-'}</td>
+                                    <td class="text-center">${row.style ?? '-'}</td>
+                                    <td class="text-center">${row.color ?? '-'}</td>
+                                    <td class="text-center">${row.qty_order ?? '-'}</td>
+                                    <td class="text-center">${row.output ?? '-'}</td>
+                                    <td class="text-center" style="color: #4CF299;">${row.progress_output ?? '-'}%</td>
+                                    <td class="text-center">${row.etd ?? '-'}</td>
+                                    <td class="text-center">${row.days_to_etd ?? '-'}</td>
+                                    <td class="text-center">${row.status ?? '-'}</td>
+                                </tr>
+                            `);
+                        });
+                    }
+
+                    // Update footer
+                    $('#footQtyOrder').text(
+                        (total.qty_order ?? 0).toLocaleString()
+                    );
+
+                    $('#footOutput').text(
+                        (total.output ?? 0).toLocaleString()
+                    );
+
+                    $('#footProgressOutput').text(
+                        (total.progress_output ?? 0) + '%'
+                    );
+                },
+
+                error: function (xhr) {
+                    console.log(xhr.responseText);
+                }
+            });
+        }
+
+        function loadTableTopDefect(filter) {
+
+            $.ajax({
+                url: "{{ route('monitoring_finalinspection_topdefect') }}",
+                type: "GET",
+                data: filter,
+
+                success: function (response) {
+
+                    let rows = response.data || [];
+                    let total = Number(response.total || 0);
+
+                    let $body = $('#tableDefectFinalBody');
+
+                    $body.empty();
+
+                    loadDefectCategoryChart(response);
+                    if (rows.length === 0) {
+
+                        $body.append(`
+                            <tr>
+                                <td colspan="5" class="text-center">
+                                    No Data
+                                </td>
+                            </tr>
+                        `);
+
+                        $('#footTotalDefectQty').text('0');
+                        $('#footTotalDefectPct').text('0%');
+
+                    } else {
+                        rows.forEach(function (row, idx) {
+                            let pct = Number(row.percentage || 0);
+                            $body.append(`
+                                <tr>
+                                    <td class="text-center">
+                                        ${idx + 1}
+                                    </td>
+
+                                    <td class="text-left">
+                                        ${row.defect_name ?? '-'}
+                                    </td>
+
+                                    <td class="text-center">
+                                        ${(Number(row.qty) || 0)
+                                            .toLocaleString('id-ID')}
+                                    </td>
+
+                                    <td class="text-center">
+                                        ${pct}%
+                                    </td>
+
+                                    <td>
+
+                                        <div style="
+                                            background:#1C2536;
+                                            border-radius:10px;
+                                            width:100%;
+                                            height:10px;
+                                            overflow:hidden;
+                                        ">
+
+                                            <div style="
+                                                background:#0d6efd;
+                                                width:${pct}%;
+                                                height:100%;
+                                            "></div>
+
+                                        </div>
+
+                                    </td>
+
+                                </tr>
+                            `);
+                        });
+
+
+                        $('#footTotalDefectQty').text(
+                            total.toLocaleString('id-ID')
+                        );
+
+                        $('#footTotalDefectPct').text('100%');
+                    }
+                },
+
+                error: function (xhr) {
+                    console.log(xhr.responseText);
+                }
+            });
+        }
+
+       let defectCategoryChart = null;
+        function renderDefectCategoryChart(
+            chartId,
+            processValue,
+            nonProcessValue,
+            processPercent,
+            nonProcessPercent,
+            processTextId,
+            nonProcessTextId
+        ) {
+
+            processValue = Number(processValue) || 0;
+            nonProcessValue = Number(nonProcessValue) || 0;
+            processPercent = Number(processPercent) || 0;
+            nonProcessPercent = Number(nonProcessPercent) || 0;
+
+            const processText = document.getElementById(processTextId);
+
+            if (processText) {
+                processText.innerText =
+                    processValue.toLocaleString('id-ID') +
+                    ' (' +
+                    processPercent.toFixed(0) +
+                    '%)';
+            }
+
+            const nonProcessText = document.getElementById(nonProcessTextId);
+
+            if (nonProcessText) {
+                nonProcessText.innerText =
+                    nonProcessValue.toLocaleString('id-ID') +
+                    ' (' +
+                    nonProcessPercent.toFixed(0) +
+                    '%)';
+            }
+
+            const chartDom = document.getElementById(chartId);
+
+            if (!chartDom) {
+                return;
+            }
+
+            if (defectCategoryChart) {
+                defectCategoryChart.dispose();
+                defectCategoryChart = null;
+            }
+
+            defectCategoryChart = echarts.init(chartDom);
+            const option = {
+
+                backgroundColor: 'transparent',
+
+                grid: {
+                    left: '10%',
+                    right: '10%',
+                    top: '20%',
+                    bottom: '5%',
+                    containLabel: false
+                },
+                xAxis: {
+                    type: 'category',
+                    data: [
+                        'Process',
+                        'Non Process'
+                    ],
+                    show: false
+                },
+                yAxis: {
+                    type: 'value',
+                    show: false,
+                    min: 0,
+                    max: 100
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    },
+                    formatter: function (params) {
+                        const item = params[0];
+                        if (!item) {
+                            return '';
+                        }
+                        return `
+                            <div>
+                                <strong>${item.name}</strong><br>
+                                Qty: ${item.name === 'Process'
+                                    ? processValue.toLocaleString('id-ID')
+                                    : nonProcessValue.toLocaleString('id-ID')
+                                }<br>
+                                Percentage: ${item.value}%
+                            </div>
+                        `;
+                    }
+                },
+                series: [
+                    {
+                        type: 'bar',
+                        barWidth: '35%',
+                        data: [
+                            {
+                                value: processPercent.toFixed(0),
+
+                                itemStyle: {
+                                    color: '#3b82f6',
+                                    borderRadius: [
+                                        4,
+                                        4,
+                                        0,
+                                        0
+                                    ]
+                                }
+                            },
+
+                            {
+                                value: nonProcessPercent.toFixed(0),
+
+                                itemStyle: {
+                                    color: '#4ade80',
+                                    borderRadius: [
+                                        4,
+                                        4,
+                                        0,
+                                        0
+                                    ]
+                                }
+                            }
+                        ],
+
+                        label: {
+                            show: true,
+
+                            position: 'top',
+
+                            color: '#ffffff',
+
+                            fontSize: 13,
+
+                            formatter: function (params) {
+                                return params.value + ' %';
+                            }
+                        }
+                    }
+                ]
+            };
+
+            defectCategoryChart.setOption(option);
+        }
+
+        window.loadDefectCategoryChart = function (response) {
+
+            if (!response) {
+                renderDefectCategoryChart(
+                    'chart-defect-category',
+                    0,
+                    0,
+                    0,
+                    0,
+                    'process-text',
+                    'non-process-text'
+                );
+
+                return;
+            }
+
+            const processValue = Number(response.process || 0);
+            const nonProcessValue = Number(response.non_process || 0);
+            const processPercent = Number(response.process_percent || 0);
+            const nonProcessPercent = Number(response.non_process_percent || 0);
+
+            renderDefectCategoryChart(
+                'chart-defect-category',
+                processValue,
+                nonProcessValue,
+                processPercent,
+                nonProcessPercent,
+                'process-text',
+                'non-process-text'
+            );
+        };
+
+        window.addEventListener('resize', function () {
+            if (defectCategoryChart) {
+                defectCategoryChart.resize();
+            }
+        });
+
+        function loadTableFinalOver(filter) {
+            $.ajax({
+                url: "{{ route('monitoring_finalinspection_finaloverview') }}",
+                type: "GET",
+                data: filter,
+
+                success: function (response) {
+
+                    console.log('Response:', response);
+
+                    let rows = response.data || [];
+
+                    let $body = $('#tableFinalOverviewBody');
+                    $body.empty();
+
+                    let row = rows[0] || {};
+                    let pass = row.pass || {};
+                    let reject = row.reject || {};
+                    let notFinal = row.not_final || {};
+                    let total = row.total || {};
+
+                    if (!row || Object.keys(row).length === 0) {
+
+                        $body.append(`
+                            <tr>
+                                <td colspan="6" class="text-center">
+                                    No Data
+                                </td>
+                            </tr>
+                        `);
+
+                    } else {
+
+                        // PASS
+                        $body.append(`
+                            <tr>
+                                <td class="title-pass text-center">
+                                    PASS
+                                </td>
+
+                                <td class="text-center">
+                                    ${pass.count ?? '-'}
+                                </td>
+
+                                <td class="text-center">
+                                    ${pass.qty ?? '-'}
+                                </td>
+
+                                <td class="text-center">
+                                    ${pass.qty_inspect ?? '-'}
+                                </td>
+
+                                <td class="text-center">
+                                    ${pass.output ?? '-'}
+                                </td>
+
+                                <td class="text-center">
+                                    <div class="fi-bar-wrapper">
+                                        <div
+                                            id="passingRatePass"
+                                            class="fi-bar fi-bar-green"
+                                            style="width: ${pass.progress_output ?? 0}%"
+                                            title="${Number(pass.progress_output ?? 0).toLocaleString('id-ID')}%">
+                                        </div>
+
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <!-- REJECT -->
+                            <tr>
+                                <td class="title-reject text-center">
+                                    REJECT
+                                </td>
+
+                                <td class="text-center">
+                                    ${reject.count ?? '-'}
+                                </td>
+
+                                <td class="text-center">
+                                    ${reject.qty ?? '-'}
+                                </td>
+
+                                <td class="text-center">
+                                    ${reject.qty_inspect ?? '-'}
+                                </td>
+
+                                <td class="text-center">
+                                    ${reject.output ?? '-'}
+                                </td>
+
+                                <td class="text-center">
+                                    <div class="fi-bar-wrapper">
+                                        <div
+                                            id="passingRateReject"
+                                            class="fi-bar fi-bar-red"
+                                            style="width: ${reject.progress_output ?? 0}%"
+                                            title="${Number(reject.progress_output ?? 0).toLocaleString('id-ID')}%">
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <!-- NOT FINAL -->
+                            <tr>
+                                <td class="title-notfinal text-center">
+                                    NOT FINAL
+                                </td>
+
+                                <td class="text-center">
+                                    ${notFinal.count ?? '-'}
+                                </td>
+
+                                <td class="text-center">
+                                    ${notFinal.qty ?? '-'}
+                                </td>
+
+                                <td class="text-center">
+                                    ${notFinal.qty_inspect ?? '-'}
+                                </td>
+
+                                <td class="text-center">
+                                    ${notFinal.output ?? '-'}
+                                </td>
+
+                                <td class="text-center">
+                                    <div class="fi-bar-wrapper">
+                                        <div
+                                            id="passingRateNotfinal"
+                                            class="fi-bar fi-bar-orange"
+                                            style="width: ${notFinal.progress_output ?? 0}%"
+                                            title="${Number(notFinal.progress_output ?? 0).toLocaleString('id-ID')}%">
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        `);
+                    }
+
+                    $('#foottotPo').text(
+                        Number(total.total_po ?? 0).toLocaleString()
+                    );
+
+                    $('#foottotQtyOrder').text(
+                        Number(total.qty_order ?? 0).toLocaleString()
+                    );
+
+
+                    $('#foottotQtyInspect').text(
+                        Number(total.qty_inspect ?? 0).toLocaleString()
+                    );
+
+                    $('#foottotOutput').text(
+                        Number(total.output ?? 0).toLocaleString()
+                    );
+
+                    $('#foottotProgress').text(
+                        Number(total.progress_output ?? 0).toLocaleString()
+                    );
+                },
+
+                error: function (xhr) {
+                    console.log('AJAX Error:', xhr);
+                    console.log('Response:', xhr.responseText);
+                }
+            });
+        }
+
+        const chartInstances = {};
+
+        function getFontScale(width, height) {
+            const size = Math.min(width, height);
+
+            if (size <= 90) {
+                return {
+                    center: 10,
+                    sub: 8
+                };
+            }
+
+            if (size <= 120) {
+                return {
+                    center: 12,
+                    sub: 9
+                };
+            }
+
+            if (size <= 160) {
+                return {
+                    center: 14,
+                    sub: 10
+                };
+            }
+
+            return {
+                center: 16,
+                sub: 11
+            };
+        }
+
+        function renderDonutChart(
+            chartId,
+            passValue,
+            rejectValue,
+            totalValue,
+            passTextId,
+            rejectTextId,
+            passColor = '#4ade80',
+            rejectColor = '#f87171',
+            centerLabel = 'Pcs'
+        ) {
+            const total = Number(totalValue) || 0;
+
+            const pass = Number(passValue) || 0;
+            const reject = Number(rejectValue) || 0;
+
+            const passPct = total > 0
+                ? ((pass / total) * 100).toFixed(0)
+                : 0;
+
+            const rejectPct = total > 0
+                ? ((reject / total) * 100).toFixed(0)
+                : 0;
+
+            if (passTextId && document.getElementById(passTextId)) {
+                document.getElementById(passTextId).innerText =
+                    pass.toLocaleString('id-ID') + ' (' + passPct + '%)';
+            }
+
+            if (rejectTextId && document.getElementById(rejectTextId)) {
+                document.getElementById(rejectTextId).innerText =
+                    reject.toLocaleString('id-ID') + ' (' + rejectPct + '%)';
+            }
+
+            const chartDom = document.getElementById(chartId);
+            if (!chartDom) return;
+
+            const myChart = echarts.init(chartDom);
+            chartInstances[chartId] = myChart;
+
+            const data = [
+                {
+                    value: pass,
+                    name: 'PASS',
+                    itemStyle: {
+                        color: passColor
+                    }
+                }
+            ];
+
+            if (rejectTextId) {
+                data.push({
+                    value: reject,
+                    name: 'REJECT',
+                    itemStyle: {
+                        color: rejectColor
+                    }
+                });
+            }
+
+            function buildOption() {
+                const width = chartDom.clientWidth || 150;
+                const height = chartDom.clientHeight || 150;
+
+                const { center, sub } = getFontScale(width, height);
+
+                return {
+                    backgroundColor: 'transparent',
+
+                    tooltip: {
+                        trigger: 'item',
+                        formatter: '{b}: {c} ({d}%)'
+                    },
+
+                    series: [
+                        {
+                            name: 'Inspection Result',
+                            type: 'pie',
+
+                            // responsive
+                            radius: [
+                                '52%',
+                                '70%'
+                            ],
+
+                            center: ['50%', '50%'],
+
+                            avoidLabelOverlap: false,
+
+                            label: {
+                                show: false
+                            },
+
+                            labelLine: {
+                                show: false
+                            },
+
+                            data: data
+                        }
+                    ],
+
+                    graphic: [
+                        {
+                            type: 'text',
+                            left: 'center',
+                            top: '43%',
+
+                            style: {
+                                text: total.toLocaleString('id-ID'),
+                                textAlign: 'center',
+                                fill: '#ffffff',
+                                fontSize: center,
+                                fontWeight: 'bold'
+                            }
+                        },
+                        {
+                            type: 'text',
+                            left: 'center',
+                            top: '57%',
+
+                            style: {
+                                text: centerLabel,
+                                textAlign: 'center',
+                                fill: '#ffffff',
+                                fontSize: sub,
+                                fontWeight: 'normal'
+                            }
+                        }
+                    ]
+                };
+            }
+
+            myChart.setOption(buildOption());
+
+            const ro = new ResizeObserver(() => {
+                myChart.resize();
+                myChart.setOption(buildOption());
+            });
+
+            ro.observe(chartDom);
+        }
+
+
+        function loadChart(filter) {
+            $.ajax({
+                url: "{{ route('monitoring_finalinspection_chartdata') }}",
+                type: "GET",
+                data: filter,
+                success: function (response) {
+                    const row = (response.data && response.data[0]) || {};
+
+                    const qi = row.qty_inspect || {};
+                    const qo = row.qty_order || {};
+                    const oql = row.oql_defect || {};
+
+                    renderDonutChart('chart-1', qi.pass ?? 0, qi.reject ?? 0, qi.total, 'pass-text-1', 'reject-text-1');
+                    renderDonutChart(
+                        'chart-2',
+                        oql.total ?? 0,
+                        0,
+                        oql.defect_percent ?? 0,
+                        'pass-text-2',
+                        null,
+                        '#3F3184',
+                        '#374151',
+                        'Defect Rate'
+                    );
+                    renderDonutChart(
+                        'chart-3',
+                        qo.pass ?? 0,
+                        qo.reject ?? 0,
+                        qo.total ?? 0,
+                        'pass-text-3',
+                        'reject-text-3',
+                    );
+                },
+                error: function (xhr) {
+                    console.log(xhr.responseText);
+                }
+            });
+        }
+
+        function updateDataTime() {
+            let now = new Date();
+            let day = String(now.getDate()).padStart(2, '0');
+            let month = [
+                "January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November", "December"
+            ];
+            let year = now.getFullYear();
+            let hour = String(now.getHours()).padStart(2, '0');
+            let minute = String(now.getMinutes()).padStart(2, '0');
+            let second = String(now.getSeconds()).padStart(2, '0');
+
+            let formatted = `${day} ${month[now.getMonth()]} ${year} - ${hour} : ${minute} : ${second}`;
+
+            document.getElementById('liveClock').innerHTML = formatted;
+
+            localStorage.setItem('lastDataUpdate', formatted);
+        }
+
+        updateDataTime();
+        window.updateDataTime = updateDataTime;
+
+        $('#findbtn').on('click', function (e) {
+            e.preventDefault();
+
+            currentFilter = {
+                groupbuyer: $('#groupbuyer').val(),
+                style: $('#selectstyle').val(),
+                po: $('#selectpo').val(),
+                datea: $('#datea').val(),
+                dateb: $('#dateb').val(),
+            };
+
+            if (currentFilter.datea == null || currentFilter.datea == '' ||
+                currentFilter.dateb == null || currentFilter.dateb == '') {
+                swal('Warning!', 'Please select Periode Date first!', 'warning');
+                return;
+            }
+
+            const start = parseDMY(currentFilter.datea);
+            const end = parseDMY(currentFilter.dateb);
+
+            // if (start > end) {
+            //     swal('Warning!', 'Start date cannot be later than end date!', 'warning');
+            //     return;
+            // }
+
+            const diffDays = (end - start) / (1000 * 60 * 60 * 24);
+
+            if (diffDays > 31) {
+                swal('Warning!', 'Date Has More Than 31 Days in Range, Cannot View Data.', 'warning');
+                return;
+            }
+
+            if (currentFilter.groupbuyer == null || currentFilter.groupbuyer == '') {
+                swal('Warning!', 'Please select Group Buyer first!', 'warning');
+                return;
+            }
+
+            if (currentFilter.style == null || currentFilter.style == '') {
+                swal('Warning!', 'Please select Style first!', 'warning');
+                return;
+            }
+
+            if (currentFilter.po == null || currentFilter.po == '') {
+                swal('Warning!', 'Please select PO first!', 'warning');
+                return;
+            }
+
+            hasFiltered = true;
+            loadCards(currentFilter);
+            loadTable(currentFilter);
+            loadTableFinalOver(currentFilter);
+            loadChart(currentFilter);
+            loadTableTopDefect(currentFilter);
+            loadDefectCategoryChart(response);
+
+        });
+
+    });
+</script>
+@include('layouts.loading')
+@endpush
+
+progress final
+<div class="flex-fill border-custom-datatable rounded-1 panel-top">
+    <div class="wrapper-sub ">
+        <h6 class="subheader mb-0 fw-normal text-truncate">
+            PO PRIORITY PROGRESS FINAL (BASED ON ETD)
+        </h6>
+        <div class="table-scroll-tbl rounded mt-2 px-2 w-100">
+            <table class="table-res table-borderless table-hover">
+                <thead>
+                    <tr>
+                        <th class="text-center" style="width:6%;">Priority</th>
+                        <th class="text-center" style="width:9%;">PO No.</th>
+                        <th class="text-center" style="width:9%;">Buyer</th>
+                        <th class="text-center" style="width:9%;">Style</th>
+                        <th class="text-center" style="width:9%;">Article / Color</th>
+                        <th class="text-center" style="width:8%;">
+                            QTY Order<br>(Pcs)
+                        </th>
+                        <th class="text-center" style="width:8%;">
+                            Output<br>(Pcs)
+                        </th>
+                        <th class="text-center" style="width:9%;">
+                            Progress<br>Output
+                        </th>
+                        <th class="text-center" style="width:9%;">
+                            ETD<br>(Shipment Date)
+                        </th>
+                        <th class="text-center" style="width:8%;">
+                            Days to<br>ETD
+                        </th>
+                        <th class="text-center" style="width:8%;">
+                            Status<br>Final
+                        </th>
+                    </tr>
+                </thead>
+
+                <tbody class="text-center" id="tablePriorityFinalBody">
+                    <tr>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                    </tr>
+                </tbody>
+
+                <tfoot class="table-foot" id="tablePriorityFinalFooter">
+                    <tr>
+                        <th class="text-center" style="color: #4C8CF2;">
+                            Total
+                        </th>
+
+                        <th></th>
+                        <th></th>
+                        <th></th>
+                        <th></th>
+
+                        <th class="text-center"
+                            style="color: #4C8CF2;"
+                            id="footQtyOrder">
+                        </th>
+
+                        <th class="text-center"
+                            style="color: #4C8CF2;"
+                            id="footOutput">
+                        </th>
+
+                        <th class="text-center"
+                            style="color: #4C8CF2;"
+                            id="footProgressOutput">
+                        </th>
+
+                        <th></th>
+                        <th></th>
+                        <th></th>
+                    </tr>
+                </tfoot>
+
+            </table>
+
+        </div>
+    </div>
+</div>
+
+
+finaloverview
+<style>
+    .wrapper-layout {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+    }
+
+    /* FINAL INSPECTION OVERVIEW */
+    .panel-top {
+        flex: 0 0 32%;
+        height: 32%;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .panel-bottom {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .panel-top .wrapper-sub {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        box-sizing: border-box;
+        padding: 10px;
+        margin: 0;
+        overflow: hidden;
+    }
+
+    .panel-top .subheader {
+        flex: 0 0 auto;
+    }
+
+    .final-overview-table {
+        flex: 1 1 0;
+        min-height: 0;
+        width: 100%;
+        overflow: hidden;
+    }
+
+    .final-overview-table .table-res {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        table-layout: fixed;
+        border-collapse: collapse;
+    }
+
+    .final-overview-table .table-res thead th {
+        padding: 5px 4px;
+    }
+</style>
+<div class="flex-fill border-custom-datatable rounded-1 panel-top">
+    <div class="wrapper-sub">
+        <h6 class="subheader mb-0 fw-normal text-truncate">
+            FINAL INSPECTION OVERVIEW
+        </h6>
+        <div class="final-overview-table rounded mt-2 w-100">
+            <table class="table-res table-borderless table-hover">
+                <thead>
+                    <tr>
+                        <th class="text-center" style="width:6%;">Status Final</th>
+                        <th class="text-center" style="width:9%;">PO <br> (Count)</th>
+                        <th class="text-center" style="width:9%;">Total QTY Order <br> (Pcs)</th>
+                        <th class="text-center" style="width:9%;">Total QTY Inspect <br> (Pcs)</th>
+                        <th class="text-center" style="width:9%;">Total Output <br> (Pcs)</th>
+                        <th class="text-center" style="width:9%;">Progress Output <br> (Pcs)</th>
+                    </tr>
+                </thead>
+                <tbody class="text-center" id="tableFinalOverviewBody">
+                    <tr>
+                        <td class="title-pass">PASS</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">
+                            <div class="fi-bar-wrapper">
+                                <div id="passingRatePass" class="fi-bar fi-bar-green" style="width: 0%;"></div>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="title-reject">REJECT</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">
+                            <div class="fi-bar-wrapper">
+                                <div id="passingRateReject" class="fi-bar fi-bar-red" style="width: 0%;"></div>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="title-notfinal">NOT FINAL</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">
+                            <div class="fi-bar-wrapper">
+                                <div id="passingRateNotfinal" class="fi-bar fi-bar-orange" style="width: 0%;"></div>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+
+                <tfoot class="table-foot" id="tablePriorityFinalFooter">
+                    <tr>
+                        <th class="text-center" style="color: #4C8CF2;">Total</th>
+                        <th class="text-center" style="color: #4C8CF2;" id="foottotPo">-</th>
+                        <th class="text-center" style="color: #4C8CF2;" id="foottotQtyOrder">-</th>
+                        <th class="text-center" style="color: #4C8CF2;" id="foottotQtyInspect">-</th>
+                        <th class="text-center" style="color: #4C8CF2;" id="foottotOutput">-</th>
+                        <th class="text-center" style="color: #4C8CF2;" id="foottotProgress">-</th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+chart blade
+<style>
+    .wrapper-sub {
+        height: 100%;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .col > .border-custom-datatable {
+        overflow: hidden;
+    }
+
+    .chart-donut {
+        width: 100%;
+        flex: 1 1 0;
+        min-height: 0;
+        height: 0;
+    }
+
+    /* =========================
+    TITLE / LEGEND
+    ========================= */
+
+    .subheader {
+        font-size: clamp(10px, 0.8vw, 13px);
+        line-height: 1.2;
+        padding: 4px 6px 0;
+    }
+
+    .chart-title {
+        font-size: clamp(9px, 0.75vw, 13px);
+        gap: clamp(8px, 1.5vw, 20px) !important;
+        padding: 0 5px 6px;
+        flex-shrink: 0;
+    }
+
+    .chart-title .fw-bold {
+        font-size: clamp(9px, 0.75vw, 13px) !important;
+        line-height: 1.1;
+    }
+
+    .chart-title div[id$="-text-1"],
+    .chart-title div[id$="-text-2"],
+    .chart-title div[id$="-text-3"] {
+        font-size: clamp(8px, 0.65vw, 12px) !important;
+        line-height: 1.1;
+    }
+
+    /* kotak warna legend */
+    .chart-title span {
+        width: clamp(8px, 0.7vw, 12px) !important;
+        height: clamp(8px, 0.7vw, 12px) !important;
+        margin-right: clamp(4px, 0.5vw, 8px) !important;
+        flex-shrink: 0;
+    }
+
+    /* =========================
+    KHUSUS TABLET / LAPTOP
+    992px - 1400px
+    ========================= */
+
+    @media (min-width: 992px) and (max-width: 1400px) {
+
+        .subheader {
+            font-size: clamp(9px, 0.75vw, 11px);
+        }
+
+        .chart-title {
+            gap: clamp(6px, 1vw, 14px) !important;
+            margin-top: 4px !important;
+        }
+
+        .chart-title .fw-bold {
+            font-size: clamp(8px, 0.65vw, 11px) !important;
+        }
+
+        .chart-title div[id$="-text-1"],
+        .chart-title div[id$="-text-2"],
+        .chart-title div[id$="-text-3"] {
+            font-size: clamp(7px, 0.6vw, 10px) !important;
+        }
+    }
+
+    /* layar kecil */
+    @media (max-width: 991.98px) {
+
+        .subheader {
+            font-size: 11px;
+        }
+
+        .chart-title .fw-bold {
+            font-size: 11px !important;
+        }
+
+        .chart-title div[id$="-text-1"],
+        .chart-title div[id$="-text-2"],
+        .chart-title div[id$="-text-3"] {
+            font-size: 10px !important;
+        }
+    }
+
+    .legend-value {
+        font-size: clamp(8px, 0.65vw, 12px);
+        color: #9ca3af;
+        line-height: 1.1;
+    }
+
+    .chart-donut {
+        width: 100%;
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+
+    .chart-title {
+        flex-shrink: 0;
+    }
+</style>
+
+<div class="flex-fill panel-slot panel-bottom">
+    <div class="row row-cols-1 row-cols-lg-3 g-2 h-100">
+        <!-- CHART 1 -->
+        <div class="col">
+            <div class="border-custom-datatable rounded-1 h-100">
+                <div class="wrapper-sub">
+                    <h6 class="subheader mb-0 fw-normal text-truncate">
+                        FINAL INSPECTION RESULT (QTY INSPECT)
+                    </h6>
+
+                    <div id="chart-1" class="chart-donut flex-fill"></div>
+
+                    <div class="chart-title d-flex justify-content-center gap-4 mt-2">
+                        <div class="d-flex align-items-center ">
+                            <span style="width:12px;height:12px;background:#4ade80;border-radius:2px;display:inline-block;margin-right:8px;"></span>
+                            <div>
+                                <div class="fw-bold">PASS</div>
+                                <div id="pass-text-1" class="legend-value">0 (0%)</div>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <span style="width:12px;height:12px;background:#f87171;border-radius:2px;display:inline-block;margin-right:8px;"></span>
+                            <div>
+                                <div class="fw-bold">REJECT</div>
+                                <div id="reject-text-1" class="legend-value">0 (0%)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CHART 2 -->
+        <div class="col">
+            <div class="border-custom-datatable rounded-1 h-100">
+                <div class="wrapper-sub">
+                    <h6 class="subheader mb-0 fw-normal text-truncate">FINAL INSPECTION RESULT (OQL-DEFECT RATE)</h6>
+
+                    <div id="chart-2" class="chart-donut flex-fill"></div>
+
+                    <div class="chart-title d-flex justify-content-center gap-4 mt-2">
+                        <div class="d-flex align-items-center">
+                            <span style="width:12px;height:12px;background:#3F3184;border-radius:2px;display:inline-block;margin-right:8px;"></span>
+                            <div>
+                                <div class="fw-bold">OQL (Defect Rate)</div>
+                                <div id="pass-text-2" class="legend-value">0 (0%)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CHART 3 -->
+        <div class="col">
+            <div class="border-custom-datatable rounded-1 h-100">
+                <div class="wrapper-sub">
+                    <h6 class="subheader mb-0 fw-normal text-truncate">FINAL INSPECTION RESULT (QTY ORDER)</h6>
+
+                    <div id="chart-3" class="chart-donut flex-fill"></div>
+
+                    <div class="chart-title d-flex justify-content-center gap-4 mt-2">
+                        <div class="d-flex align-items-center">
+                            <span style="width:12px;height:12px;background:#4ade80;border-radius:2px;display:inline-block;margin-right:8px;"></span>
+                            <div>
+                                <div class="fw-bold">PASS</div>
+                                <div id="pass-text-3" class="legend-value">0 (0%)</div>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <span style="width:12px;height:12px;background:#f87171;border-radius:2px;display:inline-block;margin-right:8px;"></span>
+                            <div>
+                                <div class="fw-bold">REJECT</div>
+                                <div id="reject-text-3" class="legend-value">0 (0%)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+
+    const chartInstances = {};
+
+    function getFontScale(width, height) {
+        const size = Math.min(width, height);
+
+        if (size <= 90) {
+            return {
+                center: 10,
+                sub: 8
+            };
+        }
+
+        if (size <= 120) {
+            return {
+                center: 12,
+                sub: 9
+            };
+        }
+
+        if (size <= 160) {
+            return {
+                center: 14,
+                sub: 10
+            };
+        }
+
+        return {
+            center: 16,
+            sub: 11
+        };
+    }
+
+
+    function renderDonutChart(
+                chartId,
+                passValue,
+                rejectValue,
+                totalValue,
+                passTextId,
+                rejectTextId,
+                passColor = '#4ade80',
+                rejectColor = '#f87171',
+                centerLabel = 'Pcs'
+            ) {
+                const total = Number(totalValue) || 0;
+
+                const pass = Number(passValue) || 0;
+                const reject = Number(rejectValue) || 0;
+
+                const passPct = total > 0
+                    ? ((pass / total) * 100).toFixed(0)
+                    : 0;
+
+                const rejectPct = total > 0
+                    ? ((reject / total) * 100).toFixed(0)
+                    : 0;
+
+                if (passTextId && document.getElementById(passTextId)) {
+                    document.getElementById(passTextId).innerText =
+                        pass.toLocaleString('id-ID') + ' (' + passPct + '%)';
+                }
+
+                if (rejectTextId && document.getElementById(rejectTextId)) {
+                    document.getElementById(rejectTextId).innerText =
+                        reject.toLocaleString('id-ID') + ' (' + rejectPct + '%)';
+                }
+
+                const chartDom = document.getElementById(chartId);
+                if (!chartDom) return;
+
+                const myChart = echarts.init(chartDom);
+                chartInstances[chartId] = myChart;
+
+                const data = [
+                    {
+                        value: pass,
+                        name: 'PASS',
+                        itemStyle: {
+                            color: passColor
+                        }
+                    }
+                ];
+
+                if (rejectTextId) {
+                    data.push({
+                        value: reject,
+                        name: 'REJECT',
+                        itemStyle: {
+                            color: rejectColor
+                        }
+                    });
+                }
+
+        function buildOption() {
+            const width = chartDom.clientWidth || 150;
+            const height = chartDom.clientHeight || 150;
+
+            const { center, sub } = getFontScale(width, height);
+
+            return {
+                backgroundColor: 'transparent',
+
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{b}: {c} ({d}%)'
+                },
+
+                series: [
+                    {
+                        name: 'Inspection Result',
+                        type: 'pie',
+
+                        // responsive
+                        radius: [
+                            '52%',
+                            '70%'
+                        ],
+
+                        center: ['50%', '50%'],
+
+                        avoidLabelOverlap: false,
+
+                        label: {
+                            show: false
+                        },
+
+                        labelLine: {
+                            show: false
+                        },
+
+                        data: data
+                    }
+                ],
+
+                graphic: [
+                    {
+                        type: 'text',
+                        left: 'center',
+                        top: '43%',
+
+                        style: {
+                            text: total.toLocaleString('id-ID'),
+                            textAlign: 'center',
+                            fill: '#ffffff',
+                            fontSize: center,
+                            fontWeight: 'bold'
+                        }
+                    },
+                    {
+                        type: 'text',
+                        left: 'center',
+                        top: '57%',
+
+                        style: {
+                            text: centerLabel,
+                            textAlign: 'center',
+                            fill: '#ffffff',
+                            fontSize: sub,
+                            fontWeight: 'normal'
+                        }
+                    }
+                ]
+            };
+        }
+
+
+                myChart.setOption(buildOption());
+
+                const ro = new ResizeObserver(() => {
+                    myChart.resize();
+                    myChart.setOption(buildOption());
+                });
+
+                ro.observe(chartDom);
+            }
+
+        renderDonutChart('chart-1', 0, 0, 'pass-text-1', 'reject-text-1');
+        renderDonutChart('chart-2', oql.defect_percent ?? 0, 0, oql.defect_percent ?? 0,'pass-text-2', null,'#3F3184','#ffffff','Defect Rate'
+                        );
+        renderDonutChart('chart-3', 0, 0, 'pass-text-3', 'reject-text-3');
+
+    });
+</script>
+
+categoryblade
+<style>
+    .table-scroll-defect {
+        max-height: 122px;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+
+    @media (min-width: 992px) and (max-width: 1399.98px) {
+        #chart-defect-category {
+            height: 115px !important;
+            min-height: 115px !important;
+        }
+
+        .defect-category-legend {
+            gap: 15px !important;
+            margin-top: 0 !important;
+        }
+
+        .defect-category-legend .legend-box {
+            width: 9px !important;
+            height: 9px !important;
+            margin-right: 5px !important;
+        }
+
+        .defect-category-legend .legend-title {
+            font-size: 10px !important;
+            line-height: 10px;
+        }
+
+        .defect-category-legend .legend-value {
+            font-size: 10px !important;
+            line-height: 12px;
+        }
+    }
+
+</style>
+
+<div class="flex-fill panel-slot panel-bottom">
+    <div class="row row-cols-1 row-cols-lg-3 g-2 h-100">
+
+        <!-- TOP 5 DEFECTS -->
+        <div class="col col-xl-7">
+            <div class="border-custom-datatable rounded-1 h-100">
+                <div class="wrapper-sub">
+
+                    <h6 class="subheader mb-2 fw-normal text-truncate">
+                        TOP 5 DEFECTS (FINAL INSPECTION)
+                    </h6>
+
+                    <div class="table-scroll-tbl rounded mt-2 w-100">
+                        <table class="table-res table-borderless table-hover">
+
+                            <thead>
+                                <tr>
+                                    <th class="text-center">No</th>
+                                    <th class="text-center">Defect</th>
+                                    <th class="text-center">Qty (Pcs)</th>
+                                    <th class="text-center">%</th>
+                                    <th class="text-center"></th>
+                                </tr>
+                            </thead>
+
+                            <tbody class="text-center" id="tableDefectFinalBody">
+                                <tr>
+                                    <td>1</td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                </tr>
+
+                                <tr>
+                                    <td>2</td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                </tr>
+
+                                <tr>
+                                    <td>3</td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                </tr>
+                            </tbody>
+
+                            <tfoot class="table-foot">
+                                <tr>
+                                    <th class="text-center" style="color:#4C8CF2;">
+                                        Total
+                                    </th>
+
+                                    <th></th>
+
+                                    <th class="text-center"
+                                        style="color:#4C8CF2;"
+                                        id="footTotalDefectQty">
+                                        -
+                                    </th>
+
+                                    <th class="text-center"
+                                        style="color:#4C8CF2;"
+                                        id="footTotalDefectPct">
+                                        100%
+                                    </th>
+
+                                    <th></th>
+                                </tr>
+                            </tfoot>
+
+                        </table>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+
+        <!-- DEFECT BY CATEGORY -->
+        <div class="col col-xl-5">
+            <div class="border-custom-datatable rounded-1 h-100">
+                <div class="wrapper-sub">
+
+                    <h6 class="subheader mb-0 fw-normal text-truncate">
+                        DEFECT BY CATEGORY (FINAL INSPECTION)
+                    </h6>
+
+                    <div id="chart-defect-category"
+                         class="chart-donut flex-fill"
+                         style="height:150px;">
+                    </div>
+
+                    <div class="d-flex justify-content-center gap-4 mt-2 defect-category-legend">
+
+                        <div class="d-flex align-items-center">
+                            <span class="legend-box"
+                                style="
+                                    background:#3b82f6;
+                                    border-radius:2px;
+                                    display:inline-block;">
+                            </span>
+
+                            <div>
+                                <div class="fw-bold legend-title">
+                                    Process
+                                </div>
+
+                                <div id="process-text" class="legend-value">
+                                    0 (0%)
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-center">
+                            <span class="legend-box"
+                                style="
+                                    background:#4ade80;
+                                    border-radius:2px;
+                                    display:inline-block;">
+                            </span>
+
+                            <div>
+                                <div class="fw-bold legend-title">
+                                    Non Process
+                                </div>
+
+                                <div id="non-process-text" class="legend-value">
+                                    0 (0%)
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+
+        function renderDefectCategoryChart(chartId, processValue, nonProcessValue, processTextId, nonProcessTextId) {
+            const total = processValue + nonProcessValue;
+            const processPct = total > 0 ? ((processValue / total) * 100).toFixed(0) : 0;
+            const nonProcessPct = total > 0 ? ((nonProcessValue / total) * 100).toFixed(0) : 0;
+
+            if (processTextId && document.getElementById(processTextId)) {
+                document.getElementById(processTextId).innerText =
+                    processValue.toLocaleString('id-ID') + ' (' + processPct + '%)';
+            }
+            if (nonProcessTextId && document.getElementById(nonProcessTextId)) {
+                document.getElementById(nonProcessTextId).innerText =
+                    nonProcessValue.toLocaleString('id-ID') + ' (' + nonProcessPct + '%)';
+            }
+
+            const chartDom = document.getElementById(chartId);
+            if (!chartDom) return;
+
+            const myChart = echarts.init(chartDom);
+
+            const option = {
+                backgroundColor: 'transparent',
+                grid: {
+                    left: '10%',
+                    right: '10%',
+                    top: '25%',
+                    bottom: '5%',
+                    containLabel: false
+                },
+                xAxis: {
+                    type: 'category',
+                    data: ['Process', 'Non Process'],
+                    show: false
+                },
+                yAxis: {
+                    type: 'value',
+                    show: false,
+                    max: 100
+                },
+                series: [
+                    {
+                        type: 'bar',
+                        barWidth: '35%',
+                        data: [
+                            {
+                                value: processPct,
+                                itemStyle: { color: '#3b82f6', borderRadius: [4, 4, 0, 0] }
+                            },
+                            {
+                                value: nonProcessPct,
+                                itemStyle: { color: '#4ade80', borderRadius: [4, 4, 0, 0] }
+                            }
+                        ],
+                        label: {
+                            show: true,
+                            position: 'top',
+                            color: '#ffffff',
+                            fontSize: 13,
+                            formatter: function (params) {
+                                return params.value + ' %';
+                            }
+                        }
+                    }
+                ]
+            };
+
+            myChart.setOption(option);
+            window.addEventListener('resize', () => myChart.resize());
+        }
+
+        renderDefectCategoryChart('chart-defect-category', 0, 0, 'process-text', 'non-process-text');
+
+    });
+</script>
+
+masterlayout
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <noscript>
+        <meta http-equiv="refresh" content="0;url={{route('nojs')}}">
+    </noscript>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+	<title>{{ config('app.shortname') }}</title>
+	<link rel="icon" href="{!! _asset('img/pbtico.ico') !!}">
+
+    <link rel="stylesheet" href="{{ _asset('adminltecomponents/bootstrap-5.3.8/css/bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ _asset('adminltecomponents/select2/dist/css/select2.min.css') }}">
+    <link rel="stylesheet" href="{{ asset('/css/flatpickr.min.css') }}">
+    <link rel="stylesheet" href="{{ _asset('css/fixedColumns.bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ _asset('css/dataTables.bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ _asset('css/datatables.min.css') }}">
+    <link rel="stylesheet" href="{{ _asset('css/rowReorder.dataTables.min.css') }}">
+    <link rel="stylesheet" href="{{ _asset('css/buttons.dataTables.min.css') }}">
+    <link rel="stylesheet" href="{{ _asset('css/loading.css') }}">
+
     <style>
+        /* Default Color */
+        :root {
+            --color-title: #5A587E;
+            --color-yellow: #F2C94C;
+            --color-red: #F24C4C;
+            --color-red-alt: #E65858;
+            --color-blue: #4C8CF2;
+            --color-green: #4CF299;
+            --color-purple: #8D80CD;
+
+            --bg-dark-1: #222F4A; /* input, box biru gelap */
+            --bg-dark-2: #242E3E; /* select2/flatpickr bg, table td */
+            --bg-dark-3: #1C2536; /* table th, footer table */
+            --bg-dark-4: #1e2a44; /* flatpickr weekdays/days */
+
+            --border-muted: #576376;
+        }
+
+        /* --------------------------------------------------------------------
+        2. SHELL / LAYOUT DASHBOARD
+        -------------------------------------------------------------------- */
         html, body {
             height: auto;
             min-height: 100%;
@@ -22,123 +3033,78 @@
             flex-direction: column;
             -webkit-overflow-scrolling: touch;
         }
+        .dashboard-wrap > .d-flex.flex-wrap.justify-content-between,
+        .dashboard-wrap > .row.g-3.mt-1 {
+            flex-shrink: 0;
+        }
 
+        @media (min-width: 992px) {
+            html, body { height: 100%; }
+            body { overflow: hidden; }
+            .dashboard-wrap { height: 100%; min-height: 0; }
+            .flex-fill-area { overflow: auto; }
+        }
+
+        /* --------------------------------------------------------------------
+        3. TYPOGRAPHY & COLOR UTILITIES
+        -------------------------------------------------------------------- */
+        .dashboard-title { font-size: 2rem; }
+
+        .text-title { color: var(--color-title); }
+        .text-yellow { color: var(--color-yellow); }
+        .text-red { color: var(--color-red); }
+        .text-blue { color: var(--color-blue); }
+        .text-green { color: var(--color-green); }
+        .text-purple { color: var(--color-purple); }
+
+        .border-custom { border: 1px solid var(--border-muted) !important;margin-top: 20px !important;}
+        .border-color-yellow {
+            border: 1px solid var(--color-yellow);
+            border-radius: 5px;
+        }
+        .border-end-custom { border-right: 1px solid var(--bg-dark-2) !important;gap: 16px; }
+
+        @media (max-width: 768px) {
+            .border-end-custom {
+                border-right: none !important;
+                border-bottom: 1px solid rgba(255,255,255,.2);
+                padding-bottom: 1rem;
+                margin-bottom: 1rem;
+            }
+        }
+
+        /* --------------------------------------------------------------------
+        4. BUTTONS
+        -------------------------------------------------------------------- */
         .btn-custom {
-            background: #222F4A;
+            background: var(--bg-dark-1);
             color: #fff;
             border: none;
             border-radius: 10px;
         }
+        .btn-custom:hover { background-color: var(--bg-dark-2); }
 
-        .btn-custom:hover {
-            background-color: #242E3E;
-        }
+        .button-inline { width: 50%; justify-content: end;  }
 
-        .border-custom {
-            border: 1px solid #576376 !important;
-        }
-
-        .min-h-custom {
-            min-height: 250px;
+        @media (max-width: 1180px) {
+            .button-inline { justify-content: space-between;width: 41%;}
         }
 
-        .border-color-yellow {
-            border: 1px solid #F2C94C;
-            border-radius: 5px;
+        @media (max-width: 1024px) {
+            .button-inline { justify-content: space-between;width: 45%;}
         }
 
-        /* Color */
-        .text-title { color: #5A587E; }
-        .text-yellow { color: #F2C94C; }
-        .text-red { color: #F24C4C; }
-        .text-blue { color: #4C8CF2; }
-        .text-green { color: #4CF299; }
-
-        .color-box-yellow {
-            background-color: #363633;
-            border: 1px solid #F2C94C;
-            border-radius: 5px;
-            color: #F2C94C;
+        @media (max-width: 768px) {
+            .button-inline { justify-content: space-between;}
         }
-        .color-box-red {
-            background-color: #352837;
-            border: 1px solid #F24C4C;
-            border-radius: 5px;
-        }
-        .color-box-blue {
-            background-color: #23304E;
-            border: 1px solid #3F5588;
-            border-radius: 5px;
-        }
-        .color-box-green {
-            background-color: #1A3B45;
-            border: 1px solid #4CF299;
-            border-radius: 5px;
-            color: #4CF299
+        @media (max-width: 576px) {
+            .btn-custom { width: 100%; justify-content: center; }
         }
 
-        .stat-card {
-            min-height: 110px;
-            height: auto;
-        }
-
-        .stat-card h2,
-        .stat-card h6 {
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 100%;
-        }
-
-        .stat-card .d-flex.align-items-end {
-            max-width: 100%;
-        }
-
-        .stat-card-defect {
-            height: auto;
-        }
-        .stat-card-defect > div {
-            width: 100%;
-        }
-        .defect-header {
-            width: 100%;
-        }
-        #topDefectList {
-            width: 100%;
-        }
-
-        #topDefectList {
-            max-height: 90px;
-            width: 100%;
-            overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
-        }
-
-        #topDefectList::-webkit-scrollbar {
-            width: 1px;
-        }
-
-        #topDefectList::-webkit-scrollbar-thumb {
-            background-color: #576376;
-            border-radius: 4px;
-        }
-
-        #topDefectList .text-white.small {
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            display: inline-block;
-            max-width: 190px;
-            vertical-align: middle;
-        }
-
-        .dashboard-title {
-            font-size: 2rem;
-        }
-
-        .export-btn {
-            position: relative;
-        }
+        /* --------------------------------------------------------------------
+        5. TOOLTIP (export button, dsb)
+        -------------------------------------------------------------------- */
+        .export-btn { position: relative; }
 
         .custom-tooltip {
             position: absolute;
@@ -157,7 +3123,6 @@
             transition: all 0.2s ease;
             z-index: 10;
         }
-
         .custom-tooltip::after {
             content: "";
             position: absolute;
@@ -168,14 +3133,12 @@
             border-style: solid;
             border-color: transparent transparent transparent #000000;
         }
-
         .export-btn:hover .custom-tooltip {
             opacity: 1;
             visibility: visible;
             right: 130%;
         }
 
-        /* custom-tooltip-bottom */
         .custom-tooltip-bottom {
             position: absolute;
             top: 100%;
@@ -195,7 +3158,6 @@
             transition: all 0.2s ease;
             z-index: 10;
         }
-
         .custom-tooltip-bottom::after {
             content: "";
             position: absolute;
@@ -205,96 +3167,435 @@
             border-style: solid;
             border-color: transparent transparent #000000 transparent;
         }
-
         .export-btn:hover .custom-tooltip-bottom {
             opacity: 1;
             visibility: visible;
             transform: translateY(0);
         }
 
-        @media (min-width: 992px) {
-            html, body {
-                height: 100%;
-            }
-            body {
-                overflow: hidden;
-            }
-            .dashboard-wrap {
-                height: 100%;
-                min-height: 0;
-            }
-            .flex-fill-area {
-                overflow: auto;
-            }
+        /* --------------------------------------------------------------------
+        6. STAT CARD (kartu ringkasan angka: qty, RFT, WFT, target, dll)
+        -------------------------------------------------------------------- */
+        .stat-card {
+            min-height: 110px;
+            height: auto;
         }
+        .stat-card h2,
+        .stat-card h6 {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+        }
+        .stat-card .d-flex.align-items-end { max-width: 100%; }
+
+        .color-box-yellow {
+            background-color: #363633;
+            border: 1px solid var(--color-yellow);
+            border-radius: 5px;
+            color: var(--color-yellow);
+        }
+        .color-box-red {
+            background-color: #352837;
+            border: 1px solid var(--color-red);
+            border-radius: 5px;
+        }
+        .color-box-blue {
+            background-color: #23304E;
+            border: 1px solid #3F5588;
+            border-radius: 5px;
+        }
+        .color-box-green {
+            background-color: #1A3B45;
+            border: 1px solid var(--color-green);
+            border-radius: 5px;
+            color: var(--color-green);
+        }
+        .color-box-purple {
+            background-color: #241B51;
+            border: 1px solid var(--color-purple);
+            border-radius: 5px;
+            color: var(--color-purple);
+        }
+
+        .icon-dashboard {
+            width: 60px; height: 60px;
+        }
+
+        .icon-refresh {
+            width: 28px;
+            height: 28px;
+        }
+
+        .icon-button-inline {
+            width: 30px; height: 30px;
+        }
+
+        .btn-custom {
+            padding: 0.8rem 1rem !important;
+            font-size: 1rem;
+            white-space: nowrap;
+        }
+
+        .btn-find {
+            background: var(--bg-dark-1);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+            padding-top: 0.5rem !important;
+            padding-bottom: 0.5rem !important;
+            font-size: 0.9rem;
+            white-space: nowrap;
+        }
+
+        .btn-find:hover { background-color: var(--bg-dark-2); }
+
+        .date-input-col { min-width: 130px; }
+
+        .card-wrapper {
+                margin-top: 1px;
+            }
 
         @media (min-width: 992px) and (max-width: 1400px) {
-            .dashboard-title { font-size: 1.5rem; }
-            .dashboard-subtitle { font-size: 0.85rem !important; }
+            .dashboard-title {
+                font-size: 1rem;
+            }
+
+            .dashboard-subtitle {
+                font-size: 0.70rem !important;
+            }
+
+            .icon-inline-lts {
+                width: 20px;
+                height: 20px;
+            }
+
             .btn-custom {
-                padding-left: 0.85rem !important;
-                padding-right: 0.85rem !important;
-                padding-top: 0.6rem !important;
-                padding-bottom: 0.6rem !important;
-                font-size: 0.9rem;
+                padding: 0.5rem 1rem !important;
+                font-size: 0.8rem;
                 white-space: nowrap;
             }
-            .row.mt-4 .box-custom { width: 26px; height: 26px; }
-            .row.mt-4 img[style*="30px"] { width: 22px !important; height: 22px !important; }
-            .row.mt-4.border-custom > [class*="col-"] {
-                gap: 0.75rem !important;
+
+            /* Stat card */
+            .stat-card {
+                min-height: 105px;
+                padding: 0.45rem !important;
+                font-size: 12px;
+            }
+
+            .stat-card img {
+                width: 30px !important;
+                height: 30px !important;
+                margin-bottom: .45rem !important;
+            }
+
+            .stat-card h6 {
+                font-size: .70rem;
+                margin-bottom: .25rem !important;
+            }
+
+            .stat-card h2 {
+                font-size: 1.1rem;
+                line-height: 1;
+            }
+
+            .stat-card small {
+                font-size: .65rem;
+            }
+
+            .stat-card-defect {
+                padding: .6rem .5rem !important;
+                height: 90px;
+            }
+
+            .defect-header {
+                gap: .5rem !important;
+            }
+
+            #topDefectChart {
+                width: 30px;
+                height: 30px;
+            }
+
+            #topDefectList {
+                max-height: 65px;
+            }
+
+            #topDefectList .text-white.small {
+                font-size: .65rem;
+                max-width: 140px;
+            }
+
+            .icon-dashboard {
+                width: 32px;
+                height: 32px;
+            }
+
+            .icon-button-inline {
+                width: 20px;
+                height: 20px;
+            }
+
+            .icon-refresh {
+                width: 18px;
+                height: 18px;
+            }
+
+            /* Filter */
+            #line,
+            #groupbuyer,
+            #datea,
+            #dateb {
+                font-size: 0.8rem;
+            }
+
+            #findbtn {
+                white-space: nowrap;
+                padding-left: 0.6rem;
+                padding-right: 0.6rem;
+            }
+
+            .period-date .position-relative {
+                flex: 1;
+            }
+
+            .period-date input {
+                font-size: 0.78rem;
                 padding-left: 0.5rem;
-                padding-right: 0.5rem;
+                padding-right: 2rem;
             }
-            .row.mt-4 label { font-size: 0.8rem; }
-            .stat-card { font-size: 14px; padding: 0.75rem !important; min-height: 165px; height: auto; }
-            .stat-card img { width: 45px !important; height: 45px !important; }
-            .stat-card h2 { font-size: 1.4rem; }
-            .stat-card h6 { font-size: 0.8rem; }
-            #topDefectList { max-height: 80px; }
-        }
 
-        /* Tablet Mini (<=1024px) */
-        @media (max-width: 1024px) {
-            .button-inline {
+            .form-control,
+            .select2-container--default .select2-selection--single {
+                height: 30px !important;
+                font-size: 0.78rem;
+            }
+
+            .select2-container--default .select2-selection--single .select2-selection__rendered {
+                line-height: 30px !important;
+            }
+
+            .select2-container--default .select2-selection--single .select2-selection__arrow {
+                height: 30px !important;
+            }
+
+
+            .select2-dropdown { background: var(--bg-dark-1); color: white;font-size: 12px; }
+
+            .row.mt-4 .box-custom {
+                width: 22px;
+                height: 22px;
+            }
+
+            .row.mt-4 img[style*="30px"] {
+                width: 18px !important;
+                height: 18px !important;
+            }
+
+            .row.mt-4.border-custom > [class*="col-"] {
+                gap: 0.5rem !important;
+                padding-left: 0.4rem;
+                padding-right: 0.4rem;
+            }
+
+            .row.mt-4 label {
+                font-size: 0.72rem;
+            }
+
+            .margin-button {
+                margin-right: 24px;
+            }
+
+            .action-btn {
+                gap: 8px;
+            }
+
+            /* Datatable */
+            #datedatatables {
+                font-size: 0.8rem;
+                max-width: 100%;
+                padding-right: 2rem;
+            }
+
+            .search-input {
+                width: 150px;
+            }
+
+            h5.text-nowrap {
+                font-size: 0.95rem;
+            }
+
+            .datatable-wrap {
+                flex-grow: 1;
+                min-height: 0;
+            }
+
+            .table-scroll-area {
+                flex-grow: 1;
+                min-height: 0;
+                max-height: none;
+                height: auto;
+            }
+
+            .wrapper-title {
+                flex-wrap: nowrap;
+            }
+
+            .datatable-header-left {
+                flex: 1 1 auto;
+                min-width: 0;
+            }
+
+            .datatable-header-right {
+                flex: 0 0 auto;
+                margin-left: auto;
+            }
+
+            .datatable-header-left .position-relative {
+                min-width: 100px;
+            }
+
+            .btn-find {
+                background: var(--bg-dark-1);
+                color: #fff;
+                border: none;
+                border-radius: 5px;
+                padding: 0.34rem 1rem !important;
+                font-size: 0.78rem;
+                white-space: nowrap;
+            }
+
+            .wrapper-date.period-date {
+                gap: 6px !important;
+            }
+
+            .date-input-col {
+                flex: 0 0 210px !important;
+                flex-shrink: 0 !important;
+                min-width: 90px;
+                width: 200px;
+            }
+
+            .date-input-col input {
                 width: 100%;
-                justify-content: start;
+                font-size: 0.72rem;
+                padding-left: 0.5rem;
+                padding-right: 1.6rem;
+            }
+
+            .date-input-col img {
+                width: 13px !important;
+                height: 13px !important;
+            }
+
+            .to {
+                padding-left: 2px !important;
+                padding-right: 2px !important;
+            }
+
+            .border-custom-datatable {
+                padding: 0.75rem !important;
+            }
+
+            .border-custom {
+                margin-top: 10px !important;
+            }
+
+            .detailIcon {
+                width: 18px !important;
+                height: 18px !important;
+            }
+
+            .export-btn .export-icon {
+                width: 20px !important;
+                height: 20px !important;
+            }
+
+            /* Isi tabel */
+            #tableInlinePerformance {
+                font-size: 0.78rem;
+            }
+
+            #tableInlinePerformance thead th {
+                padding: 0.5rem 0.4rem;
+                font-size: 0.75rem;
+                line-height: 1.2;
+            }
+
+            #tableInlinePerformance tbody td,
+            #tableInlinePerformance tfoot td {
+                padding: 0.4rem 0.4rem;
+            }
+
+            .skeleton-badge {
+                width: 70px;
+                height: 22px;
+            }
+
+            .text-title {
+                font-size: small;
+            }
+
+            .card-wrapper {
+                margin-top: 1px;
+            }
+
+            .footer-title {
+                font-size: 11px;
+            }
+
+            .img-foot {
+                width: 12px;
+                height: 12px;
+            }
+
+            .swal-modal {
+                width: 300px;
+                padding: 10px;
+            }
+
+            .swal-icon {
+                width: 45px;
+                height: 45px;
+                margin: 10px auto;
+            }
+
+            .swal-icon--warning__body {
+                height: 20px;
+            }
+
+            .swal-icon--warning__dot {
+                width: 5px;
+                height: 5px;
+            }
+
+            .swal-title {
+                font-size: 16px;
+            }
+
+            .swal-text {
+                font-size: 12px;
+            }
+
+            .swal-button {
+                font-size: 11px;
+                padding: 4px 18px;
             }
         }
 
-        /* Mobile (<=768px) */
         @media (max-width: 768px) {
             .dashboard-title { font-size: 1.4rem; }
             .dashboard-subtitle { font-size: 1rem !important; }
-
-            .footer-title {
-                padding-top: 30px;
-            }
-
+            .footer-title { padding-top: 30px; }
             .stat-card { padding: 0.75rem !important; min-height: 150px; height: auto; font-size: 12px; }
             .stat-card img { width: 45px !important; height: 45px !important; }
-            #topDefectList { max-height: 70px; }
-            .defect-header {
-                flex-direction: column;
-                gap: 0.5rem !important;
-            }
-            .border-end-custom {
-                border-right: none !important;
-                border-bottom: 1px solid rgba(255,255,255,.2);
-                padding-bottom: 1rem;
-                margin-bottom: 1rem;
-            }
-
-            .button-inline {
-                width: 100%;
-                justify-content: space-between;
-            }
         }
 
         @media (max-width: 576px) {
             .dashboard-title { font-size: 1.1rem; }
             .dashboard-subtitle { display: none; }
-            .btn-custom { width: 100%; justify-content: center; }
             .d-flex.flex-wrap > .d-flex { width: 100%; }
             .color-box-yellow img, .color-box-red img,
             .color-box-blue img, .color-box-green img {
@@ -306,267 +3607,345 @@
             }
         }
 
+        /* --------------------------------------------------------------------
+        7. FILTER COMPONENT (icon+label+input, select2, flatpickr, action-btn)
+        Dipakai oleh partial "filter" di semua modul dashboard.
+        -------------------------------------------------------------------- */
+        .bg-custom-select {
+            background: var(--bg-dark-2);
+            color: #fff;
+            border: 0;
+        }
+
+        .box-custom { width: 35px; height: 35px; }
+
+        .form-control,
+        .select2-container--default .select2-selection--single {
+            height: 38px;
+            border-radius: 0.375rem;
+        }
+
+        input[type="text"] {
+            background-color: var(--bg-dark-1);
+            color: white;
+            border: none;
+        }
+        input[type="text"]:focus {
+            background-color: var(--bg-dark-1);
+            color: white;
+            border-color: var(--border-muted);
+            box-shadow: none;
+        }
+
+        /* Select2 dark theme */
+        .select2-container { width: 100% !important; }
+        .select2-container--default .select2-selection--single {
+            background: var(--bg-dark-1);
+            border: none;
+            display: flex;
+            align-items: center;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__rendered {
+            color: white;
+            line-height: 38px;
+            padding-left: 0.75rem;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__arrow { height: 38px; }
+        .select2-container--default .select2-selection--single .select2-selection__placeholder { color: #ffffff !important; }
+        .select2-container--default .select2-results__option--highlighted[aria-selected] {
+            background-color: transparent !important;
+            color: white !important;
+        }
+        .select2-container--default .select2-results__option[aria-selected="true"] {
+            background-color: transparent !important;
+            color: white !important;
+        }
+        .select2-dropdown { background: var(--bg-dark-1); color: white; }
+        .select2-results__option { color: white; }
+        .select2-search__field { background: var(--bg-dark-1); color: white; border: none; }
+        .select2-results__options::-webkit-scrollbar { width: 6px; }
+        .select2-results__options::-webkit-scrollbar-thumb { background: #D9D9D9; border-radius: 4px; }
+
+        /* Flatpickr dark theme */
+        .flatpickr-calendar {
+            background: var(--bg-dark-2);
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+            border: none;
+            width: 100%;
+            max-width: 307px;
+        }
+        .flatpickr-calendar.arrowTop:before,
+        .flatpickr-calendar.arrowTop:after { display: none; }
+        .flatpickr-months { border-radius: 12px 12px 0 0; padding: 10px 0; }
+        .flatpickr-current-month { color: #fff; font-weight: 700; font-size: 1.1rem; }
+        .flatpickr-current-month .flatpickr-monthDropdown-months,
+        .flatpickr-current-month input.cur-year { color: #fff; background: transparent; }
+        .flatpickr-months .flatpickr-prev-month,
+        .flatpickr-months .flatpickr-next-month { color: #fff; fill: #fff; top: 12px; }
+        .flatpickr-months .flatpickr-prev-month svg,
+        .flatpickr-months .flatpickr-next-month svg { fill: #fff; }
+        .flatpickr-weekdays { background: var(--bg-dark-4); }
+        span.flatpickr-weekday { background: var(--bg-dark-4); color: #cfd8ec; font-weight: 600; }
+        .flatpickr-days { background: var(--bg-dark-4); border: none; }
+        .dayContainer { background: var(--bg-dark-4); }
+        .flatpickr-day { color: #fff; border-radius: 10px; }
+        .flatpickr-day:hover { background: #33456b; }
+        .flatpickr-day.today { border-color: #6c8cd5; }
+        .flatpickr-day.prevMonthDay,
+        .flatpickr-day.nextMonthDay { color: #5a6785; }
+        .flatpickr-day.selected,
+        .flatpickr-day.selected:hover { background: #32549A; border-color: #32549A; color: #fff; }
+        .flatpickr-day.flatpickr-disabled,
+        .flatpickr-day.flatpickr-disabled:hover { color: #5a6785; cursor: not-allowed; }
+
+        .period-date .position-relative { flex: 1 1 0; min-width: 0; }
+        .period-date input { font-size: 0.85rem; }
+
+        .margin-button { margin-right: 80px; }
+        .action-btn { display: flex; align-items: end; gap: 12px; }
+
+
+        @media (min-width: 992px) and (max-width: 1400px) {
+            #line, #groupbuyer, #datea, #dateb { font-size: 0.85rem; }
+            #findbtn { white-space: nowrap; padding-left: 0.75rem; padding-right: 0.75rem; }
+            .period-date .position-relative { flex: 1;}
+            .period-date input { font-size: 0.8rem; padding-left: .5rem; padding-right: 2rem; }
+            .row.mt-4 .box-custom { width: 26px; height: 26px; }
+            .row.mt-4 img[style*="30px"] { width: 22px !important; height: 22px !important; }
+            .row.mt-4.border-custom > [class*="col-"] {
+                gap: 0.75rem !important;
+                padding-left: 0.5rem;
+                padding-right: 0.5rem;
+            }
+            .row.mt-4 label { font-size: 0.8rem; }
+
+            .box-custom {
+                height: 27px !important;
+            }
+
+            .icon-summary {
+                width: 20px;
+                height: 20px;
+            }
+
+            .border-end-custom { gap: 5px; }
+
+            .to{
+                font-size: 12px;
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .period-date { display: flex; flex-direction: column; }
+            .icon-filter { display: none; }
+            .to { display: none; }
+            .wrapper-date { width: 100%; margin: 0; padding: 0 !important; align-items: stretch !important; }
+            .margin-button { width: 200px; margin-right: 0; }
+        }
+
+        @media (min-width: 1024px) and (max-width: 1030px) {
+            .margin-button { width: 100px; margin-right: 0; }
+        }
+
+        @media (max-width: 767.98px) {
+            .period-date { flex-direction: column; align-items: stretch; }
+            .period-date .position-relative { width: 100%; }
+            .period-date span.px-2 { text-align: center; padding: 4px 0 !important; }
+            #findbtn { width: 100%; }
+            .icon-filter { display: none; }
+            .action-btn { width: 100%; justify-content: space-between; align-items: center; }
+            .margin-button { margin-right: 0; width: auto; }
+        }
+
+        /* --------------------------------------------------------------------
+        8. TABLE / DATATABLE COMPONENT (theme, header, search, skeleton, copy badge)
+        -------------------------------------------------------------------- */
+        .table-custom { border-collapse: collapse; }
+        .table-custom th {
+            background-color: var(--bg-dark-3) !important;
+            color: white;
+            text-align: center;
+            vertical-align: middle;
+        }
+        .table-custom td {
+            background-color: var(--bg-dark-2) !important;
+            color: white;
+            border: 1px solid var(--bg-dark-3) !important;
+        }
+
         .datatable-wrap {
+            display: flex;
+            flex-direction: column;
+            overflow-y: hidden;
             flex: 1 1 auto;
             min-height: 0;
         }
-
         .table-scroll-area {
             flex: 1 1 auto;
             min-height: 200px;
             height: auto;
             max-height: none;
+            overflow-y: auto;
+            position: relative;
+            overscroll-behavior: contain;
+            -webkit-overflow-scrolling: touch;
         }
 
-        .dashboard-wrap > .d-flex.flex-wrap.justify-content-between,
-        .dashboard-wrap > .row.g-3.mt-1 {
-            flex-shrink: 0;
+        h5.text-nowrap { white-space: nowrap; }
+
+        .wrapper-title { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; width: 100%;margin-bottom: 15px; }
+        .datatable-header-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .datatable-header-right { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+
+        .search-wrapper { position: relative; width: 250px; }
+        .search-icon {
+            position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+            width: 18px; height: 18px; pointer-events: none;
+        }
+        .search-input { width: 250px; max-width: 100%; padding-left: 40px; }
+        .export-text { display: none; }
+
+        .position-relative { flex-grow: 0; width: 250px; min-width: 160px; }
+
+        /* Skeleton loading */
+        .skeleton-td { padding: 10px 8px !important; }
+        .skeleton-bar {
+            height: 14px;
+            border-radius: 6px;
+            background: linear-gradient(90deg, #2a3346 25%, #3a4560 37%, #2a3346 63%);
+            background-size: 400% 100%;
+            animation: skeleton-shimmer 1.4s ease infinite;
+        }
+        .skeleton-badge { height: 28px; width: 90px; margin: 0 auto; border-radius: 999px; }
+        @keyframes skeleton-shimmer {
+            0% { background-position: 100% 50%; }
+            100% { background-position: 0 50%; }
+        }
+
+        /* Scrollbar */
+        .table-scroll-wrapper::-webkit-scrollbar { height: 8px; width: 8px; }
+        .table-scroll-wrapper::-webkit-scrollbar-track { background: var(--bg-dark-2); border-radius: 4px; }
+        .table-scroll-wrapper::-webkit-scrollbar-thumb { background: #D9D9D9; border-radius: 4px; }
+        .table-scroll-wrapper { scrollbar-width: thin; scrollbar-color: #D9D9D9 var(--bg-dark-2); }
+        .table-responsive { -webkit-overflow-scrolling: touch; }
+
+        /* Copy-to-clipboard badge (mobile) */
+        .copyable-cell { cursor: default; }
+        @media (max-width: 991.98px) {
+            .copyable-cell { cursor: pointer; }
+        }
+        .copy-badge-popover {
+            position: fixed;
+            z-index: 1080;
+            background-color: var(--bg-dark-3);
+            border: 1px solid var(--color-blue);
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: #fff;
+            font-size: 13px;
+            max-width: 260px;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: copyBadgeFadeIn .15s ease-out;
+        }
+        .copy-badge-popover .copy-badge-text { word-break: break-word; flex: 1; line-height: 1.3; }
+        .copy-badge-popover .copy-badge-icon { flex-shrink: 0; width: 16px; height: 16px; cursor: pointer; opacity: 0.85; }
+        .copy-badge-popover.copied { border-color: var(--color-green); }
+        .copy-badge-popover .copy-badge-status { font-size: 11px; color: var(--color-green); display: none; }
+        .copy-badge-popover.copied .copy-badge-status { display: block; }
+        .copy-badge-popover.copied .copy-badge-text { display: none; }
+        @keyframes copyBadgeFadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (min-width: 992px) and (max-width: 1400px) {
+            #datedatatables { font-size: 0.85rem; }
+            .search-input { width: 170px; }
+            h5.text-nowrap { font-size: 1.05rem; }
+            .datatable-wrap { flex-grow: 1; min-height: 0; }
+            .table-scroll-area { flex-grow: 1; min-height: 0; max-height: none; height: auto; }
+            .wrapper-title { flex-wrap: nowrap; margin-bottom: 1px; }
+            .datatable-header-left { flex: 1 1 auto; min-width: 0; }
+            .datatable-header-right { flex: 0 0 auto; margin-left: auto; }
+            #datedatatables { max-width: 100%; }
+            .flatpickr-calendar {
+                max-width: 260px;
+                padding: 4px;
+                border-radius: 4px;
+            }
+            .flatpickr-day {
+                width: 30px;
+                height: 30px;
+                line-height: 30px;
+                font-size: 0.70rem;
+            }
+            .flatpickr-current-month {
+                font-size: 0.95rem;
+            }
+            span.flatpickr-weekday {
+                font-size: 0.75rem;
+            }
+        }
+
+        @media (min-width: 768px) and (max-width: 991.98px) {
+            .datatable-header-left,
+            .datatable-header-right { width: 100%; flex-wrap: wrap; }
+            .datatable-header-left h5.text-nowrap { white-space: normal; font-size: 1rem; flex: 1 1 auto; min-width: 0; }
+            .datatable-header-left .position-relative { flex: 1 1 220px; min-width: 200px; }
+            .datatable-header-right { justify-content: flex-start; }
+            .datatable-header-right .search-input { width: 240px; flex: 1 1 240px; }
+        }
+
+        @media (max-width: 767.98px) {
+            #datedatatables { width: 100% !important; }
+            .search-input { width: 100%; }
+            #find { flex-shrink: 0; }
+            .wrapper-title { flex-direction: column; align-items: stretch; }
+            .datatable-header-left { width: 100%; flex-wrap: wrap; row-gap: 0.5rem; }
+            .datatable-header-left h5.text-nowrap { white-space: normal; font-size: 0.95rem; flex: 1 1 auto; min-width: 0; word-break: break-word; }
+            .datatable-header-left .position-relative { width: 100%; flex-grow: 0; min-width: 0; }
+            .datatable-header-right { width: 100%; justify-content: space-between; }
+            .datatable-header-right .search-input { flex: 1 1 100%; }
+            .search-wrapper { flex: 1; width: auto; }
+            .export-btn { padding: 6px 12px !important; color: white; font-size: 0.85rem; font-weight: 500; }
+            .export-text { display: inline-block; }
+            .detailIcon { display: none; }
+            .position-relative { flex-grow: 1; width: auto; min-width: 0; }
+        }
+
+        .border-custom-datatable {
+            border: 1px solid #4C8CF2 !important;
+            background-color: #212B3E;
         }
     </style>
-    @endsection
 
-    @section('content')
-    <div class="container-fluid dashboard-wrap">
-        <!-- Header -->
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 ">
-            <div class="d-flex align-items-center gap-3 text-decoration-none">
-                <img
-                    src="{{ _asset('svg/inlinePerformance/machine.svg') }}"
-                    class="flex-shrink-0"
-                    alt="Inline Performance"
-                    style="width: 60px; height: 60px;">
-
-                <div class="d-flex flex-column justify-content-center">
-                    <h2 class="text-white mb-1 dashboard-title">
-                        INLINE PERFORMANCE DASHBOARD
-                    </h2>
-                    <p class="text-white fs-6 mb-0 dashboard-subtitle">
-                        Real-time monitoring of inline production performance
-                    </p>
-                </div>
-            </div>
-            <div class="button-inline d-flex gap-3">
-                <a href="{{ route('home') }}" class="d-flex align-items-center gap-3 text-decoration-none px-3">
-                    <img
-                        src="{{ _asset('svg/inlinePerformance/home.svg') }}"
-                        class="flex-shrink-0"
-                        alt="Inline Performance"
-                        style="width: 30px; height: 30px;">
-                </a>
-
-                <a href="{{ route('monitoring_inlineperformance_selectlinelts') }}"
-                   class="loading-target btn-custom px-4 py-3 text-decoration-none d-flex align-items-center">
-                    <img src="{{ _asset('svg/inlinePerformance/inline.svg') }}" class="me-2" alt="">
-                    INLINE TLS
-                </a>
-
-                <button
-                    type="button"
-                    class="export-btn px-3"
-                    style="border: none; background: transparent; outline: none; box-shadow: none; padding: 0;"
-                    onclick="location.reload()"
-                    aria-label="Refresh"
-                >
-                    <img src="{{ _asset('svg/inlinePerformance/reload.svg') }}" alt="Refresh">
-                    <span class="custom-tooltip-bottom">Refresh</span>
-                </button>
-            </div>
-        </div>
-
-        <!-- Filter -->
-        @include('monitoring::inlineperformance.index.filter')
-
-        <!-- Card -->
-        <div class="row g-3 mt-1">
-            <!-- QTY INSPECT -->
-            <div class="col-6 col-sm-4 col-lg-2">
-                <div class="stat-card color-box-yellow h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <img src="{{ _asset('svg/inlinePerformance/qty-inspect.svg') }}"
-                        class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
-                    <h6 class="fw-bold text-yellow mb-2">INSPECT QTY</h6>
-                    <div class="d-flex align-items-end text-white">
-                        <h2 class="fw-bold mb-0" id="cardQtyInspect">-</h2>
-                        <small class="ms-1">pcs</small>
-                    </div>
-                </div>
-            </div>
-
-            <!-- QTY DEFECT -->
-            <div class="col-6 col-sm-4 col-lg-2">
-                <div class="stat-card color-box-green h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <img src="{{ _asset('svg/inlinePerformance/qty-defect.svg') }}"
-                        class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
-                    <h6 id="defectText" class="fw-bold text-green mb-2">DEFECT QTY</h6>
-                    <div class="d-flex align-items-end text-white">
-                        <h2 class="fw-bold mb-0" id="cardQtyDefect">-</h2>
-                        <small class="ms-1">pcs</small>
-                    </div>
-                </div>
-            </div>
-
-            <!-- RFT -->
-            <div class="col-6 col-sm-4 col-lg-2">
-                <div class="stat-card color-box-green h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <img src="{{ _asset('svg/inlinePerformance/rft.svg') }}"
-                        class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
-                    <h6 class="fw-bold text-green mb-2">RFT</h6>
-                    <h2 class="fw-bold mb-0 text-white"><span id="cardRft">-</span> %</h2>
-                </div>
-            </div>
-
-            <!-- WFT -->
-            <div class="col-6 col-sm-4 col-lg-2">
-                <div class="stat-card color-box-blue h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <img src="{{ _asset('svg/inlinePerformance/wft.svg') }}"
-                        class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
-                    <h6 class="fw-bold text-blue mb-2">WFT</h6>
-                    <h2 class="fw-bold mb-0 text-white"><span id="cardWft">-</span> %</h2>
-                </div>
-            </div>
-
-            <!-- TARGET -->
-            <div class="col-6 col-sm-4 col-lg-2">
-                <div id="targetColor" class="stat-card color-box-green h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <img src="{{ _asset('svg/inlinePerformance/target.svg') }}"
-                        class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
-                    <h6 id="targetText" class="fw-bold text-green mb-2">TARGET RFT</h6>
-                    <h2 class="fw-bold mb-0 text-white">97 %</h2>
-                </div>
-            </div>
-
-            <!-- TOP DEFECT -->
-            <div class="col-6 col-sm-4 col-lg-2">
-                <div class="stat-card stat-card-defect color-box-red h-100 p-4">
-                    <div class="d-flex flex-column justify-content-center align-items-center text-center gap-3">
-
-                        <div class="d-flex justify-content-center align-items-center gap-3 defect-header">
-                            <svg id="topDefectChart" viewBox="0 0 120 120" width="60" height="60" role="img" aria-label="Top defect chart">
-                                <!-- Generate lewat JS -->
-                            </svg>
-                            <h6 class="fw-bold text-white mb-0">TOP DEFECT</h6>
-                        </div>
-
-                        <div id="topDefectList" class="text-start"></div>
-
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Datatables -->
-        <div class="flex-fill-area">
-             @include('monitoring::inlineperformance.index.datatables', ['date' => $date, 'data' => $data])
-        </div>
-
-        <!-- Footer -->
-        <div class="footer-title mt-2 text-white d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0">
-            <div class="d-flex align-items-center gap-2">
-                <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" style="width: 18px; height: 18px;" alt="">
-                Data Update
-                <span id="liveClock"></span>
-            </div>
-        </div>
-    </div>
-
-    @section('extrascript')
-    <script>
-        $(document).ready(function () {
-
-            $(document).on('click', '.loading-target', function (e) {
-                e.preventDefault();
-
-                const targetUrl = $(this).attr('href');
-
-                $('#loading').show();
-
-                setTimeout(function () {
-                    window.location.href = targetUrl;
-                }, 100);
-            });
-
-            window.addEventListener('pageshow', function (event) {
-                if (event.persisted) {
-                    $('#loading').hide();
-                }
-            });
-
-            updateTopDefectChart(null);
-
-            function updateDataTime() {
-                let now = new Date();
-                let day = String(now.getDate()).padStart(2, '0');
-                let month = [
-                    "January", "February", "March", "April", "May", "June",
-                    "July", "August", "September", "October", "November", "December"
-                ];
-                let year = now.getFullYear();
-                let hour = String(now.getHours()).padStart(2, '0');
-                let minute = String(now.getMinutes()).padStart(2, '0');
-                let second = String(now.getSeconds()).padStart(2, '0');
-
-                let formatted = `${day} ${month[now.getMonth()]} ${year} - ${hour} : ${minute} : ${second}`;
-
-                document.getElementById('liveClock').innerHTML = formatted;
-
-                localStorage.setItem('lastDataUpdate', formatted);
-            }
-
-            updateDataTime();
-
-            window.updateDataTime = updateDataTime;
-        });
-
-        function updateTopDefectChart(topDefect) {
-            const svg = document.getElementById('topDefectChart');
-            const size = 120;
-            const strokeWidth = 30;
-            const radius = (size - strokeWidth) / 2;
-            const circumference = 2 * Math.PI * radius;
-
-            // reset
-            svg.innerHTML = '';
-
-            if (!topDefect || topDefect.length === 0 || topDefect === null) {
-                // background ring kosong
-                svg.innerHTML = `
-                    <circle
-                        cx="${size / 2}" cy="${size / 2}" r="${radius}"
-                        fill="none" stroke="#D9D9D9" stroke-width="${strokeWidth}">
-                    </circle>
-                `;
-                return;
-            }
-
-
-            let offsetAccumulated = 0;
-            let svgContent = '';
-
-            topDefect.forEach(function (item) {
-                const percent = Number(item.percent) || 0;
-                const dashLength = (percent / 100) * circumference;
-                const dashArray = `${dashLength} ${circumference - dashLength}`;
-                const dashOffset = -offsetAccumulated;
-
-                svgContent += `
-                    <circle
-                        cx="${size / 2}" cy="${size / 2}" r="${radius}"
-                        fill="none"
-                        stroke="${item.color}"
-                        stroke-width="${strokeWidth}"
-                        stroke-dasharray="${dashArray}"
-                        stroke-dashoffset="${dashOffset}"
-                        transform="rotate(-90 ${size / 2} ${size / 2})"
-                        stroke-linecap="butt">
-                    </circle>
-                `;
-
-                offsetAccumulated += dashLength;
-            });
-
-            svg.innerHTML = svgContent;
-        }
-        </script>
-    @endsection
-
+    @yield('extracss')
+</head>
+<body style="background-color: #1C2536;">
+    @yield('content')
     @include('layouts.loading')
-    @endsection
+
+    <script src="{{ _asset('adminltecomponents/jquery/dist/jquery.min.js') }}"></script>
+    <script src="{{ _asset('adminltecomponents/bootstrap-5.3.8/js/bootstrap.min.js') }}"></script>
+    <script src="{{ _asset('adminltecomponents/select2/dist/js/select2.min.js') }}"></script>
+    <script src="{{ _asset('js/datatables.min.js') }}"></script>
+    <script src="{{ _asset('js/jquery.dataTables.min.js') }}"></script>
+    <script src="{{ asset('/js/flatpickr.min.js') }}"></script>
+    <script src="{{ asset('js/flatpickr_language_id.js') }}"></script>
+    <script src="{{ _asset('js/sweetalert.min.js') }}"></script>
+    <script src="{!! _asset('js/dataTables.buttons.min.js') !!}"></script>
+    <script src="{{ _asset('js/dataTables.bootstrap.min.js') }}"></script>
+    <script src="{{ _asset('js/datatables.min.js') }}"></script>
+    <script src="{{ _asset('js/sheet.js') }}"></script>
+    <script src="{{ _asset('js/echarts.min.js') }}"></script>
+
+    @yield('extrascript')
+    @stack('scripts')
+</body>
+</html>
+
+
