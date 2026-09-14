@@ -12,7 +12,7 @@ private function buildPriorityFinalAdditionalData(Collection $idpoList): Collect
 
     // Expand ke semua idpo dalam family combine_pro yang sama (termasuk idpo lama
     // hasil reroute), karena record final inspection bisa nempel di idpo lama
-    // sementara $idpoList yang masuk ke sini adalah idpo AKTIF (pasca reroute).
+    // sementara $idpoList di sini adalah idpo AKTIF (pasca reroute).
     $combineProList = HistoryDataBreakdown::whereIn('idpo', $idpoList)
         ->pluck('combine_pro')->filter()->unique()->values();
 
@@ -21,16 +21,15 @@ private function buildPriorityFinalAdditionalData(Collection $idpoList): Collect
         : HistoryDataBreakdown::whereIn('combine_pro', $combineProList)
             ->pluck('idpo')->filter()->unique()->values();
 
+    // PENTING: jangan exclude defect_code 800/900 di query dasar ini.
+    // qty_inspect harus menghitung SEMUA record yang sudah date_output,
+    // sinkron dengan buildSummaryFilterData()::$totalQtyInspect yang juga
+    // tidak exclude 800/900. Exclude 800/900 baru dilakukan khusus untuk
+    // menurunkan data defect (lihat $defectRows di bawah).
     $rows = OutputDetailFinalInspection::query()
         ->join($od, "$od.barcode", '=', "$fi.barcode")
         ->whereIn("$od.idpo", $allHistoryIdpo)
         ->whereNotNull("$fi.date_output")
-        ->where(function ($q) use ($fi) {
-            // defect_code NULL (lolos inspeksi) harus tetap ikut terhitung;
-            // yang dibuang cuma kode grade 800/900
-            $q->whereNull("$fi.defect_code")
-                ->orWhereNotIn("$fi.defect_code", [800, 900]);
-        })
         ->select(
             "$od.idpo",
             "$od.idcolor",
@@ -51,13 +50,16 @@ private function buildPriorityFinalAdditionalData(Collection $idpoList): Collect
 
     $keyOf = fn ($r) => $r->idpo . '|' . $r->idcolor;
 
-    // qty_inspect dihitung dari fi_id unik (konsisten dgn buildSummaryFilterData
-    // yang pakai COUNT(DISTINCT fi.id)), bukan dari barcode unik — satu barcode
-    // bisa punya lebih dari satu record final inspection.
+    // qty_inspect: SEMUA fi_id unik yang sudah date_output (termasuk grade 800/900)
     $qtyInspectMap = $rows->groupBy($keyOf)
         ->map(fn ($g) => $g->pluck('fi_id')->unique()->count());
 
-    $defectRows = $rows->filter(fn ($row) => !is_null($row->defect_code));
+    // defect "beneran": defect_code terisi DAN bukan kode grade 800/900
+    // (samakan dengan logic exclude di topDefects())
+    $defectRows = $rows->filter(function ($row) {
+        return !is_null($row->defect_code)
+            && !in_array((string) $row->defect_code, ['800', '900'], true);
+    });
 
     $defectQtyMap = $defectRows->groupBy($keyOf)
         ->map(fn ($g) => $g->pluck('fi_id')->unique()->count());
