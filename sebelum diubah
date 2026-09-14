@@ -1,938 +1,2133 @@
+index blade
+@extends('layouts.masternonavbar')
 
-<?php
-
-namespace Modules\Monitoring\Http\Controllers;
-
-use DB;
-use Carbon\Carbon;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Collection;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Schema;
-use App\Http\Controllers\Controller;
-use App\Http\Models\Color;
-use App\Http\Models\DataBreakdown;
-use App\Http\Models\FactoryParameter;
-use App\Http\Models\HistoryDataBreakdown;
-use App\Http\Models\HistoryPO;
-use App\Http\Models\Main\MasterEmployeeGroup;
-use App\Http\Models\Main\MasterEmployeeSection;
-use App\Http\Models\Main\MasterGroupBuyer;
-use App\Http\Models\PurchaseOrder;
-use App\Http\Models\Main\Buyer;
-use App\Http\Models\Main\EmployeeAttendance;
-use App\Http\Models\Main\Style;
-use App\Http\Models\Main\Param;
-use App\Http\Models\Main\QCDefect;
-use App\Http\Models\OutputDetail;
-use App\Http\Models\OutputDetailFinalInspection;
-use App\Http\Models\SewingOutput;
-use Illuminate\Support\Facades\Log;
-use Modules\Packing\Http\Controllers\OutputPackingController;
-use Modules\Sewing\Http\Controllers\WorktimeSettingController;
-use Symfony\Component\Console\Output\Output;
-
-class FinalInspectionController extends Controller
-{
-    protected $m_modul = 'report';
-
-    protected $perPage = 20;
-
-    function __construct()
-    {
-        $this->middleware('auth');
+@section('extracss')
+<style>
+    .stat-card {
+        height: 150px !important;
+        min-height: 150px !important;
+        padding: 0 !important;
     }
 
-    function index(Request $request)
-    {
-        if ($this->myaccess() == '0') {
-            return redirect()
-                ->back()
-                ->with('alert', [
-                    'title' => 'Unauthorized!',
-                    'message' => 'You Dont Have Any Access Here!',
-                    'status' => 'warning',
-                ]);
-        }
-
-        preconnect(session('db'));
-
-        return view('monitoring::finalinspection.index');
+    .stat-card img {
+        width: 40px !important;
+        height: 40px !important;
+        margin-bottom: .45rem !important;
     }
 
-    /*
-    |--------------------------------------------------------------------
-    | CASCADING FILTER ENDPOINTS
-    | Urutan baru: ETD (datea/dateb) -> Group Buyer -> Style -> PO
-    |
-    | Ketiga endpoint ini pakai qualifikasi "union" dari kedua leaf-row
-    | logic (getLeafHistoryRowsInRange & getLeafHistoryRows) supaya PO
-    | yang qualify di Overdue ATAU di PO Need Final tetap muncul sebagai
-    | pilihan. Sengaja TIDAK dipaginate karena rentang ETD sudah dibatasi
-    | maksimal 31 hari dari FE, jadi volume datanya wajar ditarik sekaligus.
-    |--------------------------------------------------------------------
-    */
-
-    function groupbuyer(Request $request)
-    {
-        preconnect(session('db'));
-
-        if (!$request->filled('datea') || !$request->filled('dateb')) {
-            return response()->json([
-                'results' => [],
-                'pagination' => ['more' => false],
-            ]);
-        }
-
-        [$from, $to] = $this->parseDateRange($request->datea, $request->dateb);
-
-        $idpoList = $this->getQualifiedIdpoUnion($request, $from, $to);
-
-        if ($idpoList->isEmpty()) {
-            return response()->json([
-                'results' => [],
-                'pagination' => ['more' => false],
-            ]);
-        }
-
-        $buyerIds = PurchaseOrder::whereIn('idpo', $idpoList)
-            ->pluck('idbuyer')
-            ->filter()
-            ->unique()
-            ->values();
-
-        $groupBuyerIds = Buyer::whereIn('idbuyer', $buyerIds)
-            ->pluck('groupbuyer')
-            ->filter()
-            ->unique()
-            ->values();
-
-        $query = MasterGroupBuyer::select('id', 'group_name')
-            ->whereIn('id', $groupBuyerIds);
-
-        if ($request->filled('q')) {
-            $query->where('group_name', 'like', '%' . $request->q . '%');
-        }
-
-        $results = $query->orderBy('group_name', 'asc')
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'id' => $item->id,
-                    'text' => $item->group_name,
-                ];
-            })
-            ->values();
-
-        return response()->json([
-            'results' => $results,
-            'pagination' => ['more' => false],
-        ]);
+    .stat-card h6 {
+        font-size: 1rem;
+        margin-bottom: .25rem !important;
     }
 
-    function styleSelect(Request $request)
-    {
-        preconnect(session('db'));
-
-        if (!$request->filled('datea') || !$request->filled('dateb')) {
-            return response()->json([
-                'results' => [],
-                'pagination' => ['more' => false],
-            ]);
-        }
-
-        [$from, $to] = $this->parseDateRange($request->datea, $request->dateb);
-
-        $idpoList = $this->getQualifiedIdpoUnion($request, $from, $to);
-
-        if ($idpoList->isEmpty()) {
-            return response()->json([
-                'results' => [],
-                'pagination' => ['more' => false],
-            ]);
-        }
-
-        $styleIds = PurchaseOrder::whereIn('idpo', $idpoList)
-            ->pluck('idstyle')
-            ->filter()
-            ->unique()
-            ->values();
-
-        $query = Style::whereIn('idstyle', $styleIds);
-
-        if ($request->filled('q')) {
-            $query->where('idstyle', 'like', '%' . $request->q . '%');
-        }
-
-        $results = $query->select('idstyle', 'nmstyle')
-            ->orderBy('nmstyle', 'asc')
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'id' => $item->idstyle,
-                    'text' => $item->nmstyle,
-                ];
-            })
-            ->values();
-
-        return response()->json([
-            'results' => $results,
-            'pagination' => ['more' => false],
-        ]);
+    .stat-card h2 {
+        font-size: 1.5rem;
+        line-height: 1;
     }
 
-    function poSelect(Request $request)
-    {
-        preconnect(session('db'));
-
-        if (!$request->filled('datea') || !$request->filled('dateb')) {
-            return response()->json([
-                'results' => [],
-                'pagination' => ['more' => false],
-            ]);
-        }
-
-        [$from, $to] = $this->parseDateRange($request->datea, $request->dateb);
-
-        $idpoList = $this->getQualifiedIdpoUnion($request, $from, $to);
-
-        if ($idpoList->isEmpty()) {
-            return response()->json([
-                'results' => [],
-                'pagination' => ['more' => false],
-            ]);
-        }
-
-        $query = PurchaseOrder::whereIn('idpo', $idpoList);
-
-        if ($request->filled('q')) {
-            $query->where('po', 'like', '%' . $request->q . '%');
-        }
-
-        // Distinct per idpo (BUKAN per po), karena satu nomor po bisa
-        // punya beberapa idpo (revisi/reroute) dan tiap revisi harus
-        // tetap bisa dipilih terpisah.
-        $results = $query->select('idpo', 'po')
-            ->distinct()
-            ->orderBy('po', 'asc')
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'id' => $item->idpo,
-                    'text' => $item->po,
-                ];
-            })
-            ->values();
-
-        return response()->json([
-            'results' => $results,
-            'pagination' => ['more' => false],
-        ]);
+    .stat-card small {
+        font-size: 1rem;
     }
 
-    /**
-     * Union idpo qualifikasi dari kedua leaf-row logic yang ada
-     * (getLeafHistoryRowsInRange & getLeafHistoryRows).
-     *
-     * Kedua fungsi itu sengaja TIDAK digabung jadi satu karena beda
-     * semantik penentuan leaf (lihat komentar di masing-masing fungsi),
-     * dan mengubah salah satunya berisiko mengubah hasil Overdue /
-     * PO Need Final yang sudah berjalan. Union dipakai di sini supaya
-     * dropdown tetap mencakup PO yang qualify di logic manapun.
-     */
-    private function getQualifiedIdpoUnion(Request $request, Carbon $from, Carbon $to)
-    {
-        $leafRowsA = $this->getLeafHistoryRowsInRange($request, $from, $to, 'combine_pro', true);
-        $leafRowsB = $this->getLeafHistoryRows($request, 'combine_pro', true, $from, $to);
-
-        return $leafRowsA->pluck('idpo')
-            ->merge($leafRowsB->pluck('idpo'))
-            ->unique()
-            ->values();
+    .stat-card-defect {
+        height: auto;
     }
 
-    /**
-     * Parse & normalisasi rentang tanggal d-m-Y dari request (swap kalau
-     * datea > dateb, endOfDay di sisi akhir). Dipakai bersama di beberapa
-     * tempat supaya logic parsing tanggal tidak diulang-ulang.
-     */
-    private function parseDateRange(string $datea, string $dateb): array
-    {
-        $dateA = Carbon::createFromFormat('d-m-Y', $datea)->startOfDay();
-        $dateB = Carbon::createFromFormat('d-m-Y', $dateb)->startOfDay();
-
-        $from = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
-        $to   = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
-
-        return [$from, $to];
+    .stat-card-defect > div {
+        width: 100%;
     }
 
-    static function getReroutePO(string $idpo)
-    {
-        preconnect(session('db'));
+    .subtitle {
+        font-size: 13px;
+        color: white;
+    }
 
-        try {
-            // Ambil original_pro dari PO lama
-            $originalPro = HistoryDataBreakdown::query()
-                ->where('idpo', $idpo)
-                ->whereNotNull('original_pro')
-                ->distinct()
-                ->pluck('original_pro');
+    .defect-header {
+        width: 100%;
+    }
 
-            if ($originalPro->isEmpty()) {
-                return collect();
+    .defect-list {
+        width: 100%;
+        font-size: 13px;
+        gap: 2px;
+    }
+
+    #topDefectList {
+        max-height: 110px;
+        width: 100%;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #topDefectList::-webkit-scrollbar {
+        width: 3px;
+    }
+
+    #topDefectList::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 4px;
+    }
+
+    #topDefectList .defect-item {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        margin-bottom: 1px;
+    }
+
+    #topDefectList .defect-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .defect-circle {
+        width: 12px;
+        height: 12px;
+    }
+
+    .defect-name {
+        flex: 1;
+        min-width: 0;
+        margin-left: 8px;
+        text-align: left;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .defect-total {
+        flex: 0 0 auto;
+        margin-left: 8px;
+        white-space: nowrap;
+    }
+
+    .defect-percent {
+        flex: 0 0 55px;
+        margin-left: 8px;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .icon-summary {
+        width: 25px;
+        height: 25px;
+    }
+
+    @media (min-width: 992px) and (max-width: 1400px) {
+        #topDefectList {
+            max-height: 83px;
+        }
+
+        .stat-card {
+            height: 100px !important;
+            min-height: 100px !important;
+        }
+
+        .stat-card img {
+            width: 20px !important;
+            height: 20px !important;
+            margin-bottom: .30rem !important;
+        }
+
+        .stat-card h6 {
+            font-size: 10px;
+            margin-bottom: .20rem !important;
+        }
+
+        .stat-card h2 {
+            font-size: 12px;
+            line-height: 1;
+        }
+
+        .stat-card p {
+            font-size: 10px;
+            line-height: 0.5;
+        }
+
+        .stat-card small {
+            font-size: 10px !important;
+        }
+
+        .stat-card-defect {
+            height: auto;
+        }
+
+        .stat-card-defect > div {
+            width: 100%;
+        }
+
+        .defect-header {
+            width: 100%;
+        }
+
+        .defect-list {
+            width: 100%;
+            font-size: 10px;
+        }
+
+        .flatpickr-calendar {
+            max-width: 315px;
+            padding: 4px;
+            border-radius: 4px;
+        }
+
+        .flatpickr-day {
+            width: 30px;
+            height: 30px;
+            line-height: 30px;
+            font-size: 0.68rem;
+        }
+
+        .flatpickr-current-month {
+            font-size: 0.95rem;
+        }
+
+        span.flatpickr-weekday {
+            font-size: 0.75rem;
+        }
+
+        .text-title {
+            font-size: 12px;
+        }
+
+        .margin-cstm {
+            margin-top: 10px !important;
+            padding: 6px 0 !important;
+        }
+
+         .wrapper-layout {
+            gap: 4px;
+        }
+    }
+
+    @media (max-width: 768px) {
+        #topDefectList {
+            max-height: 110px;
+        }
+
+        .defect-header {
+            flex-direction: column;
+            gap: 0.5rem !important;
+        }
+
+        .footer-title {
+            font-size: 12px;
+        }
+
+        .img-foot {
+            width: 15px;
+            height: 15px;
+        }
+
+        .title-pcs {
+            font-size: 10px !important;
+        }
+    }
+
+    .title-pcs {
+        font-size: 12px !important;
+    }
+
+    .subheader {
+        font-size: 15px;
+    }
+
+    .flex-lg-grow-7,
+    .flex-lg-grow-5 {
+        flex: 1 1 100%;
+    }
+
+    /* Desktop 992–1400 */
+    @media (min-width: 992px) and (max-width: 1399.98px) {
+        .flex-lg-grow-7 { flex: 7; }
+        .flex-lg-grow-5 { flex: 5; }
+        .subheader { font-size: 0.60rem; }
+        .final-inspection-card {
+            padding: 20px;
+        }
+    }
+
+    /* Desktop besar >= 1400 */
+    @media (min-width: 1400px) {
+        .flex-lg-grow-7 { flex: 7; }
+        .flex-lg-grow-5 { flex: 5; }
+
+        .subheader { font-size: 0.9rem; }
+    }
+
+    .final-inspection-card {
+        border-radius: 5px;
+        padding: 16px;
+        background-color: #212B3E;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        box-sizing: border-box;
+    }
+
+    .fi-title {
+        text-align: center;
+        color: #ffffff;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        margin-bottom: 14px;
+    }
+
+    .fi-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+
+    .fi-row:last-child {
+        margin-bottom: 0;
+    }
+
+    .fi-label {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        width: 110px;
+        flex: 0 0 110px;
+    }
+
+    .fi-percent {
+        color: #ffffff;
+        font-size: 16px;
+        font-weight: 700;
+        line-height: 1.1;
+    }
+
+    .fi-text {
+        color: #ffffff;
+        font-size: 10px;
+        letter-spacing: 0.3px;
+        white-space: nowrap;
+        margin-top: 2px;
+    }
+
+    .fi-bar-wrapper {
+        flex: 1;
+        height: 32px;
+        background: #1a2332;
+        overflow: hidden;
+        position: relative;
+        min-width: 0;
+    }
+
+    .fi-bar {
+        height: 100%;
+        transition: width 0.6s ease;
+        min-width: 6px;
+    }
+
+    .fi-bar-green {
+        background: #2ecc71;
+    }
+
+    .fi-bar-red {
+        background: #e74c3c;
+    }
+
+    .fi-bar-orange {
+        background: #F27D01;
+    }
+
+    @media (min-width: 992px) and (max-width: 1399.98px) {
+        .fi-title { font-size: 11px; margin-bottom: 8px; }
+        .fi-percent { font-size: 13px; }
+        .fi-text { font-size: 8px; }
+        .fi-bar-wrapper { height: 24px; }
+        .fi-row { margin: 0 8px; gap: 8px; }
+        .final-inspection-card { padding: 12px; height: 100px !important; }
+         .fi-label { width: 90px; flex: 0 0 90px;font-size: 10px; }
+    }
+
+    .flex-fill.border-custom-datatable, .flex-fill.panel-slot {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        min-width: 0;
+        width: 100%;
+        height: 100%;
+        flex: 1 1 0;
+        overflow: hidden;
+    }
+
+    .wrapper-sub {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        min-width: 0;
+        min-height: 0;
+        padding: 10px;
+        box-sizing: border-box;
+        overflow: hidden;
+    }
+
+    .sub-header {
+        padding: 8px 16px;
+        margin-bottom: 4px
+    }
+
+    .table-scroll-tbl {
+        flex: 1 1 0;
+        min-height: 0;
+        min-width: 0;
+        width: 100%;
+        overflow: auto;
+    }
+
+    .table-res {
+        width: 100%;
+        height: auto;
+        margin: 0;
+        table-layout: fixed;
+        border-collapse: collapse;
+    }
+
+    .table-res thead th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background-color: #1B2331;
+        vertical-align: middle;
+        word-wrap: break-word;
+        font-weight: 400;
+        font-size: 12px;
+        padding: 0.75rem 0.5rem;
+        line-height: 15px !important;
+    }
+
+    .table-res tbody td {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        vertical-align: middle;
+        padding: 0.5rem;
+        font-weight: 400;
+        font-size: 12px;
+        line-height: 22px !important;
+    }
+
+    .table-res tfoot th {
+        position: sticky;
+        bottom: 0;
+        z-index: 2;
+        background-color: #1B2331;
+        font-weight: 600;
+        font-size: 14px;
+        line-height: 6px !important;
+        padding: 0.75rem 0.5rem;
+    }
+
+    /* EMPTY STATE */
+    .table-res tbody .empty-row {
+        height: 120px;
+    }
+
+    .table-res tbody .empty-row td {
+        text-align: center;
+        white-space: normal;
+        overflow: visible;
+        text-overflow: unset;
+    }
+
+    @media (min-width: 992px) and (max-width: 1399.98px) {
+        .table-res thead th {
+            font-size: 10px;
+            padding: 3px 5px !important;
+            line-height: 1;
+        }
+
+        .table-res tbody td {
+            font-size: 10px;
+            padding: 3px 5px !important;
+            line-height: 1;
+        }
+
+        .table-res tfoot th {
+            font-size: 10px;
+            padding: 3px 5px !important;
+            line-height: 1 !important;
+        }
+
+        .flex-fill.border-custom-datatable, .flex-fill.panel-slot {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        .border-custom-datatable {
+            padding: 0.20rem !important;
+        }
+    }
+
+    .title-pass {
+        color: #327932 ;
+        font-weight: 700 !important;
+        text-align: start;
+    }
+    .title-reject {
+        color: #F24C4C ;
+        font-weight: 700 !important;
+        text-align: start;
+    }
+    .title-notfinal {
+        color: #F27D01 ;
+        font-weight: 700 !important;
+        text-align: start;
+    }
+
+    .dashboard-wrap .flex-grow-1 {
+        min-height: 0;
+    }
+
+    .table-scroll-tbl::-webkit-scrollbar { height: 8px; width: 8px; }
+    .table-scroll-tbl::-webkit-scrollbar-track { background: var(--bg-dark-2); border-radius: 4px; }
+    .table-scroll-tbl::-webkit-scrollbar-thumb { background: #D9D9D9; border-radius: 4px; }
+    .table-scroll-tbl { scrollbar-width: thin; scrollbar-color: #D9D9D9 var(--bg-dark-2); }
+    .table-responsive { -webkit-overflow-scrolling: touch; }
+
+    .wrapper-layout {
+        gap: 8px;
+    }
+
+    @media (min-width: 992px) and (max-width: 1399.98px) {
+
+        html,
+        body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .dashboard-wrap {
+            height: 100vh;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .dashboard-wrap > .flex-grow-1 {
+            flex: 1 1 0 !important;
+            min-height: 0 !important;
+            overflow: hidden;
+        }
+
+        .dashboard-wrap > .flex-grow-1 > .row {
+            height: 100%;
+            min-height: 0;
+        }
+
+        .dashboard-wrap > .flex-grow-1 > .row > [class*="col-"] {
+            min-height: 0;
+        }
+
+        .wrapper-layout {
+            height: 100%;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .panel-slot {
+            min-height: 0;
+            height: auto;
+            overflow: hidden;
+        }
+    }
+
+    .wrapper-layout {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        height: 100%;
+    }
+
+    .panel-bottom {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    @media (min-width: 992px) and (max-width: 1399.98px) {
+        .wrapper-layout {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .panel-top {
+            flex: 0 0 auto;
+            min-height: 0;
+        }
+
+        .panel-bottom {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .panel-bottom > .row {
+            height: 100%;
+            min-height: 0;
+        }
+
+        .wrapper-sub {
+            /* height: 100%; */
+            min-height: 0;
+            max-height: none;
+        }
+    }
+
+    .final-overview-table {
+        flex: 1 1 auto;
+        min-height: 0;
+        min-width: 0;
+        width: 100%;
+        overflow: auto;
+    }
+
+    .table-res {
+        width: 100%;
+        margin: 0;
+        table-layout: fixed;
+        border-collapse: collapse;
+    }
+
+    .panel-bottom {
+        flex: 1 1 0;
+        min-height: 0;
+        height: 0;
+        overflow: hidden;
+    }
+
+    .panel-bottom > .row {
+        height: 100%;
+        min-height: 0;
+    }
+
+    .panel-bottom > .row > .col {
+        min-height: 0;
+        height: 100%;
+    }
+
+    .panel-bottom .border-custom-datatable {
+        height: 100%;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .panel-bottom .wrapper-sub {
+        display: flex;
+        flex-direction: column;
+
+        width: 100%;
+        height: 100%;
+
+        min-width: 0;
+        min-height: 0;
+
+        padding: 10px;
+        box-sizing: border-box;
+
+        overflow: hidden;
+    }
+
+    .panel-bottom .subheader {
+        flex: 0 0 auto;
+    }
+
+    .chart-donut {
+        width: 100%;
+        flex: 1 1 0;
+        height: 0;
+        min-height: 0;
+    }
+
+    .chart-title {
+        flex: 0 0 auto;
+        font-size: 13px;
+        margin-top: 8px !important;
+    }
+
+    @media (max-width: 991.98px) {
+        .dashboard-wrap {
+            height: auto !important;
+            min-height: 100vh;
+            overflow: visible !important;
+        }
+
+        .dashboard-wrap > .flex-grow-1 {
+            min-height: auto !important;
+            overflow: visible !important;
+        }
+
+        .dashboard-wrap > .flex-grow-1 > .row {
+            height: auto !important;
+        }
+
+        .wrapper-layout {
+            height: auto !important;
+            min-height: 0;
+            overflow: visible !important;
+        }
+
+        /* Panel tabel */
+        .pf-panel-top {
+            height: 350px !important;
+            min-height: 350px !important;
+            flex: 0 0 350px !important;
+            overflow: hidden;
+        }
+
+        .pf-panel-top .wrapper-sub {
+            height: 100%;
+            min-height: 0;
+        }
+
+        .pf-panel-top .table-scroll-tbl {
+            flex: 1 1 auto;
+            min-height: 0;
+            height: auto;
+            overflow: auto;
+        }
+
+        /* Table */
+        .pf-panel-top .table-res {
+            width: 100%;
+            min-width: 900px;
+        }
+    }
+
+    @media (min-width: 992px) and (max-width: 1399.98px) {
+
+        .dashboard-wrap {
+            height: 100vh;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+
+        /* Area dashboard utama harus mengambil sisa tinggi */
+        .dashboard-wrap > .flex-grow-1 {
+            flex: 1 1 0 !important;
+            min-height: 0 !important;
+            height: auto !important;
+            overflow: hidden;
+        }
+
+        /* Footer wajib tetap punya ruang */
+        .dashboard-wrap > .footer-title {
+            flex: 0 0 24px !important;
+            min-height: 24px !important;
+            height: 24px !important;
+            display: flex !important;
+            align-items: center !important;
+            visibility: visible !important;
+            position: relative;
+            z-index: 10;
+        }
+
+        #liveClock {
+            display: inline-block !important;
+            visibility: visible !important;
+        }
+    }
+
+    @media (min-width: 992px) {
+
+        html,
+        body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .dashboard-wrap {
+            height: 100vh;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .dashboard-wrap > .flex-grow-1 {
+            flex: 1 1 0 !important;
+            min-height: 0 !important;
+            overflow: hidden;
+        }
+
+        .dashboard-wrap > .flex-grow-1 > .row {
+            height: 100%;
+            min-height: 0;
+        }
+
+        .dashboard-wrap > .flex-grow-1 > .row > [class*="col-"] {
+            height: 100%;
+            min-height: 0;
+        }
+
+        .wrapper-layout {
+            height: 100% !important;
+            min-height: 0 !important;
+            overflow: hidden;
+        }
+
+        .footer-title {
+            flex: 0 0 24px !important;
+            height: 24px !important;
+            min-height: 24px !important;
+            display: flex !important;
+            align-items: center;
+        }
+    }
+
+     /* TABLET */
+    @media (min-width: 768px) and (max-width: 991.98px) {
+        .button-inline {
+            width: 25%;
+        }
+
+        .subheader {
+            font-size: 15px;
+        }
+    }
+</style>
+@endsection
+
+@section('content')
+<div class="container-fluid dashboard-wrap">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div class="d-flex align-items-center gap-3 text-decoration-none">
+            <img src="{{ _asset('svg/finalInspection/final.svg') }}" class="icon-dashboard flex-shrink-0" alt="Endline Performance">
+            <div class="d-flex flex-column justify-content-center">
+                <h2 class="text-white mb-1 dashboard-title">FINAL INSPECTION DASHBOARD - {{ str_replace('GMS ', '', session('factoryname')) }}</h2>
+                <p class="text-white fs-6 mb-0 dashboard-subtitle">Monitoring Final Inspection and Shipment Readiness</p>
+            </div>
+        </div>
+
+        <div class="button-inline d-flex">
+            <a href="{{ route('home') }}" class="d-flex align-items-center gap-3 text-decoration-none px-3">
+                <img src="{{ _asset('svg/inlinePerformance/home.svg') }}" class="icon-button-inline flex-shrink-0" alt="Home">
+            </a>
+
+            <button class="export-btn bg-transparent border-0 p-0" id="exportbtn" aria-label="Export">
+                    <img src="{{ _asset('svg/inlinePerformance/export.svg') }}" alt="Export"
+                        class="export-icon"
+                        >
+                    <span class="custom-tooltip">Excel</span>
+            </button>
+            <button type="button" class="export-btn px-3" style="border: none; background: transparent; outline: none; box-shadow: none; padding: 0;" onclick="location.reload()" aria-label="Refresh">
+                <img src="{{ _asset('svg/inlinePerformance/reload.svg') }}" alt="Refresh" class="icon-refresh">
+                <span class="custom-tooltip-bottom">Refresh</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Summary Filter -->
+    @include('monitoring::finalinspection.partials.summary')
+
+    <!-- Summary Cards -->
+    <div class="row g-3 card-wrapper">
+            <div class="col-12 col-sm-4 col-lg">
+                <div class="stat-card color-box-blue h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                    <img src="{{ _asset('svg/endlinePerformance/total-output.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
+                    <h6 class="fw-bold text-blue mb-0" style="line-height:1;">TOTAL</h6>
+                    <p class="fw-bold text-blue mb-0" style="line-height:1;">PO</p>
+                    <div class="d-flex align-items-end text-white mt-2 mb-2 mt-2 mb-2">
+                        <h2 class="fw-bold mb-0" id="totalpo">-</h2>
+                    </div>
+                    <small class="title-pcs ms-1 text-white">PO</small>
+                </div>
+            </div>
+
+            <div class="col-12 col-sm-4 col-lg">
+                <div class="stat-card color-box-yellow h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                    <img src="{{ _asset('svg/inlinePerformance/qty-inspect.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
+                    <h6 class="fw-bold text-yellow mb-0" style="line-height:1;" >TOTAL</h6>
+                    <p class="fw-bold text-yellow mb-0" style="line-height:1;" >QTY</p>
+                    <div class="d-flex align-items-end text-white mt-2 mb-2">
+                        <h2 class="fw-bold mb-0" id="totalqty">-</h2>
+                    </div>
+                    <small class="title-pcs ms-1 text-white">pcs</small>
+                </div>
+            </div>
+
+            <div class="col-12 col-sm-4 col-lg">
+                <div class="stat-card color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                    <img src="{{ _asset('svg/finalInspection/qty-inspect.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
+                    <h6 id="defectText" class="fw-bold text-red mb-0" style="line-height:1;" >TOTAL QTY</h6>
+                    <p class="fw-bold text-red mb-0" style="line-height:1;" >INSPECT</p>
+                    <div class="d-flex align-items-end text-white mt-2 mb-2">
+                        <h2 class="fw-bold mb-0" id="totalqtyinspect">-</h2>
+                    </div>
+                    <small class="title-pcs ms-1 text-white">pcs</small>
+                </div>
+            </div>
+
+            <div class="col-12 col-sm-4 col-lg">
+                <div class="stat-card color-box-green h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                    <img src="{{ _asset('svg/finalInspection/po-need-final.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
+                    <h6 class="fw-bold text-green mb-0" style="line-height:1;" >PO NEED FINAL</h6>
+                    <p class="subtitle text-blue mb-0" style="line-height:1;" >(Final ≥ H - 1 ETD )</p>
+                    <div class="d-flex align-items-end text-white mt-2 mb-2">
+                        <h2 class="fw-bold mb-0" id="poneedfinal">-</h2>
+                    </div>
+                    <small class="title-pcs ms-1 text-white">PO</small>
+                </div>
+            </div>
+
+            <div class="col-12 col-sm-4 col-lg">
+                <div class="stat-card color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                    <img src="{{ _asset('svg/finalInspection/overdue.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
+                    <h6 class="fw-bold text-red mb-0" style="line-height:1;" >OVERDUE</h6>
+                    <p class="subtitle text-blue mb-0" style="line-height:1;" >(ETD < Today)</p>
+                    <div class="d-flex align-items-end text-white mt-2 mb-2">
+                        <h2 class="fw-bold mb-0" id="overdue">-</h2>
+                    </div>
+                    <small class="title-pcs ms-1 text-white">PO</small>
+                </div>
+            </div>
+
+            <div class="col-12 col-sm-4 col-lg">
+                <div id="targetColor" class="stat-card color-box-green h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                    <img src="{{ _asset('svg/finalInspection/final-completed.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
+                    <h6 id="targetText" class="fw-bold text-green mb-0" style="line-height:1;" >FINAL</h6>
+                    <p class="text-green fw-bold mb-0" style="line-height:1;" >COMPLETED</p>
+                    <div class="d-flex align-items-end text-white mt-2 mb-2">
+                        <h2 class="fw-bold mb-0 text-white" id="final" >-</h2>
+                    </div>
+                    <small class="title-pcs ms-1 text-white">PO</small>
+                </div>
+            </div>
+
+            <div class="col-12 col-sm-6 col-lg">
+                <div id="targetColor" class="stat-card color-box-purple h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                    <img src="{{ _asset('svg/finalInspection/oql.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
+                    <h6 id="targetText" class="fw-bold text-purple mb-0" style="line-height:1;" >OQL</h6>
+                    <div class="d-flex align-items-end text-white mt-2 mb-2">
+                        <h2 class="fw-bold mb-0 text-white" id="oql">-</h2>
+                        <h2 class="fw-bold mb-0 text-white">%</h2>
+                    </div>
+                    <small class="title-pcs ms-1 text-white">Defect Rate</small>
+                </div>
+            </div>
+
+            <div class="col-12 col-sm-6 col-lg-2">
+                <div class="final-inspection-card h-100 border-custom-datatable">
+                    <div class="fi-title">FINAL INSPECTION RESULT</div>
+
+                    <div class="fi-row">
+                        <div class="fi-label">
+                            <span id="passingRateValue" class="fi-percent">-%</span>
+                            <span class="fi-text">PASSING RATE</span>
+                        </div>
+                        <div class="fi-bar-wrapper">
+                            <div id="passingRateBar" class="fi-bar fi-bar-green" style="width: 0%;"></div>
+                        </div>
+                    </div>
+
+                    <div class="fi-row">
+                        <div class="fi-label">
+                            <span id="rejectRateValue" class="fi-percent">-%</span>
+                            <span class="fi-text">REJECT RATE</span>
+                        </div>
+                        <div class="fi-bar-wrapper">
+                            <div id="rejectRateBar" class="fi-bar fi-bar-red" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    <!-- Weekly Defect -->
+    <div class="flex-grow-1" style="min-height: 0;">
+        <div class="pt-2 row h-100 text-white g-2">
+            <!-- Left -->
+            <div class="col-12 col-lg-7 d-flex">
+                <div class="wrapper-layout rounded d-flex flex-column w-100 h-100"
+                    style="min-height:0;">
+
+                    @include('monitoring::finalinspection.partials.progress-final')
+
+                    @include('monitoring::finalinspection.partials.chart')
+
+                </div>
+            </div>
+
+            <!-- Right -->
+            <div class="col-12 col-lg-5 d-flex">
+                <div class="wrapper-layout rounded d-flex flex-column w-100 h-100"
+                    style="min-height:0;">
+
+                    @include('monitoring::finalinspection.partials.final-overview')
+
+                    @include('monitoring::finalinspection.partials.category-defect')
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Footer -->
+     <div class="footer-title text-white d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0">
+        <div class="d-flex align-items-center gap-2">
+            <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" class="img-foot" alt="">
+                Data Update
+            <span id="liveClock"></span>
+        </div>
+    </div>
+
+    <div class="footer-title text-white d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0">
+
+    </div>
+</div>
+
+@section('extrascript')
+<script>
+    $(document).on('click', '.loading-target', function (e) {
+        e.preventDefault();
+
+        const targetUrl = $(this).attr('href');
+
+        $('#loading').show();
+
+        setTimeout(function () {
+            window.location.href = targetUrl;
+        }, 100);
+
+        window.addEventListener('pageshow', function (event) {
+            if (event.persisted) {
+                $('#loading').hide();
             }
-
-            // Ambil kp_item dari data cutoff
-            $cutoffItems = HistoryDataBreakdown::query()
-                ->whereIn('original_pro', $originalPro)
-                ->where('is_cutoff', 1)
-                ->pluck('kp_item')
-                ->filter()
-                ->unique();
-
-            if ($cutoffItems->isEmpty()) {
-                return collect();
-            }
-
-            // Cari PO yang menggunakan kp_item_ref dari PO lama
-            return HistoryDataBreakdown::query()
-                ->whereIn('original_pro', $originalPro)
-                ->whereIn('kp_item_ref', $cutoffItems)
-                ->where('idpo', '!=', $idpo)
-                ->select([
-                    'idpo',
-                    'original_pro',
-                    'kp_item',
-                    'kp_item_ref',
-                    'qty_ori',
-                ])
-                ->distinct()
-                ->get();
-
-        } catch (\Throwable $e) {
-            return collect();
-        }
-    }
-
-    private function effectiveIdpoExpr(string $dbr): string
-    {
-        return "(CASE WHEN $dbr.revisi_kp = 1 AND $dbr.kp_item_ref IS NOT NULL
-            THEN (SELECT dbr_prev.idpo FROM $dbr as dbr_prev
-                WHERE dbr_prev.combine_pro = $dbr.combine_pro
-                    AND dbr_prev.idpo > $dbr.idpo
-                ORDER BY dbr_prev.idpo DESC LIMIT 1)
-            ELSE $dbr.idpo END)";
-    }
-
-    private function applyRequireHasFinalRecord($query, string $fi, string $od, string $dbr)
-    {
-        $expr = $this->effectiveIdpoExpr($dbr);
-        $query->whereExists(function ($q) use ($fi, $od, $expr) {
-            $q->select(DB::raw(1))
-                ->from("$fi as fi3")
-                ->join("$od as od3", "od3.barcode", '=', 'fi3.barcode')
-                ->whereRaw("od3.idpo = $expr");
         });
-        return $query;
+    });
+</script>
+@endsection
+
+@include('layouts.loading')
+@endsection
+
+finaloverview blade
+<style>
+    .wrapper-layout {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
     }
 
-    private function applyExcludeIfAnyFinalEffective($query, string $fi, string $od, string $dbr)
-    {
-        $expr = $this->effectiveIdpoExpr($dbr);
-        $query->whereNotExists(function ($q) use ($fi, $od, $expr) {
-            $q->select(DB::raw(1))
-                ->from("$fi as fi2")
-                ->join("$od as od2", "od2.barcode", '=', 'fi2.barcode')
-                ->whereRaw("od2.idpo = $expr")
-                ->where('fi2.is_output', 1);
-        });
-        return $query;
+    .fo-panel-top {
+        flex: 0 0 32%;
+        min-height: 0;
+        overflow: hidden;
     }
 
-    /**
-     * Dari leaf rows, ambil idpo yang total qty_ori-nya > 0.
-     * Dipakai bersama di getFinalCheckIdpoList, getPoNeedFinalIdpoList,
-     * dan priorityFinal (sebelumnya logic ini juga diulang di 3 tempat).
-     */
-    private function qualifiedIdpoFromLeafRows($leafRows)
-    {
-        return $leafRows->groupBy('idpo')
-            ->map(function ($rows) {
-                return (int) $rows->sum('qty_ori');
-            })
-            ->filter(function ($qty) {
-                return $qty > 0;
-            })
-            ->keys()
-            ->values();
+    .panel-bottom {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: hidden;
     }
 
-    private function getFinalCheckIdpoList(Request $request, Carbon $from, Carbon $to)
-    {
-        $fi  = (new OutputDetailFinalInspection())->getTable();
-        $od  = (new OutputDetail())->getTable();
-        $po  = (new PurchaseOrder())->getTable();
-        $dbr = (new HistoryDataBreakdown())->getTable();
-
-        $leafRows = $this->getLeafHistoryRowsInRange($request, $from, $to, 'combine_pro', true);
-
-        $qualifiedIdpo = $this->qualifiedIdpoFromLeafRows($leafRows);
-
-        $query = HistoryDataBreakdown::query()
-            ->join($po, "$po.idpo", '=', "$dbr.idpo")
-            ->whereIn("$dbr.idpo", $qualifiedIdpo);
-
-        $this->applyRequireHasFinalRecord($query, $fi, $od, $dbr);
-        $this->applyExcludeIfAnyFinalEffective($query, $fi, $od, $dbr);
-
-        return $query->select("$dbr.idpo")->distinct()->pluck('idpo');
+    .panel-top .wrapper-sub {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        box-sizing: border-box;
+        padding: 10px;
+        margin: 0;
+        overflow: hidden;
     }
 
-    /**
-     * NOTE: sengaja TIDAK digabung dengan getLeafHistoryRows().
-     * Fungsi ini menentukan leaf berdasarkan SELURUH histori dulu
-     * (tanpa filter tanggal di SQL), baru filter tanggal diterapkan
-     * di akhir ke hasil leaf rows. Ini dipakai khusus untuk Overdue.
-     */
-    private function getLeafHistoryRowsInRange(Request $request, Carbon $from, Carbon $to, $familyColumn = 'combine_pro', $applyPoFilter = true)
-    {
-        $po  = (new PurchaseOrder())->getTable();
-        $dbr = (new HistoryDataBreakdown())->getTable();
-
-        $rawQuery = HistoryDataBreakdown::query()
-            ->join($po, "$po.idpo", '=', "$dbr.idpo")
-            ->where("$dbr.production_status", "IH");
-
-        if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
-            $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
-            $rawQuery->whereIn("$po.idbuyer", $buyerIds);
-        }
-        if ($applyPoFilter && $request->filled('po') && $request->po !== 'all') {
-            $rawQuery->where("$dbr.idpo", $request->po);
-        }
-        if ($request->filled('style') && $request->style !== 'all') {
-            $rawQuery->where("$po.idstyle", $request->style);
-        }
-
-        $rawRows = $rawQuery->select(
-            "$dbr.idpo", "$dbr.idcolor", "$dbr.qty_ori", "$dbr.kp_item",
-            "$dbr.kp_item_ref", "$dbr.revisi_kp", "$dbr.deliverydate",
-            "$dbr.$familyColumn as family_key",
-            "$po.po", "$po.idbuyer", "$po.idstyle"
-        )->get();
-
-        $deduped = $rawRows
-            ->groupBy(fn ($r) => $r->idpo . '|' . $r->idcolor . '|' . $r->kp_item)
-            ->map(fn ($group) => $group->sortByDesc('revisi_kp')->first())
-            ->values();
-
-        $refByFamily = $deduped
-            ->filter(fn ($r) => !is_null($r->kp_item_ref))
-            ->groupBy('family_key')
-            ->map(fn ($group) => $group->pluck('kp_item_ref')->unique()->values());
-
-        $leafRows = $deduped->filter(function ($row) use ($refByFamily) {
-            $refs = $refByFamily->get($row->family_key);
-            return !($refs && $refs->contains($row->kp_item));
-        })->values();
-
-        // Filter tanggal di akhir, ke leaf rows
-        return $leafRows->filter(function ($row) use ($from, $to) {
-            $dv = Carbon::parse($row->deliverydate);
-            return $dv->greaterThanOrEqualTo($from) && $dv->lessThanOrEqualTo($to);
-        })->values();
+    .panel-top .subheader {
+        flex: 0 0 auto;
     }
 
-    private function getPoNeedFinalIdpoList(Request $request, Carbon $fromDate, Carbon $toDate)
-    {
-        $fi  = (new OutputDetailFinalInspection())->getTable();
-        $od  = (new OutputDetail())->getTable();
-        $po  = (new PurchaseOrder())->getTable();
-        $dbr = (new HistoryDataBreakdown())->getTable();
-
-        $leafRows = $this->getLeafHistoryRows(
-            $request,
-            'combine_pro',
-            true,
-            $fromDate,
-            $toDate
-        );
-
-        $qualifiedIdpo = $this->qualifiedIdpoFromLeafRows($leafRows);
-
-        $query = HistoryDataBreakdown::query()
-            ->join($po, "$po.idpo", '=', "$dbr.idpo")
-            ->whereIn("$dbr.idpo", $qualifiedIdpo);
-
-        $this->applyRequireHasFinalRecord($query, $fi, $od, $dbr);
-        $this->applyExcludeIfAnyFinalEffective($query, $fi, $od, $dbr);
-
-        return $query->select("$dbr.idpo")->distinct()->pluck('idpo');
+    .final-overview-table {
+        flex: 1 1 0;
+        min-height: 0;
+        width: 100%;
+        overflow: hidden;
     }
 
-    function summaryFilter(Request $request)
-    {
-        preconnect(session('db'));
-
-        [$dta, $dtb] = $this->parseDateRange($request->datea, $request->dateb);
-
-        $fi  = (new OutputDetailFinalInspection())->getTable();
-        $od  = (new OutputDetail())->getTable();
-        $po  = (new PurchaseOrder())->getTable();
-        $dbr = (new HistoryDataBreakdown())->getTable();
-
-        $applyCommonFilters = function ($query) use ($request, $po, $od) {
-            if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
-                $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
-                $query->whereIn("$po.idbuyer", $buyerIds);
-            }
-            if ($request->filled('po') && $request->po !== 'all') {
-                $query->where("$od.idpo", $request->po);
-            }
-            if ($request->filled('style') && $request->style !== 'all') {
-                $query->where("$po.idstyle", $request->style);
-            }
-            return $query;
-        };
-
-        $effectiveIdpoExpr = $this->effectiveIdpoExpr($dbr);
-
-        $headerQuery = OutputDetailFinalInspection::query()
-            ->join($od, "$od.barcode", '=', "$fi.barcode")
-            ->join($po, "$po.idpo", '=', "$od.idpo")
-            ->whereExists(function ($query) use ($dbr, $od, $dta, $dtb, $effectiveIdpoExpr) {
-                $query->select(DB::raw(1))
-                    ->from($dbr)
-                    ->whereBetween("$dbr.deliverydate", [$dta, $dtb])
-                    ->whereRaw("$effectiveIdpoExpr = $od.idpo")
-                    ->where("$dbr.production_status", "IH");
-            });
-
-        $applyCommonFilters($headerQuery);
-
-        $poIds = (clone $headerQuery)
-            ->select("$od.idpo")
-            ->distinct()
-            ->pluck("$od.idpo");
-
-        $totalQty = HistoryDataBreakdown::whereIn('idpo', $poIds)
-            ->where('is_cutoff', '1')
-            ->sum('qty_ori');
-
-        $totalQtyInspect = (clone $headerQuery)
-            ->whereNotNull("$fi.date_output")
-            ->count(DB::raw("DISTINCT $fi.id"));
-
-        // ===== PO Need Final: today s/d dtb =====
-        $today = Carbon::today()->startOfDay();
-
-        $needFinalFrom = $today->copy();
-        $needFinalTo   = $dtb->copy();
-
-        if ($needFinalFrom->lessThanOrEqualTo($needFinalTo)) {
-            $poNeedFinalList = $this->getPoNeedFinalIdpoList(
-                $request,
-                $needFinalFrom,
-                $needFinalTo
-            );
-        } else {
-            $poNeedFinalList = collect();
-        }
-
-        $poNeedFinal = $poNeedFinalList->count();
-
-        // ===== Overdue =====
-        $overdueFrom = $today->copy()->subDays(7)->startOfDay();
-        $overdueTo   = $today->copy()->endOfDay();
-
-        $overdueList = $this->getFinalCheckIdpoList($request, $overdueFrom, $overdueTo);
-        $overdue = $overdueList->count();
-
-        $finalComIdpoList = (clone $headerQuery)
-            ->where("$fi.is_output", 1)
-            ->select("$po.idpo")
-            ->distinct()
-            ->pluck("$po.idpo");
-
-        $finalCom = $finalComIdpoList->count();
-
-        $totalPo = $poNeedFinalList
-            ->merge($overdueList)
-            ->merge($finalComIdpoList)
-            ->unique()
-            ->count();
-
-        // OQL
-        $totDefect = (clone $headerQuery)
-            ->whereNotNull("$fi.date_output")
-            ->whereNotNull("$fi.defect_code")
-            ->count(DB::raw("DISTINCT $fi.id"));
-
-        $oql = $totalQtyInspect > 0 ? round(($totDefect / $totalQtyInspect) * 100, 2) : 0;
-
-        $rejectIdpoList = (clone $headerQuery)
-            ->whereIn("$od.idpo", $finalComIdpoList)
-            ->whereNotNull("$fi.date_output")
-            ->whereNotNull("$fi.defect_code")
-            ->select("$od.idpo")
-            ->distinct()
-            ->pluck("$od.idpo");
-
-        $poWithDefect = $rejectIdpoList->count();
-        $poNoDefect   = $finalCom - $poWithDefect;
-
-        $passingRate = $finalCom > 0 ? round(($poNoDefect / $finalCom) * 100, 2) : 0;
-        $rejectRate  = $finalCom > 0 ? round(($poWithDefect / $finalCom) * 100, 2) : 0;
-
-        return response()->json([
-            'total_po'          => $totalPo,
-            'total_qty'         => $totalQty,
-            'total_qty_inspect' => $totalQtyInspect,
-            'po_need_final'     => $poNeedFinal,
-            'overdue'           => $overdue,
-            'final_completed'   => $finalCom,
-            'oql'               => $oql,
-            'passing_rate'      => $passingRate,
-            'reject_rate'       => $rejectRate,
-        ]);
+    .final-overview-table .table-res {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        table-layout: fixed;
+        border-collapse: collapse;
     }
 
-    private function getLeafHistoryRows(
-        Request $request,
-        $familyColumn = 'combine_pro',
-        $applyPoFilter = true,
-        $fromDate = null,
-        $toDate = null
-    ) {
-        $po  = (new PurchaseOrder())->getTable();
-        $dbr = (new HistoryDataBreakdown())->getTable();
-
-        $rawQuery = HistoryDataBreakdown::query()
-            ->join($po, "$po.idpo", '=', "$dbr.idpo")
-            ->where("$dbr.production_status", "IH");
-
-        if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
-            $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)
-                ->pluck('idbuyer');
-
-            $rawQuery->whereIn("$po.idbuyer", $buyerIds);
-        }
-
-        if ($applyPoFilter && $request->filled('po') && $request->po !== 'all') {
-            $rawQuery->where("$dbr.idpo", $request->po);
-        }
-
-        if ($request->filled('style') && $request->style !== 'all') {
-            $rawQuery->where("$po.idstyle", $request->style);
-        }
-
-        if ($fromDate && $toDate) {
-
-            // Dipakai kalau caller memberikan tanggal khusus
-            $dta = $fromDate->copy()->startOfDay();
-            $dtb = $toDate->copy()->endOfDay();
-
-        } elseif ($request->filled('datea') && $request->filled('dateb')) {
-
-            [$dta, $dtb] = $this->parseDateRange($request->datea, $request->dateb);
-
-        } else {
-            $dta = null;
-            $dtb = null;
-        }
-
-        // Kalau ada range tanggal, filter DBR dari awal
-        if ($dta && $dtb) {
-            $rawQuery->whereBetween(
-                "$dbr.deliverydate",
-                [$dta, $dtb]
-            );
-        }
-
-        $rawRows = $rawQuery->select(
-            "$dbr.idpo",
-            "$dbr.idcolor",
-            "$dbr.qty_ori",
-            "$dbr.kp_item",
-            "$dbr.kp_item_ref",
-            "$dbr.revisi_kp",
-            "$dbr.deliverydate",
-            "$dbr.$familyColumn as family_key",
-            "$po.po",
-            "$po.idbuyer",
-            "$po.idstyle"
-        )->get();
-
-        $deduped = $rawRows
-            ->groupBy(function ($r) {
-                return $r->idpo . '|' . $r->idcolor . '|' . $r->kp_item;
-            })
-            ->map(function ($group) {
-                return $group
-                    ->sortByDesc('revisi_kp')
-                    ->first();
-            })
-            ->values();
-
-        $refByFamily = $deduped
-            ->filter(fn ($r) => !is_null($r->kp_item_ref))
-            ->groupBy('family_key')
-            ->map(function ($group) {
-                return $group
-                    ->pluck('kp_item_ref')
-                    ->unique()
-                    ->values();
-            });
-
-        $leafRows = $deduped
-            ->filter(function ($row) use ($refByFamily) {
-                $refs = $refByFamily->get($row->family_key);
-
-                return !(
-                    $refs &&
-                    $refs->contains($row->kp_item)
-                );
-            })
-            ->values();
-
-        return $leafRows;
+    .final-overview-table .table-res thead th {
+        padding: 5px 4px;
     }
 
-    function priorityFinal(Request $request)
-    {
-        preconnect(session('db'));
+    .tableBorder {
+        border-collapse: collapse;
+    }
 
-        $fi  = (new OutputDetailFinalInspection())->getTable();
-        $od  = (new OutputDetail())->getTable();
-        $po  = (new PurchaseOrder())->getTable();
-        $dbr = (new HistoryDataBreakdown())->getTable();
-
-        // LEAF ROWS (qty & list PO)
-        $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true);
-
-        $byIdpoLeaf = $leafRows->groupBy('idpo');
-
-        $qtyPerIdpo = array();
-        $etdPerIdpo = array();
-        foreach ($byIdpoLeaf as $idpo => $rows) {
-            $qtyPerIdpo[$idpo] = (int) $rows->sum('qty_ori');
-            $etdPerIdpo[$idpo] = $rows->max('deliverydate');
-        }
-
-        $qualifiedIdpo = $this->qualifiedIdpoFromLeafRows($leafRows);
-
-        $finalCheckQuery = HistoryDataBreakdown::query()
-            ->join($po, "$po.idpo", '=', "$dbr.idpo")
-            ->whereIn("$dbr.idpo", $qualifiedIdpo);
-
-        $this->applyRequireHasFinalRecord($finalCheckQuery, $fi, $od, $dbr);
-        $this->applyExcludeIfAnyFinalEffective($finalCheckQuery, $fi, $od, $dbr);
-
-        $finalIdpoList = $finalCheckQuery->select("$dbr.idpo")->distinct()->pluck('idpo');
-
-        $poList = $finalIdpoList->map(function ($idpo) use ($byIdpoLeaf) {
-            $rows = $byIdpoLeaf->get($idpo);
-            $first = $rows->first();
-            return (object) array(
-                'idpo' => $idpo, 'po' => $first->po, 'idbuyer' => $first->idbuyer,
-                'idstyle' => $first->idstyle, 'idcolor' => $first->idcolor,
-            );
-        });
-
-        $idpoList = $poList->pluck('idpo')->unique()->values();
-
-        $buyerIds = $poList->pluck('idbuyer')->filter()->unique()->values();
-        $buyerGroupMap = Buyer::whereIn('idbuyer', $buyerIds)->pluck('groupbuyer', 'idbuyer');
-        $groupBuyerIds = $buyerGroupMap->filter()->unique()->values();
-        $groupBuyerNames = MasterGroupBuyer::whereIn('id', $groupBuyerIds)->pluck('group_name', 'id');
-        $styleIds = $poList->pluck('idstyle')->filter()->unique()->values();
-        $styleMap = Style::whereIn('idstyle', $styleIds)->pluck('nmstyle', 'idstyle');
-        $colorIds = $poList->pluck('idcolor')->filter()->unique()->values();
-        $colorMap = Color::whereIn('idcolor', $colorIds)->pluck('nmcolor', 'idcolor');
-
-        $outputRows = HistoryPO::whereIn('idpo', $idpoList)
-            ->get(['idpo', 'revisi_kp', 'qtypo'])
-            ->groupBy('idpo')
-            ->map(function ($rows) {
-                return $rows->sortByDesc('revisi_kp')->first();
-            });
-
-        $today = Carbon::today()->startOfDay();
-
-        $data = $poList->map(function ($item) use (
-            $buyerGroupMap, $groupBuyerNames, $styleMap, $colorMap,
-            $qtyPerIdpo, $etdPerIdpo, $outputRows, $today
-        ) {
-            $groupBuyerId = $buyerGroupMap->get($item->idbuyer);
-            $outputRow = $outputRows->get($item->idpo);
-
-            $etd = isset($etdPerIdpo[$item->idpo]) ? $etdPerIdpo[$item->idpo] : null;
-            $daysToEtd = null;
-            if ($etd) {
-                $daysToEtd = $today->diffInDays(Carbon::parse($etd)->startOfDay(), false);
-            }
-
-            $totalQty = isset($qtyPerIdpo[$item->idpo]) ? (int) $qtyPerIdpo[$item->idpo] : 0;
-            $totalOutput = $outputRow ? (int) $outputRow->qtypo : 0;
-
-            $progressOutput = $totalQty > 0 ? round(($totalOutput / $totalQty) * 100, 2) : 0;
-
-            return array(
-                'idpo' => $item->idpo,
-                'po' => $item->po,
-                'style' => $styleMap->get($item->idstyle) ? $styleMap->get($item->idstyle) : '-',
-                'color' => $colorMap->get($item->idcolor) ? $colorMap->get($item->idcolor) : '-',
-                'buyer' => $groupBuyerId ? ($groupBuyerNames->get($groupBuyerId) ? $groupBuyerNames->get($groupBuyerId) : '-') : '-',
-                'qty_order' => $totalQty,
-                'output' => $totalOutput,
-                'progress_output' => $progressOutput,
-                'etd' => $etd ? Carbon::parse($etd)->format('d-m-Y') : '-',
-                'days_to_etd' => $daysToEtd,
-            );
-        })->values();
-
-        $totalQtyOrderAll = $data->sum('qty_order');
-        $totalOutputAll   = $data->sum('output');
-        $totalProgressOutputAll = $totalQtyOrderAll > 0
-            ? round(($totalOutputAll / $totalQtyOrderAll) * 100, 2) : 0;
-
-        return response()->json(array(
-            'data'  => $data,
-            'total' => array(
-                'qty_order' => $totalQtyOrderAll, 'output' => $totalOutputAll,
-                'progress_output' => $totalProgressOutputAll,
-            ),
-        ));
+    .tableBorder th,
+    .tableBorder td {
+        border: 2px solid #1C2536 !important;
     }
 
 
-    function finalOverview (Request $request)
-    {
-         preconnect(session('db'));
 
-        [$dta, $dtb] = $this->parseDateRange($request->datea, $request->dateb);
-
-        $fi  = (new OutputDetailFinalInspection())->getTable();
-        $od  = (new OutputDetail())->getTable();
-        $po  = (new PurchaseOrder())->getTable();
-        $dbr = (new HistoryDataBreakdown())->getTable();
-
-        $applyCommonFilters = function ($query) use ($request, $po, $od) {
-            if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
-                $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
-                $query->whereIn("$po.idbuyer", $buyerIds);
-            }
-            if ($request->filled('po') && $request->po !== 'all') {
-                $query->where("$od.idpo", $request->po);
-            }
-            if ($request->filled('style') && $request->style !== 'all') {
-                $query->where("$po.idstyle", $request->style);
-            }
-            return $query;
-        };
-
-        $effectiveIdpoExpr = $this->effectiveIdpoExpr($dbr);
-
-        $headerQuery = OutputDetailFinalInspection::query()
-            ->join($od, "$od.barcode", '=', "$fi.barcode")
-            ->join($po, "$po.idpo", '=', "$od.idpo")
-            ->whereExists(function ($query) use ($dbr, $od, $dta, $dtb, $effectiveIdpoExpr) {
-                $query->select(DB::raw(1))
-                    ->from($dbr)
-                    ->whereBetween("$dbr.deliverydate", [$dta, $dtb])
-                    ->whereRaw("$effectiveIdpoExpr = $od.idpo")
-                    ->where("$dbr.production_status", "IH");
-            });
-
-        $applyCommonFilters($headerQuery);
-
-        $finalComIdpoList = (clone $headerQuery)
-            // ->where("$fi.is_output", 1)
-            ->select("$po.idpo")
-            ->distinct()
-            ->pluck("$po.idpo");
-
-        $finalCom = $finalComIdpoList->count();
-
-        $passIdpoList = (clone $headerQuery)
-            ->whereIn("$od.idpo", $finalComIdpoList)
-            ->whereNotNull("$fi.date_output")
-            ->whereNull("$fi.defect_code")
-            ->select("$od.idpo")
-            ->distinct()
-            ->pluck("$od.idpo");
-
-        $rejectIdpoList = (clone $headerQuery)
-            ->whereIn("$od.idpo", $finalComIdpoList)
-            ->whereNotNull("$fi.date_output")
-            ->whereNotNull("$fi.defect_code")
-            ->select("$od.idpo")
-            ->distinct()
-            ->pluck("$od.idpo");
-
-        $qtyPass = HistoryDataBreakdown::whereIn('idpo', $passIdpoList)
-            ->sum('qty_ori');
-
-        $qtyReject = HistoryDataBreakdown::whereIn('idpo', $rejectIdpoList)
-            ->sum('qty_ori');
-
-        $poWithDefect = $rejectIdpoList->count();
-        $poNoDefect   = $finalCom - $poWithDefect;
-
-        $poIds = (clone $headerQuery)
-            ->select("$od.idpo")
-            ->distinct()
-            ->pluck("$od.idpo");
-
-        $totalQty = HistoryDataBreakdown::whereIn('idpo', $rejectIdpoList)
-            ->sum('qty_ori');
-
-         $today = Carbon::today()->startOfDay();
-
-        $needFinalFrom = $today->copy();
-        $needFinalTo   = $dtb->copy();
-
-        if ($needFinalFrom->lessThanOrEqualTo($needFinalTo)) {
-            $poNeedFinalList = $this->getPoNeedFinalIdpoList(
-                $request,
-                $needFinalFrom,
-                $needFinalTo
-            );
-        } else {
-            $poNeedFinalList = collect();
+    @media (min-width: 769px) and (max-width: 1180px) {
+        .final-wrapper {
+            min-height: 250px !important;
         }
-
-        $poNeedFinal = $poNeedFinalList->count();
-
-        // ===== Overdue =====
-        $overdueFrom = $today->copy()->subDays(7)->startOfDay();
-        $overdueTo   = $today->copy()->endOfDay();
-
-        $overdueList = $this->getFinalCheckIdpoList($request, $overdueFrom, $overdueTo);
-        $overdue = $overdueList->count();
-
-        $notFinal = $poNeedFinal + $overdue;
-
-        $totalQtyInspect = (clone $headerQuery)
-            ->whereNotNull("$fi.date_output")
-            ->count(DB::raw("DISTINCT $fi.id"));
-
-            return response()->json([
-                'data' => [[
-                    'pass' => [
-                        'count' => $poNoDefect,
-                        'qty'   => $qtyPass
-                    ],
-                    'reject' => [
-                        'count' => $poWithDefect,
-                        'qty'   => $qtyReject
-                    ],
-                    'not_final' => [
-                        'count' => $notFinal,
-                    ],
-                ]]
-            ]);
     }
+</style>
+<div class="flex-fill border-custom-datatable rounded-1 fo-panel-top">
+    <div class="wrapper-sub">
+        <h6 class="subheader mb-0 fw-normal text-truncate">
+            FINAL INSPECTION OVERVIEW
+        </h6>
+        <div class="final-overview-table final-wrapper rounded mt-2 w-100">
+            <table class="table-res table-hover tableBorder">
+                <thead>
+                    <tr>
+                        <th class="text-center" style="width:6%;">Status Final</th>
+                        <th class="text-center" style="width:9%;">PO <br> (Count)</th>
+                        <th class="text-center" style="width:9%;">Total Qty Order <br> (Pcs)</th>
+                        <th class="text-center" style="width:9%;">Total Qty Inspect <br> (Pcs)</th>
+                        <th class="text-center" style="width:9%;">Total Output <br> (Pcs)</th>
+                        <th class="text-center" style="width:9%;">Progress Output <br> (%)</th>
+                    </tr>
+                </thead>
+                <tbody class="text-center" id="tableFinalOverviewBody">
+                    <tr>
+                        <td class="title-pass">PASS</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">
+                            <div class="fi-bar-wrapper">
+                                <div id="passingRatePass" class="fi-bar fi-bar-green" style="width: 0%;"></div>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="title-reject">REJECT</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">
+                            <div class="fi-bar-wrapper">
+                                <div id="passingRateReject" class="fi-bar fi-bar-red" style="width: 0%;"></div>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="title-notfinal">NOT FINAL</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">
+                            <div class="fi-bar-wrapper">
+                                <div id="passingRateNotfinal" class="fi-bar fi-bar-orange" style="width: 0%;"></div>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+
+                <tfoot class="table-foot" id="tablePriorityFinalFooter">
+                    <tr>
+                        <th class="text-center" style="color: #4C8CF2;">TOTAL</th>
+                        <th class="text-center" style="color: #4C8CF2;" id="foottotPo">-</th>
+                        <th class="text-center" style="color: #4C8CF2;" id="foottotQtyOrder">-</th>
+                        <th class="text-center" style="color: #4C8CF2;" id="foottotQtyInspect">-</th>
+                        <th class="text-center" style="color: #4C8CF2;" id="foottotOutput">-</th>
+                        <th class="text-center" style="color: #4C8CF2;" id="foottotProgress">-%</th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+progressfinal
+<style>
+    .pf-panel-top {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+
+    .wrapper-sub {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+    }
+
+     @media (min-width: 992px) and (max-width: 1399.98px) {
+        .pf-panel-top {
+            flex: 0 0 55%;
+            height: 55%;
+            min-height: 0;
+            overflow: hidden;
+        }
+    }
+
+    .tableBorder td,
+    .tableBorder th {
+        border-color: #1C2536 !important;
+    }
+
+    @media (min-width: 769px) and (max-width: 1024px) {
+        .table-res {
+        }
+    }
+
+    .priority-table {
+    width: 100%;
+    table-layout: fixed;
 }
+
+.priority-table .col-priority {
+    width: 6%;
+}
+
+.priority-table .col-po {
+    width: 14%;
+}
+
+.priority-table .col-buyer {
+    width: 11%;
+}
+
+.priority-table .col-style {
+    width: 10%;
+}
+
+.priority-table .col-color {
+    width: 13%;
+}
+
+.priority-table .col-qty {
+    width: 6%;
+}
+
+.priority-table .col-output {
+    width: 6%;
+}
+
+.priority-table .col-progress {
+    width: 9%;
+}
+
+.priority-table .col-etd {
+    width: 9%;
+}
+
+.priority-table .col-days {
+    width: 7%;
+}
+
+.priority-table .col-status {
+    width: 7%;
+}
+
+</style>
+
+<div class="flex-fill border-custom-datatable rounded-1 pf-panel-top">
+    <div class="wrapper-sub ">
+        <h6 class="subheader mb-0 fw-normal text-truncate">
+            PO PRIORITY PROGRESS FINAL (BASED ON ETD)
+        </h6>
+        <div class="table-scroll-tbl rounded mt-2 px-2 w-100">
+            <table class="table-res table-borderless table-hover tableBorder priority-table">
+                <colgroup>
+                    <col class="col-priority">
+                    <col class="col-po">
+                    <col class="col-buyer">
+                    <col class="col-style">
+                    <col class="col-color">
+                    <col class="col-qty">
+                    <col class="col-output">
+                    <col class="col-progress">
+                    <col class="col-etd">
+                    <col class="col-days">
+                    <col class="col-status">
+                </colgroup>
+
+                <thead>
+                    <tr>
+                        <th class="text-center">Priority</th>
+                        <th class="text-center">PO No.</th>
+                        <th class="text-center">Buyer</th>
+                        <th class="text-center">Style</th>
+                        <th class="text-center">Article / Color</th>
+                        <th class="text-center">
+                            Qty Order<br>(Pcs)
+                        </th>
+                        <th class="text-center">
+                            Output<br>(Pcs)
+                        </th>
+                        <th class="text-center">
+                            Progress<br>Output<br>(%)
+                        </th>
+                        <th class="text-center">
+                            ETD<br>(Shipment Date)
+                        </th>
+                        <th class="text-center">
+                            Days to<br>ETD
+                        </th>
+                        <th class="text-center">
+                            Status<br>Final
+                        </th>
+                    </tr>
+                </thead>
+
+                <tbody class="text-center table-bordered" id="tablePriorityFinalBody">
+                    <tr>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-%</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                    </tr>
+                </tbody>
+
+                <tfoot class="table-foot" id="tablePriorityFinalFooter">
+                    <tr>
+                        <th class="text-center" style="color: #4C8CF2;">
+                            TOTAL
+                        </th>
+
+                        <th></th>
+                        <th></th>
+                        <th></th>
+                        <th></th>
+
+                        <th class="text-center"
+                            style="color: #4C8CF2;"
+                            id="footQtyOrder">
+                        </th>
+
+                        <th class="text-center"
+                            style="color: #4C8CF2;"
+                            id="footOutput">
+                        </th>
+
+                        <th class="text-center"
+                            style="color: #4C8CF2;"
+                            id="footProgressOutput">
+                        </th>
+
+                        <th></th>
+                        <th></th>
+                        <th></th>
+                    </tr>
+                </tfoot>
+
+            </table>
+
+
+
+        </div>
+    </div>
+</div>
+
+chartblade
+<style>
+    .wrapper-sub {
+        height: 100%;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .chart-donut {
+        width: 100%;
+        flex: 1 1 0;
+        min-height: 0;
+    }
+
+    .subheader {
+        font-size: clamp(10px, 0.8vw, 13px);
+        line-height: 1.2;
+        padding: 4px 6px 0;
+        flex-shrink: 0;
+    }
+
+    .chart-title {
+        flex-shrink: 0;
+        font-size: clamp(9px, 0.75vw, 13px);
+        gap: clamp(8px, 1.5vw, 20px) !important;
+        padding: 0 5px 6px;
+    }
+
+
+    .col > .border-custom-datatable {
+        overflow: hidden;
+    }
+
+    .chart-title .fw-bold {
+        font-size: clamp(9px, 0.75vw, 13px) !important;
+        line-height: 1.1;
+    }
+
+    .chart-title div[id$="-text-1"],
+    .chart-title div[id$="-text-2"],
+    .chart-title div[id$="-text-3"] {
+        font-size: clamp(8px, 0.65vw, 12px) !important;
+        line-height: 1.1;
+    }
+
+    .chart-title span {
+        width: clamp(8px, 0.7vw, 12px) !important;
+        height: clamp(8px, 0.7vw, 12px) !important;
+        margin-right: clamp(4px, 0.5vw, 8px) !important;
+        flex-shrink: 0;
+    }
+
+    @media (min-width: 992px) and (max-width: 1400px) {
+        .subheader {
+            font-size: clamp(9px, 0.75vw, 11px);
+        }
+
+        .chart-title {
+            gap: clamp(6px, 1vw, 14px) !important;
+            margin-top: 4px !important;
+        }
+
+        .chart-title .fw-bold {
+            font-size: clamp(8px, 0.65vw, 11px) !important;
+        }
+
+        .chart-title div[id$="-text-1"],
+        .chart-title div[id$="-text-2"],
+        .chart-title div[id$="-text-3"] {
+            font-size: clamp(7px, 0.6vw, 10px) !important;
+        }
+    }
+
+    /* layar kecil */
+    @media (max-width: 991.98px) {
+
+        .subheader {
+            font-size: 11px;
+        }
+
+        .chart-title .fw-bold {
+            font-size: 11px !important;
+        }
+
+        .chart-title div[id$="-text-1"],
+        .chart-title div[id$="-text-2"],
+        .chart-title div[id$="-text-3"] {
+            font-size: 10px !important;
+        }
+    }
+
+    .legend-value {
+        font-size: clamp(8px, 0.65vw, 12px);
+        color: #9ca3af;
+        line-height: 1.1;
+    }
+
+    .chart-donut {
+        width: 100%;
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+
+    .chart-title {
+        flex-shrink: 0;
+    }
+
+
+
+    @media (min-width: 768px) and (max-width: 991.98px) {
+
+        .panel-bottom > .row {
+            height: 100%;
+        }
+
+        .panel-bottom > .row > .col {
+            height: 300px !important;
+            min-height: 300px !important;
+        }
+
+        .panel-bottom > .row > .col > .border-custom-datatable {
+            height: 100% !important;
+        }
+    }
+</style>
+
+<div class="flex-fill panel-slot panel-bottom">
+    <div class="row row-cols-1 row-cols-lg-3 row-cols-md-3 g-2 h-100">
+        <!-- CHART 1 -->
+        <div class="chart-wrapper col">
+            <div class="border-custom-datatable rounded-1 h-100">
+                <div class="wrapper-sub">
+                    <h6 class="subheader mb-0 fw-normal text-truncate">
+                        FINAL INSPECTION RESULT (QTY INSPECT)
+                    </h6>
+
+                    <div id="chart-1" class="chart-donut flex-fill"></div>
+
+                    <div class="chart-title d-flex justify-content-center gap-4 mt-2">
+                        <div class="d-flex align-items-center ">
+                            <span style="width:12px;height:12px;background:#4ade80;border-radius:2px;display:inline-block;margin-right:8px;"></span>
+                            <div>
+                                <div class="fw-bold">PASS</div>
+                                <div id="pass-text-1" class="legend-value">0 (0%)</div>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <span style="width:12px;height:12px;background:#f87171;border-radius:2px;display:inline-block;margin-right:8px;"></span>
+                            <div>
+                                <div class="fw-bold">REJECT</div>
+                                <div id="reject-text-1" class="legend-value">0 (0%)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CHART 2 -->
+        <div class="col">
+            <div class="border-custom-datatable rounded-1 h-100">
+                <div class="wrapper-sub">
+                    <h6 class="subheader mb-0 fw-normal text-truncate">FINAL INSPECTION RESULT (OQL-DEFECT RATE)</h6>
+
+                    <div id="chart-2" class="chart-donut flex-fill"></div>
+
+                    <div class="chart-title d-flex justify-content-center gap-4 mt-2">
+                        <div class="d-flex align-items-center">
+                            <span style="width:12px;height:12px;background:#3F3184;border-radius:2px;display:inline-block;margin-right:8px;"></span>
+                            <div>
+                                <div class="fw-bold">OQL (Defect Rate)</div>
+                                <div id="pass-text-2" class="legend-value">0 (0%)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CHART 3 -->
+        <div class="col">
+            <div class="border-custom-datatable rounded-1 h-100">
+                <div class="wrapper-sub">
+                    <h6 class="subheader mb-0 fw-normal text-truncate">FINAL INSPECTION RESULT (QTY ORDER)</h6>
+
+                    <div id="chart-3" class="chart-donut flex-fill"></div>
+
+                    <div class="chart-title d-flex justify-content-center gap-4 mt-2">
+                        <div class="d-flex">
+                            <div>
+                                <span style="width:12px;height:12px;background:#4ade80;border-radius:2px;display:inline-block;margin-right:8px;"></span>
+                            </div>
+                            <div>
+                                <div class="fw-bold">PASS</div>
+                                <div id="pass-text-3" class="legend-value">0 (0%)</div>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <div>
+                                <span style="width:12px;height:12px;background:#f87171;border-radius:2px;display:inline-block;margin-right:8px;"></span>
+
+                            </div>
+                            <div>
+                                <div class="fw-bold">REJECT</div>
+                                <div id="reject-text-3" class="legend-value">0 (0%)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+
+    const chartInstances = {};
+
+    function getFontScale(width, height) {
+        const size = Math.min(width, height);
+
+        if (size <= 90) {
+            return {
+                center: 10,
+                sub: 8
+            };
+        }
+
+        if (size <= 120) {
+            return {
+                center: 12,
+                sub: 9
+            };
+        }
+
+        if (size <= 160) {
+            return {
+                center: 14,
+                sub: 10
+            };
+        }
+
+        return {
+            center: 16,
+            sub: 11
+        };
+    }
+
+    function renderDonutChart(
+        chartId,
+        passValue,
+        rejectValue,
+        totalValue,
+        passTextId,
+        rejectTextId,
+        passColor = '#4ade80',
+        rejectColor = '#f87171',
+        centerLabel = 'Pcs',
+        firstName = 'PASS',
+        valueSuffix = '',
+        showPercentage = true,
+        customTooltip = null
+    ) {
+        const total = Number(totalValue) || 0;
+
+        const pass = Number(passValue) || 0;
+        const reject = Number(rejectValue) || 0;
+
+        const passPct = total > 0
+            ? ((pass / total) * 100).toFixed(2)
+            : 0;
+
+        const rejectPct = total > 0
+            ? ((reject / total) * 100).toFixed(2)
+            : 0;
+
+        if (passTextId && document.getElementById(passTextId)) {
+            document.getElementById(passTextId).innerText =
+                showPercentage
+                    ? pass.toLocaleString('id-ID') + ' (' + passPct + '%)'
+                    : pass.toLocaleString('id-ID');
+        }
+
+        if (rejectTextId && document.getElementById(rejectTextId)) {
+            document.getElementById(rejectTextId).innerText =
+                reject.toLocaleString('id-ID') + ' (' + rejectPct + '%)';
+        }
+
+        const chartDom = document.getElementById(chartId);
+
+        if (!chartDom) return;
+
+        const myChart = echarts.init(chartDom);
+        chartInstances[chartId] = myChart;
+
+        const data = [
+            {
+                value: pass,
+                name: firstName,
+                itemStyle: {
+                    color: passColor
+                }
+            }
+        ];
+
+        if (rejectTextId) {
+            data.push({
+                value: reject,
+                name: 'REJECT',
+                itemStyle: {
+                    color: rejectColor
+                }
+            });
+        }
+
+        function buildOption() {
+            const width = chartDom.clientWidth || 150;
+            const height = chartDom.clientHeight || 150;
+
+            const { center, sub } = getFontScale(width, height);
+
+            return {
+                backgroundColor: 'transparent',
+
+                tooltip: {
+                    trigger: 'item',
+                    formatter: customTooltip || '{b}: {c} ({d}%)'
+                },
+
+                series: [
+                    {
+                        name: 'Inspection Result',
+                        type: 'pie',
+                        radius: [
+                            '52%',
+                            '70%'
+                        ],
+                        center: ['50%', '50%'],
+                        avoidLabelOverlap: false,
+                        label: {
+                            show: false
+                        },
+                        labelLine: {
+                            show: false
+                        },
+                        data: data
+                    }
+                ],
+
+                graphic: [
+                    {
+                        type: 'text',
+                        left: 'center',
+                        top: '43%',
+                        style: {
+                            text: total.toLocaleString('id-ID') + valueSuffix,
+                            textAlign: 'center',
+                            fill: '#ffffff',
+                            fontSize: center,
+                            fontWeight: 'bold'
+                        }
+                    },
+                    {
+                        type: 'text',
+                        left: 'center',
+                        top: '57%',
+                        style: {
+                            text: centerLabel,
+                            textAlign: 'center',
+                            fill: '#ffffff',
+                            fontSize: sub,
+                            fontWeight: 'normal'
+                        }
+                    }
+                ]
+            };
+        }
+        myChart.setOption(buildOption());
+        const ro = new ResizeObserver(() => {
+            myChart.resize();
+            myChart.setOption(buildOption());
+        });
+        ro.observe(chartDom);
+    }
+        renderDonutChart(
+            'chart-1',
+            0,
+            0,
+            0,
+            'pass-text-1',
+            'reject-text-1'
+        );
+        renderDonutChart(
+            'chart-2',
+            0,
+            0,
+            0,
+            'pass-text-2',
+            null,
+            '#3F3184',
+            '#374151',
+            'Pcs',
+            'OQL',
+            '',
+            false,
+            function (params) {
+                return params.name + ': ' + params.value + ' %';
+            }
+        );
+        const oqlText = document.getElementById('pass-text-2');
+        if (oqlText) {
+            oqlText.innerText = '0%';
+        }
+
+        renderDonutChart(
+            'chart-3',
+            0,
+            0,
+            0,
+            'pass-text-3',
+            'reject-text-3'
+        );
+    });
+</script>
+
+category-defect
+<style>
+    .table-scroll-defect {
+        max-height: 122px;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+
+    .wrapper-sub {
+        height: 100%;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    #chart-defect-category {
+        width: 100%;
+        flex: 1 1 0;
+        min-height: 0;
+    }
+
+    @media (min-width: 992px) and (max-width: 1399.98px) {
+        #chart-defect-category {
+            height: 115px !important;
+            min-height: 115px !important;
+        }
+
+        .defect-category-legend {
+            gap: 15px !important;
+            margin-top: 0 !important;
+        }
+
+        .defect-category-legend .legend-box {
+            width: 9px !important;
+            height: 9px !important;
+            margin-right: 5px !important;
+        }
+
+        .defect-category-legend .legend-title {
+            font-size: 10px !important;
+            line-height: 10px;
+        }
+
+        .defect-category-legend .legend-value {
+            font-size: 10px !important;
+            line-height: 12px;
+        }
+
+        .border-custom-datatable{
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+    }
+
+    /* TABLET */
+    @media (min-width: 768px) and (max-width: 991.98px) {
+        .category-wrapper {
+            height: 600px !important;
+            min-height: 600px !important;
+        }
+
+        .category-wrapper .category-row {
+            height: 100% !important;
+            min-height: 0 !important;
+        }
+
+        .category-wrapper .category-row > .col {
+            height: 100% !important;
+            min-height: 0 !important;
+        }
+
+        .category-wrapper .category-row > .col > .border-custom-datatable {
+            height: 100% !important;
+            min-height: 0 !important;
+        }
+
+        .category-wrapper .wrapper-sub {
+            height: 100% !important;
+            min-height: 0 !important;
+        }
+
+        #chart-defect-category {
+            flex: 1 1 0 !important;
+            width: 100% !important;
+            height: auto !important;
+            min-height: 0 !important;
+        }
+
+        .defect-category-legend {
+            flex-shrink: 0 !important;
+        }
+    }
+</style>
+
+<div class="flex-fill panel-slot panel-bottom category-wrapper">
+    <div class="row g-2 h-100 category-row">
+        <!-- TOP 5 DEFECTS -->
+        <div class="wrap-height col-12 col-lg-7">
+            <div class="border-custom-datatable rounded-1 h-100">
+                <div class="wrapper-sub" style="margin: 0 !important;padding:10px !important">
+
+                    <h6 class="subheader mb-2 fw-normal text-truncate">
+                        TOP 5 DEFECTS (FINAL INSPECTION)
+                    </h6>
+
+                    <div class="table-scroll-tbl rounded mt-2 w-100">
+                        <table class="table-res table-borderless table-hover tableBorder">
+                            <thead>
+                                <tr>
+                                    <th class="text-center">No</th>
+                                    <th class="text-center">Defect</th>
+                                    <th class="text-center">Qty (Pcs)</th>
+                                    <th class="text-center">%</th>
+                                    <th class="text-center"></th>
+                                </tr>
+                            </thead>
+
+                            <tbody class="text-center" id="tableDefectFinalBody">
+                                <tr>
+                                    <td>1</td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                </tr>
+
+                                <tr>
+                                    <td>2</td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                </tr>
+
+                                <tr>
+                                    <td>3</td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                </tr>
+                            </tbody>
+
+                            <tfoot class="table-foot">
+                                <tr>
+                                    <th class="text-center" style="color:#4C8CF2;">
+                                        TOTAL
+                                    </th>
+
+                                    <th></th>
+
+                                    <th class="text-center"
+                                        style="color:#4C8CF2;"
+                                        id="footTotalDefectQty">
+                                        -
+                                    </th>
+
+                                    <th class="text-center"
+                                        style="color:#4C8CF2;"
+                                        id="footTotalDefectPct">
+                                        -%
+                                    </th>
+                                    <th></th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- DEFECT BY CATEGORY -->
+        <div class="col-12 col-lg-5">
+            <div class="border-custom-datatable rounded-1 h-100">
+                <div class="wrapper-sub">
+
+                    <h6 class="subheader mb-0 fw-normal text-truncate">
+                        DEFECT BY CATEGORY (FINAL INSPECTION)
+                    </h6>
+
+                    <div id="chart-defect-category"
+                        class="chart-donut">
+                    </div>
+
+
+                    <div class="d-flex justify-content-center gap-4 mt-2 defect-category-legend">
+
+                        <div class="d-flex align-items-center">
+                            <div class="d-flex">
+                                <div>
+                                    <span style="width:12px;height:12px;background:#0C46A5;border-radius:2px;display:inline-block;margin-right:8px;"></span>
+                                </div>
+                                <div>
+                                    <div class="fw-bold legend-title">
+                                        Process
+                                    </div>
+
+                                    <div id="process-text" class="legend-value">
+                                        0 (0%)
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-center">
+                            <div class="d-flex">
+                                <div>
+                                    <span style="width:12px;height:12px;background:#4CF299;border-radius:2px;display:inline-block;margin-right:8px;"></span>
+                                </div>
+                                <div>
+                                    <div class="fw-bold legend-title">
+                                        Non Process
+                                    </div>
+
+                                    <div id="non-process-text" class="legend-value">
+                                        0 (0%)
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        function renderDefectCategoryChart(chartId, processValue, nonProcessValue, processTextId, nonProcessTextId) {
+            const total = processValue + nonProcessValue;
+            const processPct = total > 0 ? ((processValue / total) * 100).toFixed(0) : 0;
+            const nonProcessPct = total > 0 ? ((nonProcessValue / total) * 100).toFixed(0) : 0;
+
+            const MIN_BAR_HEIGHT = 5;
+
+            const processChartValue = Number(processPct) === 0 ? MIN_BAR_HEIGHT : Number(processPct);
+            const nonProcessChartValue = Number(nonProcessPct) === 0 ? MIN_BAR_HEIGHT : Number(nonProcessPct);
+
+
+            if (processTextId && document.getElementById(processTextId)) {
+                document.getElementById(processTextId).innerText =
+                    processValue.toLocaleString('id-ID') + ' (' + processPct + '%)';
+            }
+            if (nonProcessTextId && document.getElementById(nonProcessTextId)) {
+                document.getElementById(nonProcessTextId).innerText =
+                    nonProcessValue.toLocaleString('id-ID') + ' (' + nonProcessPct + '%)';
+            }
+
+            const chartDom = document.getElementById(chartId);
+            if (!chartDom) return;
+
+            const myChart = echarts.init(chartDom);
+
+            const isSmallDesktop = window.innerWidth >= 992 && window.innerWidth <= 1400;
+
+            const option = {
+                backgroundColor: 'transparent',
+
+                grid: {
+                    left: '10%',
+                    right: '10%',
+                    top: '25%',
+                    bottom: '5%',
+                    containLabel: false
+                },
+
+                xAxis: {
+                    type: 'category',
+                    data: ['Process', 'Non Process'],
+                    show: false
+                },
+
+                yAxis: {
+                    type: 'value',
+                    show: false,
+                    max: 100
+                },
+
+                tooltip: {
+                    trigger: 'item',
+
+                    padding: isSmallDesktop ? [5, 8] : [8, 12],
+
+                    textStyle: {
+                        fontSize: isSmallDesktop ? 10 : 12
+                    },
+
+                    formatter: function (params) {
+                        return `
+                            ${params.name}<br>
+                            <b>${params.data.actualValue}%</b>
+                        `;
+                    }
+
+                },
+
+                series: [
+                    {
+                        type: 'bar',
+
+                        barWidth: isSmallDesktop ? '30%' : '35%',
+
+                        data: [
+                            {
+                                value: processChartValue,
+                                actualValue: Number(processPct),
+                                itemStyle: {
+                                    color: '#3b82f6',
+                                    borderRadius: [4, 4, 0, 0]
+                                }
+                            },
+                            {
+                                value: nonProcessChartValue,
+                                actualValue: Number(nonProcessPct),
+                                itemStyle: {
+                                    color: '#4ade80',
+                                    borderRadius: [4, 4, 0, 0]
+                                }
+                            }
+                        ],
+
+
+                        label: {
+                            show: true,
+                            position: 'top',
+                            color: '#ffffff',
+                            fontSize: isSmallDesktop ? 10 : 13,
+
+                            formatter: function (params) {
+                                return params.data.actualValue + ' %';
+                            }
+
+                        }
+                    }
+                ]
+            };
+
+
+            myChart.setOption(option);
+            window.addEventListener('resize', () => myChart.resize());
+        }
+
+        renderDefectCategoryChart('chart-defect-category', 0, 0, 'process-text', 'non-process-text');
+    });
+</script>
+
+
