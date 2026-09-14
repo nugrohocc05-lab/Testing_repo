@@ -1,223 +1,106 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <title>Report Final Inspection</title>
+// Dipakai: exportData saja
+// Menghasilkan qty_inspect, defect_qty, defect_name (gabungan semua nama defect,
+// tidak dibatasi jumlahnya), dan breakdown process/non_process per idpo+warna.
+private function buildPriorityFinalAdditionalData(Collection $idpoList): Collection
+{
+    $fi = (new OutputDetailFinalInspection())->getTable();
+    $od = (new OutputDetail())->getTable();
 
-    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
-    <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
+    if ($idpoList->isEmpty()) {
+        return collect();
+    }
 
-    <style>
-        body { font-family: Arial, Helvetica, sans-serif; font-size: 13px; padding: 20px; }
-        h1 { font-size: 18px; margin-bottom: 4px; }
-        .filter-info { margin-bottom: 20px; color: #444; }
-        .filter-info span { margin-right: 20px; }
-        .section { margin-bottom: 35px; }
-        .section h2 { font-size: 15px; background: #d9d9d9; padding: 6px 10px; margin-bottom: 8px; }
-        table.dataTable { width: 100% !important; border-collapse: collapse; }
-        table.dataTable thead th { background: #d9d9d9; }
-        table.dataTable tfoot td { font-weight: bold; background: #c6efce; }
-        table.summary-table td { padding: 4px 10px; border: 1px solid #ddd; }
-        table.summary-table td.label { font-weight: bold; width: 220px; background: #f5f5f5; }
-    </style>
-</head>
-<body>
+    // Expand ke semua idpo dalam family combine_pro yang sama (termasuk idpo lama
+    // hasil reroute), karena record final inspection bisa nempel di idpo lama
+    // sementara $idpoList yang masuk ke sini adalah idpo AKTIF (pasca reroute).
+    $combineProList = HistoryDataBreakdown::whereIn('idpo', $idpoList)
+        ->pluck('combine_pro')->filter()->unique()->values();
 
-    <h1>Report Final Inspection</h1>
-    <div class="filter-info">
-        <span><strong>Periode:</strong> {{ $filter['periode'] }}</span>
-        <span><strong>Group Buyer:</strong> {{ $filter['groupbuyer'] }}</span>
-        <span><strong>Style:</strong> {{ $filter['style'] }}</span>
-        <span><strong>PO:</strong> {{ $filter['po'] }}</span>
-    </div>
+    $allHistoryIdpo = $combineProList->isEmpty()
+        ? $idpoList
+        : HistoryDataBreakdown::whereIn('combine_pro', $combineProList)
+            ->pluck('idpo')->filter()->unique()->values();
 
-    {{-- ===================== SECTION 1: RINGKASAN ===================== --}}
-    <div class="section">
-        <h2>Ringkasan</h2>
-        <table id="table-summary" class="summary-table">
-            <tbody>
-                <tr><td class="label">Total PO</td><td>{{ $summary['total_po'] }}</td></tr>
-                <tr><td class="label">Total Qty Order</td><td>{{ $summary['total_qty'] }}</td></tr>
-                <tr><td class="label">Total Qty Inspect</td><td>{{ $summary['total_qty_inspect'] }}</td></tr>
-                <tr><td class="label">PO Need Final</td><td>{{ $summary['po_need_final'] }}</td></tr>
-                <tr><td class="label">Overdue</td><td>{{ $summary['overdue'] }}</td></tr>
-                <tr><td class="label">Final Completed</td><td>{{ $summary['final_completed'] }}</td></tr>
-                <tr><td class="label">OQL (%)</td><td>{{ $summary['oql'] }}%</td></tr>
-                <tr><td class="label">Passing Rate (%)</td><td>{{ $summary['passing_rate'] }}%</td></tr>
-                <tr><td class="label">Reject Rate (%)</td><td>{{ $summary['reject_rate'] }}%</td></tr>
-            </tbody>
-        </table>
-    </div>
+    $rows = OutputDetailFinalInspection::query()
+        ->join($od, "$od.barcode", '=', "$fi.barcode")
+        ->whereIn("$od.idpo", $allHistoryIdpo)
+        ->whereNotNull("$fi.date_output")
+        ->where(function ($q) use ($fi) {
+            // defect_code NULL (lolos inspeksi) harus tetap ikut terhitung;
+            // yang dibuang cuma kode grade 800/900
+            $q->whereNull("$fi.defect_code")
+                ->orWhereNotIn("$fi.defect_code", [800, 900]);
+        })
+        ->select(
+            "$od.idpo",
+            "$od.idcolor",
+            "$fi.id as fi_id",
+            "$fi.barcode",
+            "$fi.defect_code"
+        )
+        ->distinct()
+        ->get();
 
-    {{-- ===================== SECTION 2: DETAIL PO ===================== --}}
-    <div class="section">
-        <h2>Detail PO</h2>
-        <table id="table-detail-po" class="display" style="width:100%">
-            <thead>
-                <tr>
-                    <th>No</th>
-                    <th>PO</th>
-                    <th>Style</th>
-                    <th>Color</th>
-                    <th>Buyer</th>
-                    <th>Qty Order</th>
-                    <th>Output</th>
-                    <th>Progress Output (%)</th>
-                    <th>ETD</th>
-                    <th>Days to ETD</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach ($detailPo as $i => $row)
-                <tr>
-                    <td>{{ $i + 1 }}</td>
-                    <td>{{ $row['po'] }}</td>
-                    <td>{{ $row['style'] }}</td>
-                    <td>{{ $row['color'] }}</td>
-                    <td>{{ $row['buyer'] }}</td>
-                    <td>{{ $row['qty_order'] }}</td>
-                    <td>{{ $row['output'] }}</td>
-                    <td>{{ $row['progress_output'] }}</td>
-                    <td>{{ $row['etd'] }}</td>
-                    <td>{{ $row['days_to_etd'] }}</td>
-                    <td>{{ $row['status'] }}</td>
-                </tr>
-                @endforeach
-            </tbody>
-            <tfoot>
-                <tr>
-                    <td colspan="5">TOTAL</td>
-                    <td>{{ $detailPoTotal['qty_order'] }}</td>
-                    <td>{{ $detailPoTotal['output'] }}</td>
-                    <td>{{ $detailPoTotal['progress_output'] }}</td>
-                    <td colspan="3"></td>
-                </tr>
-            </tfoot>
-        </table>
-    </div>
+    // Remap tiap baris ke idpo aktif (hasil reroute) SEBELUM grouping,
+    // supaya data yang nempel di idpo lama tetap tergabung ke PO yang benar.
+    $rows = $rows->map(function ($r) {
+        $active = $this->remapToReroutedIdpo(collect([(string) $r->idpo]))->first();
+        $r->idpo = $active ?: $r->idpo;
+        return $r;
+    });
 
-    {{-- ===================== SECTION 3: OVERVIEW PER STATUS ===================== --}}
-    <div class="section">
-        <h2>Overview per Status</h2>
-        <table id="table-overview" class="display" style="width:100%">
-            <thead>
-                <tr>
-                    <th>Status</th>
-                    <th>Jumlah PO</th>
-                    <th>Qty Order</th>
-                    <th>Qty Inspect</th>
-                    <th>Output</th>
-                    <th>Progress Output (%)</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>Pass</td>
-                    <td>{{ $overview['pass']['count'] }}</td>
-                    <td>{{ $overview['pass']['qty'] }}</td>
-                    <td>{{ $overview['pass']['qty_inspect'] }}</td>
-                    <td>{{ $overview['pass']['output'] }}</td>
-                    <td>{{ $overview['pass']['progress_output'] }}</td>
-                </tr>
-                <tr>
-                    <td>Reject</td>
-                    <td>{{ $overview['reject']['count'] }}</td>
-                    <td>{{ $overview['reject']['qty'] }}</td>
-                    <td>{{ $overview['reject']['qty_inspect'] }}</td>
-                    <td>{{ $overview['reject']['output'] }}</td>
-                    <td>{{ $overview['reject']['progress_output'] }}</td>
-                </tr>
-                <tr>
-                    <td>Need Final</td>
-                    <td>{{ $overview['need_final']['count'] }}</td>
-                    <td>{{ $overview['need_final']['qty'] }}</td>
-                    <td>{{ $overview['need_final']['qty_inspect'] }}</td>
-                    <td>{{ $overview['need_final']['output'] }}</td>
-                    <td>{{ $overview['need_final']['progress_output'] }}</td>
-                </tr>
-            </tbody>
-            <tfoot>
-                <tr>
-                    <td>TOTAL</td>
-                    <td>{{ $overview['total']['total_po'] }}</td>
-                    <td>{{ $overview['total']['qty_order'] }}</td>
-                    <td>{{ $overview['total']['qty_inspect'] }}</td>
-                    <td>{{ $overview['total']['output'] }}</td>
-                    <td>{{ $overview['total']['progress_output'] }}</td>
-                </tr>
-            </tfoot>
-        </table>
-    </div>
+    $keyOf = fn ($r) => $r->idpo . '|' . $r->idcolor;
 
-    {{-- ===================== SECTION 4: TOP 5 DEFECTS ===================== --}}
-    <div class="section">
-        <h2>Top 5 Defects</h2>
-        <table id="table-top-defects" class="display" style="width:100%">
-            <thead>
-                <tr>
-                    <th>Kode Defect</th>
-                    <th>Nama Defect</th>
-                    <th>Qty</th>
-                    <th>Persentase (%)</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach ($topDefects['data'] as $row)
-                <tr>
-                    <td>{{ $row['defect_code'] }}</td>
-                    <td>{{ $row['defect_name'] }}</td>
-                    <td>{{ $row['qty'] }}</td>
-                    <td>{{ $row['percentage'] }}</td>
-                </tr>
-                @endforeach
-            </tbody>
-        </table>
+    // qty_inspect dihitung dari fi_id unik (konsisten dgn buildSummaryFilterData
+    // yang pakai COUNT(DISTINCT fi.id)), bukan dari barcode unik — satu barcode
+    // bisa punya lebih dari satu record final inspection.
+    $qtyInspectMap = $rows->groupBy($keyOf)
+        ->map(fn ($g) => $g->pluck('fi_id')->unique()->count());
 
-        <table class="summary-table" style="margin-top:12px">
-            <tbody>
-                <tr><td class="label">Total Defect</td><td>{{ $topDefects['total_defect'] }}</td></tr>
-                <tr><td class="label">Process</td><td>{{ $topDefects['process'] }}</td></tr>
-                <tr><td class="label">Non Process</td><td>{{ $topDefects['non_process'] }}</td></tr>
-                <tr><td class="label">Non Process (No Grade)</td><td>{{ $topDefects['non_process_no_grade'] }}</td></tr>
-                <tr><td class="label">Process (%)</td><td>{{ $topDefects['process_percent'] }}%</td></tr>
-                <tr><td class="label">Non Process (%)</td><td>{{ $topDefects['non_process_percent'] }}%</td></tr>
-            </tbody>
-        </table>
-    </div>
+    $defectRows = $rows->filter(fn ($row) => !is_null($row->defect_code));
 
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
-    <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
-    <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    $defectQtyMap = $defectRows->groupBy($keyOf)
+        ->map(fn ($g) => $g->pluck('fi_id')->unique()->count());
 
-    <script>
-        $(function () {
-            var filenamePrefix = 'Report_Final_Inspection_{{ str_replace(" ", "_", $filter['periode']) }}';
+    $defectCodes = $defectRows->pluck('defect_code')->filter()->unique()->values();
+    $defectNames = QCDefect::whereIn('kdcacat', $defectCodes)->pluck('deskripsi', 'kdcacat');
+    $defectCategories = QCDefect::whereIn('kdcacat', $defectCodes)->pluck('category', 'kdcacat');
 
-            function initTable(selector, sheetName) {
-                return $(selector).DataTable({
-                    dom: 'Bfrtip',
-                    paging: selector === '#table-detail-po', // tabel besar aja yg dipaging
-                    ordering: true,
-                    searching: selector === '#table-detail-po',
-                    buttons: [
-                        {
-                            extend: 'excelHtml5',
-                            text: 'Export Excel',
-                            title: sheetName,
-                            filename: filenamePrefix + '_' + sheetName.replace(/\s+/g, '_'),
-                        }
-                    ]
-                });
-            }
-
-            initTable('#table-detail-po', 'Detail PO');
-            initTable('#table-overview', 'Overview per Status');
-            initTable('#table-top-defects', 'Top 5 Defects');
-            // table-summary sengaja tidak di-DataTable-kan (key-value, bukan tabular list)
+    // Semua nama defect per idpo+warna (bukan cuma yang paling sering), diurutkan
+    // dari yang paling banyak muncul lalu digabung jadi satu string.
+    $defectNameMap = $defectRows
+        ->groupBy($keyOf)
+        ->map(function ($g) use ($defectNames) {
+            return $g->groupBy('defect_code')
+                ->sortByDesc(fn ($items) => $items->count())
+                ->keys()
+                ->map(fn ($code) => $defectNames->get($code) ?: $code)
+                ->implode(', ');
         });
-    </script>
-</body>
-</html>
+
+    // Jumlah defect (dihitung per fi_id unik) yang tergolong process vs non-process
+    $processMap = collect();
+    $nonProcessMap = collect();
+    foreach ($defectRows->groupBy($keyOf) as $key => $g) {
+        $process = 0;
+        $nonProcess = 0;
+        foreach ($g->groupBy('fi_id') as $fiRows) {
+            $category = (int) $defectCategories->get($fiRows->first()->defect_code, 0);
+            $category === 1 ? $process++ : $nonProcess++;
+        }
+        $processMap->put($key, $process);
+        $nonProcessMap->put($key, $nonProcess);
+    }
+
+    $result = collect();
+    foreach ($qtyInspectMap as $key => $qty) {
+        $result->put($key, [
+            'qty_inspect' => $qty,
+            'defect_qty' => $defectQtyMap->get($key, 0),
+            'defect_name' => $defectNameMap->get($key, '-'),
+            'process' => $processMap->get($key, 0),
+            'non_process' => $nonProcessMap->get($key, 0),
+        ]);
+    }
+    return $result;
+}
