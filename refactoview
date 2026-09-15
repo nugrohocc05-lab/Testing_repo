@@ -623,10 +623,20 @@
             hasFiltered = false;
         });
 
-        // Render murni dari response summaryFilter (dipakai baik oleh loadCards()
-        // yang manggil AJAX sendiri, maupun oleh loadDashboardAll() yang sudah
-        // punya datanya dari endpoint gabungan). Isi function ini SAMA PERSIS
-        // dengan success callback loadCards() sebelumnya, tidak ada yang diubah.
+        // ============================================================
+        // RENDER FUNCTIONS
+        // ------------------------------------------------------------
+        // Ini adalah isi asli dari masing-masing success callback
+        // (loadCards, loadTable, loadTableTopDefect, loadTableFinalOver,
+        // loadChart) yang dipindah jadi fungsi terpisah, TANPA mengubah
+        // satu baris pun logic render/DOM-nya. Tujuannya supaya bisa
+        // dipakai baik oleh load*() versi lama (1 ajax per section)
+        // maupun loadDashboard() versi baru (1 ajax untuk semua section)
+        // -- hasil yang ditampilkan ke user dijamin identik karena kode
+        // render-nya sama persis, cuma sumber datanya (response) yang
+        // beda jalur.
+        // ============================================================
+
         function renderCards(response) {
             $('#totalpo').text(response.total_po ?? '-');
             $('#totalqty').text(response.total_qty ?? '-');
@@ -665,35 +675,6 @@
             updateDataTime();
         }
 
-        // Dipertahankan untuk kompatibilitas/fallback (tidak dipakai lagi oleh
-        // tombol Find setelah refactor, tapi tetap berfungsi persis seperti dulu
-        // jika suatu saat dipanggil manual).
-        function loadCards(filter) {
-            $.ajax({
-                url: "{{ route('monitoring_finalinspection_summaryfilter') }}",
-                type: "GET",
-                data: filter,
-
-                beforeSend: function () {
-                    $('#loading').show();
-                },
-
-                success: function (response) {
-                    renderCards(response);
-                },
-
-                error: function (xhr) {
-                    console.log(xhr.responseText);
-                },
-
-                complete: function () {
-                    $('#loading').hide();
-                }
-            });
-        }
-
-        // Render murni dari response priorityFinal. Isi SAMA PERSIS dengan success
-        // callback loadTable() sebelumnya.
         function renderTable(response) {
             let rows = response.data || [];
             let total = response.total || {};
@@ -740,7 +721,10 @@
                                 ${row.output ?? '-'}
                             </td>
 
-                            <td class="text-center" style="color:#4CF299;">
+                            <td
+                                class="text-center"
+                                style="color:#4CF299;"
+                            >
                                 ${row.progress_output ?? '-'}%
                             </td>
 
@@ -784,26 +768,6 @@
             );
         }
 
-        // Dipertahankan untuk kompatibilitas/fallback.
-        function loadTable(filter) {
-            $.ajax({
-                url: "{{ route('monitoring_finalinspection_priorityfinal') }}",
-                type: "GET",
-                data: filter,
-
-                success: function (response) {
-                    renderTable(response);
-                },
-
-                error: function (xhr) {
-                    console.log(xhr.responseText);
-                }
-            });
-        }
-
-        // Render murni dari response topDefects. Isi SAMA PERSIS dengan success
-        // callback loadTableTopDefect() sebelumnya (termasuk pemanggilan
-        // loadDefectCategoryChart(response) di dalamnya).
         function renderTableTopDefect(response) {
             let rows = response.data || [];
             let total = Number(response.total || 0);
@@ -865,22 +829,6 @@
 
                 $('#footTotalDefectPct').text('100%');
             }
-        }
-
-        // Dipertahankan untuk kompatibilitas/fallback.
-        function loadTableTopDefect(filter) {
-            $.ajax({
-                url: "{{ route('monitoring_finalinspection_topdefect') }}",
-                type: "GET",
-                data: filter,
-
-                success: function (response) {
-                    renderTableTopDefect(response);
-                },
-                error: function (xhr) {
-                    console.log(xhr.responseText);
-                }
-            });
         }
 
        let defectCategoryChart = null;
@@ -1067,8 +1015,6 @@
             }
         });
 
-        // Render murni dari response finalOverview. Isi SAMA PERSIS dengan success
-        // callback loadTableFinalOver() sebelumnya.
         function renderTableFinalOver(response) {
             let rows = response.data || [];
 
@@ -1213,24 +1159,6 @@
             $('#foottotProgress').text(
                 Number(total.progress_output ?? 0).toLocaleString() + '%'
             );
-        }
-
-        // Dipertahankan untuk kompatibilitas/fallback.
-        function loadTableFinalOver(filter) {
-            $.ajax({
-                url: "{{ route('monitoring_finalinspection_finaloverview') }}",
-                type: "GET",
-                data: filter,
-
-                success: function (response) {
-                    renderTableFinalOver(response);
-                },
-
-                error: function (xhr) {
-                    console.log('AJAX Error:', xhr);
-                    console.log('Response:', xhr.responseText);
-                }
-            });
         }
 
         const chartInstances = {};
@@ -1407,8 +1335,6 @@
         }
 
 
-        // Render murni dari response chartData. Isi SAMA PERSIS dengan success
-        // callback loadChart() sebelumnya.
         function renderChart(response) {
             const row = (response.data && response.data[0]) || {};
 
@@ -1450,56 +1376,6 @@
             );
         }
 
-        // Dipertahankan untuk kompatibilitas/fallback.
-        function loadChart(filter) {
-            $.ajax({
-                url: "{{ route('monitoring_finalinspection_chartdata') }}",
-                type: "GET",
-                data: filter,
-                success: function (response) {
-                    renderChart(response);
-                },
-                error: function (xhr) {
-                    console.log(xhr.responseText);
-                }
-            });
-        }
-
-        // ENDPOINT BARU: satu AJAX call ke dashboardAll() yang mengembalikan
-        // summary + priority_final + final_overview + chart + top_defect
-        // sekaligus. Setelah response datang, dipanggil render*() yang PERSIS
-        // sama dengan yang dipakai versi lama (renderCards, renderTable, dst) -
-        // jadi cara data ditampilkan di layar tidak berubah sama sekali,
-        // hanya jumlah request ke server yang berubah dari 5 jadi 1.
-        function loadDashboardAll(filter) {
-            $.ajax({
-                url: "{{ route('monitoring_finalinspection_dashboardall') }}",
-                type: "GET",
-                data: filter,
-
-                beforeSend: function () {
-                    $('#loading').show();
-                },
-
-                success: function (response) {
-                    renderCards(response.summary || {});
-                    renderTable(response.priority_final || {});
-                    renderTableFinalOver(response.final_overview || {});
-                    renderChart(response.chart || {});
-                    renderTableTopDefect(response.top_defect || {});
-                },
-
-                error: function (xhr) {
-                    console.log(xhr.responseText);
-                    swal('Error!', 'Failed to load dashboard data', 'error');
-                },
-
-                complete: function () {
-                    $('#loading').hide();
-                }
-            });
-        }
-
         function updateDataTime() {
             let now = new Date();
             let day = String(now.getDate()).padStart(2, '0');
@@ -1521,6 +1397,148 @@
 
         updateDataTime();
         window.updateDataTime = updateDataTime;
+
+        // ============================================================
+        // LOAD FUNCTIONS (versi lama, 1 ajax per section)
+        // ------------------------------------------------------------
+        // Sengaja TIDAK dihapus. Isinya sekarang cuma pemanggilan ajax
+        // ke endpoint lama masing-masing, lalu success-nya memanggil
+        // render*() di atas (bukan lagi menulis DOM langsung). Ini
+        // dipertahankan sebagai jalur rollback: kalau loadDashboard()
+        // bermasalah, tinggal kembalikan pemanggilan di #findbtn ke
+        // 5 fungsi ini tanpa perlu ubah apa pun yang lain.
+        // ============================================================
+
+        function loadCards(filter) {
+            $.ajax({
+                url: "{{ route('monitoring_finalinspection_summaryfilter') }}",
+                type: "GET",
+                data: filter,
+
+                beforeSend: function () {
+                    $('#loading').show();
+                },
+
+                success: function (response) {
+                    renderCards(response);
+                },
+
+                error: function (xhr) {
+                    console.log(xhr.responseText);
+                },
+
+                complete: function () {
+                    $('#loading').hide();
+                }
+            });
+        }
+
+        function loadTable(filter) {
+            $.ajax({
+                url: "{{ route('monitoring_finalinspection_priorityfinal') }}",
+                type: "GET",
+                data: filter,
+
+                success: function (response) {
+                    renderTable(response);
+                },
+
+                error: function (xhr) {
+                    console.log(xhr.responseText);
+                }
+            });
+        }
+
+        function loadTableTopDefect(filter) {
+            $.ajax({
+                url: "{{ route('monitoring_finalinspection_topdefect') }}",
+                type: "GET",
+                data: filter,
+
+                success: function (response) {
+                    renderTableTopDefect(response);
+                },
+                error: function (xhr) {
+                    console.log(xhr.responseText);
+                }
+            });
+        }
+
+        function loadTableFinalOver(filter) {
+            $.ajax({
+                url: "{{ route('monitoring_finalinspection_finaloverview') }}",
+                type: "GET",
+                data: filter,
+
+                success: function (response) {
+                    renderTableFinalOver(response);
+                },
+
+                error: function (xhr) {
+                    console.log('AJAX Error:', xhr);
+                    console.log('Response:', xhr.responseText);
+                }
+            });
+        }
+
+        function loadChart(filter) {
+            $.ajax({
+                url: "{{ route('monitoring_finalinspection_chartdata') }}",
+                type: "GET",
+                data: filter,
+                success: function (response) {
+                    renderChart(response);
+                },
+                error: function (xhr) {
+                    console.log(xhr.responseText);
+                }
+            });
+        }
+
+        // ============================================================
+        // OPSI A: satu ajax untuk semua section tombol "Find"
+        // ------------------------------------------------------------
+        // Memanggil endpoint agregat dashboardAll() sekali, lalu
+        // membagi hasilnya (summaryFilter / priorityFinal /
+        // finalOverview / chartData / topDefects) ke render*() yang
+        // SAMA PERSIS dipakai oleh load*() versi lama di atas -- jadi
+        // tampilan yang dihasilkan dijamin identik, cuma jumlah
+        // request HTTP-nya yang berubah dari 5 jadi 1.
+        //
+        // PENTING: perlu route baru di routes -- arahkan ke
+        // FinalInspectionController@dashboardAll, contoh:
+        //   Route::get('finalinspection/dashboard-all',
+        //     [FinalInspectionController::class, 'dashboardAll'])
+        //     ->name('monitoring_finalinspection_dashboardall');
+        // ============================================================
+
+        function loadDashboard(filter) {
+            $.ajax({
+                url: "{{ route('monitoring_finalinspection_dashboardall') }}",
+                type: "GET",
+                data: filter,
+
+                beforeSend: function () {
+                    $('#loading').show();
+                },
+
+                success: function (response) {
+                    renderCards(response.summaryFilter || {});
+                    renderTable(response.priorityFinal || {});
+                    renderTableFinalOver(response.finalOverview || {});
+                    renderChart(response.chartData || {});
+                    renderTableTopDefect(response.topDefects || {});
+                },
+
+                error: function (xhr) {
+                    console.log(xhr.responseText);
+                },
+
+                complete: function () {
+                    $('#loading').hide();
+                }
+            });
+        }
 
         $('#findbtn').on('click', function (e) {
             e.preventDefault();
@@ -1572,7 +1590,13 @@
             }
 
             hasFiltered = true;
-            loadDashboardAll(currentFilter);
+            loadDashboard(currentFilter);
+            // Versi lama (rollback), non-aktifkan baris di atas lalu aktifkan 5 baris ini kalau perlu:
+            // loadCards(currentFilter);
+            // loadTable(currentFilter);
+            // loadTableFinalOver(currentFilter);
+            // loadChart(currentFilter);
+            // loadTableTopDefect(currentFilter);
         });
 
         function generateExcel(data) {
