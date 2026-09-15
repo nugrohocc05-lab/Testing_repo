@@ -98,9 +98,7 @@ class FinalInspectionController extends Controller
         $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
         $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
 
-        // applyPoFilter=false: belum ada style/po yang dipilih di tahap ini
         $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', false, $dta, $dtb);
-        // kriteria qualified idpo sekarang sama persis dgn poSelect
         $qualifiedIdpo = $this->getFinalIdpoList($request, $dta, $dtb);
 
         $qualifiedBuyerIds = $leafRows->whereIn('idpo', $qualifiedIdpo)
@@ -136,7 +134,6 @@ class FinalInspectionController extends Controller
         $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
 
         $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', false, $dta, $dtb);
-        // kriteria qualified idpo sekarang sama persis dgn poSelect
         $qualifiedIdpo = $this->getFinalIdpoList($request, $dta, $dtb);
 
         $styleIds = $leafRows->whereIn('idpo', $qualifiedIdpo)
@@ -170,10 +167,8 @@ class FinalInspectionController extends Controller
         $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
         $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
 
-        // applyPoFilter=true: HARUS sama dengan priorityFinal
         $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true, $dta, $dtb);
 
-        // PO yang ditampilkan harus sama dengan priorityFinal / groupbuyer / styleSelect
         $finalIdpoList = $this->getFinalIdpoList($request, $dta, $dtb);
 
         $poRows = $leafRows->whereIn('idpo', $finalIdpoList)->unique('idpo')->values();
@@ -227,7 +222,7 @@ class FinalInspectionController extends Controller
         }
     }
 
-    // Dipakai: priorityFinal, exportData
+    // priorityFinal, exportData
     private function buildPriorityFinalData(Request $request, Carbon $dta, Carbon $dtb): array
     {
         $fi = (new OutputDetailFinalInspection())->getTable();
@@ -425,7 +420,7 @@ class FinalInspectionController extends Controller
         return response()->json($this->buildPriorityFinalData($request, $dta, $dtb));
     }
 
-    // Dipakai: summaryFilter, exportData
+    // summaryFilter, exportData
     private function buildSummaryFilterData(Request $request, Carbon $dta, Carbon $dtb): array
     {
         $fi = (new OutputDetailFinalInspection())->getTable();
@@ -556,7 +551,6 @@ class FinalInspectionController extends Controller
             ->whereNotNull("$fi.date_output")
             ->count(DB::raw("DISTINCT $od.barcode"));
 
-        // leaf rows dari getLeafHistoryRows() sudah di-cache; tidak perlu dipanggil ulang
         $byIdpoLeaf = $leafRows->groupBy('idpo');
 
         $today = Carbon::today()->startOfDay();
@@ -816,7 +810,7 @@ class FinalInspectionController extends Controller
         return implode(', ', $values);
     }
 
-    // Dipakai: exportData saja
+    // exportData
     private function buildPriorityFinalAdditionalData(Collection $idpoList): Collection
     {
         $fi = (new OutputDetailFinalInspection())->getTable();
@@ -882,7 +876,6 @@ class FinalInspectionController extends Controller
                     ->implode(', ');
             });
 
-        // Jumlah defect (dihitung per fi_id unik) yang tergolong process vs non-process
         $processMap = collect();
         $nonProcessMap = collect();
         foreach ($defectRows->groupBy($keyOf) as $key => $g) {
@@ -962,7 +955,6 @@ class FinalInspectionController extends Controller
 
             'non_process' => $nonProcess,
 
-            // Percentage dari total defect
             'process_percentage' => $defectQty > 0
                 ? round(($process / $defectQty) * 100, 2)
                 : 0,
@@ -974,7 +966,7 @@ class FinalInspectionController extends Controller
 
 
         $filterInfo = [
-            'periode' => $dta->format('d-m-Y') . ' s/d ' . $dtb->format('d-m-Y'),
+            'periode' => $dta->format('d-m-Y') . ' to ' . $dtb->format('d-m-Y'),
             'groupbuyer' => $this->resolveFilterLabel(
                 $request->groupbuyer,
                 fn($ids) => MasterGroupBuyer::whereIn('id', $ids)->pluck('group_name')
@@ -1215,7 +1207,6 @@ class FinalInspectionController extends Controller
         return $this->leafRowsCache[$cacheKey] = $leafRows;
     }
 
-    // Dipakai oleh getLeafHistoryRows() saat applyPoFilter=true & ada filter ?po=
     private function resolveRerouteIdpo($idpo)
     {
         if (!$idpo || $idpo === 'all') {
@@ -1237,7 +1228,7 @@ class FinalInspectionController extends Controller
         return $activeIdpo->isNotEmpty() ? $activeIdpo : collect([$idpo]);
     }
 
-    // Dipakai: resolveRerouteIdpo, getActiveRerouteIdpoList, getRerouteIdpoList,
+    // resolveRerouteIdpo, getActiveRerouteIdpoList, getRerouteIdpoList,
     // resolveRerouteDuplicates, getNetCutoffQty.
     private function getLastHistoryPoRevisi(Collection $idpoList): Collection
     {
@@ -1253,7 +1244,7 @@ class FinalInspectionController extends Controller
             ->map(fn ($rows) => $rows->sortByDesc('revisi')->first());
     }
 
-    // Dipakai: groupbuyer, styleSelect, poSelect, priorityFinal
+    // groupbuyer, styleSelect, poSelect, priorityFinal
     private function getActiveRerouteIdpoList($idpoList)
     {
         $idpoList = collect($idpoList)->filter()->unique()->values();
@@ -1275,7 +1266,7 @@ class FinalInspectionController extends Controller
         return $lastHistory->filter(fn ($row) => (int) $row->qtypo > 0)->keys()->values();
     }
 
-    // Dipakai: priorityFinal (basis idpo untuk hitung output)
+    // priorityFinal (basis idpo untuk hitung output)
     private function getRerouteIdpoList($idpoList)
     {
         $idpoList = collect($idpoList)->filter()->unique()->values();
@@ -1304,7 +1295,7 @@ class FinalInspectionController extends Controller
         return $result->unique()->values();
     }
 
-    // Dipakai: getSplitFinalCheckIdpoList
+    // getSplitFinalCheckIdpoList
     private function resolveRerouteDuplicates(Collection $idpoList): Collection
     {
         if ($idpoList->isEmpty()) {
@@ -1352,7 +1343,7 @@ class FinalInspectionController extends Controller
         ))->values();
     }
 
-    // Dipakai: poSelect, summaryFilter, priorityFinal, finalOverview, chartData
+    // poSelect, summaryFilter, priorityFinal, finalOverview, chartData
     private function getSplitFinalCheckIdpoList(Request $request, Carbon $dta, Carbon $dtb, Carbon $today): array
     {
         $fi = (new OutputDetailFinalInspection())->getTable();
@@ -1360,7 +1351,6 @@ class FinalInspectionController extends Controller
         $po = (new PurchaseOrder())->getTable();
         $dbr = (new HistoryDataBreakdown())->getTable();
 
-        // leaf rows dihitung sekali atas seluruh [dta, dtb], bukan per sub-rentang
         $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true, $dta, $dtb);
         $qtyPerIdpo = $leafRows->groupBy('idpo')->map(fn ($rows) => (int) $rows->sum('qty_ori'));
         $etdPerIdpo = $leafRows->groupBy('idpo')->map(fn ($rows) => $rows->max('deliverydate'));
@@ -1425,7 +1415,7 @@ class FinalInspectionController extends Controller
         return ['overdue' => $overdue->values(), 'need_final' => $needFinal->values()];
     }
 
-    // Dipakai: poSelect, priorityFinal (idpo lama -> idpo aktif hasil reroute)
+    // poSelect, priorityFinal (idpo lama -> idpo aktif hasil reroute)
     private function remapToReroutedIdpo(Collection $idpoList): Collection
     {
         if ($idpoList->isEmpty()) {
@@ -1457,7 +1447,7 @@ class FinalInspectionController extends Controller
             ->unique()->values();
     }
 
-    // Dipakai: buildPriorityFinalData, buildPriorityFinalAdditionalData.
+    // buildPriorityFinalData, buildPriorityFinalAdditionalData.
     private function buildRerouteMap(Collection $idpoList): Collection
     {
         $idpoList = collect($idpoList)->map(fn ($id) => (string) $id)->filter()->unique()->values();
@@ -1491,7 +1481,7 @@ class FinalInspectionController extends Controller
         return $identityMap->map(fn ($idpo) => $newIdpoByOriginal->get($idpo, $idpo));
     }
 
-    // Dipakai: finalOverview saja
+    // finalOverview
     private function redistributeReroutedOutput(Collection $idpoList, Collection $outputPerIdpo): Collection
     {
         if ($idpoList->isEmpty()) {
@@ -1548,7 +1538,7 @@ class FinalInspectionController extends Controller
         return collect($result);
     }
 
-    // Dipakai: finalOverview, chartData
+    // finalOverview, chartData
     private function getNetCutoffQty(Collection $idpoList): int
     {
         if ($idpoList->isEmpty()) {
@@ -1634,7 +1624,3 @@ class FinalInspectionController extends Controller
         return $netQty;
     }
 }
-
-
-Route::get('/finalinspection/dashboard-all', [FinalInspectionController::class, 'dashboardAll'])
-    ->name('monitoring_finalinspection_dashboardall');
