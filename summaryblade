@@ -779,9 +779,6 @@
     </div>
 
     @php
-        $qpRowsPerColumn = 10;
-        $qpChunks = collect($line)->values()->chunk($qpRowsPerColumn);
-
         $qpRowVisual = function (array $d) {
             $isOff = ($d['line_off'] ?? false) || ($d['mps_off'] ?? false);
 
@@ -829,55 +826,56 @@
             ];
         };
     @endphp
+
     <div class="qp-body">
-        <div class="qp-columns-outer" id="qpColumnsOuter">
-            <div class="qp-columns-track" id="qpColumnsTrack">
-                @foreach ($qpChunks as $qpChunk)
-                    <div class="qp-column">
-                        <div class="qp-col-header">
-                            <div class="qp-grid p-2 px-lg-1 py-lg-4">
-                                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">Line</span>
-                                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center text-center color-box-yellow">
-                                    <span class="label-short">INSPECT</span>
-                                    <span class="label-full">INSPECT QTY</span>
-                                </span>
-                                <span class="bg-card-rft rounded-3 d-flex justify-content-center align-items-center">RFT</span>
-                                <span class="bg-card-wft rounded-3 d-flex justify-content-center align-items-center">WFT</span>
-                                <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">TLS</span>
-                            </div>
-                        </div>
-
-                        <div class="qp-list">
-                            @foreach ($qpChunk as $d)
-                                @php $v = $qpRowVisual($d); @endphp
-                                <div class="qp-row bg-card-line rounded-3">
-                                    <div class="qp-grid px-2 px-lg-1">
-                                        <span class="d-flex justify-content-center align-items-center" style="border-right: 1px solid rgba(255,255,255,.08)">{{ $d['line_id'] }}</span>
-
-                                        @if ($v['isOff'])
-                                            <span class="d-flex justify-content-center align-items-center text-center {{ ($d['line_off'] ?? false) ? 'text-white' : '' }}" style="grid-column: span 3;border-right: 1px solid rgba(255,255,255,.08)">
-                                                {{ $v['statusLabel'] }}
-                                            </span>
-                                        @else
-                                            <span class="d-flex justify-content-center align-items-center text-center " style="border-right: 1px solid rgba(255,255,255,.08)">{{ $d['tot_inspect'] }}</span>
-                                            <span class="d-flex justify-content-center align-items-center" style="border-right: 1px solid rgba(255,255,255,.08)">{{ $d['rft'] }} %</span>
-                                            <span class="d-flex justify-content-center align-items-center" style="border-right: 1px solid rgba(255,255,255,.08)">{{ $d['wft'] }} %</span>
-                                        @endif
-
-                                        <div class="tls-cell">
-                                            <span class="number-circle {{ $v['more3Class'] }}" style="background-color: {{ $v['more3Color'] }};"></span>
-                                            <span class="number-circle {{ $v['defectClass'] }}" style="background-color: {{ $v['defectColor'] }};"></span>
-                                            <span class="number-circle {{ $v['noDefectClass'] }}" style="background-color: {{ $v['noDefectColor'] }};"></span>
-                                            <span class="number-circle {{ $v['oilClass'] }}" style="background-color: {{ $v['oilColor'] }};"></span>
-                                        </div>
-                                    </div>
-                                </div>
-                            @endforeach
-                        </div>
-                    </div>
-                @endforeach
+        {{-- Template header kolom — di-clone oleh JS untuk tiap kolom yang dibuat dinamis --}}
+        <template id="qpColHeaderTemplate">
+            <div class="qp-col-header">
+                <div class="qp-grid p-2 px-lg-1 py-lg-4">
+                    <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">Line</span>
+                    <span class="bg-card rounded-3 d-flex justify-content-center align-items-center text-center color-box-yellow">
+                        <span class="label-short">INSPECT</span>
+                        <span class="label-full">INSPECT QTY</span>
+                    </span>
+                    <span class="bg-card-rft rounded-3 d-flex justify-content-center align-items-center">RFT</span>
+                    <span class="bg-card-wft rounded-3 d-flex justify-content-center align-items-center">WFT</span>
+                    <span class="bg-card rounded-3 d-flex justify-content-center align-items-center">TLS</span>
+                </div>
             </div>
+        </template>
+
+        <div class="qp-columns-outer" id="qpColumnsOuter">
+            <div class="qp-columns-track" id="qpColumnsTrack"></div>
         </div>
+    </div>
+
+    {{-- Sumber data flat (disembunyikan) — dipindahkan JS ke kolom yang dibangun dinamis --}}
+    <div id="qpFlatRows" style="display:none;">
+        @foreach ($line as $d)
+            @php $v = $qpRowVisual($d); @endphp
+            <div class="qp-row bg-card-line rounded-3">
+                <div class="qp-grid px-2 px-lg-1">
+                    <span class="d-flex justify-content-center align-items-center" style="border-right: 1px solid rgba(255,255,255,.08)">{{ $d['line_id'] }}</span>
+
+                    @if ($v['isOff'])
+                        <span class="d-flex justify-content-center align-items-center text-center {{ ($d['line_off'] ?? false) ? 'text-white' : '' }}" style="grid-column: span 3;border-right: 1px solid rgba(255,255,255,.08)">
+                            {{ $v['statusLabel'] }}
+                        </span>
+                    @else
+                        <span class="d-flex justify-content-center align-items-center text-center " style="border-right: 1px solid rgba(255,255,255,.08)">{{ $d['tot_inspect'] }}</span>
+                        <span class="d-flex justify-content-center align-items-center" style="border-right: 1px solid rgba(255,255,255,.08)">{{ $d['rft'] }} %</span>
+                        <span class="d-flex justify-content-center align-items-center" style="border-right: 1px solid rgba(255,255,255,.08)">{{ $d['wft'] }} %</span>
+                    @endif
+
+                    <div class="tls-cell">
+                        <span class="number-circle {{ $v['more3Class'] }}" style="background-color: {{ $v['more3Color'] }};"></span>
+                        <span class="number-circle {{ $v['defectClass'] }}" style="background-color: {{ $v['defectColor'] }};"></span>
+                        <span class="number-circle {{ $v['noDefectClass'] }}" style="background-color: {{ $v['noDefectColor'] }};"></span>
+                        <span class="number-circle {{ $v['oilClass'] }}" style="background-color: {{ $v['oilColor'] }};"></span>
+                    </div>
+                </div>
+            </div>
+        @endforeach
     </div>
 
     <div class="legend text-white">
@@ -986,13 +984,93 @@
         wrap.style.height = Math.max(available - 8, 300) + 'px';
     }
 
+    // ===== Distribusi baris ke kolom secara dinamis (max 4 kolom, sesuai breakpoint) =====
+
+    function qpGetColumnCount(width) {
+        if (width < 768) return 1;
+        if (width < 992) return 2;
+        if (width <= 1400) return 3;
+        return 4;
+    }
+
+    function qpBuildColumns() {
+        var flatContainer = document.getElementById('qpFlatRows');
+        var track = document.getElementById('qpColumnsTrack');
+        var headerTpl = document.getElementById('qpColHeaderTemplate');
+        if (!flatContainer || !track || !headerTpl) return;
+
+        // kembalikan row yang sudah pernah dipindah ke kolom sebelumnya, balikin ke flat container dulu
+        var existingRows = track.querySelectorAll('.qp-row');
+        existingRows.forEach(function (r) { flatContainer.appendChild(r); });
+        track.innerHTML = '';
+
+        var rows = Array.prototype.slice.call(flatContainer.querySelectorAll('.qp-row'));
+        var totalRows = rows.length;
+        if (totalRows === 0) return;
+
+        var columnsCount = qpGetColumnCount(window.innerWidth);
+        var rowsPerColumn = Math.ceil(totalRows / columnsCount);
+
+        for (var c = 0; c < columnsCount; c++) {
+            var colStart = c * rowsPerColumn;
+            if (colStart >= totalRows) break;
+
+            var colEl = document.createElement('div');
+            colEl.className = 'qp-column';
+            colEl.appendChild(headerTpl.content.cloneNode(true));
+
+            var listEl = document.createElement('div');
+            listEl.className = 'qp-list';
+
+            rows.slice(colStart, colStart + rowsPerColumn).forEach(function (r) {
+                listEl.appendChild(r);
+            });
+
+            colEl.appendChild(listEl);
+            track.appendChild(colEl);
+        }
+    }
+
+    function qpApplyRowHeights() {
+        var isDesktop = qpIsDesktop();
+        var lists = document.querySelectorAll('.qp-list');
+        var gap = 6; // samakan dengan CSS .qp-list { gap: 6px }
+
+        lists.forEach(function (list) {
+            var rows = list.querySelectorAll('.qp-row');
+            if (!rows.length) return;
+
+            if (!isDesktop) {
+                rows.forEach(function (r) {
+                    r.style.height = '';
+                    r.style.maxHeight = '';
+                });
+                return;
+            }
+
+            var availableHeight = list.clientHeight;
+            var rowHeight = Math.floor((availableHeight - gap * (rows.length - 1)) / rows.length);
+            rowHeight = Math.max(rowHeight, 24); // batas aman minimum keterbacaan
+
+            rows.forEach(function (r) {
+                r.style.height = rowHeight + 'px';
+                r.style.maxHeight = rowHeight + 'px';
+            });
+        });
+    }
+
     var qpResizeTimer = null;
     function qpRefreshLayoutDebounced() {
         clearTimeout(qpResizeTimer);
         qpResizeTimer = setTimeout(qpRefreshLayout, 120);
     }
+
     function qpRefreshLayout() {
+        qpBuildColumns();
         qpAdjustDashboardHeight();
+        requestAnimationFrame(function () {
+            qpApplyRowHeights();
+        });
     }
 
     if (document.fonts && document.fonts.ready) {
@@ -1002,6 +1080,8 @@
     window.addEventListener('load', qpRefreshLayout);
     window.addEventListener('resize', qpRefreshLayoutDebounced);
     document.addEventListener('DOMContentLoaded', qpRefreshLayout);
+    document.addEventListener('fullscreenchange', qpRefreshLayoutDebounced);
+    document.addEventListener('webkitfullscreenchange', qpRefreshLayoutDebounced);
 
 </script>
 @endsection
