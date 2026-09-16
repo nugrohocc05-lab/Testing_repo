@@ -1,114 +1,450 @@
-function buildInlineLtsData($line, $date = null)
-{
-    $raw = $this->fetchInlineLtsRaw($line, $date);
+<style>
+    .wrapper-sub {
+        height: 100%;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
 
-    $operators              = $raw['operators'];
-    $detailsByHeader        = $raw['detailsByHeader'];
-    $headersByOperatorRound = $raw['headersByOperatorRound'];
+    .chart-donut {
+        width: 100%;
+        flex: 1 1 auto;
+        min-height: 0;
+    }
 
-    // Hitung status per operator, berurutan dari round 1 -> max, sambil bawa histori
-    $statusByOperatorRound = [];
+    .subheader {
+        font-size: clamp(10px, 0.8vw, 13px);
+        line-height: 1.2;
+        padding: 4px 6px 0;
+        flex-shrink: 0;
+    }
 
-    foreach ($operators as $op) {
-        $okStreak     = 0;
-        $everHadIssue = false;
+    .chart-title {
+        flex-shrink: 0;
+        font-size: clamp(9px, 0.75vw, 13px);
+        gap: clamp(8px, 1.5vw, 20px) !important;
+        padding: 0 5px 6px;
+    }
 
-        for ($r = 1; $r <= $raw['max_round']; $r++) {
-            $key = $op['nik'] . '-' . $r;
-            $headerGroup = $headersByOperatorRound->get($key);
+    .col > .border-custom-datatable {
+        overflow: hidden;
+    }
 
-            if (!$headerGroup || $headerGroup->isEmpty()) {
-                // Round kosong -> dilewati, tidak mempengaruhi state
-                $statusByOperatorRound[$op['nik']][$r] = 'empty';
-                continue;
-            }
+    .chart-title .fw-bold {
+        font-size: clamp(9px, 0.75vw, 13px) !important;
+        line-height: 1.1;
+    }
 
-            $hIdsThisCell = $headerGroup->pluck('id');
-            $details = collect();
-            foreach ($hIdsThisCell as $hid) {
-                $details = $details->merge($detailsByHeader->get($hid, collect()));
-            }
+    .chart-title div[id$="-text-1"],
+    .chart-title div[id$="-text-2"],
+    .chart-title div[id$="-text-3"] {
+        font-size: clamp(8px, 0.65vw, 12px) !important;
+        line-height: 1.1;
+    }
 
-            $defectCount = $details->count();
-            $hasCap = $details->contains(function ($d) {
-                return !empty($d->problem) || !empty($d->action) || !empty($d->rootcause);
-            });
+    .chart-title span {
+        width: clamp(8px, 0.7vw, 12px) !important;
+        height: clamp(8px, 0.7vw, 12px) !important;
+        margin-right: clamp(4px, 0.5vw, 8px) !important;
+        flex-shrink: 0;
+    }
 
-            if ($defectCount > 0) {
-                // Defect baru -> merah, chain diulang dari awal
-                $status = $defectCount == 1 ? 'one' : 'multi';
-                $okStreak     = 0;
-                $everHadIssue = true;
-            } elseif ($hasCap) {
-                // CAP diisi round ini -> tetap merah + pensil
-                $status = 'capped';
-                $okStreak     = 0;
-                $everHadIssue = true;
-            } else {
-                // Round bersih (tidak ada defect & tidak ada cap)
-                if ($everHadIssue) {
-                    $okStreak++;
-                    if ($okStreak == 1) {
-                        $status = 'recovering'; // kuning, oke pertama setelah issue
-                    } else {
-                        $status = 'none'; // hijau, sudah 2x oke berturut-turut
-                        $everHadIssue = false; // balik ke baseline normal
-                    }
-                } else {
-                    $status = 'none'; // baseline hijau, memang belum pernah ada masalah
+    @media (min-width: 992px) and (max-width: 1400px) {
+        .subheader {
+            font-size: clamp(9px, 0.75vw, 11px);
+        }
+
+        .chart-title {
+            gap: clamp(6px, 1vw, 14px) !important;
+            margin-top: 4px !important;
+        }
+
+        .chart-title .fw-bold {
+            font-size: clamp(8px, 0.65vw, 11px) !important;
+        }
+
+        .chart-title div[id$="-text-1"],
+        .chart-title div[id$="-text-2"],
+        .chart-title div[id$="-text-3"] {
+            font-size: clamp(7px, 0.6vw, 10px) !important;
+        }
+    }
+
+    @media (max-width: 991.98px) {
+        .subheader {
+            font-size: 11px;
+        }
+
+        .chart-title .fw-bold {
+            font-size: 11px !important;
+        }
+
+        .chart-title div[id$="-text-1"],
+        .chart-title div[id$="-text-2"],
+        .chart-title div[id$="-text-3"] {
+            font-size: 10px !important;
+        }
+    }
+
+    .legend-value {
+        font-size: clamp(10px, 0.65vw, 12px);
+        color: #9ca3af;
+        line-height: 1.1;
+    }
+
+    @media (min-width: 768px) and (max-width: 991.98px) {
+        .panel-bottom > .row {
+            height: 100%;
+        }
+
+        .panel-bottom > .row > .col {
+            height: 300px !important;
+            min-height: 300px !important;
+        }
+
+        .panel-bottom > .row > .col > .border-custom-datatable {
+            height: 100% !important;
+        }
+    }
+</style>
+
+<div class="flex-fill panel-slot panel-bottom">
+    <div class="row row-cols-1 row-cols-lg-3 row-cols-md-3 g-2 h-100">
+
+        <!-- CHART 1 -->
+        <div class="chart-wrapper col">
+            <div class="border-custom-datatable rounded-1 h-100">
+                <div class="wrapper-sub">
+                    <h6 class="subheader mb-0 fw-normal text-truncate">
+                        FINAL INSPECTION RESULT (QTY INSPECT)
+                    </h6>
+
+                    <div id="chart-1" class="chart-donut flex-fill"></div>
+
+                    <div class="chart-title d-flex justify-content-center gap-4 mt-2">
+                        <div class="d-flex">
+                            <div>
+                                <span style="width:12px;height:12px;background:#4ade80;border-radius:2px;display:inline-block;margin-right:8px;"></span>
+                            </div>
+                            <div>
+                                <div class="fw-bold">PASS</div>
+                                <div id="pass-text-1" class="legend-value">0 (0%)</div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex">
+                            <div>
+                                <span style="width:12px;height:12px;background:#f87171;border-radius:2px;display:inline-block;margin-right:8px;"></span>
+                            </div>
+                            <div>
+                                <div class="fw-bold">REJECT</div>
+                                <div id="reject-text-1" class="legend-value">0 (0%)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CHART 2 -->
+        <div class="col">
+            <div class="border-custom-datatable rounded-1 h-100">
+                <div class="wrapper-sub">
+                    <h6 class="subheader mb-0 fw-normal text-truncate">
+                        FINAL INSPECTION RESULT (OQL-DEFECT RATE)
+                    </h6>
+
+                    <div id="chart-2" class="chart-donut flex-fill"></div>
+
+                    <div class="chart-title d-flex justify-content-center gap-4 mt-2">
+                        <div class="d-flex">
+                            <div>
+                                <span style="width:12px;height:12px;background:#3F3184;border-radius:2px;display:inline-block;margin-right:8px;"></span>
+                            </div>
+                            <div>
+                                <div class="fw-bold">OQL (Defect Rate)</div>
+                                <div id="pass-text-2" class="legend-value">0 (0%)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CHART 3 -->
+        <div class="col">
+            <div class="border-custom-datatable rounded-1 h-100">
+                <div class="wrapper-sub">
+                    <h6 class="subheader mb-0 fw-normal text-truncate">
+                        FINAL INSPECTION RESULT (QTY ORDER)
+                    </h6>
+
+                    <div id="chart-3" class="chart-donut flex-fill"></div>
+
+                    <div class="chart-title d-flex justify-content-center gap-4 mt-2">
+                        <div class="d-flex">
+                            <div>
+                                <span style="width:12px;height:12px;background:#4ade80;border-radius:2px;display:inline-block;margin-right:8px;"></span>
+                            </div>
+                            <div>
+                                <div class="fw-bold">PASS</div>
+                                <div id="pass-text-3" class="legend-value">0 (0%)</div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex">
+                            <div>
+                                <span style="width:12px;height:12px;background:#f87171;border-radius:2px;display:inline-block;margin-right:8px;"></span>
+                            </div>
+                            <div>
+                                <div class="fw-bold">REJECT</div>
+                                <div id="reject-text-3" class="legend-value">0 (0%)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+
+    function getFontScale(width, height) {
+        const size = Math.min(width, height);
+
+        if (size <= 90) {
+            return {
+                center: 12,
+                sub: 8
+            };
+        }
+
+        if (size <= 120) {
+            return {
+                center: 15,
+                sub: 9
+            };
+        }
+
+        if (size <= 160) {
+            return {
+                center: 18,
+                sub: 10
+            };
+        }
+
+        return {
+            center: 22,
+            sub: 11
+        };
+    }
+
+    function renderDonutChart(
+        chartId,
+        passValue,
+        rejectValue,
+        totalValue,
+        passTextId,
+        rejectTextId,
+        passColor = '#4ade80',
+        rejectColor = '#f87171',
+        centerLabel = 'Pcs',
+        firstName = 'PASS',
+        valueSuffix = '',
+        showPercentage = true,
+        customTooltip = null
+    ) {
+        const total = Number(totalValue) || 0;
+        const pass = Number(passValue) || 0;
+        const reject = Number(rejectValue) || 0;
+
+        const passPct = total > 0
+            ? ((pass / total) * 100).toFixed(2)
+            : 0;
+
+        const rejectPct = total > 0
+            ? ((reject / total) * 100).toFixed(2)
+            : 0;
+
+        if (passTextId && document.getElementById(passTextId)) {
+            document.getElementById(passTextId).innerText =
+                showPercentage
+                    ? pass.toLocaleString('id-ID') + ' (' + passPct + '%)'
+                    : pass.toLocaleString('id-ID');
+        }
+
+        if (rejectTextId && document.getElementById(rejectTextId)) {
+            document.getElementById(rejectTextId).innerText =
+                reject.toLocaleString('id-ID') + ' (' + rejectPct + '%)';
+        }
+
+        const chartDom = document.getElementById(chartId);
+
+        if (!chartDom) return;
+
+        const myChart = echarts.init(chartDom);
+
+        const data = [
+            {
+                value: pass,
+                name: firstName,
+                itemStyle: {
+                    color: passColor
                 }
             }
-
-            $statusByOperatorRound[$op['nik']][$r] = $status;
-        }
-    }
-
-    // Susun ulang jadi struktur per-round (untuk tabel)
-    $rounds = [];
-    for ($r = 1; $r <= $raw['max_round']; $r++) {
-        $cells = [];
-        $roundHasDefect = false;
-        $roundHasCap    = false;
-
-        foreach ($operators as $op) {
-            $status = $statusByOperatorRound[$op['nik']][$r] ?? 'empty';
-            $cells[] = ['status' => $status];
-
-            if (in_array($status, ['one', 'multi'])) $roundHasDefect = true;
-            if ($status === 'capped') $roundHasCap = true;
-        }
-
-        $rounds[] = [
-            'round'      => $r,
-            'cells'      => $cells,
-            'has_defect' => $roundHasDefect,
-            'has_cap'    => $roundHasCap,
         ];
+
+        if (rejectTextId) {
+            data.push({
+                value: reject,
+                name: 'REJECT',
+                itemStyle: {
+                    color: rejectColor
+                }
+            });
+        }
+
+        function buildOption() {
+            const width = chartDom.clientWidth || 150;
+            const height = chartDom.clientHeight || 150;
+
+            const { center, sub } = getFontScale(width, height);
+
+            let tooltipFontSize = 12;
+            let tooltipPadding = [5, 8];
+
+            if (width >= 992 && width <= 1400) {
+                tooltipFontSize = 9;
+                tooltipPadding = [3, 5];
+            } else if (width < 992) {
+                tooltipFontSize = 10;
+                tooltipPadding = [4, 6];
+            }
+
+            return {
+                backgroundColor: 'transparent',
+
+                tooltip: {
+                    trigger: 'item',
+                    formatter: customTooltip || '{b}: {c} ({d}%)',
+
+                    textStyle: {
+                        fontSize: tooltipFontSize,
+                        lineHeight: 1.2
+                    },
+
+                    padding: tooltipPadding,
+
+                    extraCssText: `
+                        border-radius: 4px !important;
+                        line-height: 1.2 !important;
+                    `
+                },
+
+                series: [
+                    {
+                        name: 'Inspection Result',
+                        type: 'pie',
+                        radius: [
+                            '52%',
+                            '70%'
+                        ],
+                        center: ['50%', '50%'],
+                        avoidLabelOverlap: false,
+                        label: {
+                            show: false
+                        },
+                        labelLine: {
+                            show: false
+                        },
+                        data: data
+                    }
+                ],
+
+                graphic: [
+                    {
+                        type: 'text',
+                        left: 'center',
+                        top: '43%',
+                        style: {
+                            text: total.toLocaleString('id-ID') + valueSuffix,
+                            textAlign: 'center',
+                            fill: '#ffffff',
+                            fontSize: center,
+                            fontWeight: 'bold'
+                        }
+                    },
+                    {
+                        type: 'text',
+                        left: 'center',
+                        top: '57%',
+                        style: {
+                            text: centerLabel,
+                            textAlign: 'center',
+                            fill: '#ffffff',
+                            fontSize: sub,
+                            fontWeight: 'normal'
+                        }
+                    }
+                ]
+            };
+        }
+
+        myChart.setOption(buildOption());
+
+        const ro = new ResizeObserver(() => {
+            myChart.resize();
+            myChart.setOption(buildOption());
+        });
+
+        ro.observe(chartDom);
     }
 
-    return [
-        'tot_inspect' => $raw['tot_inspect'],
-        'tot_defect'  => $raw['tot_defect'],
-        'rft'         => $raw['rft'],
-        'wft'         => $raw['wft'],
-        'operators'   => $operators,
-        'rounds'      => $rounds,
-    ];
-}
+    renderDonutChart(
+        'chart-1',
+        0,
+        0,
+        0,
+        'pass-text-1',
+        'reject-text-1'
+    );
 
+    renderDonutChart(
+        'chart-2',
+        0,
+        0,
+        0,
+        'pass-text-2',
+        null,
+        '#3F3184',
+        '#374151',
+        'Pcs',
+        'OQL',
+        '',
+        false,
+        function (params) {
+            return params.name + ': ' + params.value + ' %';
+        }
+    );
 
+    const oqlText = document.getElementById('pass-text-2');
 
-$statusIcon = [
-    'none'       => '<img src="' . _asset('svg/inlinePerformance/checklist.svg') . '" alt="No Defect">',
-    'one'        => '',
-    'multi'      => '<img src="' . _asset('svg/inlinePerformance/defect2.svg') . '" alt="Multi Defect">',
-    'capped'     => '<img src="' . _asset('svg/inlinePerformance/pencil-white.svg') . '" alt="CAP Filled">',
-    'recovering' => '',
-];
+    if (oqlText) {
+        oqlText.innerText = '0%';
+    }
 
+    renderDonutChart(
+        'chart-3',
+        0,
+        0,
+        0,
+        'pass-text-3',
+        'reject-text-3'
+    );
 
-.status-none        { background-color: #219653; }
-.status-one,
-.status-multi       { background-color: #F24C4C; }
-.status-capped      { background-color: #F24C4C; }  /* merah + pensil */
-.status-recovering  { background-color: #F9E21D; }  /* kuning, oke pertama setelah issue */
+});
+</script>
