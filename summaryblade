@@ -1,250 +1,284 @@
-public function updateCap(Request $request, $id)
-{
-    $output = SewingOutput::findOrFail($id);
+ function endlinetls(Request $request)
+    {
+        preconnect(session('db'));
 
-    $output->problem    = $request->problem;
-    $output->nik_pic    = $request->nik_pic;
-    $output->action     = $request->action;
-    $output->root_cause = $request->root_cause;
+        $date = Carbon::today();
 
-    // Cek apakah keempat kolom cap sudah lengkap
-    $capColumns    = ['problem', 'nik_pic', 'action', 'root_cause'];
-    $isCapComplete = collect($capColumns)->every(fn ($col) => !empty($output->{$col}));
+        // Line
+        $g = (new MasterEmployeeGroup())->getTable();
+        $s = (new MasterEmployeeSection())->getTable();
 
-    if ($isCapComplete) {
-        $output->updated_at = now();
-    }
+        $lines = MasterEmployeeGroup::select(
+                "$g.id as kodegroup",
+                "$g.name as namagroup",
+            )
+            ->join($s, "$s.id", '=', "$g.section_id")
+            ->distinct()
+            ->whereHas('groupline', function ($q) {
+                $q->where('factory_id', session('db')->iddb)
+                    ->where('is_show', 1)
+                    ->where('is_line', 1);
+            });
 
-    $output->save();
+        if ($request->q) {
+            $lines->where(function ($q) use ($request, $g) {
+                $q->where("$g.name", 'like', "%$request->q%");
+            });
+        }
 
-    return response()->json(['success' => true]);
-}
+        $lines = $lines->orderBy('kodegroup')->get();
 
-function endlinetls(Request $request)
-{
-    preconnect(session('db'));
+        $lineIds = $lines->pluck('kodegroup');
 
-    $date = Carbon::today();
+        try {
+            $mpLineParam = ($lp = FactoryParameter::find('line_mapping_tolerance'))
+                ? $lp->value * 1
+                : 30;
+        } catch (\Exception $e) {
+            $mpLineParam = 30;
+        }
 
-    // Line
-    $g = (new MasterEmployeeGroup())->getTable();
-    $s = (new MasterEmployeeSection())->getTable();
+        try {
+            $mpMinusParam = FactoryParameter::where('key', 'line_mpminus')->first();
+            $mpMinusParam = $mpMinusParam ? $mpMinusParam->value : -3;
+        } catch (\Exception $e) {
+            $mpMinusParam = -3;
+        }
 
-    $lines = MasterEmployeeGroup::select(
-            "$g.id as kodegroup",
-            "$g.name as namagroup",
-        )
-        ->join($s, "$s.id", '=', "$g.section_id")
-        ->distinct()
-        ->whereHas('groupline', function ($q) {
-            $q->where('factory_id', session('db')->iddb)
-                ->where('is_show', 1)
-                ->where('is_line', 1);
-        });
-
-    if ($request->q) {
-        $lines->where(function ($q) use ($request, $g) {
-            $q->where("$g.name", 'like', "%$request->q%");
-        });
-    }
-
-    $lines = $lines->orderBy('kodegroup')->get();
-
-    $lineIds = $lines->pluck('kodegroup');
-
-    try {
-        $mpLineParam = ($lp = FactoryParameter::find('line_mapping_tolerance'))
-            ? $lp->value * 1
-            : 30;
-    } catch (\Exception $e) {
-        $mpLineParam = 30;
-    }
-
-    try {
-        $mpMinusParam = FactoryParameter::where('key', 'line_mpminus')->first();
-        $mpMinusParam = $mpMinusParam ? $mpMinusParam->value : -3;
-    } catch (\Exception $e) {
-        $mpMinusParam = -3;
-    }
-
-    $statsByLine = SewingOutput::whereBetween('date', [
+        $statsByLine = SewingOutput::whereBetween('date', [
             $date->copy()->startOfDay(),
             $date->copy()->endOfDay()
         ])
         ->whereIn('line', $lineIds)
         ->selectRaw("
             line,
-            SUM(CASE WHEN is_qc = 1 THEN 1 ELSE 0 END) as tot_inspect,
-            SUM(CASE WHEN defect_code IS NOT NULL THEN 1 ELSE 0 END) as tot_defect,
-            SUM(CASE WHEN defect_code IS NOT NULL AND updated_at IS NULL
-                THEN 1 ELSE 0 END) as tot_defect_cap,
-            SUM(CASE WHEN defect_code IS NOT NULL AND defect_code NOT IN (602)
-                THEN 1 ELSE 0 END) as defect_not_oil,
-            SUM(CASE WHEN is_qc = 1 AND defect_code IN (602)
-                THEN 1 ELSE 0 END) as tot_oil_defect,
-            SUM(CASE WHEN is_qc = 1 AND defect_code IN (602) AND updated_at IS NULL
-                THEN 1 ELSE 0 END) as oil_defect_uncapped,
-            SUM(CASE WHEN is_output = 1 AND qc_seq = 0 AND defect_code IS NULL
-                THEN 1 ELSE 0 END) as tot_rft
+
+            SUM(CASE
+                WHEN is_qc = 1
+                THEN 1 ELSE 0
+            END) as tot_inspect,
+
+            SUM(CASE
+                WHEN defect_code IS NOT NULL
+                THEN 1 ELSE 0
+            END) as tot_defect,
+
+            SUM(CASE
+                WHEN defect_code IS NOT NULL
+                AND updated_at IS NULL
+                THEN 1 ELSE 0
+            END) as tot_defect_cap,
+
+            SUM(CASE
+                WHEN defect_code IS NOT NULL
+                AND defect_code NOT IN (602)
+                THEN 1 ELSE 0
+            END) as defect_not_oil,
+
+            SUM(CASE
+                WHEN is_qc = 1
+                AND defect_code = 602
+                THEN 1 ELSE 0
+            END) as tot_oil_defect,
+
+            SUM(CASE
+                WHEN is_qc = 1
+                AND defect_code = 602
+                AND updated_at IS NULL
+                THEN 1 ELSE 0
+            END) as oil_defect_uncapped,
+
+            MAX(CASE
+                WHEN is_qc = 1
+                AND defect_code = 602
+                AND updated_at IS NOT NULL
+                THEN updated_at
+            END) as last_oil_cap_at,
+
+            SUM(CASE
+                WHEN is_output = 1
+                AND qc_seq = 0
+                AND defect_code IS NULL
+                THEN 1 ELSE 0
+            END) as tot_rft
         ")
         ->groupBy('line')
         ->get()
         ->keyBy('line');
 
-    $incompleteCapLines = $statsByLine
-        ->filter(fn ($row) => $row->tot_defect_cap > 0)
-        ->keys()
-        ->flip();
+        $incompleteCapLines = $statsByLine
+            ->filter(fn ($row) => $row->tot_defect_cap > 0)
+            ->keys()
+            ->flip();
 
-    $lines = $lines->map(function ($line) use (
-        $mpLineParam,
-        $mpMinusParam,
-        $statsByLine,
-        $incompleteCapLines
-    ) {
-        $lineId = $line->kodegroup;
-        $stat   = $statsByLine->get($lineId);
+        $lines = $lines->map(function ($line) use (
+            $mpLineParam,
+            $mpMinusParam,
+            $statsByLine,
+            $incompleteCapLines
+        ) {
+            $lineId = $line->kodegroup;
+            $stat   = $statsByLine->get($lineId);
 
-        $totInspect        = (int) ($stat->tot_inspect ?? 0);
-        $totDefect         = (int) ($stat->tot_defect ?? 0);
-        $totDefectCap      = (int) ($stat->tot_defect_cap ?? 0);
-        $defectNotOil      = (int) ($stat->defect_not_oil ?? 0);
-        $totOilDefect      = (int) ($stat->tot_oil_defect ?? 0);
-        $oilDefectUncapped = (int) ($stat->oil_defect_uncapped ?? 0);
-        $totRft            = (int) ($stat->tot_rft ?? 0);
-        $capFilled         = !isset($incompleteCapLines[$lineId]);
+            $totInspect        = (int) ($stat->tot_inspect ?? 0);
+            $totDefect         = (int) ($stat->tot_defect ?? 0);
+            $totDefectCap      = (int) ($stat->tot_defect_cap ?? 0);
+            $defectNotOil      = (int) ($stat->defect_not_oil ?? 0);
+            $totOilDefect      = (int) ($stat->tot_oil_defect ?? 0);
+            $oilDefectUncapped = (int) ($stat->oil_defect_uncapped ?? 0);
+            $totRft            = (int) ($stat->tot_rft ?? 0);
+            $capFilled         = !isset($incompleteCapLines[$lineId]);
 
-        $rft = $totInspect > 0 ? round(($totRft / $totInspect) * 100, 2) : 0;
-        $wft = $totInspect > 0 ? round(($totDefect / $totInspect) * 100, 2) : 0;
+            $lastOilCapAt = $stat->last_oil_cap_at ?? null;
 
-        // ==== Penentuan Line off & MPS off (berdasarkan worktime) ====
-        $lineOff = true;
-        $mpsOff  = true;
-        $mp      = 0;
+            $newOilDefect = 0;
 
-        if (session('monitoring')) {
-            $wtDate       = Carbon::now();
-            $isToday      = true;
-            $worktimeline = WorktimeSettingController::getLineWorkingTime($line, $wtDate);
-        } else {
-            $wtDate       = Carbon::parse(session('endline.date'));
-            $isToday      = $wtDate->format('Y-m-d') == Carbon::now()->format('Y-m-d');
-            $worktimeline = WorktimeSettingController::getLineWorkingTimeShift($line, $wtDate, session('endline.shift'));
-        }
-
-        if ($worktimeline) {
-            $lineOff = false;
-
-            $worktime = $worktimeline->workingtime;
-            $range    = WorktimeSettingController::get_worktime_range($worktimeline, $worktime);
-            $swt      = $range->startworktime;
-            $fwt      = $range->finishworktime;
-
-            if ($swt->greaterThan($fwt)) {
-                $fwt->addDay();
+            if ($lastOilCapAt && $oilDefectUncapped == 0) {
+                $newOilDefect = SewingOutput::where('line', $lineId)
+                    ->where('is_qc', 1)
+                    ->where('defect_code', 602)
+                    ->where('created_at', '>', $lastOilCapAt)
+                    ->count();
+            } elseif (!$lastOilCapAt) {
+                $newOilDefect = $totOilDefect;
             }
 
-            $startTime = Carbon::parse($swt)->subMinute($mpLineParam);
-            $endTime   = $isToday
-                ? Carbon::now()->addMinute($mpLineParam)
-                : Carbon::parse($startTime)->addHour();
+            $oilBlueActive = $oilDefectUncapped > 0 || $newOilDefect >= 10;
 
-            try {
-                $attendance = EmployeeAttendance::where('factory_id', session('db')->iddb)
-                    ->where('group_id', $lineId)
-                    ->whereBetween('time', [$startTime, $endTime])
-                    ->where('is_efficiency', 1)
-                    ->where('shift', $worktime->shift)
-                    ->selectRaw("status, COUNT(*) as total")
-                    ->groupBy('status')
-                    ->pluck('total', 'status');
+            $rft = $totInspect > 0 ? round(($totRft / $totInspect) * 100, 2) : 0;
+            $wft = $totInspect > 0 ? round(($totDefect / $totInspect) * 100, 2) : 0;
 
-                $inCount  = $attendance['IN'] ?? 0;
-                $outCount = $attendance['OUT'] ?? 0;
-                $allCount = $attendance->sum();
+            // ==== Penentuan Line off & MPS off (berdasarkan worktime) ====
+            $lineOff = true;
+            $mpsOff  = true;
+            $mp      = 0;
 
-                if ($isToday) {
-                    $mp = max(0, $inCount - $outCount + $mpMinusParam);
-                } else {
-                    $mp = max(0, $inCount - ($allCount - $inCount) + $mpMinusParam);
-                }
-            } catch (\Exception $e) {
-                $mp = 0;
-            }
-
-            $mpsOff = $mp <= 0;
-        }
-
-        return [
-            'kodegroup'           => $line->kodegroup,
-            'namagroup'           => $line->namagroup,
-            'line_id'             => $lineId,
-            'tot_inspect'         => $totInspect,
-            'tot_defect'          => $totDefect,
-            'tot_defect_cap'      => $totDefectCap,
-            'tot_oil_defect'      => $totOilDefect,
-            'oil_defect_uncapped' => $oilDefectUncapped,
-            'defect_not_oil'      => $defectNotOil,
-            'rft'                 => $rft,
-            'wft'                 => $wft,
-            'mp'                  => $mp,
-            'line_off'            => $lineOff,
-            'mps_off'             => $mpsOff,
-            'cap_filled'          => $capFilled,
-        ];
-    });
-
-    return view('monitoring::endlineperformance.tls.index', [
-        'line' => $lines,
-    ]);
-}
-
-@php
-    $qpRowVisual = function (array $d) {
-        $isOff = ($d['line_off'] ?? false) || ($d['mps_off'] ?? false);
-
-        $more3Color = '#BD3F3F3D'; $more3Class = '';
-        $defectColor = '#F9A51D40'; $defectClass = '';
-        $noDefectColor = '#1D9A5C3B'; $noDefectClass = '';
-        $oilColor = '#1744B740'; $oilClass = '';
-
-        if (!$isOff) {
-            $totDefect         = $d['tot_defect'] ?? 0;
-            $totOilDefect      = $d['tot_oil_defect'] ?? 0;
-            $oilDefectUncapped = $d['oil_defect_uncapped'] ?? 0;
-            $capFilled         = $d['cap_filled'] ?? false;
-            $totDefectCap      = $d['tot_defect_cap'] ?? 0;
-
-            if ($totOilDefect >= 10 && $oilDefectUncapped > 0) {
-                $oilColor = '#0000FF';
-                $oilClass = 'is-active';
-            }
-
-            if ($totDefectCap >= 3) {
-                $more3Color = '#ff0404';
-                $more3Class = 'is-active';
-
-            } elseif ($totDefectCap >= 1 && $totDefectCap < 3) {
-                $defectColor = '#fff133';
-                $defectClass = 'is-active';
-
-            } elseif ($capFilled) {
-                $noDefectColor = '#3dff2c';
-                $noDefectClass = 'is-active';
-
+            if (session('monitoring')) {
+                $wtDate       = Carbon::now();
+                $isToday      = true;
+                $worktimeline = WorktimeSettingController::getLineWorkingTime($line, $wtDate);
             } else {
-                $noDefectColor = '#3dff2c';
-                $noDefectClass = 'is-active';
+                $wtDate       = Carbon::parse(session('endline.date'));
+                $isToday      = $wtDate->format('Y-m-d') == Carbon::now()->format('Y-m-d');
+                $worktimeline = WorktimeSettingController::getLineWorkingTimeShift($line, $wtDate, session('endline.shift'));
             }
-        }
 
-        return [
-            'isOff' => $isOff,
-            'statusLabel' => ($d['line_off'] ?? false) ? 'LINE OFF' : (($d['mps_off'] ?? false) ? 'MPS OFF' : null),
-            'more3Color' => $more3Color, 'more3Class' => $more3Class,
-            'defectColor' => $defectColor, 'defectClass' => $defectClass,
-            'noDefectColor' => $noDefectColor, 'noDefectClass' => $noDefectClass,
-            'oilColor' => $oilColor, 'oilClass' => $oilClass,
-        ];
-    };
-@endphp
+            if ($worktimeline) {
+                $lineOff = false;
+
+                $worktime = $worktimeline->workingtime;
+                $range    = WorktimeSettingController::get_worktime_range($worktimeline, $worktime);
+                $swt      = $range->startworktime;
+                $fwt      = $range->finishworktime;
+
+                if ($swt->greaterThan($fwt)) {
+                    $fwt->addDay();
+                }
+
+                $startTime = Carbon::parse($swt)->subMinute($mpLineParam);
+                $endTime   = $isToday
+                    ? Carbon::now()->addMinute($mpLineParam)
+                    : Carbon::parse($startTime)->addHour();
+
+                try {
+                    $attendance = EmployeeAttendance::where('factory_id', session('db')->iddb)
+                        ->where('group_id', $lineId)
+                        ->whereBetween('time', [$startTime, $endTime])
+                        ->where('is_efficiency', 1)
+                        ->where('shift', $worktime->shift)
+                        ->selectRaw("status, COUNT(*) as total")
+                        ->groupBy('status')
+                        ->pluck('total', 'status');
+
+                    $inCount  = $attendance['IN'] ?? 0;
+                    $outCount = $attendance['OUT'] ?? 0;
+                    $allCount = $attendance->sum();
+
+                    if ($isToday) {
+                        $mp = max(0, $inCount - $outCount + $mpMinusParam);
+                    } else {
+                        $mp = max(0, $inCount - ($allCount - $inCount) + $mpMinusParam);
+                    }
+                } catch (\Exception $e) {
+                    $mp = 0;
+                }
+
+                $mpsOff = $mp <= 0;
+            }
+
+            return [
+                'kodegroup'           => $line->kodegroup,
+                'namagroup'           => $line->namagroup,
+                'line_id'             => $lineId,
+                'tot_inspect'         => $totInspect,
+                'tot_defect'          => $totDefect,
+                'tot_defect_cap'      => $totDefectCap,
+                'tot_oil_defect'      => $totOilDefect,
+                'oil_defect_uncapped' => $oilDefectUncapped,
+                'new_oil_defect'      => $newOilDefect,
+                'oil_blue_active'     => $oilBlueActive,
+                'defect_not_oil'      => $defectNotOil,
+                'rft'                 => $rft,
+                'wft'                 => $wft,
+                'mp'                  => $mp,
+                'line_off'            => $lineOff,
+                'mps_off'             => $mpsOff,
+                'cap_filled'          => $capFilled,
+            ];
+
+        });
+
+        return view('monitoring::endlineperformance.tls.index', [
+            'line' => $lines,
+        ]);
+    }
+
+     @php
+        $qpRowVisual = function (array $d) {
+            $isOff = ($d['line_off'] ?? false) || ($d['mps_off'] ?? false);
+
+            $more3Color = '#BD3F3F3D'; $more3Class = '';
+            $defectColor = '#F9A51D40'; $defectClass = '';
+            $noDefectColor = '#1D9A5C3B'; $noDefectClass = '';
+            $oilColor = '#1744B740'; $oilClass = '';
+
+            if (!$isOff) {
+                $totDefect         = $d['tot_defect'] ?? 0;
+                $totOilDefect      = $d['tot_oil_defect'] ?? 0;
+                $oilDefectUncapped = $d['oil_defect_uncapped'] ?? 0;
+                $capFilled         = $d['cap_filled'] ?? false;
+                $totDefectCap      = $d['tot_defect_cap'] ?? 0;
+
+                if ($totOilDefect >= 10 && $oilDefectUncapped > 0 ) {
+                    $oilColor = '#0000FF';
+                    $oilClass = 'is-active';
+                }
+
+                if ($totDefectCap >= 3) {
+                    $more3Color = '#ff0404';
+                    $more3Class = 'is-active';
+
+                } elseif ($totDefectCap >= 1 && $totDefectCap < 3) {
+                    $defectColor = '#fff133';
+                    $defectClass = 'is-active';
+
+                } elseif ($capFilled) {
+                    $noDefectColor = '#3dff2c';
+                    $noDefectClass = 'is-active';
+
+                } else {
+                    $noDefectColor = '#3dff2c';
+                    $noDefectClass = 'is-active';
+                }
+            }
+
+            return [
+                'isOff' => $isOff,
+                'statusLabel' => ($d['line_off'] ?? false) ? 'LINE OFF' : (($d['mps_off'] ?? false) ? 'MPS OFF' : null),
+                'more3Color' => $more3Color, 'more3Class' => $more3Class,
+                'defectColor' => $defectColor, 'defectClass' => $defectClass,
+                'noDefectColor' => $noDefectColor, 'noDefectClass' => $noDefectClass,
+                'oilColor' => $oilColor, 'oilClass' => $oilClass,
+            ];
+        };
+    @endphp
