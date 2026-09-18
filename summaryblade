@@ -16,10 +16,22 @@ class SewingOutput extends Model
 
     const UPDATED_AT = null;
 
+    // Ganti sesuai nama 4 kolom "cap" yang sebenarnya
+    protected $capColumns = ['a', 'b', 'c', 'd'];
+
     private $rules = [
         'barcode' => 'required|string|max:16',
         'line' => 'required|string|max:4',
     ];
+
+    protected static function booted()
+    {
+        static::saving(function ($model) {
+            if ($model->isDirty($model->capColumns)) {
+                $model->cap_updated_at = now();
+            }
+        });
+    }
 
     public function validation($data)
     {
