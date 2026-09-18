@@ -1,4 +1,4 @@
-  function endlinetls(Request $request)
+ function endlinetls(Request $request)
     {
         preconnect(session('db'));
 
@@ -176,3 +176,67 @@
             'line' => $lines,
         ]);
     }
+
+
+  @php
+        $qpRowVisual = function (array $d) {
+            $isOff = ($d['line_off'] ?? false) || ($d['mps_off'] ?? false);
+
+            $more3Color = '#BD3F3F3D'; $more3Class = '';
+            $defectColor = '#F9A51D40'; $defectClass = '';
+            $noDefectColor = '#1D9A5C3B'; $noDefectClass = '';
+            $oilColor = '#1744B740'; $oilClass = '';
+
+            if (!$isOff) {
+                $totDefect = $d['tot_defect'] ?? 0;
+                $oilDefect = $d['oil_defect'] ?? 0;
+                $capFilled = $d['cap_filled'] ?? false;
+                $totDefectCap = $d['tot_defect_cap'] ?? 0;
+
+                if($oilDefect >= 10) {
+                    $oilColor = '#0000FF';
+                    $oilClass = 'is-active';
+                }
+
+                if ($totDefectCap >= 3) {
+                    $more3Color = '#ff0404';
+                    $more3Class = 'is-active';
+
+                } elseif ($totDefectCap >= 1 && $totDefectCap < 3) {
+                    $defectColor = '#fff133';
+                    $defectClass = 'is-active';
+
+                } elseif ($capFilled) {
+                    $noDefectColor = '#3dff2c';
+                    $noDefectClass = 'is-active';
+
+                } else {
+                    $noDefectColor = '#3dff2c';
+                    $noDefectClass = 'is-active';
+                }
+            }
+
+            return [
+                'isOff' => $isOff,
+                'statusLabel' => ($d['line_off'] ?? false) ? 'LINE OFF' : (($d['mps_off'] ?? false) ? 'MPS OFF' : null),
+                'more3Color' => $more3Color, 'more3Class' => $more3Class,
+                'defectColor' => $defectColor, 'defectClass' => $defectClass,
+                'noDefectColor' => $noDefectColor, 'noDefectClass' => $noDefectClass,
+                'oilColor' => $oilColor, 'oilClass' => $oilClass,
+            ];
+        };
+    @endphp
+
+Alur sekarang: 
+1. Lampu biru menyala semisal defect lebih dari sama dengan 10 
+
+Alur baru : 
+1. Lampu biru menyala semisal defect lebih dari sama dengan 10
+2. lalu semisal total defect 14, dan sudah diisi cap 10 dijam 10-11 , dan ada sisa oil 4 di jam 12-1 maka lampu masih nyala 
+karena setelah diisi cap, updated_at nya terisi dijam itu, dan cek apakah ada data oil yang cap nya kosong, jadi lampu biru masih
+hidup, karena masih ada sisa  oil walaupun oil nya tidak ada 10 dan aturan updated_at terisi semisal kolom problem, nik_pic, action,root_cause
+sudah terisi pada saat itu 
+
+Aturan updated_at terisi : 
+Jika kolom problem, nik_pic, action,root_cause sudah terisi maka updated_at akan terisi 
+dan updated_at akan digunakan untuk penentuan lampu biru itu hidup atau mati  
