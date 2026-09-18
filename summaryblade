@@ -1,62 +1,12 @@
-<?php
+DELIMITER $$
 
-namespace App\Http\Models;
+CREATE TRIGGER trg_sewing_outputs_cap_updated
+BEFORE UPDATE ON sewing_outputs
+FOR EACH ROW
+BEGIN
+    IF NOT (OLD.a <=> NEW.a AND OLD.b <=> NEW.b AND OLD.c <=> NEW.c AND OLD.d <=> NEW.d) THEN
+        SET NEW.cap_updated_at = NOW();
+    END IF;
+END$$
 
-use App\Http\Models\Main\MasterEmployeeGroup;
-use App\Http\Models\Main\QCDefect;
-use App\Http\Models\OutputDetail;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Validator;
-
-class SewingOutput extends Model
-{
-    protected $connection = 'mysql';
-
-    protected $guarded = [];
-
-    const UPDATED_AT = null;
-
-    // Ganti sesuai nama 4 kolom "cap" yang sebenarnya
-    protected $capColumns = ['a', 'b', 'c', 'd'];
-
-    private $rules = [
-        'barcode' => 'required|string|max:16',
-        'line' => 'required|string|max:4',
-    ];
-
-    protected static function booted()
-    {
-        static::saving(function ($model) {
-            if ($model->isDirty($model->capColumns)) {
-                $model->cap_updated_at = now();
-            }
-        });
-    }
-
-    public function validation($data)
-    {
-        $validator = Validator::make($data, $this->rules);
-        return $validator;
-    }
-
-    public function save(array $options = [])
-    {
-        $this->user_id = session('user')->nik ?? null;
-        return parent::save($options);
-    }
-
-    function groupbagian()
-    {
-        return $this->belongsTo(MasterEmployeeGroup::class, 'line', 'id');
-    }
-
-    function outputdetail()
-    {
-        return $this->belongsTo(OutputDetail::class, 'barcode', 'barcode');
-    }
-
-    function defect()
-    {
-        return $this->belongsTo(QCDefect::class, 'defect_code', 'kdcacat');
-    }
-}
+DELIMITER ;
