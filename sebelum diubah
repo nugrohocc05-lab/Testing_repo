@@ -51,6 +51,10 @@ class FinalInspectionController extends Controller
     // redistributeReroutedOutput, getNetCutoffQty)
     private $ownerMapCache = [];
 
+    // TAMBAHAN: cache rows mentah HistoryDataBreakdown by combine_pro (kolom lengkap),
+    // satu sumber data yang dipakai getOwnerByCombineKpItem() dan semua pemanggilnya
+    private $historyRowsByComboCache = [];
+
     function __construct()
     {
         $this->middleware('auth');
@@ -1410,10 +1414,35 @@ class FinalInspectionController extends Controller
         return $activeIdpo->isNotEmpty() ? $activeIdpo : collect([$idpo]);
     }
 
-    // TAMBAHAN: helper terpusat & di-cache untuk owner-map (combine_pro|kp_item -> idpo).
-    // Dipakai oleh getActiveRerouteIdpoList, resolveRerouteDuplicates, remapToReroutedIdpo,
-    // buildRerouteMap, redistributeReroutedOutput, getNetCutoffQty — sebelumnya masing2
-    // query ulang HistoryDataBreakdown::whereIn('combine_pro', ...) dari nol.
+    // TAMBAHAN: satu sumber data ter-cache untuk semua kebutuhan rows HistoryDataBreakdown
+    // by combine_pro. Selalu ambil kolom lengkap sekali per kombinasi combine_pro list,
+    // supaya getOwnerByCombineKpItem() dan pemanggil lain yang butuh kolom tambahan
+    // (qty_ori, is_cutoff, combine_pro_set) tidak query ulang tabel yang sama.
+    private function getHistoryRowsByCombinePro(Collection $combineProList): Collection
+    {
+        $combineProList = collect($combineProList)->filter()->unique()->sort()->values();
+        if ($combineProList->isEmpty()) {
+            return collect();
+        }
+
+        $cacheKey = md5($combineProList->implode(','));
+        if (array_key_exists($cacheKey, $this->historyRowsByComboCache)) {
+            return $this->historyRowsByComboCache[$cacheKey];
+        }
+
+        return $this->historyRowsByComboCache[$cacheKey] = HistoryDataBreakdown::whereIn('combine_pro', $combineProList)
+            ->select(
+                'idpo', 'combine_pro', 'combine_pro_set',
+                'kp_item', 'kp_item_ref', 'revisi_kp',
+                'qty_ori', 'is_cutoff'
+            )
+            ->get();
+    }
+
+    // TAMBAHAN: owner-map (combine_pro|kp_item -> idpo), diturunkan dari
+    // getHistoryRowsByCombinePro() (tidak query lagi ke DB, cukup groupBy di PHP).
+    // Dipakai oleh resolveRerouteDuplicates, remapToReroutedIdpo, buildRerouteMap,
+    // redistributeReroutedOutput, getNetCutoffQty.
     private function getOwnerByCombineKpItem(Collection $combineProList): Collection
     {
         $combineProList = collect($combineProList)->filter()->unique()->sort()->values();
@@ -1426,38 +1455,13 @@ class FinalInspectionController extends Controller
             return $this->ownerMapCache[$cacheKey];
         }
 
-        $rows = HistoryDataBreakdown::whereIn('combine_pro', $combineProList)
-            ->select('idpo', 'combine_pro', 'kp_item', 'kp_item_ref', 'revisi_kp')
-            ->get();
+        $rows = $this->getHistoryRowsByCombinePro($combineProList);
 
         $ownerMap = $rows
             ->groupBy(fn ($r) => $r->combine_pro . '|' . $r->kp_item)
             ->map(fn ($group) => (string) $group->sortBy('idpo')->first()->idpo);
 
-        // simpan juga rows mentahnya di cache terpisah supaya method yang butuh
-        // kolom tambahan (qty_ori, is_cutoff, dst) tidak perlu query combine_pro lagi
-        $this->ownerMapCache[$cacheKey . '_rows'] = $rows;
-
         return $this->ownerMapCache[$cacheKey] = $ownerMap;
-    }
-
-    // helper: ambil rows mentah HistoryDataBreakdown by combine_pro dengan kolom custom,
-    // dipakai method yang butuh kolom tambahan (qty_ori, is_cutoff, combine_pro_set)
-    private function getHistoryRowsByCombinePro(Collection $combineProList, array $columns): Collection
-    {
-        $combineProList = collect($combineProList)->filter()->unique()->sort()->values();
-        if ($combineProList->isEmpty()) {
-            return collect();
-        }
-
-        $cacheKey = md5($combineProList->implode(',') . '|' . implode(',', $columns));
-        if (array_key_exists($cacheKey, $this->ownerMapCache)) {
-            return $this->ownerMapCache[$cacheKey];
-        }
-
-        return $this->ownerMapCache[$cacheKey] = HistoryDataBreakdown::whereIn('combine_pro', $combineProList)
-            ->select($columns)
-            ->get();
     }
 
     // priorityFinal, getSplitFinalCheckIdpoList
@@ -1541,10 +1545,7 @@ class FinalInspectionController extends Controller
         }
 
         $ownerByCombineKpItem = $this->getOwnerByCombineKpItem($combineProList);
-        $rows = $this->getHistoryRowsByCombinePro(
-            $combineProList,
-            ['idpo', 'combine_pro', 'kp_item', 'kp_item_ref', 'revisi_kp']
-        );
+        $rows = $this->getHistoryRowsByCombinePro($combineProList);
 
         $reroutedPairs = $rows
             ->filter(fn ($r) => $r->revisi_kp == 1 && !is_null($r->kp_item_ref))
@@ -1680,10 +1681,7 @@ class FinalInspectionController extends Controller
         }
 
         $ownerByCombineKpItem = $this->getOwnerByCombineKpItem($combineProList);
-        $rows = $this->getHistoryRowsByCombinePro(
-            $combineProList,
-            ['idpo', 'combine_pro', 'kp_item', 'kp_item_ref', 'revisi_kp']
-        );
+        $rows = $this->getHistoryRowsByCombinePro($combineProList);
 
         $newIdpoByOriginal = $rows
             ->filter(fn ($r) => $r->revisi_kp == 1 && !is_null($r->kp_item_ref))
@@ -1714,10 +1712,7 @@ class FinalInspectionController extends Controller
         }
 
         $ownerByCombineKpItem = $this->getOwnerByCombineKpItem($combineProList);
-        $rows = $this->getHistoryRowsByCombinePro(
-            $combineProList,
-            ['idpo', 'combine_pro', 'kp_item', 'kp_item_ref', 'revisi_kp']
-        );
+        $rows = $this->getHistoryRowsByCombinePro($combineProList);
 
         $newIdpoByOriginal = $rows
             ->filter(fn ($r) => $r->revisi_kp == 1 && !is_null($r->kp_item_ref))
@@ -1730,8 +1725,8 @@ class FinalInspectionController extends Controller
     }
 
     // finalOverview
-    // DIUBAH: pakai getOwnerByCombineKpItem() (cached); rows tambahan (qty_ori) tetap
-    // diambil sendiri karena kolomnya beda dari owner-map dasar
+    // DIUBAH: pakai getOwnerByCombineKpItem() + getHistoryRowsByCombinePro() (satu query
+    // ter-cache untuk kedua kebutuhan, termasuk kolom qty_ori)
     private function redistributeReroutedOutput(Collection $idpoList, Collection $outputPerIdpo): Collection
     {
         if ($idpoList->isEmpty()) {
@@ -1745,10 +1740,7 @@ class FinalInspectionController extends Controller
         }
 
         $ownerByCombineKpItem = $this->getOwnerByCombineKpItem($combineProList);
-        $rows = $this->getHistoryRowsByCombinePro(
-            $combineProList,
-            ['idpo', 'combine_pro', 'kp_item', 'kp_item_ref', 'revisi_kp', 'qty_ori']
-        );
+        $rows = $this->getHistoryRowsByCombinePro($combineProList);
 
         $childrenByOriginal = collect();
         $rows->filter(fn ($r) => $r->revisi_kp == 1 && !is_null($r->kp_item_ref))
@@ -1787,8 +1779,8 @@ class FinalInspectionController extends Controller
     }
 
     // finalOverview, chartData
-    // DIUBAH: pakai getOwnerByCombineKpItem() (cached); rows tambahan (qty_ori, is_cutoff,
-    // combine_pro_set) tetap diambil sendiri karena kolomnya beda
+    // DIUBAH: pakai getOwnerByCombineKpItem() + getHistoryRowsByCombinePro() (satu query
+    // ter-cache mencakup qty_ori, is_cutoff, combine_pro_set)
     private function getNetCutoffQty(Collection $idpoList): int
     {
         if ($idpoList->isEmpty()) {
@@ -1804,10 +1796,7 @@ class FinalInspectionController extends Controller
         }
 
         $ownerByCombineKpItem = $this->getOwnerByCombineKpItem($combineProList);
-        $familyRows = $this->getHistoryRowsByCombinePro(
-            $combineProList,
-            ['idpo', 'combine_pro', 'combine_pro_set', 'kp_item', 'kp_item_ref', 'revisi_kp', 'qty_ori', 'is_cutoff']
-        );
+        $familyRows = $this->getHistoryRowsByCombinePro($combineProList);
 
         $reroutedPairs = $familyRows
             ->filter(fn ($r) => $r->revisi_kp == 1 && !is_null($r->kp_item_ref))
