@@ -1,2133 +1,1874 @@
-index blade
-@extends('layouts.masternonavbar')
+<?php
 
-@section('extracss')
-<style>
-    .stat-card {
-        height: 150px !important;
-        min-height: 150px !important;
-        padding: 0 !important;
+namespace Modules\Monitoring\Http\Controllers;
+
+use DB;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Collection;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Schema;
+use App\Http\Controllers\Controller;
+use App\Http\Models\Color;
+use App\Http\Models\DataBreakdown;
+use App\Http\Models\FactoryParameter;
+use App\Http\Models\HistoryDataBreakdown;
+use App\Http\Models\HistoryPO;
+use App\Http\Models\Main\MasterEmployeeGroup;
+use App\Http\Models\Main\MasterEmployeeSection;
+use App\Http\Models\Main\MasterGroupBuyer;
+use App\Http\Models\PurchaseOrder;
+use App\Http\Models\Main\Buyer;
+use App\Http\Models\Main\EmployeeAttendance;
+use App\Http\Models\Main\Style;
+use App\Http\Models\Main\Param;
+use App\Http\Models\Main\QCDefect;
+use App\Http\Models\OutputDetail;
+use App\Http\Models\OutputDetailFinalInspection;
+use App\Http\Models\OutputDetailPacking;
+use App\Http\Models\SewingOutput;
+use Illuminate\Support\Facades\Log;
+use Modules\Packing\Http\Controllers\OutputPackingController;
+use Modules\Sewing\Http\Controllers\WorktimeSettingController;
+use Symfony\Component\Console\Output\Output;
+
+class FinalInspectionController extends Controller
+{
+    protected $m_modul = 'report';
+    protected $perPage = 20;
+
+    private $leafRowsCache = [];
+
+    // TAMBAHAN: cache untuk getSplitFinalCheckIdpoList (query whereExists berat,
+    // dipanggil ulang di priorityFinal, summaryFilter, finalOverview, chartData
+    // dengan filter+rentang tanggal yang sama persis lewat dashboardAll)
+    private $splitFinalCache = [];
+
+    // TAMBAHAN: cache owner-map (combine_pro|kp_item -> idpo pemilik pertama),
+    // dipakai berulang oleh semua fungsi reroute (getActiveRerouteIdpoList,
+    // resolveRerouteDuplicates, remapToReroutedIdpo, buildRerouteMap,
+    // redistributeReroutedOutput, getNetCutoffQty)
+    private $ownerMapCache = [];
+
+    function __construct()
+    {
+        $this->middleware('auth');
     }
 
-    .stat-card img {
-        width: 40px !important;
-        height: 40px !important;
-        margin-bottom: .45rem !important;
+    function index(Request $request)
+    {
+        if ($this->myaccess() == '0') {
+            return redirect()->back()->with('alert', [
+                'title' => 'Unauthorized!',
+                'message' => 'You Dont Have Any Access Here!',
+                'status' => 'warning',
+            ]);
+        }
+        preconnect(session('db'));
+        return view('monitoring::finalinspection.index');
     }
 
-    .stat-card h6 {
-        font-size: 1rem;
-        margin-bottom: .25rem !important;
+    private function getFinalIdpoList(Request $request, Carbon $dta, Carbon $dtb): Collection
+    {
+        $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true, $dta, $dtb);
+        $qtyPerIdpo = $leafRows->groupBy('idpo')->map(fn ($rows) => (int) $rows->sum('qty_ori'));
+        $qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
+
+        $today = Carbon::today()->startOfDay();
+        $split = $this->getSplitFinalCheckIdpoList($request, $dta, $dtb, $today);
+
+        $fi = (new OutputDetailFinalInspection())->getTable();
+        $od = (new OutputDetail())->getTable();
+        $po = (new PurchaseOrder())->getTable();
+
+        // DIUBAH: langsung filter by $od.idpo, tanpa pluck barcode dulu
+        // (menghilangkan 1 query + IN-clause raksasa berisi barcode)
+        $headerQuery = OutputDetailFinalInspection::query()
+            ->join($od, "$od.barcode", '=', "$fi.barcode")
+            ->join($po, "$po.idpo", '=', "$od.idpo")
+            ->whereIn("$od.idpo", $qualifiedIdpo);
+
+        $finalComIdpoList = (clone $headerQuery)
+            ->where("$fi.is_output", 1)
+            ->select("$od.idpo")->distinct()->pluck("$od.idpo");
+
+        $finalIdpoList = $split['overdue']->merge($split['need_final'])
+            ->merge($finalComIdpoList)->unique()->values();
+
+        return $this->getActiveRerouteIdpoList($finalIdpoList);
     }
 
-    .stat-card h2 {
-        font-size: 1.5rem;
-        line-height: 1;
+    function groupbuyer(Request $request)
+    {
+        preconnect(session('db'));
+
+        $q = $request->get('q');
+        $page = (int) $request->get('page', 1);
+
+        $dateA = Carbon::createFromFormat(
+            'd-m-Y',
+            $request->datea
+        )->startOfDay();
+
+        $dateB = Carbon::createFromFormat(
+            'd-m-Y',
+            $request->dateb
+        )->startOfDay();
+
+        $dta = $dateA->lessThanOrEqualTo($dateB)
+            ? $dateA
+            : $dateB;
+
+        $dtb = $dateA->lessThanOrEqualTo($dateB)
+            ? $dateB->copy()->endOfDay()
+            : $dateA->copy()->endOfDay();
+
+        /*
+        * Ambil data PO berdasarkan tanggal.
+        * Tidak menggunakan getFinalIdpoList(),
+        * karena Group Buyer tidak perlu bergantung
+        * pada data Final Inspection.
+        */
+        $leafRows = $this->getLeafHistoryRows(
+            $request,
+            'combine_pro',
+            false,
+            $dta,
+            $dtb
+        );
+
+        /*
+        * Ambil ID Buyer dari PO yang ditemukan.
+        */
+        $qualifiedBuyerIds = $leafRows
+            ->pluck('idbuyer')
+            ->filter()
+            ->unique()
+            ->values();
+
+        /*
+        * Ambil ID Group Buyer dari master Buyer.
+        */
+        $qualifiedGroupBuyerIds = Buyer::whereIn(
+            'idbuyer',
+            $qualifiedBuyerIds
+        )
+            ->pluck('groupbuyer')
+            ->filter()
+            ->unique()
+            ->values();
+
+        /*
+        * Ambil Group Buyer untuk Select2.
+        */
+        $paginator = MasterGroupBuyer::select(
+            'id',
+            'group_name'
+        )
+            ->whereIn('id', $qualifiedGroupBuyerIds)
+            ->when($q, function ($query) use ($q) {
+                $query->where(
+                    'group_name',
+                    'like',
+                    '%' . $q . '%'
+                );
+            })
+            ->orderBy('group_name', 'asc')
+            ->paginate(
+                $this->perPage,
+                ['id', 'group_name'],
+                'page',
+                $page
+            );
+
+        $data = collect($paginator->items())
+            ->map(function ($item) {
+                return [
+                    'id' => $item->id,
+                    'text' => $item->group_name,
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'results' => $data,
+            'pagination' => [
+                'more' => $paginator->hasMorePages(),
+            ],
+        ]);
     }
 
-    .stat-card small {
-        font-size: 1rem;
-    }
+    function styleSelect(Request $request)
+    {
+        preconnect(session('db'));
 
-    .stat-card-defect {
-        height: auto;
-    }
+        $page = (int) $request->get('page', 1);
 
-    .stat-card-defect > div {
-        width: 100%;
-    }
+        $dateA = Carbon::createFromFormat(
+            'd-m-Y',
+            $request->datea
+        )->startOfDay();
 
-    .subtitle {
-        font-size: 13px;
-        color: white;
-    }
+        $dateB = Carbon::createFromFormat(
+            'd-m-Y',
+            $request->dateb
+        )->startOfDay();
 
-    .defect-header {
-        width: 100%;
-    }
+        $dta = $dateA->lessThanOrEqualTo($dateB)
+            ? $dateA
+            : $dateB;
 
-    .defect-list {
-        width: 100%;
-        font-size: 13px;
-        gap: 2px;
-    }
+        $dtb = $dateA->lessThanOrEqualTo($dateB)
+            ? $dateB->copy()->endOfDay()
+            : $dateA->copy()->endOfDay();
 
-    #topDefectList {
-        max-height: 110px;
-        width: 100%;
-        overflow-y: auto;
-        overflow-x: hidden;
-        -webkit-overflow-scrolling: touch;
-    }
+        $leafRows = $this->getLeafHistoryRows(
+            $request,
+            'combine_pro',
+            false,
+            $dta,
+            $dtb
+        );
 
-    #topDefectList::-webkit-scrollbar {
-        width: 3px;
-    }
+        // Tidak menggunakan getFinalIdpoList()
+        $styleIds = $leafRows
+            ->pluck('idstyle')
+            ->filter()
+            ->unique()
+            ->values();
 
-    #topDefectList::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.3);
-        border-radius: 4px;
-    }
+        $query = Style::whereIn('idstyle', $styleIds);
 
-    #topDefectList .defect-item {
-        display: flex;
-        align-items: center;
-        width: 100%;
-        margin-bottom: 1px;
-    }
-
-    #topDefectList .defect-item:last-child {
-        margin-bottom: 0;
-    }
-
-    .defect-circle {
-        width: 12px;
-        height: 12px;
-    }
-
-    .defect-name {
-        flex: 1;
-        min-width: 0;
-        margin-left: 8px;
-        text-align: left;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .defect-total {
-        flex: 0 0 auto;
-        margin-left: 8px;
-        white-space: nowrap;
-    }
-
-    .defect-percent {
-        flex: 0 0 55px;
-        margin-left: 8px;
-        text-align: right;
-        white-space: nowrap;
-    }
-
-    .icon-summary {
-        width: 25px;
-        height: 25px;
-    }
-
-    @media (min-width: 992px) and (max-width: 1400px) {
-        #topDefectList {
-            max-height: 83px;
+        if ($request->filled('q')) {
+            $query->where(
+                'nmstyle',
+                'like',
+                '%' . $request->q . '%'
+            );
         }
 
-        .stat-card {
-            height: 100px !important;
-            min-height: 100px !important;
-        }
+        $paginator = $query
+            ->select('idstyle', 'nmstyle')
+            ->paginate(
+                $this->perPage,
+                ['idstyle', 'nmstyle'],
+                'page',
+                $page
+            );
 
-        .stat-card img {
-            width: 20px !important;
-            height: 20px !important;
-            margin-bottom: .30rem !important;
-        }
+        return response()->json([
+            'results' => collect($paginator->items())
+                ->map(fn ($item) => [
+                    'id' => $item->idstyle,
+                    'text' => $item->nmstyle,
+                ])
+                ->values(),
 
-        .stat-card h6 {
-            font-size: 10px;
-            margin-bottom: .20rem !important;
-        }
-
-        .stat-card h2 {
-            font-size: 12px;
-            line-height: 1;
-        }
-
-        .stat-card p {
-            font-size: 10px;
-            line-height: 0.5;
-        }
-
-        .stat-card small {
-            font-size: 10px !important;
-        }
-
-        .stat-card-defect {
-            height: auto;
-        }
-
-        .stat-card-defect > div {
-            width: 100%;
-        }
-
-        .defect-header {
-            width: 100%;
-        }
-
-        .defect-list {
-            width: 100%;
-            font-size: 10px;
-        }
-
-        .flatpickr-calendar {
-            max-width: 315px;
-            padding: 4px;
-            border-radius: 4px;
-        }
-
-        .flatpickr-day {
-            width: 30px;
-            height: 30px;
-            line-height: 30px;
-            font-size: 0.68rem;
-        }
-
-        .flatpickr-current-month {
-            font-size: 0.95rem;
-        }
-
-        span.flatpickr-weekday {
-            font-size: 0.75rem;
-        }
-
-        .text-title {
-            font-size: 12px;
-        }
-
-        .margin-cstm {
-            margin-top: 10px !important;
-            padding: 6px 0 !important;
-        }
-
-         .wrapper-layout {
-            gap: 4px;
-        }
+            'pagination' => [
+                'more' => $paginator->hasMorePages(),
+            ],
+        ]);
     }
 
-    @media (max-width: 768px) {
-        #topDefectList {
-            max-height: 110px;
+    function poSelect(Request $request)
+    {
+        preconnect(session('db'));
+
+        $page = (int) $request->get('page', 1);
+
+        $dateA = Carbon::createFromFormat(
+            'd-m-Y',
+            $request->datea
+        )->startOfDay();
+
+        $dateB = Carbon::createFromFormat(
+            'd-m-Y',
+            $request->dateb
+        )->startOfDay();
+
+        $dta = $dateA->lessThanOrEqualTo($dateB)
+            ? $dateA
+            : $dateB;
+
+        $dtb = $dateA->lessThanOrEqualTo($dateB)
+            ? $dateB->copy()->endOfDay()
+            : $dateA->copy()->endOfDay();
+
+        $leafRows = $this->getLeafHistoryRows(
+            $request,
+            'combine_pro',
+            true,
+            $dta,
+            $dtb
+        );
+
+        $poRows = $leafRows
+            ->filter(fn ($row) => !empty($row->idpo))
+            ->unique('idpo')
+            ->values();
+
+        if ($request->filled('q')) {
+            $q = $request->q;
+
+            $poRows = $poRows
+                ->filter(function ($row) use ($q) {
+                    return stripos($row->po, $q) !== false;
+                })
+                ->values();
         }
 
-        .defect-header {
-            flex-direction: column;
-            gap: 0.5rem !important;
-        }
+        $total = $poRows->count();
 
-        .footer-title {
-            font-size: 12px;
-        }
+        $items = $poRows
+            ->forPage($page, $this->perPage)
+            ->values();
 
-        .img-foot {
-            width: 15px;
-            height: 15px;
-        }
+        return response()->json([
+            'results' => $items->map(fn ($item) => [
+                'id' => $item->idpo,
+                'text' => $item->po,
+            ])->values(),
 
-        .title-pcs {
-            font-size: 10px !important;
-        }
+            'pagination' => [
+                'more' => ($page * $this->perPage) < $total,
+            ],
+        ]);
     }
 
-    .title-pcs {
-        font-size: 12px !important;
-    }
 
-    .subheader {
-        font-size: 15px;
-    }
-
-    .flex-lg-grow-7,
-    .flex-lg-grow-5 {
-        flex: 1 1 100%;
-    }
-
-    /* Desktop 992–1400 */
-    @media (min-width: 992px) and (max-width: 1399.98px) {
-        .flex-lg-grow-7 { flex: 7; }
-        .flex-lg-grow-5 { flex: 5; }
-        .subheader { font-size: 0.60rem; }
-        .final-inspection-card {
-            padding: 20px;
-        }
-    }
-
-    /* Desktop besar >= 1400 */
-    @media (min-width: 1400px) {
-        .flex-lg-grow-7 { flex: 7; }
-        .flex-lg-grow-5 { flex: 5; }
-
-        .subheader { font-size: 0.9rem; }
-    }
-
-    .final-inspection-card {
-        border-radius: 5px;
-        padding: 16px;
-        background-color: #212B3E;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        box-sizing: border-box;
-    }
-
-    .fi-title {
-        text-align: center;
-        color: #ffffff;
-        font-size: 13px;
-        font-weight: 600;
-        letter-spacing: 0.5px;
-        margin-bottom: 14px;
-    }
-
-    .fi-row {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 12px;
-    }
-
-    .fi-row:last-child {
-        margin-bottom: 0;
-    }
-
-    .fi-label {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        width: 110px;
-        flex: 0 0 110px;
-    }
-
-    .fi-percent {
-        color: #ffffff;
-        font-size: 16px;
-        font-weight: 700;
-        line-height: 1.1;
-    }
-
-    .fi-text {
-        color: #ffffff;
-        font-size: 10px;
-        letter-spacing: 0.3px;
-        white-space: nowrap;
-        margin-top: 2px;
-    }
-
-    .fi-bar-wrapper {
-        flex: 1;
-        height: 32px;
-        background: #1a2332;
-        overflow: hidden;
-        position: relative;
-        min-width: 0;
-    }
-
-    .fi-bar {
-        height: 100%;
-        transition: width 0.6s ease;
-        min-width: 6px;
-    }
-
-    .fi-bar-green {
-        background: #2ecc71;
-    }
-
-    .fi-bar-red {
-        background: #e74c3c;
-    }
-
-    .fi-bar-orange {
-        background: #F27D01;
-    }
-
-    @media (min-width: 992px) and (max-width: 1399.98px) {
-        .fi-title { font-size: 11px; margin-bottom: 8px; }
-        .fi-percent { font-size: 13px; }
-        .fi-text { font-size: 8px; }
-        .fi-bar-wrapper { height: 24px; }
-        .fi-row { margin: 0 8px; gap: 8px; }
-        .final-inspection-card { padding: 12px; height: 100px !important; }
-         .fi-label { width: 90px; flex: 0 0 90px;font-size: 10px; }
-    }
-
-    .flex-fill.border-custom-datatable, .flex-fill.panel-slot {
-        display: flex;
-        flex-direction: column;
-        min-height: 0;
-        min-width: 0;
-        width: 100%;
-        height: 100%;
-        flex: 1 1 0;
-        overflow: hidden;
-    }
-
-    .wrapper-sub {
-        display: flex;
-        flex-direction: column;
-        width: 100%;
-        height: 100%;
-        min-width: 0;
-        min-height: 0;
-        padding: 10px;
-        box-sizing: border-box;
-        overflow: hidden;
-    }
-
-    .sub-header {
-        padding: 8px 16px;
-        margin-bottom: 4px
-    }
-
-    .table-scroll-tbl {
-        flex: 1 1 0;
-        min-height: 0;
-        min-width: 0;
-        width: 100%;
-        overflow: auto;
-    }
-
-    .table-res {
-        width: 100%;
-        height: auto;
-        margin: 0;
-        table-layout: fixed;
-        border-collapse: collapse;
-    }
-
-    .table-res thead th {
-        position: sticky;
-        top: 0;
-        z-index: 2;
-        background-color: #1B2331;
-        vertical-align: middle;
-        word-wrap: break-word;
-        font-weight: 400;
-        font-size: 12px;
-        padding: 0.75rem 0.5rem;
-        line-height: 15px !important;
-    }
-
-    .table-res tbody td {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        vertical-align: middle;
-        padding: 0.5rem;
-        font-weight: 400;
-        font-size: 12px;
-        line-height: 22px !important;
-    }
-
-    .table-res tfoot th {
-        position: sticky;
-        bottom: 0;
-        z-index: 2;
-        background-color: #1B2331;
-        font-weight: 600;
-        font-size: 14px;
-        line-height: 6px !important;
-        padding: 0.75rem 0.5rem;
-    }
-
-    /* EMPTY STATE */
-    .table-res tbody .empty-row {
-        height: 120px;
-    }
-
-    .table-res tbody .empty-row td {
-        text-align: center;
-        white-space: normal;
-        overflow: visible;
-        text-overflow: unset;
-    }
-
-    @media (min-width: 992px) and (max-width: 1399.98px) {
-        .table-res thead th {
-            font-size: 10px;
-            padding: 3px 5px !important;
-            line-height: 1;
-        }
-
-        .table-res tbody td {
-            font-size: 10px;
-            padding: 3px 5px !important;
-            line-height: 1;
-        }
-
-        .table-res tfoot th {
-            font-size: 10px;
-            padding: 3px 5px !important;
-            line-height: 1 !important;
-        }
-
-        .flex-fill.border-custom-datatable, .flex-fill.panel-slot {
-            margin: 0 !important;
-            padding: 0 !important;
-        }
-
-        .border-custom-datatable {
-            padding: 0.20rem !important;
-        }
-    }
-
-    .title-pass {
-        color: #327932 ;
-        font-weight: 700 !important;
-        text-align: start;
-    }
-    .title-reject {
-        color: #F24C4C ;
-        font-weight: 700 !important;
-        text-align: start;
-    }
-    .title-notfinal {
-        color: #F27D01 ;
-        font-weight: 700 !important;
-        text-align: start;
-    }
-
-    .dashboard-wrap .flex-grow-1 {
-        min-height: 0;
-    }
-
-    .table-scroll-tbl::-webkit-scrollbar { height: 8px; width: 8px; }
-    .table-scroll-tbl::-webkit-scrollbar-track { background: var(--bg-dark-2); border-radius: 4px; }
-    .table-scroll-tbl::-webkit-scrollbar-thumb { background: #D9D9D9; border-radius: 4px; }
-    .table-scroll-tbl { scrollbar-width: thin; scrollbar-color: #D9D9D9 var(--bg-dark-2); }
-    .table-responsive { -webkit-overflow-scrolling: touch; }
-
-    .wrapper-layout {
-        gap: 8px;
-    }
-
-    @media (min-width: 992px) and (max-width: 1399.98px) {
-
-        html,
-        body {
-            height: 100%;
-            overflow: hidden;
-        }
-
-        .dashboard-wrap {
-            height: 100vh;
-            min-height: 0;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .dashboard-wrap > .flex-grow-1 {
-            flex: 1 1 0 !important;
-            min-height: 0 !important;
-            overflow: hidden;
-        }
-
-        .dashboard-wrap > .flex-grow-1 > .row {
-            height: 100%;
-            min-height: 0;
-        }
-
-        .dashboard-wrap > .flex-grow-1 > .row > [class*="col-"] {
-            min-height: 0;
-        }
-
-        .wrapper-layout {
-            height: 100%;
-            min-height: 0;
-            overflow: hidden;
-        }
-
-        .panel-slot {
-            min-height: 0;
-            height: auto;
-            overflow: hidden;
-        }
-    }
-
-    .wrapper-layout {
-        display: flex;
-        flex-direction: column;
-        min-height: 0;
-        height: 100%;
-    }
-
-    .panel-bottom {
-        flex: 1 1 0;
-        min-height: 0;
-        overflow: hidden;
-    }
-
-    @media (min-width: 992px) and (max-width: 1399.98px) {
-        .wrapper-layout {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-            min-height: 0;
-            overflow: hidden;
-        }
-
-        .panel-top {
-            flex: 0 0 auto;
-            min-height: 0;
-        }
-
-        .panel-bottom {
-            flex: 1 1 auto;
-            min-height: 0;
-            overflow: hidden;
-        }
-
-        .panel-bottom > .row {
-            height: 100%;
-            min-height: 0;
-        }
-
-        .wrapper-sub {
-            /* height: 100%; */
-            min-height: 0;
-            max-height: none;
-        }
-    }
-
-    .final-overview-table {
-        flex: 1 1 auto;
-        min-height: 0;
-        min-width: 0;
-        width: 100%;
-        overflow: auto;
-    }
-
-    .table-res {
-        width: 100%;
-        margin: 0;
-        table-layout: fixed;
-        border-collapse: collapse;
-    }
-
-    .panel-bottom {
-        flex: 1 1 0;
-        min-height: 0;
-        height: 0;
-        overflow: hidden;
-    }
-
-    .panel-bottom > .row {
-        height: 100%;
-        min-height: 0;
-    }
-
-    .panel-bottom > .row > .col {
-        min-height: 0;
-        height: 100%;
-    }
-
-    .panel-bottom .border-custom-datatable {
-        height: 100%;
-        min-height: 0;
-        overflow: hidden;
-    }
-
-    .panel-bottom .wrapper-sub {
-        display: flex;
-        flex-direction: column;
-
-        width: 100%;
-        height: 100%;
-
-        min-width: 0;
-        min-height: 0;
-
-        padding: 10px;
-        box-sizing: border-box;
-
-        overflow: hidden;
-    }
-
-    .panel-bottom .subheader {
-        flex: 0 0 auto;
-    }
-
-    .chart-donut {
-        width: 100%;
-        flex: 1 1 0;
-        height: 0;
-        min-height: 0;
-    }
-
-    .chart-title {
-        flex: 0 0 auto;
-        font-size: 13px;
-        margin-top: 8px !important;
-    }
-
-    @media (max-width: 991.98px) {
-        .dashboard-wrap {
-            height: auto !important;
-            min-height: 100vh;
-            overflow: visible !important;
-        }
-
-        .dashboard-wrap > .flex-grow-1 {
-            min-height: auto !important;
-            overflow: visible !important;
-        }
-
-        .dashboard-wrap > .flex-grow-1 > .row {
-            height: auto !important;
-        }
-
-        .wrapper-layout {
-            height: auto !important;
-            min-height: 0;
-            overflow: visible !important;
-        }
-
-        /* Panel tabel */
-        .pf-panel-top {
-            height: 350px !important;
-            min-height: 350px !important;
-            flex: 0 0 350px !important;
-            overflow: hidden;
-        }
-
-        .pf-panel-top .wrapper-sub {
-            height: 100%;
-            min-height: 0;
-        }
-
-        .pf-panel-top .table-scroll-tbl {
-            flex: 1 1 auto;
-            min-height: 0;
-            height: auto;
-            overflow: auto;
-        }
-
-        /* Table */
-        .pf-panel-top .table-res {
-            width: 100%;
-            min-width: 900px;
-        }
-    }
-
-    @media (min-width: 992px) and (max-width: 1399.98px) {
-
-        .dashboard-wrap {
-            height: 100vh;
-            min-height: 0;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            box-sizing: border-box;
-        }
-
-        /* Area dashboard utama harus mengambil sisa tinggi */
-        .dashboard-wrap > .flex-grow-1 {
-            flex: 1 1 0 !important;
-            min-height: 0 !important;
-            height: auto !important;
-            overflow: hidden;
-        }
-
-        /* Footer wajib tetap punya ruang */
-        .dashboard-wrap > .footer-title {
-            flex: 0 0 24px !important;
-            min-height: 24px !important;
-            height: 24px !important;
-            display: flex !important;
-            align-items: center !important;
-            visibility: visible !important;
-            position: relative;
-            z-index: 10;
-        }
-
-        #liveClock {
-            display: inline-block !important;
-            visibility: visible !important;
-        }
-    }
-
-    @media (min-width: 992px) {
-
-        html,
-        body {
-            height: 100%;
-            overflow: hidden;
-        }
-
-        .dashboard-wrap {
-            height: 100vh;
-            min-height: 0;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .dashboard-wrap > .flex-grow-1 {
-            flex: 1 1 0 !important;
-            min-height: 0 !important;
-            overflow: hidden;
-        }
-
-        .dashboard-wrap > .flex-grow-1 > .row {
-            height: 100%;
-            min-height: 0;
-        }
-
-        .dashboard-wrap > .flex-grow-1 > .row > [class*="col-"] {
-            height: 100%;
-            min-height: 0;
-        }
-
-        .wrapper-layout {
-            height: 100% !important;
-            min-height: 0 !important;
-            overflow: hidden;
-        }
-
-        .footer-title {
-            flex: 0 0 24px !important;
-            height: 24px !important;
-            min-height: 24px !important;
-            display: flex !important;
-            align-items: center;
-        }
-    }
-
-     /* TABLET */
-    @media (min-width: 768px) and (max-width: 991.98px) {
-        .button-inline {
-            width: 25%;
-        }
-
-        .subheader {
-            font-size: 15px;
-        }
-    }
-</style>
-@endsection
-
-@section('content')
-<div class="container-fluid dashboard-wrap">
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
-        <div class="d-flex align-items-center gap-3 text-decoration-none">
-            <img src="{{ _asset('svg/finalInspection/final.svg') }}" class="icon-dashboard flex-shrink-0" alt="Endline Performance">
-            <div class="d-flex flex-column justify-content-center">
-                <h2 class="text-white mb-1 dashboard-title">FINAL INSPECTION DASHBOARD - {{ str_replace('GMS ', '', session('factoryname')) }}</h2>
-                <p class="text-white fs-6 mb-0 dashboard-subtitle">Monitoring Final Inspection and Shipment Readiness</p>
-            </div>
-        </div>
-
-        <div class="button-inline d-flex">
-            <a href="{{ route('home') }}" class="d-flex align-items-center gap-3 text-decoration-none px-3">
-                <img src="{{ _asset('svg/inlinePerformance/home.svg') }}" class="icon-button-inline flex-shrink-0" alt="Home">
-            </a>
-
-            <button class="export-btn bg-transparent border-0 p-0" id="exportbtn" aria-label="Export">
-                    <img src="{{ _asset('svg/inlinePerformance/export.svg') }}" alt="Export"
-                        class="export-icon"
-                        >
-                    <span class="custom-tooltip">Excel</span>
-            </button>
-            <button type="button" class="export-btn px-3" style="border: none; background: transparent; outline: none; box-shadow: none; padding: 0;" onclick="location.reload()" aria-label="Refresh">
-                <img src="{{ _asset('svg/inlinePerformance/reload.svg') }}" alt="Refresh" class="icon-refresh">
-                <span class="custom-tooltip-bottom">Refresh</span>
-            </button>
-        </div>
-    </div>
-
-    <!-- Summary Filter -->
-    @include('monitoring::finalinspection.partials.summary')
-
-    <!-- Summary Cards -->
-    <div class="row g-3 card-wrapper">
-            <div class="col-12 col-sm-4 col-lg">
-                <div class="stat-card color-box-blue h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <img src="{{ _asset('svg/endlinePerformance/total-output.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
-                    <h6 class="fw-bold text-blue mb-0" style="line-height:1;">TOTAL</h6>
-                    <p class="fw-bold text-blue mb-0" style="line-height:1;">PO</p>
-                    <div class="d-flex align-items-end text-white mt-2 mb-2 mt-2 mb-2">
-                        <h2 class="fw-bold mb-0" id="totalpo">-</h2>
-                    </div>
-                    <small class="title-pcs ms-1 text-white">PO</small>
-                </div>
-            </div>
-
-            <div class="col-12 col-sm-4 col-lg">
-                <div class="stat-card color-box-yellow h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <img src="{{ _asset('svg/inlinePerformance/qty-inspect.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
-                    <h6 class="fw-bold text-yellow mb-0" style="line-height:1;" >TOTAL</h6>
-                    <p class="fw-bold text-yellow mb-0" style="line-height:1;" >QTY</p>
-                    <div class="d-flex align-items-end text-white mt-2 mb-2">
-                        <h2 class="fw-bold mb-0" id="totalqty">-</h2>
-                    </div>
-                    <small class="title-pcs ms-1 text-white">pcs</small>
-                </div>
-            </div>
-
-            <div class="col-12 col-sm-4 col-lg">
-                <div class="stat-card color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <img src="{{ _asset('svg/finalInspection/qty-inspect.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
-                    <h6 id="defectText" class="fw-bold text-red mb-0" style="line-height:1;" >TOTAL QTY</h6>
-                    <p class="fw-bold text-red mb-0" style="line-height:1;" >INSPECT</p>
-                    <div class="d-flex align-items-end text-white mt-2 mb-2">
-                        <h2 class="fw-bold mb-0" id="totalqtyinspect">-</h2>
-                    </div>
-                    <small class="title-pcs ms-1 text-white">pcs</small>
-                </div>
-            </div>
-
-            <div class="col-12 col-sm-4 col-lg">
-                <div class="stat-card color-box-green h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <img src="{{ _asset('svg/finalInspection/po-need-final.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
-                    <h6 class="fw-bold text-green mb-0" style="line-height:1;" >PO NEED FINAL</h6>
-                    <p class="subtitle text-blue mb-0" style="line-height:1;" >(Final ≥ H - 1 ETD )</p>
-                    <div class="d-flex align-items-end text-white mt-2 mb-2">
-                        <h2 class="fw-bold mb-0" id="poneedfinal">-</h2>
-                    </div>
-                    <small class="title-pcs ms-1 text-white">PO</small>
-                </div>
-            </div>
-
-            <div class="col-12 col-sm-4 col-lg">
-                <div class="stat-card color-box-red h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <img src="{{ _asset('svg/finalInspection/overdue.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
-                    <h6 class="fw-bold text-red mb-0" style="line-height:1;" >OVERDUE</h6>
-                    <p class="subtitle text-blue mb-0" style="line-height:1;" >(ETD < Today)</p>
-                    <div class="d-flex align-items-end text-white mt-2 mb-2">
-                        <h2 class="fw-bold mb-0" id="overdue">-</h2>
-                    </div>
-                    <small class="title-pcs ms-1 text-white">PO</small>
-                </div>
-            </div>
-
-            <div class="col-12 col-sm-4 col-lg">
-                <div id="targetColor" class="stat-card color-box-green h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <img src="{{ _asset('svg/finalInspection/final-completed.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
-                    <h6 id="targetText" class="fw-bold text-green mb-0" style="line-height:1;" >FINAL</h6>
-                    <p class="text-green fw-bold mb-0" style="line-height:1;" >COMPLETED</p>
-                    <div class="d-flex align-items-end text-white mt-2 mb-2">
-                        <h2 class="fw-bold mb-0 text-white" id="final" >-</h2>
-                    </div>
-                    <small class="title-pcs ms-1 text-white">PO</small>
-                </div>
-            </div>
-
-            <div class="col-12 col-sm-6 col-lg">
-                <div id="targetColor" class="stat-card color-box-purple h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
-                    <img src="{{ _asset('svg/finalInspection/oql.svg') }}" class="img-fluid mb-3" style="width:60px;height:60px;" alt="">
-                    <h6 id="targetText" class="fw-bold text-purple mb-0" style="line-height:1;" >OQL</h6>
-                    <div class="d-flex align-items-end text-white mt-2 mb-2">
-                        <h2 class="fw-bold mb-0 text-white" id="oql">-</h2>
-                        <h2 class="fw-bold mb-0 text-white">%</h2>
-                    </div>
-                    <small class="title-pcs ms-1 text-white">Defect Rate</small>
-                </div>
-            </div>
-
-            <div class="col-12 col-sm-6 col-lg-2">
-                <div class="final-inspection-card h-100 border-custom-datatable">
-                    <div class="fi-title">FINAL INSPECTION RESULT</div>
-
-                    <div class="fi-row">
-                        <div class="fi-label">
-                            <span id="passingRateValue" class="fi-percent">-%</span>
-                            <span class="fi-text">PASSING RATE</span>
-                        </div>
-                        <div class="fi-bar-wrapper">
-                            <div id="passingRateBar" class="fi-bar fi-bar-green" style="width: 0%;"></div>
-                        </div>
-                    </div>
-
-                    <div class="fi-row">
-                        <div class="fi-label">
-                            <span id="rejectRateValue" class="fi-percent">-%</span>
-                            <span class="fi-text">REJECT RATE</span>
-                        </div>
-                        <div class="fi-bar-wrapper">
-                            <div id="rejectRateBar" class="fi-bar fi-bar-red" style="width: 0%;"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-    <!-- Weekly Defect -->
-    <div class="flex-grow-1" style="min-height: 0;">
-        <div class="pt-2 row h-100 text-white g-2">
-            <!-- Left -->
-            <div class="col-12 col-lg-7 d-flex">
-                <div class="wrapper-layout rounded d-flex flex-column w-100 h-100"
-                    style="min-height:0;">
-
-                    @include('monitoring::finalinspection.partials.progress-final')
-
-                    @include('monitoring::finalinspection.partials.chart')
-
-                </div>
-            </div>
-
-            <!-- Right -->
-            <div class="col-12 col-lg-5 d-flex">
-                <div class="wrapper-layout rounded d-flex flex-column w-100 h-100"
-                    style="min-height:0;">
-
-                    @include('monitoring::finalinspection.partials.final-overview')
-
-                    @include('monitoring::finalinspection.partials.category-defect')
-
-                </div>
-            </div>
-
-        </div>
-    </div>
-
-    <!-- Footer -->
-     <div class="footer-title text-white d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0">
-        <div class="d-flex align-items-center gap-2">
-            <img src="{{ _asset('svg/inlinePerformance/time.svg') }}" class="img-foot" alt="">
-                Data Update
-            <span id="liveClock"></span>
-        </div>
-    </div>
-
-    <div class="footer-title text-white d-flex flex-wrap justify-content-between align-items-center gap-2 flex-shrink-0">
-
-    </div>
-</div>
-
-@section('extrascript')
-<script>
-    $(document).on('click', '.loading-target', function (e) {
-        e.preventDefault();
-
-        const targetUrl = $(this).attr('href');
-
-        $('#loading').show();
-
-        setTimeout(function () {
-            window.location.href = targetUrl;
-        }, 100);
-
-        window.addEventListener('pageshow', function (event) {
-            if (event.persisted) {
-                $('#loading').hide();
+    static function getReroutePO(string $idpo)
+    {
+        preconnect(session('db'));
+        try {
+            $originalPro = HistoryDataBreakdown::query()
+                ->where('idpo', $idpo)
+                ->whereNotNull('original_pro')
+                ->distinct()->pluck('original_pro');
+
+            if ($originalPro->isEmpty()) {
+                return collect();
             }
-        });
-    });
-</script>
-@endsection
 
-@include('layouts.loading')
-@endsection
+            $cutoffItems = HistoryDataBreakdown::query()
+                ->whereIn('original_pro', $originalPro)
+                ->where('is_cutoff', 1)
+                ->pluck('kp_item')->filter()->unique();
 
-finaloverview blade
-<style>
-    .wrapper-layout {
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-        min-height: 0;
-    }
+            if ($cutoffItems->isEmpty()) {
+                return collect();
+            }
 
-    .fo-panel-top {
-        flex: 0 0 32%;
-        min-height: 0;
-        overflow: hidden;
-    }
-
-    .panel-bottom {
-        flex: 1 1 0;
-        min-height: 0;
-        overflow: hidden;
-    }
-
-    .panel-top .wrapper-sub {
-        display: flex;
-        flex-direction: column;
-        width: 100%;
-        height: 100%;
-        min-height: 0;
-        box-sizing: border-box;
-        padding: 10px;
-        margin: 0;
-        overflow: hidden;
-    }
-
-    .panel-top .subheader {
-        flex: 0 0 auto;
-    }
-
-    .final-overview-table {
-        flex: 1 1 0;
-        min-height: 0;
-        width: 100%;
-        overflow: hidden;
-    }
-
-    .final-overview-table .table-res {
-        width: 100%;
-        height: 100%;
-        margin: 0;
-        table-layout: fixed;
-        border-collapse: collapse;
-    }
-
-    .final-overview-table .table-res thead th {
-        padding: 5px 4px;
-    }
-
-    .tableBorder {
-        border-collapse: collapse;
-    }
-
-    .tableBorder th,
-    .tableBorder td {
-        border: 2px solid #1C2536 !important;
-    }
-
-
-
-    @media (min-width: 769px) and (max-width: 1180px) {
-        .final-wrapper {
-            min-height: 250px !important;
-        }
-    }
-</style>
-<div class="flex-fill border-custom-datatable rounded-1 fo-panel-top">
-    <div class="wrapper-sub">
-        <h6 class="subheader mb-0 fw-normal text-truncate">
-            FINAL INSPECTION OVERVIEW
-        </h6>
-        <div class="final-overview-table final-wrapper rounded mt-2 w-100">
-            <table class="table-res table-hover tableBorder">
-                <thead>
-                    <tr>
-                        <th class="text-center" style="width:6%;">Status Final</th>
-                        <th class="text-center" style="width:9%;">PO <br> (Count)</th>
-                        <th class="text-center" style="width:9%;">Total Qty Order <br> (Pcs)</th>
-                        <th class="text-center" style="width:9%;">Total Qty Inspect <br> (Pcs)</th>
-                        <th class="text-center" style="width:9%;">Total Output <br> (Pcs)</th>
-                        <th class="text-center" style="width:9%;">Progress Output <br> (%)</th>
-                    </tr>
-                </thead>
-                <tbody class="text-center" id="tableFinalOverviewBody">
-                    <tr>
-                        <td class="title-pass">PASS</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">
-                            <div class="fi-bar-wrapper">
-                                <div id="passingRatePass" class="fi-bar fi-bar-green" style="width: 0%;"></div>
-                            </div>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td class="title-reject">REJECT</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">
-                            <div class="fi-bar-wrapper">
-                                <div id="passingRateReject" class="fi-bar fi-bar-red" style="width: 0%;"></div>
-                            </div>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td class="title-notfinal">NOT FINAL</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">
-                            <div class="fi-bar-wrapper">
-                                <div id="passingRateNotfinal" class="fi-bar fi-bar-orange" style="width: 0%;"></div>
-                            </div>
-                        </td>
-                    </tr>
-                </tbody>
-
-                <tfoot class="table-foot" id="tablePriorityFinalFooter">
-                    <tr>
-                        <th class="text-center" style="color: #4C8CF2;">TOTAL</th>
-                        <th class="text-center" style="color: #4C8CF2;" id="foottotPo">-</th>
-                        <th class="text-center" style="color: #4C8CF2;" id="foottotQtyOrder">-</th>
-                        <th class="text-center" style="color: #4C8CF2;" id="foottotQtyInspect">-</th>
-                        <th class="text-center" style="color: #4C8CF2;" id="foottotOutput">-</th>
-                        <th class="text-center" style="color: #4C8CF2;" id="foottotProgress">-%</th>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
-    </div>
-</div>
-
-progressfinal
-<style>
-    .pf-panel-top {
-        display: flex;
-        flex-direction: column;
-        min-height: 0;
-    }
-
-    .wrapper-sub {
-        display: flex;
-        flex-direction: column;
-        flex: 1;
-        min-height: 0;
-    }
-
-     @media (min-width: 992px) and (max-width: 1399.98px) {
-        .pf-panel-top {
-            flex: 0 0 55%;
-            height: 55%;
-            min-height: 0;
-            overflow: hidden;
+            return HistoryDataBreakdown::query()
+                ->whereIn('original_pro', $originalPro)
+                ->whereIn('kp_item_ref', $cutoffItems)
+                ->where('idpo', '!=', $idpo)
+                ->select(['idpo', 'original_pro', 'kp_item', 'kp_item_ref', 'qty_ori'])
+                ->distinct()->get();
+        } catch (\Throwable $e) {
+            return collect();
         }
     }
 
-    .tableBorder td,
-    .tableBorder th {
-        border-color: #1C2536 !important;
-    }
+    // priorityFinal, exportData
+    private function buildPriorityFinalData(Request $request, Carbon $dta, Carbon $dtb): array
+    {
+        $fi = (new OutputDetailFinalInspection())->getTable();
+        $od = (new OutputDetail())->getTable();
+        $po = (new PurchaseOrder())->getTable();
+        $odp = (new OutputDetailPacking())->getTable();
 
-    @media (min-width: 769px) and (max-width: 1024px) {
-        .table-res {
-        }
-    }
+        $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true, $dta, $dtb);
 
-    .priority-table {
-    width: 100%;
-    table-layout: fixed;
-}
+        $byIdpoThenColor = $leafRows->groupBy('idpo')->map(fn ($rows) => $rows->groupBy('idcolor'));
+        $byIdpoLeaf = $leafRows->groupBy('idpo');
 
-.priority-table .col-priority {
-    width: 6%;
-}
-
-.priority-table .col-po {
-    width: 14%;
-}
-
-.priority-table .col-buyer {
-    width: 11%;
-}
-
-.priority-table .col-style {
-    width: 10%;
-}
-
-.priority-table .col-color {
-    width: 13%;
-}
-
-.priority-table .col-qty {
-    width: 6%;
-}
-
-.priority-table .col-output {
-    width: 6%;
-}
-
-.priority-table .col-progress {
-    width: 9%;
-}
-
-.priority-table .col-etd {
-    width: 9%;
-}
-
-.priority-table .col-days {
-    width: 7%;
-}
-
-.priority-table .col-status {
-    width: 7%;
-}
-
-</style>
-
-<div class="flex-fill border-custom-datatable rounded-1 pf-panel-top">
-    <div class="wrapper-sub ">
-        <h6 class="subheader mb-0 fw-normal text-truncate">
-            PO PRIORITY PROGRESS FINAL (BASED ON ETD)
-        </h6>
-        <div class="table-scroll-tbl rounded mt-2 px-2 w-100">
-            <table class="table-res table-borderless table-hover tableBorder priority-table">
-                <colgroup>
-                    <col class="col-priority">
-                    <col class="col-po">
-                    <col class="col-buyer">
-                    <col class="col-style">
-                    <col class="col-color">
-                    <col class="col-qty">
-                    <col class="col-output">
-                    <col class="col-progress">
-                    <col class="col-etd">
-                    <col class="col-days">
-                    <col class="col-status">
-                </colgroup>
-
-                <thead>
-                    <tr>
-                        <th class="text-center">Priority</th>
-                        <th class="text-center">PO No.</th>
-                        <th class="text-center">Buyer</th>
-                        <th class="text-center">Style</th>
-                        <th class="text-center">Article / Color</th>
-                        <th class="text-center">
-                            Qty Order<br>(Pcs)
-                        </th>
-                        <th class="text-center">
-                            Output<br>(Pcs)
-                        </th>
-                        <th class="text-center">
-                            Progress<br>Output<br>(%)
-                        </th>
-                        <th class="text-center">
-                            ETD<br>(Shipment Date)
-                        </th>
-                        <th class="text-center">
-                            Days to<br>ETD
-                        </th>
-                        <th class="text-center">
-                            Status<br>Final
-                        </th>
-                    </tr>
-                </thead>
-
-                <tbody class="text-center table-bordered" id="tablePriorityFinalBody">
-                    <tr>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-%</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                    </tr>
-                </tbody>
-
-                <tfoot class="table-foot" id="tablePriorityFinalFooter">
-                    <tr>
-                        <th class="text-center" style="color: #4C8CF2;">
-                            TOTAL
-                        </th>
-
-                        <th></th>
-                        <th></th>
-                        <th></th>
-                        <th></th>
-
-                        <th class="text-center"
-                            style="color: #4C8CF2;"
-                            id="footQtyOrder">
-                        </th>
-
-                        <th class="text-center"
-                            style="color: #4C8CF2;"
-                            id="footOutput">
-                        </th>
-
-                        <th class="text-center"
-                            style="color: #4C8CF2;"
-                            id="footProgressOutput">
-                        </th>
-
-                        <th></th>
-                        <th></th>
-                        <th></th>
-                    </tr>
-                </tfoot>
-
-            </table>
-
-
-
-        </div>
-    </div>
-</div>
-
-chartblade
-<style>
-    .wrapper-sub {
-        height: 100%;
-        min-height: 0;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-    }
-
-    .chart-donut {
-        width: 100%;
-        flex: 1 1 0;
-        min-height: 0;
-    }
-
-    .subheader {
-        font-size: clamp(10px, 0.8vw, 13px);
-        line-height: 1.2;
-        padding: 4px 6px 0;
-        flex-shrink: 0;
-    }
-
-    .chart-title {
-        flex-shrink: 0;
-        font-size: clamp(9px, 0.75vw, 13px);
-        gap: clamp(8px, 1.5vw, 20px) !important;
-        padding: 0 5px 6px;
-    }
-
-
-    .col > .border-custom-datatable {
-        overflow: hidden;
-    }
-
-    .chart-title .fw-bold {
-        font-size: clamp(9px, 0.75vw, 13px) !important;
-        line-height: 1.1;
-    }
-
-    .chart-title div[id$="-text-1"],
-    .chart-title div[id$="-text-2"],
-    .chart-title div[id$="-text-3"] {
-        font-size: clamp(8px, 0.65vw, 12px) !important;
-        line-height: 1.1;
-    }
-
-    .chart-title span {
-        width: clamp(8px, 0.7vw, 12px) !important;
-        height: clamp(8px, 0.7vw, 12px) !important;
-        margin-right: clamp(4px, 0.5vw, 8px) !important;
-        flex-shrink: 0;
-    }
-
-    @media (min-width: 992px) and (max-width: 1400px) {
-        .subheader {
-            font-size: clamp(9px, 0.75vw, 11px);
+        $qtyPerIdpo = [];
+        foreach ($byIdpoLeaf as $idpo => $rows) {
+            $qtyPerIdpo[$idpo] = (int) $rows->sum('qty_ori');
         }
 
-        .chart-title {
-            gap: clamp(6px, 1vw, 14px) !important;
-            margin-top: 4px !important;
+        $today = Carbon::today()->startOfDay();
+        $split = $this->getSplitFinalCheckIdpoList($request, $dta, $dtb, $today);
+
+        $qualifiedIdpo = collect($qtyPerIdpo)->filter(fn ($qty) => $qty > 0)->keys()->values();
+
+        // DIUBAH: langsung filter by $od.idpo, tanpa pluck barcode dulu
+        $headerQuery = OutputDetailFinalInspection::query()
+            ->join($od, "$od.barcode", '=', "$fi.barcode")
+            ->join($po, "$po.idpo", '=', "$od.idpo")
+            ->whereIn("$od.idpo", $qualifiedIdpo);
+
+        $finalComIdpoList = (clone $headerQuery)
+            ->where("$fi.is_output", 1)
+            ->select("$od.idpo")->distinct()->pluck("$od.idpo");
+
+        $rejectIdpoList = (clone $headerQuery)
+            ->whereIn("$od.idpo", $finalComIdpoList)
+            ->whereNotNull("$fi.date_output")
+            ->whereNotNull("$fi.defect_code")
+            ->select("$od.idpo")->distinct()->pluck("$od.idpo");
+
+        $finalComIdpoList = $this->remapToReroutedIdpo($finalComIdpoList);
+        $rejectIdpoList = $this->remapToReroutedIdpo($rejectIdpoList);
+        $passIdpoList = $finalComIdpoList->diff($rejectIdpoList)->values();
+
+        $statusByIdpo = collect();
+        foreach ($split['overdue'] as $idpo) {
+            $statusByIdpo->put((string) $idpo, 'overdue');
+        }
+        foreach ($split['need_final'] as $idpo) {
+            $statusByIdpo->put((string) $idpo, 'need_final');
+        }
+        foreach ($passIdpoList as $idpo) {
+            $statusByIdpo->put((string) $idpo, 'pass');
+        }
+        foreach ($rejectIdpoList as $idpo) {
+            $statusByIdpo->put((string) $idpo, 'reject');
         }
 
-        .chart-title .fw-bold {
-            font-size: clamp(8px, 0.65vw, 11px) !important;
+        $originalFinalIdpoList = $split['overdue']->merge($split['need_final'])
+            ->merge($finalComIdpoList)->unique()->values();
+        $finalIdpoList = $this->getActiveRerouteIdpoList($originalFinalIdpoList);
+
+        $poList = collect();
+        foreach ($finalIdpoList as $idpo) {
+            $colorGroups = $byIdpoThenColor->get($idpo);
+            if (!$colorGroups) {
+                continue;
+            }
+            foreach ($colorGroups as $idcolor => $rows) {
+                $first = $rows->first();
+                $poList->push((object) [
+                    'idpo' => $idpo,
+                    'idcolor' => $idcolor,
+                    'po' => $first->po,
+                    'idbuyer' => $first->idbuyer,
+                    'idstyle' => $first->idstyle,
+                    'qty' => (int) $rows->sum('qty_ori'),
+                    'etd' => $rows->max('deliverydate'),
+                ]);
+            }
+        }
+        $poList = $poList->values();
+
+        $idpoList = $poList->pluck('idpo')->unique()->values();
+        $buyerIds = $poList->pluck('idbuyer')->filter()->unique()->values();
+        $buyerGroupMap = Buyer::whereIn('idbuyer', $buyerIds)->pluck('groupbuyer', 'idbuyer');
+        $groupBuyerIds = $buyerGroupMap->filter()->unique()->values();
+        $groupBuyerNames = MasterGroupBuyer::whereIn('id', $groupBuyerIds)->pluck('group_name', 'id');
+        $styleIds = $poList->pluck('idstyle')->filter()->unique()->values();
+        $styleMap = Style::whereIn('idstyle', $styleIds)->pluck('nmstyle', 'idstyle');
+        $colorIds = $poList->pluck('idcolor')->filter()->unique()->values();
+        $colorMap = Color::whereIn('idcolor', $colorIds)->pluck('nmcolor', 'idcolor');
+
+        $combineProList = HistoryDataBreakdown::whereIn('idpo', $idpoList)
+            ->pluck('combine_pro')->filter()->unique()->values();
+
+        $allHistoryIdpo = HistoryDataBreakdown::whereIn('combine_pro', $combineProList)
+            ->pluck('idpo')->filter()->unique()->values();
+
+        $outputRows = OutputDetail::query()
+            ->whereIn("$od.idpo", $allHistoryIdpo)
+            ->whereNotNull("$od.barcode")
+            ->leftJoin("$odp", "$odp.barcode", '=', "$od.barcode")
+            ->select(
+                "$od.idpo",
+                "$od.idcolor",
+                DB::raw("COUNT(DISTINCT $odp.id_set) as total_output")
+            )
+            ->groupBy("$od.idpo", "$od.idcolor")
+            ->get();
+
+        $rerouteMap = $this->buildRerouteMap($outputRows->pluck('idpo')->unique()->values());
+
+        $outputPerIdpoColor = collect();
+
+        foreach ($outputRows as $row) {
+            $activeIdpo = $rerouteMap->get((string) $row->idpo, (string) $row->idpo);
+
+            $key = $activeIdpo . '|' . $row->idcolor;
+
+            $outputPerIdpoColor->put(
+                $key,
+                ($outputPerIdpoColor->get($key, 0) + (int) $row->total_output)
+            );
         }
 
-        .chart-title div[id$="-text-1"],
-        .chart-title div[id$="-text-2"],
-        .chart-title div[id$="-text-3"] {
-            font-size: clamp(7px, 0.6vw, 10px) !important;
-        }
+        $statusOrder = ['overdue' => 0, 'need_final' => 1, 'reject' => 2, 'pass' => 3];
+
+        $data = $poList->map(function ($item) use (
+            $buyerGroupMap, $groupBuyerNames, $styleMap, $colorMap,
+            $outputPerIdpoColor, $today, $statusByIdpo
+        ) {
+            $groupBuyerId = $buyerGroupMap->get($item->idbuyer);
+            $outputKey = $item->idpo . '|' . $item->idcolor;
+            $totalOutput = $outputPerIdpoColor->get($outputKey, 0);
+            $etd = $item->etd;
+
+            $daysToEtd = $etd
+                ? $today->diffInDays(Carbon::parse($etd)->startOfDay(), false)
+                : null;
+
+            $totalQty = (int) $item->qty;
+            $progressOutput = $totalQty > 0 ? round(($totalOutput / $totalQty) * 100, 2) : 0;
+
+            $rawStatus = $statusByIdpo->get((string) $item->idpo, '-');
+            $status = in_array($rawStatus, ['overdue', 'need_final'])
+                ? 'Need Final'
+                : ($rawStatus === 'pass' ? 'Pass' : ($rawStatus === 'reject' ? 'Reject' : '-'));
+
+            return [
+                'po' => $item->po,
+                'idpo' => $item->idpo,
+                'style' => $styleMap->get($item->idstyle) ?: '-',
+                'idcolor' => $item->idcolor,
+                'color' => $colorMap->get($item->idcolor) ?: '-',
+                'buyer' => $groupBuyerId ? ($groupBuyerNames->get($groupBuyerId) ?: '-') : '-',
+                'qty_order' => $totalQty,
+                'output' => $totalOutput,
+                'progress_output' => $progressOutput,
+                'etd' => $etd ? Carbon::parse($etd)->format('d-m-Y') : '-',
+                'days_to_etd' => $daysToEtd,
+                'status' => $status,
+            ];
+        })
+        ->sort(function ($a, $b) use ($statusOrder) {
+            $orderA = $statusOrder[$a['status']] ?? 99;
+            $orderB = $statusOrder[$b['status']] ?? 99;
+            if ($orderA !== $orderB) {
+                return $orderA <=> $orderB;
+            }
+            return ($a['days_to_etd'] ?? PHP_INT_MAX) <=> ($b['days_to_etd'] ?? PHP_INT_MAX);
+        })
+        ->values();
+
+        $totalQtyOrderAll = $data->sum('qty_order');
+        $totalOutputAll = $data->sum('output');
+        $totalProgressOutputAll = $totalQtyOrderAll > 0
+            ? round(($totalOutputAll / $totalQtyOrderAll) * 100, 2) : 0;
+
+        return [
+            'data' => $data,
+            'total' => [
+                'qty_order' => $totalQtyOrderAll,
+                'output' => $totalOutputAll,
+                'progress_output' => $totalProgressOutputAll,
+            ],
+        ];
     }
 
-    /* layar kecil */
-    @media (max-width: 991.98px) {
+    function priorityFinal(Request $request)
+    {
+        preconnect(session('db'));
+        $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
+        $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+        $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
+        $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
 
-        .subheader {
-            font-size: 11px;
-        }
-
-        .chart-title .fw-bold {
-            font-size: 11px !important;
-        }
-
-        .chart-title div[id$="-text-1"],
-        .chart-title div[id$="-text-2"],
-        .chart-title div[id$="-text-3"] {
-            font-size: 10px !important;
-        }
+        return response()->json($this->buildPriorityFinalData($request, $dta, $dtb));
     }
 
-    .legend-value {
-        font-size: clamp(8px, 0.65vw, 12px);
-        color: #9ca3af;
-        line-height: 1.1;
+    // summaryFilter, exportData
+    private function buildSummaryFilterData(Request $request, Carbon $dta, Carbon $dtb): array
+    {
+        $fi = (new OutputDetailFinalInspection())->getTable();
+        $od = (new OutputDetail())->getTable();
+        $po = (new PurchaseOrder())->getTable();
+
+        $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true, $dta, $dtb);
+        $qtyPerIdpo = $leafRows->groupBy('idpo')->map(fn ($rows) => (int) $rows->sum('qty_ori'));
+
+        $qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
+
+        $today = Carbon::today()->startOfDay();
+        $split = $this->getSplitFinalCheckIdpoList($request, $dta, $dtb, $today);
+        $overdueList = $split['overdue'];
+        $needFinalList = $split['need_final'];
+
+        // DIUBAH: langsung filter by $od.idpo, tanpa pluck barcode dulu
+        $headerQuery = OutputDetailFinalInspection::query()
+            ->join($od, "$od.barcode", '=', "$fi.barcode")
+            ->join($po, "$po.idpo", '=', "$od.idpo")
+            ->whereIn("$od.idpo", $qualifiedIdpo);
+
+        $finalComIdpoList = (clone $headerQuery)
+            ->where("$fi.is_output", 1)
+            ->select("$od.idpo")->distinct()->pluck("$od.idpo");
+
+        $finalIdpoList = $overdueList->merge($needFinalList)->merge($finalComIdpoList)->unique()->values();
+
+        $totalQty = $finalIdpoList->sum(fn ($idpo) => $qtyPerIdpo->get($idpo, 0));
+
+        $totalQtyInspect = (clone $headerQuery)
+            ->whereNotNull("$fi.date_output")
+            ->count(DB::raw("DISTINCT $fi.id"));
+
+        $overdue = $overdueList->count();
+        $poNeedFinal = $needFinalList->count();
+        $finalCom = $finalComIdpoList->count();
+        $totalPo = $poNeedFinal + $overdue + $finalCom;
+
+        $totDefect = (clone $headerQuery)
+            ->whereNotNull("$fi.date_output")
+            ->whereNotNull("$fi.defect_code")
+            ->count(DB::raw("DISTINCT $fi.id"));
+
+        $oql = $totalQtyInspect > 0
+            ? number_format(($totDefect / $totalQtyInspect) * 100, 2, '.', '')
+            : '0.00';
+
+        $rejectIdpoList = (clone $headerQuery)
+            ->whereIn("$od.idpo", $finalComIdpoList)
+            ->whereNotNull("$fi.defect_code")
+            ->select("$od.idpo")->distinct()->pluck("$od.idpo");
+
+        $poWithDefect = $rejectIdpoList->count();
+        $poNoDefect = $finalCom - $poWithDefect;
+        $passingRate = $finalCom > 0 ? round(($poNoDefect / $finalCom) * 100, 2) : 0;
+        $rejectRate = $finalCom > 0 ? round(($poWithDefect / $finalCom) * 100, 2) : 0;
+
+        return [
+            'total_po' => $totalPo,
+            'total_qty' => $totalQty,
+            'total_qty_inspect' => $totalQtyInspect,
+            'po_need_final' => $poNeedFinal,
+            'overdue' => $overdue,
+            'final_completed' => $finalCom,
+            'oql' => $oql,
+            'passing_rate' => $passingRate,
+            'reject_rate' => $rejectRate,
+        ];
     }
 
-    .chart-donut {
-        width: 100%;
-        flex: 1 1 auto;
-        min-height: 0;
+    function summaryFilter(Request $request)
+    {
+        preconnect(session('db'));
+        $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
+        $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+        $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
+        $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+
+        return response()->json($this->buildSummaryFilterData($request, $dta, $dtb));
     }
 
-    .chart-title {
-        flex-shrink: 0;
-    }
+    // finalOverview, dashboardAll
+    private function buildFinalOverviewData(Request $request, Carbon $dta, Carbon $dtb): array
+    {
+        $fi = (new OutputDetailFinalInspection())->getTable();
+        $od = (new OutputDetail())->getTable();
+        $po = (new PurchaseOrder())->getTable();
+        $odp = (new OutputDetailPacking())->getTable();
 
+        $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true, $dta, $dtb);
+        $qtyPerIdpo = $leafRows->groupBy('idpo')->map(fn ($rows) => (int) $rows->sum('qty_ori'));
+        $qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
 
+        // DIUBAH: langsung filter by $od.idpo, tanpa pluck barcode dulu
+        $headerQuery = OutputDetailFinalInspection::query()
+            ->join($od, "$od.barcode", '=', "$fi.barcode")
+            ->join($po, "$po.idpo", '=', "$od.idpo")
+            ->whereIn("$od.idpo", $qualifiedIdpo);
 
-    @media (min-width: 768px) and (max-width: 991.98px) {
+        $finalComIdpoList = (clone $headerQuery)
+            ->where("$fi.is_output", 1)
+            ->select("$od.idpo")->distinct()->pluck("$od.idpo");
+        $finalCom = $finalComIdpoList->count();
 
-        .panel-bottom > .row {
-            height: 100%;
-        }
+        $rejectIdpoList = (clone $headerQuery)
+            ->whereIn("$od.idpo", $finalComIdpoList)
+            ->whereNotNull("$fi.date_output")
+            ->whereNotNull("$fi.defect_code")
+            ->select("$od.idpo")->distinct()->pluck("$od.idpo");
 
-        .panel-bottom > .row > .col {
-            height: 300px !important;
-            min-height: 300px !important;
-        }
+        $passIdpoList = $finalComIdpoList->diff($rejectIdpoList)->values();
 
-        .panel-bottom > .row > .col > .border-custom-datatable {
-            height: 100% !important;
-        }
-    }
-</style>
+        $poWithDefect = $rejectIdpoList->count();
+        $poNoDefect = $passIdpoList->count();
 
-<div class="flex-fill panel-slot panel-bottom">
-    <div class="row row-cols-1 row-cols-lg-3 row-cols-md-3 g-2 h-100">
-        <!-- CHART 1 -->
-        <div class="chart-wrapper col">
-            <div class="border-custom-datatable rounded-1 h-100">
-                <div class="wrapper-sub">
-                    <h6 class="subheader mb-0 fw-normal text-truncate">
-                        FINAL INSPECTION RESULT (QTY INSPECT)
-                    </h6>
+        $qtyInspectPass = (clone $headerQuery)
+            ->whereIn("$od.idpo", $passIdpoList)
+            ->whereNotNull("$fi.date_output")
+            ->count(DB::raw("DISTINCT $od.barcode"));
+        $qtyInspectReject = (clone $headerQuery)
+            ->whereIn("$od.idpo", $rejectIdpoList)
+            ->whereNotNull("$fi.date_output")
+            ->count(DB::raw("DISTINCT $od.barcode"));
 
-                    <div id="chart-1" class="chart-donut flex-fill"></div>
+        $byIdpoLeaf = $leafRows->groupBy('idpo');
 
-                    <div class="chart-title d-flex justify-content-center gap-4 mt-2">
-                        <div class="d-flex align-items-center ">
-                            <span style="width:12px;height:12px;background:#4ade80;border-radius:2px;display:inline-block;margin-right:8px;"></span>
-                            <div>
-                                <div class="fw-bold">PASS</div>
-                                <div id="pass-text-1" class="legend-value">0 (0%)</div>
-                            </div>
-                        </div>
-                        <div class="d-flex align-items-center">
-                            <span style="width:12px;height:12px;background:#f87171;border-radius:2px;display:inline-block;margin-right:8px;"></span>
-                            <div>
-                                <div class="fw-bold">REJECT</div>
-                                <div id="reject-text-1" class="legend-value">0 (0%)</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        $today = Carbon::today()->startOfDay();
+        $split = $this->getSplitFinalCheckIdpoList($request, $dta, $dtb, $today);
+        $finalIdpoList = $split['overdue']->merge($split['need_final'])->unique()->values();
 
-        <!-- CHART 2 -->
-        <div class="col">
-            <div class="border-custom-datatable rounded-1 h-100">
-                <div class="wrapper-sub">
-                    <h6 class="subheader mb-0 fw-normal text-truncate">FINAL INSPECTION RESULT (OQL-DEFECT RATE)</h6>
+        $poList = $finalIdpoList->map(function ($idpo) use ($byIdpoLeaf) {
+            $rows = $byIdpoLeaf->get($idpo);
+            if (!$rows) {
+                return null;
+            }
+            $first = $rows->first();
+            return (object) [
+                'idpo' => $idpo, 'po' => $first->po, 'idbuyer' => $first->idbuyer,
+                'idstyle' => $first->idstyle, 'idcolor' => $first->idcolor,
+            ];
+        })->filter()->values();
 
-                    <div id="chart-2" class="chart-donut flex-fill"></div>
+        $idpoList = $poList->pluck('idpo')->unique()->values();
 
-                    <div class="chart-title d-flex justify-content-center gap-4 mt-2">
-                        <div class="d-flex align-items-center">
-                            <span style="width:12px;height:12px;background:#3F3184;border-radius:2px;display:inline-block;margin-right:8px;"></span>
-                            <div>
-                                <div class="fw-bold">OQL (Defect Rate)</div>
-                                <div id="pass-text-2" class="legend-value">0 (0%)</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        $combineProList = HistoryDataBreakdown::whereIn('idpo', $idpoList)
+            ->pluck('combine_pro')->filter()->unique()->values();
 
-        <!-- CHART 3 -->
-        <div class="col">
-            <div class="border-custom-datatable rounded-1 h-100">
-                <div class="wrapper-sub">
-                    <h6 class="subheader mb-0 fw-normal text-truncate">FINAL INSPECTION RESULT (QTY ORDER)</h6>
+        $allHistoryIdpo = HistoryDataBreakdown::whereIn('combine_pro', $combineProList)
+            ->pluck('idpo')->filter()->unique()->values();
 
-                    <div id="chart-3" class="chart-donut flex-fill"></div>
+        $outputPerIdpo = $this->getOutputPerIdpoFromPacking($allHistoryIdpo);
 
-                    <div class="chart-title d-flex justify-content-center gap-4 mt-2">
-                        <div class="d-flex">
-                            <div>
-                                <span style="width:12px;height:12px;background:#4ade80;border-radius:2px;display:inline-block;margin-right:8px;"></span>
-                            </div>
-                            <div>
-                                <div class="fw-bold">PASS</div>
-                                <div id="pass-text-3" class="legend-value">0 (0%)</div>
-                            </div>
-                        </div>
-                        <div class="d-flex align-items-center">
-                            <div>
-                                <span style="width:12px;height:12px;background:#f87171;border-radius:2px;display:inline-block;margin-right:8px;"></span>
+        $outputPerIdpo = $this->redistributeReroutedOutput(
+            $idpoList,
+            $outputPerIdpo
+        );
 
-                            </div>
-                            <div>
-                                <div class="fw-bold">REJECT</div>
-                                <div id="reject-text-3" class="legend-value">0 (0%)</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+        $notFinalIdpoList = $idpoList;
+        $qtyInspectNotFinal = 0;
 
+        $getOutputPerIdpo = function ($idpoList) use ($od, $odp) {
+            if ($idpoList->isEmpty()) {
+                return collect();
+            }
 
-
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-
-    const chartInstances = {};
-
-    function getFontScale(width, height) {
-        const size = Math.min(width, height);
-
-        if (size <= 90) {
-            return {
-                center: 10,
-                sub: 8
-            };
-        }
-
-        if (size <= 120) {
-            return {
-                center: 12,
-                sub: 9
-            };
-        }
-
-        if (size <= 160) {
-            return {
-                center: 14,
-                sub: 10
-            };
-        }
-
-        return {
-            center: 16,
-            sub: 11
+            return OutputDetail::query()
+                ->whereIn("$od.idpo", $idpoList)
+                ->whereNotNull("$od.barcode")
+                ->leftJoin("$odp", "$odp.barcode", '=', "$od.barcode")
+                ->select(
+                    "$od.idpo",
+                    DB::raw("COUNT(DISTINCT $odp.id_set) as total_output")
+                )
+                ->groupBy("$od.idpo")
+                ->get()
+                ->mapWithKeys(function ($row) {
+                    return [
+                        (string) $row->idpo => (int) $row->total_output
+                    ];
+                });
         };
+
+        $outputPassPerIdpo = $this->redistributeReroutedOutput(
+            $passIdpoList,
+            $getOutputPerIdpo($passIdpoList)
+        );
+
+        $outputRejectPerIdpo = $this->redistributeReroutedOutput(
+            $rejectIdpoList,
+            $getOutputPerIdpo($rejectIdpoList)
+        );
+
+        $outputPass = $outputPassPerIdpo->sum();
+        $outputReject = $outputRejectPerIdpo->sum();
+        $outputNotFinal = $outputPerIdpo->sum();
+
+        $qtyPass = $passIdpoList->sum(fn ($idpo) => $qtyPerIdpo->get($idpo, 0));
+        $qtyReject = $rejectIdpoList->sum(fn ($idpo) => $qtyPerIdpo->get($idpo, 0));
+        $qtyNotFinal = $notFinalIdpoList->sum(fn ($idpo) => $qtyPerIdpo->get($idpo, 0));
+
+        $progressPass = $qtyPass > 0 ? round(($outputPass / $qtyPass) * 100, 2) : 0;
+        $progressReject = $qtyReject > 0 ? round(($outputReject / $qtyReject) * 100, 2) : 0;
+        $progressNotFinal = $qtyNotFinal > 0 ? round(($outputNotFinal / $qtyNotFinal) * 100, 2) : 0;
+
+        $totalPoAll = $poNoDefect + $poWithDefect + $notFinalIdpoList->count();
+        $totalQtyOrderAll = $qtyPass + $qtyReject + $qtyNotFinal;
+        $totalQtyInspectAll = $qtyInspectPass + $qtyInspectReject;
+        $totalOutputAll = $outputPass + $outputReject + $outputNotFinal;
+        $totalProgressOutputAll = $totalQtyOrderAll > 0
+            ? round(($totalOutputAll / $totalQtyOrderAll) * 100, 2) : 0;
+
+        return ['data' => [[
+            'pass' => [
+                'count' => $poNoDefect,
+                'qty' => $qtyPass,
+                'qty_inspect' => $qtyInspectPass,
+                'output' => $outputPass,
+                'progress_output' => $progressPass,
+            ],
+            'reject' => [
+                'count' => $poWithDefect,
+                'qty' => $qtyReject,
+                'qty_inspect' => $qtyInspectReject,
+                'output' => $outputReject,
+                'progress_output' => $progressReject,
+            ],
+            'not_final' => [
+                'count' => $notFinalIdpoList->count(),
+                'qty' => $qtyNotFinal,
+                'qty_inspect' => $qtyInspectNotFinal,
+                'output' => $outputNotFinal,
+                'progress_output' => $progressNotFinal,
+            ],
+            'total' => [
+                'total_po' => $totalPoAll,
+                'qty_order' => $totalQtyOrderAll ?: 0,
+                'qty_inspect' => $totalQtyInspectAll ?: 0,
+                'output' => $totalOutputAll ?: 0,
+                'progress_output' => $totalProgressOutputAll,
+            ],
+        ]]];
     }
 
-    function renderDonutChart(
-        chartId,
-        passValue,
-        rejectValue,
-        totalValue,
-        passTextId,
-        rejectTextId,
-        passColor = '#4ade80',
-        rejectColor = '#f87171',
-        centerLabel = 'Pcs',
-        firstName = 'PASS',
-        valueSuffix = '',
-        showPercentage = true,
-        customTooltip = null
-    ) {
-        const total = Number(totalValue) || 0;
+    function finalOverview(Request $request)
+    {
+        preconnect(session('db'));
+        $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
+        $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+        $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
+        $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
 
-        const pass = Number(passValue) || 0;
-        const reject = Number(rejectValue) || 0;
+        return response()->json($this->buildFinalOverviewData($request, $dta, $dtb));
+    }
 
-        const passPct = total > 0
-            ? ((pass / total) * 100).toFixed(2)
-            : 0;
+    private function buildTopDefectsData(Request $request, Carbon $dta, Carbon $dtb): array
+    {
+        $fi = (new OutputDetailFinalInspection())->getTable();
+        $od = (new OutputDetail())->getTable();
+        $po = (new PurchaseOrder())->getTable();
 
-        const rejectPct = total > 0
-            ? ((reject / total) * 100).toFixed(2)
-            : 0;
+        $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true, $dta, $dtb);
+        $qtyPerIdpo = $leafRows->groupBy('idpo')->map(fn ($rows) => (int) $rows->sum('qty_ori'));
+        $qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
 
-        if (passTextId && document.getElementById(passTextId)) {
-            document.getElementById(passTextId).innerText =
-                showPercentage
-                    ? pass.toLocaleString('id-ID') + ' (' + passPct + '%)'
-                    : pass.toLocaleString('id-ID');
-        }
+        // DIUBAH: langsung filter by $od.idpo, tanpa pluck barcode dulu
+        $headerQuery = OutputDetailFinalInspection::query()
+            ->join($od, "$od.barcode", '=', "$fi.barcode")
+            ->join($po, "$po.idpo", '=', "$od.idpo")
+            ->whereIn("$od.idpo", $qualifiedIdpo);
 
-        if (rejectTextId && document.getElementById(rejectTextId)) {
-            document.getElementById(rejectTextId).innerText =
-                reject.toLocaleString('id-ID') + ' (' + rejectPct + '%)';
-        }
+        $defectRows = (clone $headerQuery)
+            ->whereNotNull("$fi.date_output")
+            ->whereNotNull("$fi.defect_code")
+            ->select("$fi.id", "$fi.defect_code")
+            ->distinct()
+            ->get()
+            ->filter(fn ($row) => !in_array((string) $row->defect_code, ['800', '900'], true));
 
-        const chartDom = document.getElementById(chartId);
+        $totalDefect = $defectRows->count();
 
-        if (!chartDom) return;
+        $grouped = $defectRows
+            ->groupBy('defect_code')
+            ->map(fn ($rows, $code) => [
+                'defect_code' => $code,
+                'qty' => $rows->count(),
+                'percentage' => $totalDefect > 0
+                    ? round(($rows->count() / $totalDefect) * 100, 2)
+                    : 0,
+            ])
+            ->values();
 
-        const myChart = echarts.init(chartDom);
-        chartInstances[chartId] = myChart;
+        $defectCodes = $grouped
+            ->pluck('defect_code')
+            ->filter(fn ($code) => $code !== 'Others')
+            ->unique()
+            ->values();
 
-        const data = [
-            {
-                value: pass,
-                name: firstName,
-                itemStyle: {
-                    color: passColor
+        $categoryMap = QCDefect::whereIn('kdcacat', $defectCodes)->pluck('category', 'kdcacat');
+        $defectNames = QCDefect::whereIn('kdcacat', $defectCodes)->pluck('deskripsi', 'kdcacat');
+
+        $result = $grouped
+            ->sort(function ($a, $b) {
+                if ($a['qty'] !== $b['qty']) {
+                    return $b['qty'] <=> $a['qty'];
                 }
+
+                return (int) $a['defect_code'] <=> (int) $b['defect_code'];
+            })
+            ->take(5)
+            ->values();
+
+        $totalTop5 = $result->sum('qty');
+
+        $result = $result->map(function ($item) use ($totalTop5, $defectNames) {
+            $code = $item['defect_code'];
+            $item['defect_name'] = $defectNames->get($code, $code);
+            $item['percentage'] = $totalTop5 > 0
+                ? round(($item['qty'] / $totalTop5) * 100, 2)
+                : 0;
+
+            return $item;
+        });
+
+        $processQty = 0;
+        $nonProcessQty = 0;
+        $nonProcessQtyNoGrade = 0;
+        $totalAllDefect = $grouped->sum('qty');
+
+        foreach ($grouped as $item) {
+            $code = $item['defect_code'];
+            $qty = (int) $item['qty'];
+
+            if ($code === 'Others') {
+                continue;
             }
+
+            $category = (int) $categoryMap->get($code, 0);
+
+            if ($category === 1) {
+                $processQty += $qty;
+                continue;
+            }
+
+            $nonProcessQty += $qty;
+
+            if ((int) $code !== 888) {
+                $nonProcessQtyNoGrade += $qty;
+            }
+        }
+
+        $processPercent = $totalAllDefect > 0
+            ? round(($processQty / $totalAllDefect) * 100, 2)
+            : 0;
+
+        $nonProcessPercent = $totalAllDefect > 0
+            ? round(($nonProcessQty / $totalAllDefect) * 100, 2)
+            : 0;
+
+        return [
+            'data' => $result,
+            'total' => $totalTop5,
+            'total_defect' => $totalDefect,
+            'process' => $processQty,
+            'non_process' => $nonProcessQty,
+            'non_process_no_grade' => $nonProcessQtyNoGrade,
+            'process_percent' => $processPercent,
+            'non_process_percent' => $nonProcessPercent,
+        ];
+    }
+
+    function topDefects(Request $request)
+    {
+        preconnect(session('db'));
+
+        $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
+        $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+        $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
+        $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+
+        return response()->json($this->buildTopDefectsData($request, $dta, $dtb));
+    }
+
+    private function resolveFilterLabel($value, ?callable $lookup): string
+    {
+        if (empty($value) || $value === 'all') {
+            return 'All';
+        }
+
+        $values = is_array($value) ? $value : [$value];
+
+        if ($lookup) {
+            $labels = $lookup($values);
+            return $labels->isNotEmpty() ? $labels->implode(', ') : implode(', ', $values);
+        }
+
+        return implode(', ', $values);
+    }
+
+    // exportData
+    private function buildPriorityFinalAdditionalData(Collection $idpoList): Collection
+    {
+        $fi = (new OutputDetailFinalInspection())->getTable();
+        $od = (new OutputDetail())->getTable();
+
+        if ($idpoList->isEmpty()) {
+            return collect();
+        }
+
+        $combineProList = HistoryDataBreakdown::whereIn('idpo', $idpoList)
+            ->pluck('combine_pro')->filter()->unique()->values();
+
+        $allHistoryIdpo = $combineProList->isEmpty()
+            ? $idpoList
+            : HistoryDataBreakdown::whereIn('combine_pro', $combineProList)
+                ->pluck('idpo')->filter()->unique()->values();
+
+        $rows = OutputDetailFinalInspection::query()
+            ->join($od, "$od.barcode", '=', "$fi.barcode")
+            ->whereIn("$od.idpo", $allHistoryIdpo)
+            ->whereNotNull("$fi.date_output")
+            ->select(
+                "$od.idpo",
+                "$od.idcolor",
+                "$fi.id as fi_id",
+                "$fi.barcode",
+                "$fi.defect_code"
+            )
+            ->distinct()
+            ->get();
+
+        $rerouteMap = $this->buildRerouteMap($rows->pluck('idpo')->unique()->values());
+
+        $rows = $rows->map(function ($r) use ($rerouteMap) {
+            $r->idpo = $rerouteMap->get((string) $r->idpo, (string) $r->idpo);
+            return $r;
+        });
+
+        $keyOf = fn ($r) => $r->idpo . '|' . $r->idcolor;
+
+        $qtyInspectMap = $rows->groupBy($keyOf)
+            ->map(fn ($g) => $g->pluck('fi_id')->unique()->count());
+
+        $defectRows = $rows->filter(function ($row) {
+            return !is_null($row->defect_code)
+                && !in_array((string) $row->defect_code, ['800', '900'], true);
+        });
+
+        $defectQtyMap = $defectRows->groupBy($keyOf)
+            ->map(fn ($g) => $g->pluck('fi_id')->unique()->count());
+
+        $defectCodes = $defectRows->pluck('defect_code')->filter()->unique()->values();
+        $defectNames = QCDefect::whereIn('kdcacat', $defectCodes)->pluck('deskripsi', 'kdcacat');
+        $defectCategories = QCDefect::whereIn('kdcacat', $defectCodes)->pluck('category', 'kdcacat');
+
+        $defectNameMap = $defectRows
+            ->groupBy($keyOf)
+            ->map(function ($g) use ($defectNames) {
+                return $g->groupBy('defect_code')
+                    ->sortByDesc(fn ($items) => $items->count())
+                    ->keys()
+                    ->map(fn ($code) => $defectNames->get($code) ?: $code)
+                    ->implode(', ');
+            });
+
+        $processMap = collect();
+        $nonProcessMap = collect();
+        foreach ($defectRows->groupBy($keyOf) as $key => $g) {
+            $process = 0;
+            $nonProcess = 0;
+            foreach ($g->groupBy('fi_id') as $fiRows) {
+                $category = (int) $defectCategories->get($fiRows->first()->defect_code, 0);
+                $category === 1 ? $process++ : $nonProcess++;
+            }
+            $processMap->put($key, $process);
+            $nonProcessMap->put($key, $nonProcess);
+        }
+
+        $result = collect();
+        foreach ($qtyInspectMap as $key => $qty) {
+            $result->put($key, [
+                'qty_inspect' => $qty,
+                'defect_qty' => $defectQtyMap->get($key, 0),
+                'defect_name' => $defectNameMap->get($key, '-'),
+                'process' => $processMap->get($key, 0),
+                'non_process' => $nonProcessMap->get($key, 0),
+            ]);
+        }
+        return $result;
+    }
+
+    function exportData(Request $request)
+    {
+        preconnect(session('db'));
+
+        $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
+        $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+        $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
+        $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+
+        $summary = $this->buildSummaryFilterData($request, $dta, $dtb);
+        $priorityFinal = $this->buildPriorityFinalData($request, $dta, $dtb);
+
+        $idpoList = $priorityFinal['data']->pluck('idpo')->unique()->values();
+        $additionalMap = $this->buildPriorityFinalAdditionalData($idpoList);
+
+        $priorityFinalData = $priorityFinal['data']->map(function ($item) use ($additionalMap) {
+            $key = $item['idpo'] . '|' . $item['idcolor'];
+
+            $extra = $additionalMap->get($key, [
+                'qty_inspect' => 0,
+                'defect_qty' => 0,
+                'defect_name' => '-',
+                'process' => 0,
+                'non_process' => 0,
+            ]);
+
+            return array_merge($item, $extra);
+        })->values();
+
+        $qtyOrder = (int) $priorityFinalData->sum('qty_order');
+        $output = (int) $priorityFinalData->sum('output');
+        $qtyInspect = (int) $priorityFinalData->sum('qty_inspect');
+        $defectQty = (int) $priorityFinalData->sum('defect_qty');
+        $process = (int) $priorityFinalData->sum('process');
+        $nonProcess = (int) $priorityFinalData->sum('non_process');
+
+        $priorityFinalTotal = [
+            'qty_order' => $qtyOrder,
+
+            'output' => $output,
+
+            'progress_output' => $qtyOrder > 0
+                ? round(($output / $qtyOrder) * 100, 2)
+                : 0,
+
+            'qty_inspect' => $qtyInspect,
+
+            'defect_qty' => $defectQty,
+
+            'process' => $process,
+
+            'non_process' => $nonProcess,
+
+            'process_percentage' => $defectQty > 0
+                ? round(($process / $defectQty) * 100, 2)
+                : 0,
+
+            'non_process_percentage' => $defectQty > 0
+                ? round(($nonProcess / $defectQty) * 100, 2)
+                : 0,
         ];
 
-        if (rejectTextId) {
-            data.push({
-                value: reject,
-                name: 'REJECT',
-                itemStyle: {
-                    color: rejectColor
+
+        $filterInfo = [
+            'periode' => $dta->format('d-m-Y') . ' s/d ' . $dtb->format('d-m-Y'),
+            'groupbuyer' => $this->resolveFilterLabel(
+                $request->groupbuyer,
+                fn($ids) => MasterGroupBuyer::whereIn('id', $ids)->pluck('group_name')
+            ),
+            'style' => $this->resolveFilterLabel(
+                $request->style,
+                fn($ids) => Style::whereIn('idstyle', $ids)->pluck('nmstyle')
+            ),
+            'po' => $this->resolveFilterLabel(
+                $request->po,
+                fn($ids) => PurchaseOrder::whereIn('idpo', $ids)->pluck('po')
+            ),
+        ];
+
+        $payload = [
+            'filter' => $filterInfo,
+            'summary' => $summary,
+            'detail_po' => $priorityFinalData,
+            'detail_po_total' => $priorityFinalTotal,
+        ];
+
+        if ($request->query('format') === 'json') {
+            return response()->json($payload);
+        }
+
+        return view('monitoring::finalinspection.partials.exportdatatable', $payload);
+    }
+
+    // chartData, dashboardAll
+    private function buildChartData(Request $request, Carbon $dta, Carbon $dtb): array
+    {
+        $fi = (new OutputDetailFinalInspection())->getTable();
+        $od = (new OutputDetail())->getTable();
+        $po = (new PurchaseOrder())->getTable();
+
+        $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true, $dta, $dtb);
+        $qtyPerIdpo = $leafRows->groupBy('idpo')->map(fn ($rows) => (int) $rows->sum('qty_ori'));
+        $qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
+
+        // DIUBAH: langsung filter by $od.idpo, tanpa pluck barcode dulu
+        $headerQuery = OutputDetailFinalInspection::query()
+            ->join($od, "$od.barcode", '=', "$fi.barcode")
+            ->join($po, "$po.idpo", '=', "$od.idpo")
+            ->whereIn("$od.idpo", $qualifiedIdpo);
+
+        $finalComIdpoList = (clone $headerQuery)
+            ->where("$fi.is_output", 1)
+            ->select("$od.idpo")->distinct()->pluck("$od.idpo");
+        $finalCom = $finalComIdpoList->count();
+
+        $rejectIdpoList = (clone $headerQuery)
+            ->whereIn("$od.idpo", $finalComIdpoList)
+            ->whereNotNull("$fi.date_output")
+            ->whereNotNull("$fi.defect_code")
+            ->select("$od.idpo")->distinct()->pluck("$od.idpo");
+
+        $passIdpoList = $finalComIdpoList->diff($rejectIdpoList)->values();
+        $poWithDefect = $rejectIdpoList->count();
+        $poNoDefect = $passIdpoList->count();
+
+        $qtyPass = $passIdpoList->sum(
+            fn ($idpo) => $qtyPerIdpo->get($idpo, 0)
+        );
+
+        $qtyReject = $rejectIdpoList->sum(
+            fn ($idpo) => $qtyPerIdpo->get($idpo, 0)
+        );
+
+        $today = Carbon::today()->startOfDay();
+        $split = $this->getSplitFinalCheckIdpoList($request, $dta, $dtb, $today);
+        $notFinalIdpoList = $split['overdue']->merge($split['need_final'])->unique()->values();
+        $qtyNotFinal = $this->getNetCutoffQty($notFinalIdpoList);
+
+        $totalQtyOrder = $qtyPass + $qtyReject;
+        $orderPassPercent = $totalQtyOrder > 0 ? round(($qtyPass / $totalQtyOrder) * 100, 2) : 0;
+        $orderRejectPercent = $totalQtyOrder > 0 ? round(($qtyReject / $totalQtyOrder) * 100, 2) : 0;
+
+        $qtyInspectPass = (clone $headerQuery)
+            ->whereIn("$od.idpo", $passIdpoList)
+            ->whereNotNull("$fi.date_output")
+            ->count(DB::raw("DISTINCT $od.barcode"));
+        $qtyInspectReject = (clone $headerQuery)
+            ->whereIn("$od.idpo", $rejectIdpoList)
+            ->whereNotNull("$fi.date_output")
+            ->count(DB::raw("DISTINCT $od.barcode"));
+        $totalQtyInspect = $qtyInspectPass + $qtyInspectReject;
+
+        $defectRows = (clone $headerQuery)
+            ->whereNotNull("$fi.date_output")
+            ->whereNotNull("$fi.defect_code")
+            ->select("$fi.id", "$fi.defect_code")
+            ->distinct()->get();
+        $totalDefect = $defectRows->count();
+
+        $oqlDefect = $totalQtyInspect > 0 ? round($qtyInspectReject / $totalQtyInspect * 100, 2) : 0;
+        $inspectPass = $totalQtyInspect > 0 ? round($qtyInspectPass / $totalQtyInspect * 100, 2) : 0;
+        $inspectReject = $totalQtyInspect > 0 ? round($qtyInspectReject / $totalQtyInspect * 100, 2) : 0;
+
+        return [
+            'data' => [[
+                'qty_inspect' => [
+                    'pass' => $qtyInspectPass,
+                    'pass_percent' => $inspectPass,
+                    'reject' => $qtyInspectReject,
+                    'reject_percent' => $inspectReject,
+                    'total' => $totalQtyInspect,
+                ],
+                'oql_defect' => [
+                    'defect' => $totalDefect,
+                    'defect_percent' => $oqlDefect,
+                    'total' => $qtyInspectReject,
+                ],
+                'qty_order' => [
+                    'pass' => $qtyPass,
+                    'pass_percent' => $orderPassPercent,
+                    'reject' => $qtyReject,
+                    'reject_percent' => $orderRejectPercent,
+                    'total' => $totalQtyOrder,
+                ],
+            ]],
+        ];
+    }
+
+    function chartData(Request $request)
+    {
+        preconnect(session('db'));
+        $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
+        $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+        $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
+        $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+
+        return response()->json($this->buildChartData($request, $dta, $dtb));
+    }
+
+    function dashboardAll(Request $request)
+    {
+        preconnect(session('db'));
+        $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
+        $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+        $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
+        $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+
+        return response()->json([
+            'summaryFilter' => $this->buildSummaryFilterData($request, $dta, $dtb),
+            'priorityFinal' => $this->buildPriorityFinalData($request, $dta, $dtb),
+            'finalOverview' => $this->buildFinalOverviewData($request, $dta, $dtb),
+            'chartData' => $this->buildChartData($request, $dta, $dtb),
+            'topDefects' => $this->buildTopDefectsData($request, $dta, $dtb),
+        ]);
+    }
+
+    private function getOutputPerIdpoFromPacking($idpoList)
+    {
+        $od = (new OutputDetail())->getTable();
+        $odp = (new OutputDetailPacking())->getTable();
+
+        if ($idpoList->isEmpty()) {
+            return collect();
+        }
+
+        $outputRows = OutputDetail::query()
+            ->whereIn("$od.idpo", $idpoList)
+            ->whereNotNull("$od.barcode")
+            ->leftJoin("$odp", "$odp.barcode", '=', "$od.barcode")
+            ->select(
+                "$od.idpo",
+                DB::raw("COUNT(DISTINCT $odp.id_set) as total_output")
+            )
+            ->groupBy("$od.idpo")
+            ->get();
+
+        return $outputRows->mapWithKeys(function ($row) {
+            return [
+                (string) $row->idpo => (int) $row->total_output
+            ];
+        });
+    }
+
+    private function getLeafHistoryRows(
+        Request $request,
+        $familyColumn = 'combine_pro',
+        $applyPoFilter = true,
+        $fromDate = null,
+        $toDate = null
+    ) {
+        $cacheKey = md5(json_encode([
+            'familyColumn' => $familyColumn,
+            'applyPoFilter' => $applyPoFilter,
+            'fromDate' => $fromDate ? $fromDate->toDateTimeString() : null,
+            'toDate' => $toDate ? $toDate->toDateTimeString() : null,
+            'groupbuyer' => $request->get('groupbuyer'),
+            'po' => $applyPoFilter ? $request->get('po') : null,
+            'style' => $request->get('style'),
+            'datea' => $request->get('datea'),
+            'dateb' => $request->get('dateb'),
+        ]));
+
+        if (array_key_exists($cacheKey, $this->leafRowsCache)) {
+            return $this->leafRowsCache[$cacheKey];
+        }
+
+        $po = (new PurchaseOrder())->getTable();
+        $dbr = (new HistoryDataBreakdown())->getTable();
+
+        $rawQuery = HistoryDataBreakdown::query()
+            ->join($po, "$po.idpo", '=', "$dbr.idpo")
+            ->where("$dbr.production_status", "IH");
+
+        if ($request->filled('groupbuyer') && $request->groupbuyer !== 'all') {
+            $buyerIds = Buyer::where('groupbuyer', $request->groupbuyer)->pluck('idbuyer');
+            $rawQuery->whereIn("$po.idbuyer", $buyerIds);
+        }
+
+        if ($applyPoFilter && $request->filled('po') && $request->po !== 'all') {
+            $resolvedIdpo = $this->resolveRerouteIdpo($request->po);
+            $rawQuery->whereIn("$dbr.idpo", $resolvedIdpo);
+        }
+
+        if ($request->filled('style') && $request->style !== 'all') {
+            $rawQuery->where("$po.idstyle", $request->style);
+        }
+
+        if ($fromDate && $toDate) {
+            $dta = $fromDate->copy()->startOfDay();
+            $dtb = $toDate->copy()->endOfDay();
+        } elseif ($request->filled('datea') && $request->filled('dateb')) {
+            $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
+            $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+            $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
+            $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+        } else {
+            $dta = null;
+            $dtb = null;
+        }
+
+        if ($dta && $dtb) {
+            $rawQuery->whereBetween("$dbr.deliverydate", [$dta, $dtb]);
+        }
+
+        $rawRows = $rawQuery->select(
+            "$dbr.idpo", "$dbr.idcolor", "$dbr.qty_ori", "$dbr.kp_item",
+            "$dbr.kp_item_ref", "$dbr.revisi_kp", "$dbr.deliverydate",
+            "$dbr.$familyColumn as family_key", "$po.po", "$po.idbuyer", "$po.idstyle"
+        )->get();
+
+        $deduped = $rawRows
+            ->groupBy(fn ($r) => $r->idpo . '|' . $r->idcolor . '|' . $r->kp_item)
+            ->map(fn ($group) => $group->sortByDesc('revisi_kp')->first())
+            ->values();
+
+        $refByFamily = $deduped
+            ->filter(fn ($r) => !is_null($r->kp_item_ref))
+            ->groupBy(fn ($r) => $r->idpo . '|' . $r->family_key)
+            ->map(fn ($group) => $group->pluck('kp_item_ref')->unique()->values());
+
+        $leafRows = $deduped->filter(function ($row) use ($refByFamily) {
+            $refs = $refByFamily->get($row->idpo . '|' . $row->family_key);
+            return !($refs && $refs->contains($row->kp_item));
+        })->values();
+
+        return $this->leafRowsCache[$cacheKey] = $leafRows;
+    }
+
+    private function resolveRerouteIdpo($idpo)
+    {
+        if (!$idpo || $idpo === 'all') {
+            return collect();
+        }
+
+        $combineProList = HistoryDataBreakdown::where('idpo', $idpo)
+            ->pluck('combine_pro')->filter()->unique()->values();
+        if ($combineProList->isEmpty()) {
+            return collect([$idpo]);
+        }
+
+        $relatedIdpo = HistoryDataBreakdown::whereIn('combine_pro', $combineProList)
+            ->pluck('idpo')->filter()->unique()->values();
+
+        $lastHistory = $this->getLastHistoryPoRevisi($relatedIdpo);
+        $activeIdpo = $lastHistory->filter(fn ($row) => (int) $row->qtypo > 0)->keys()->values();
+
+        return $activeIdpo->isNotEmpty() ? $activeIdpo : collect([$idpo]);
+    }
+
+    // TAMBAHAN: helper terpusat & di-cache untuk owner-map (combine_pro|kp_item -> idpo).
+    // Dipakai oleh getActiveRerouteIdpoList, resolveRerouteDuplicates, remapToReroutedIdpo,
+    // buildRerouteMap, redistributeReroutedOutput, getNetCutoffQty — sebelumnya masing2
+    // query ulang HistoryDataBreakdown::whereIn('combine_pro', ...) dari nol.
+    private function getOwnerByCombineKpItem(Collection $combineProList): Collection
+    {
+        $combineProList = collect($combineProList)->filter()->unique()->sort()->values();
+        if ($combineProList->isEmpty()) {
+            return collect();
+        }
+
+        $cacheKey = md5($combineProList->implode(','));
+        if (array_key_exists($cacheKey, $this->ownerMapCache)) {
+            return $this->ownerMapCache[$cacheKey];
+        }
+
+        $rows = HistoryDataBreakdown::whereIn('combine_pro', $combineProList)
+            ->select('idpo', 'combine_pro', 'kp_item', 'kp_item_ref', 'revisi_kp')
+            ->get();
+
+        $ownerMap = $rows
+            ->groupBy(fn ($r) => $r->combine_pro . '|' . $r->kp_item)
+            ->map(fn ($group) => (string) $group->sortBy('idpo')->first()->idpo);
+
+        // simpan juga rows mentahnya di cache terpisah supaya method yang butuh
+        // kolom tambahan (qty_ori, is_cutoff, dst) tidak perlu query combine_pro lagi
+        $this->ownerMapCache[$cacheKey . '_rows'] = $rows;
+
+        return $this->ownerMapCache[$cacheKey] = $ownerMap;
+    }
+
+    // helper: ambil rows mentah HistoryDataBreakdown by combine_pro dengan kolom custom,
+    // dipakai method yang butuh kolom tambahan (qty_ori, is_cutoff, combine_pro_set)
+    private function getHistoryRowsByCombinePro(Collection $combineProList, array $columns): Collection
+    {
+        $combineProList = collect($combineProList)->filter()->unique()->sort()->values();
+        if ($combineProList->isEmpty()) {
+            return collect();
+        }
+
+        $cacheKey = md5($combineProList->implode(',') . '|' . implode(',', $columns));
+        if (array_key_exists($cacheKey, $this->ownerMapCache)) {
+            return $this->ownerMapCache[$cacheKey];
+        }
+
+        return $this->ownerMapCache[$cacheKey] = HistoryDataBreakdown::whereIn('combine_pro', $combineProList)
+            ->select($columns)
+            ->get();
+    }
+
+    // priorityFinal, getSplitFinalCheckIdpoList
+    private function getLastHistoryPoRevisi(Collection $idpoList): Collection
+    {
+        $idpoList = collect($idpoList)->filter()->unique()->values();
+        if ($idpoList->isEmpty()) {
+            return collect();
+        }
+
+        return HistoryPO::whereIn('idpo', $idpoList)
+            ->orderBy('idpo')->orderByDesc('revisi')
+            ->get(['idpo', 'revisi', 'qtypo'])
+            ->groupBy('idpo')
+            ->map(fn ($rows) => $rows->sortByDesc('revisi')->first());
+    }
+
+    // groupbuyer, styleSelect, poSelect, priorityFinal
+    private function getActiveRerouteIdpoList($idpoList)
+    {
+        $idpoList = collect($idpoList)->filter()->unique()->values();
+        if ($idpoList->isEmpty()) {
+            return collect();
+        }
+
+        $combineProList = HistoryDataBreakdown::whereIn('idpo', $idpoList)
+            ->pluck('combine_pro')->filter()->unique()->values();
+        if ($combineProList->isEmpty()) {
+            return $idpoList;
+        }
+
+        $allIdpo = HistoryDataBreakdown::whereIn('combine_pro', $combineProList)
+            ->pluck('idpo')->filter()->unique()->values();
+
+        $lastHistory = $this->getLastHistoryPoRevisi($allIdpo);
+
+        return $lastHistory->filter(fn ($row) => (int) $row->qtypo > 0)->keys()->values();
+    }
+
+    // priorityFinal (basis idpo untuk hitung output)
+    private function getRerouteIdpoList($idpoList)
+    {
+        $idpoList = collect($idpoList)->filter()->unique()->values();
+        if ($idpoList->isEmpty()) {
+            return collect();
+        }
+
+        $combineProList = HistoryDataBreakdown::whereIn('idpo', $idpoList)
+            ->pluck('combine_pro')->filter()->unique()->values();
+        if ($combineProList->isEmpty()) {
+            return $idpoList;
+        }
+
+        $allIdpo = HistoryDataBreakdown::whereIn('combine_pro', $combineProList)
+            ->pluck('idpo')->filter()->unique()->values();
+
+        $lastHistory = $this->getLastHistoryPoRevisi($allIdpo);
+
+        $result = collect();
+        foreach ($lastHistory as $idpo => $last) {
+            if ((int) $last->qtypo > 0) {
+                $result->push($idpo);
+            }
+        }
+
+        return $result->unique()->values();
+    }
+
+    // getSplitFinalCheckIdpoList
+    // DIUBAH: pakai getOwnerByCombineKpItem() (cached) untuk owner map
+    private function resolveRerouteDuplicates(Collection $idpoList): Collection
+    {
+        if ($idpoList->isEmpty()) {
+            return $idpoList;
+        }
+
+        $combineProList = HistoryDataBreakdown::whereIn('idpo', $idpoList)
+            ->pluck('combine_pro')->filter()->unique()->values();
+        if ($combineProList->isEmpty()) {
+            return $idpoList;
+        }
+
+        $ownerByCombineKpItem = $this->getOwnerByCombineKpItem($combineProList);
+        $rows = $this->getHistoryRowsByCombinePro(
+            $combineProList,
+            ['idpo', 'combine_pro', 'kp_item', 'kp_item_ref', 'revisi_kp']
+        );
+
+        $reroutedPairs = $rows
+            ->filter(fn ($r) => $r->revisi_kp == 1 && !is_null($r->kp_item_ref))
+            ->map(function ($r) use ($ownerByCombineKpItem) {
+                $originalIdpo = $ownerByCombineKpItem->get($r->combine_pro . '|' . $r->kp_item_ref);
+                return ($originalIdpo && $originalIdpo !== (string) $r->idpo)
+                    ? ['original' => $originalIdpo, 'rerouted' => (string) $r->idpo]
+                    : null;
+            })
+            ->filter()
+            ->unique(fn ($p) => $p['original'] . '|' . $p['rerouted'])
+            ->values();
+
+        $maxRevisiByIdpo = $this->getLastHistoryPoRevisi($reroutedPairs->pluck('original')->unique()->values());
+
+        $excludedOriginals = collect();
+        foreach ($reroutedPairs as $pair) {
+            $maxRevisiRow = $maxRevisiByIdpo->get($pair['original']);
+            if ($maxRevisiRow && (int) $maxRevisiRow->qtypo === 0) {
+                $excludedOriginals->push($pair['original']);
+            }
+        }
+
+        return $idpoList->reject(fn ($idpo) => $excludedOriginals->contains(
+            fn ($excluded) => (string) $excluded === (string) $idpo
+        ))->values();
+    }
+
+    // poSelect, summaryFilter, priorityFinal, finalOverview, chartData
+    // DIUBAH: hasil dibungkus cache ($splitFinalCache) supaya query berat ini
+    // (whereExists ganda + correlated subquery) hanya jalan 1x per kombinasi
+    // filter+rentang tanggal, bukan diulang di tiap method pemanggil.
+    private function getSplitFinalCheckIdpoList(Request $request, Carbon $dta, Carbon $dtb, Carbon $today): array
+    {
+        $cacheKey = md5(json_encode([
+            'dta' => $dta->toDateTimeString(),
+            'dtb' => $dtb->toDateTimeString(),
+            'today' => $today->toDateString(),
+            'groupbuyer' => $request->get('groupbuyer'),
+            'po' => $request->get('po'),
+            'style' => $request->get('style'),
+        ]));
+
+        if (array_key_exists($cacheKey, $this->splitFinalCache)) {
+            return $this->splitFinalCache[$cacheKey];
+        }
+
+        $fi = (new OutputDetailFinalInspection())->getTable();
+        $od = (new OutputDetail())->getTable();
+        $po = (new PurchaseOrder())->getTable();
+        $dbr = (new HistoryDataBreakdown())->getTable();
+
+        // leaf rows dihitung sekali atas seluruh [dta, dtb], bukan per sub-rentang
+        $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true, $dta, $dtb);
+        $qtyPerIdpo = $leafRows->groupBy('idpo')->map(fn ($rows) => (int) $rows->sum('qty_ori'));
+        $etdPerIdpo = $leafRows->groupBy('idpo')->map(fn ($rows) => $rows->max('deliverydate'));
+        $qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
+
+        $effectiveIdpoSql = fn () => "(CASE WHEN $dbr.revisi_kp = 1 AND $dbr.kp_item_ref IS NOT NULL
+            THEN (SELECT dbr_prev.idpo FROM $dbr as dbr_prev
+                WHERE dbr_prev.combine_pro = $dbr.combine_pro
+                    AND dbr_prev.idpo < $dbr.idpo
+                ORDER BY dbr_prev.idpo DESC LIMIT 1)
+            ELSE $dbr.idpo END)";
+
+        $requireHasFinalRecord = function ($query) use ($fi, $od, $effectiveIdpoSql) {
+            $expr = $effectiveIdpoSql();
+            $query->whereExists(function ($q) use ($fi, $od, $expr) {
+                $q->select(DB::raw(1))
+                    ->from("$fi as fi3")
+                    ->join("$od as od3", "od3.barcode", '=', 'fi3.barcode')
+                    ->whereRaw("od3.idpo = $expr");
+            });
+            return $query;
+        };
+
+        $excludeIfAnyFinalEffective = function ($query) use ($fi, $od, $effectiveIdpoSql) {
+            $expr = $effectiveIdpoSql();
+            $query->whereNotExists(function ($q) use ($fi, $od, $expr) {
+                $q->select(DB::raw(1))
+                    ->from("$fi as fi2")
+                    ->join("$od as od2", "od2.barcode", '=', 'fi2.barcode')
+                    ->whereRaw("od2.idpo = $expr")
+                    ->where('fi2.is_output', 1);
+            });
+            return $query;
+        };
+
+        $query = HistoryDataBreakdown::query()
+            ->join($po, "$po.idpo", '=', "$dbr.idpo")
+            ->whereIn("$dbr.idpo", $qualifiedIdpo);
+        $requireHasFinalRecord($query);
+        $excludeIfAnyFinalEffective($query);
+
+        $candidateIdpoList = $query->select("$dbr.idpo")->distinct()->pluck('idpo');
+        $dedupedIdpoList = $this->resolveRerouteDuplicates($candidateIdpoList);
+
+        $overdue = collect();
+        $needFinal = collect();
+        foreach ($dedupedIdpoList as $idpo) {
+            $etd = $etdPerIdpo->get($idpo);
+            if (!$etd) {
+                continue;
+            }
+            $etdDate = Carbon::parse($etd)->startOfDay();
+            $overdueLimit = $today->copy()->addDay();
+
+            if ($etdDate->lessThanOrEqualTo($overdueLimit)) {
+                $overdue->push($idpo);
+                continue;
+            }
+            $needFinal->push($idpo);
+        }
+
+        return $this->splitFinalCache[$cacheKey] = [
+            'overdue' => $overdue->values(),
+            'need_final' => $needFinal->values(),
+        ];
+    }
+
+    // poSelect, priorityFinal (idpo lama -> idpo aktif hasil reroute)
+    // DIUBAH: pakai getOwnerByCombineKpItem() (cached)
+    private function remapToReroutedIdpo(Collection $idpoList): Collection
+    {
+        if ($idpoList->isEmpty()) {
+            return $idpoList;
+        }
+
+        $combineProList = HistoryDataBreakdown::whereIn('idpo', $idpoList)
+            ->pluck('combine_pro')->filter()->unique()->values();
+        if ($combineProList->isEmpty()) {
+            return $idpoList;
+        }
+
+        $ownerByCombineKpItem = $this->getOwnerByCombineKpItem($combineProList);
+        $rows = $this->getHistoryRowsByCombinePro(
+            $combineProList,
+            ['idpo', 'combine_pro', 'kp_item', 'kp_item_ref', 'revisi_kp']
+        );
+
+        $newIdpoByOriginal = $rows
+            ->filter(fn ($r) => $r->revisi_kp == 1 && !is_null($r->kp_item_ref))
+            ->mapWithKeys(function ($r) use ($ownerByCombineKpItem) {
+                $original = $ownerByCombineKpItem->get($r->combine_pro . '|' . $r->kp_item_ref);
+                return $original ? [$original => (string) $r->idpo] : [];
+            });
+
+        return $idpoList->map(fn ($idpo) => $newIdpoByOriginal->get((string) $idpo, (string) $idpo))
+            ->unique()->values();
+    }
+
+    // buildPriorityFinalData, buildPriorityFinalAdditionalData.
+    // DIUBAH: pakai getOwnerByCombineKpItem() (cached)
+    private function buildRerouteMap(Collection $idpoList): Collection
+    {
+        $idpoList = collect($idpoList)->map(fn ($id) => (string) $id)->filter()->unique()->values();
+        $identityMap = $idpoList->mapWithKeys(fn ($idpo) => [$idpo => $idpo]);
+
+        if ($idpoList->isEmpty()) {
+            return $identityMap;
+        }
+
+        $combineProList = HistoryDataBreakdown::whereIn('idpo', $idpoList)
+            ->pluck('combine_pro')->filter()->unique()->values();
+        if ($combineProList->isEmpty()) {
+            return $identityMap;
+        }
+
+        $ownerByCombineKpItem = $this->getOwnerByCombineKpItem($combineProList);
+        $rows = $this->getHistoryRowsByCombinePro(
+            $combineProList,
+            ['idpo', 'combine_pro', 'kp_item', 'kp_item_ref', 'revisi_kp']
+        );
+
+        $newIdpoByOriginal = $rows
+            ->filter(fn ($r) => $r->revisi_kp == 1 && !is_null($r->kp_item_ref))
+            ->mapWithKeys(function ($r) use ($ownerByCombineKpItem) {
+                $original = $ownerByCombineKpItem->get($r->combine_pro . '|' . $r->kp_item_ref);
+                return $original ? [$original => (string) $r->idpo] : [];
+            });
+
+        return $identityMap->map(fn ($idpo) => $newIdpoByOriginal->get($idpo, $idpo));
+    }
+
+    // finalOverview
+    // DIUBAH: pakai getOwnerByCombineKpItem() (cached); rows tambahan (qty_ori) tetap
+    // diambil sendiri karena kolomnya beda dari owner-map dasar
+    private function redistributeReroutedOutput(Collection $idpoList, Collection $outputPerIdpo): Collection
+    {
+        if ($idpoList->isEmpty()) {
+            return $outputPerIdpo;
+        }
+
+        $combineProList = HistoryDataBreakdown::whereIn('idpo', $idpoList)
+            ->pluck('combine_pro')->filter()->unique()->values();
+        if ($combineProList->isEmpty()) {
+            return $outputPerIdpo;
+        }
+
+        $ownerByCombineKpItem = $this->getOwnerByCombineKpItem($combineProList);
+        $rows = $this->getHistoryRowsByCombinePro(
+            $combineProList,
+            ['idpo', 'combine_pro', 'kp_item', 'kp_item_ref', 'revisi_kp', 'qty_ori']
+        );
+
+        $childrenByOriginal = collect();
+        $rows->filter(fn ($r) => $r->revisi_kp == 1 && !is_null($r->kp_item_ref))
+            ->each(function ($r) use ($ownerByCombineKpItem, $childrenByOriginal) {
+                $originalIdpo = $ownerByCombineKpItem->get($r->combine_pro . '|' . $r->kp_item_ref);
+                $childIdpo = (string) $r->idpo;
+                if ($originalIdpo && $originalIdpo !== $childIdpo) {
+                    if (!$childrenByOriginal->has($originalIdpo)) {
+                        $childrenByOriginal->put($originalIdpo, collect());
+                    }
+                    $childrenByOriginal->get($originalIdpo)->push([
+                        'child' => $childIdpo, 'qty' => (int) $r->qty_ori,
+                    ]);
                 }
             });
+
+        $result = [];
+        foreach ($outputPerIdpo as $idpo => $qty) {
+            $result[(string) $idpo] = (int) $qty;
         }
 
-        function buildOption() {
-            const width = chartDom.clientWidth || 150;
-            const height = chartDom.clientHeight || 150;
-
-            const { center, sub } = getFontScale(width, height);
-
-            return {
-                backgroundColor: 'transparent',
-
-                tooltip: {
-                    trigger: 'item',
-                    formatter: customTooltip || '{b}: {c} ({d}%)'
-                },
-
-                series: [
-                    {
-                        name: 'Inspection Result',
-                        type: 'pie',
-                        radius: [
-                            '52%',
-                            '70%'
-                        ],
-                        center: ['50%', '50%'],
-                        avoidLabelOverlap: false,
-                        label: {
-                            show: false
-                        },
-                        labelLine: {
-                            show: false
-                        },
-                        data: data
-                    }
-                ],
-
-                graphic: [
-                    {
-                        type: 'text',
-                        left: 'center',
-                        top: '43%',
-                        style: {
-                            text: total.toLocaleString('id-ID') + valueSuffix,
-                            textAlign: 'center',
-                            fill: '#ffffff',
-                            fontSize: center,
-                            fontWeight: 'bold'
-                        }
-                    },
-                    {
-                        type: 'text',
-                        left: 'center',
-                        top: '57%',
-                        style: {
-                            text: centerLabel,
-                            textAlign: 'center',
-                            fill: '#ffffff',
-                            fontSize: sub,
-                            fontWeight: 'normal'
-                        }
-                    }
-                ]
-            };
-        }
-        myChart.setOption(buildOption());
-        const ro = new ResizeObserver(() => {
-            myChart.resize();
-            myChart.setOption(buildOption());
-        });
-        ro.observe(chartDom);
-    }
-        renderDonutChart(
-            'chart-1',
-            0,
-            0,
-            0,
-            'pass-text-1',
-            'reject-text-1'
-        );
-        renderDonutChart(
-            'chart-2',
-            0,
-            0,
-            0,
-            'pass-text-2',
-            null,
-            '#3F3184',
-            '#374151',
-            'Pcs',
-            'OQL',
-            '',
-            false,
-            function (params) {
-                return params.name + ': ' + params.value + ' %';
+        foreach ($childrenByOriginal as $originalIdpo => $children) {
+            $remainingRawOutput = $result[$originalIdpo] ?? 0;
+            foreach ($children as $child) {
+                $moveQty = min($child['qty'], $remainingRawOutput);
+                if ($moveQty <= 0) {
+                    continue;
+                }
+                $result[$child['child']] = ($result[$child['child']] ?? 0) + $moveQty;
+                $remainingRawOutput -= $moveQty;
             }
+            $result[$originalIdpo] = $remainingRawOutput;
+        }
+
+        return collect($result);
+    }
+
+    // finalOverview, chartData
+    // DIUBAH: pakai getOwnerByCombineKpItem() (cached); rows tambahan (qty_ori, is_cutoff,
+    // combine_pro_set) tetap diambil sendiri karena kolomnya beda
+    private function getNetCutoffQty(Collection $idpoList): int
+    {
+        if ($idpoList->isEmpty()) {
+            return 0;
+        }
+
+        $combineProList = HistoryDataBreakdown::whereIn('idpo', $idpoList)
+            ->pluck('combine_pro')->filter()->unique()->values();
+
+        if ($combineProList->isEmpty()) {
+            return (int) HistoryDataBreakdown::whereIn('idpo', $idpoList)
+                ->where('is_cutoff', '1')->sum('qty_ori');
+        }
+
+        $ownerByCombineKpItem = $this->getOwnerByCombineKpItem($combineProList);
+        $familyRows = $this->getHistoryRowsByCombinePro(
+            $combineProList,
+            ['idpo', 'combine_pro', 'combine_pro_set', 'kp_item', 'kp_item_ref', 'revisi_kp', 'qty_ori', 'is_cutoff']
         );
-        const oqlText = document.getElementById('pass-text-2');
-        if (oqlText) {
-            oqlText.innerText = '0%';
-        }
 
-        renderDonutChart(
-            'chart-3',
-            0,
-            0,
-            0,
-            'pass-text-3',
-            'reject-text-3'
-        );
-    });
-</script>
+        $reroutedPairs = $familyRows
+            ->filter(fn ($r) => $r->revisi_kp == 1 && !is_null($r->kp_item_ref))
+            ->map(function ($r) use ($ownerByCombineKpItem) {
+                $originalIdpo = $ownerByCombineKpItem->get($r->combine_pro . '|' . $r->kp_item_ref);
+                return ($originalIdpo && $originalIdpo !== (string) $r->idpo)
+                    ? [
+                        'original' => $originalIdpo, 'rerouted' => (string) $r->idpo,
+                        'combine_pro' => $r->combine_pro, 'kp_item_ref' => $r->kp_item_ref,
+                    ]
+                    : null;
+            })
+            ->filter()
+            ->unique(fn ($p) => $p['original'] . '|' . $p['rerouted'])
+            ->values();
 
-category-defect
-<style>
-    .table-scroll-defect {
-        max-height: 122px;
-        overflow-y: auto;
-        overflow-x: hidden;
-    }
+        $idpoListStr = $idpoList->map(fn ($id) => (string) $id)->values();
+        $maxRevisiByIdpo = $this->getLastHistoryPoRevisi($reroutedPairs->pluck('original')->unique()->values());
 
-    .wrapper-sub {
-        height: 100%;
-        min-height: 0;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-    }
+        $excludedOriginals = collect();
+        $qtyTakeoverByNewIdpo = collect();
 
-    #chart-defect-category {
-        width: 100%;
-        flex: 1 1 0;
-        min-height: 0;
-    }
+        foreach ($reroutedPairs as $pair) {
+            $maxRevisiRow = $maxRevisiByIdpo->get($pair['original']);
+            if ($maxRevisiRow && (int) $maxRevisiRow->qtypo === 0) {
+                $excludedOriginals->push($pair['original']);
 
-    @media (min-width: 992px) and (max-width: 1399.98px) {
-        #chart-defect-category {
-            height: 115px !important;
-            min-height: 115px !important;
-        }
+                if (!$idpoListStr->contains($pair['rerouted'])) {
+                    continue;
+                }
 
-        .defect-category-legend {
-            gap: 15px !important;
-            margin-top: 0 !important;
-        }
+                $originalCutoffQty = $familyRows
+                    ->where('idpo', $pair['original'])
+                    ->where('kp_item', $pair['kp_item_ref'])
+                    ->where('is_cutoff', '1')
+                    ->sum('qty_ori');
 
-        .defect-category-legend .legend-box {
-            width: 9px !important;
-            height: 9px !important;
-            margin-right: 5px !important;
-        }
-
-        .defect-category-legend .legend-title {
-            font-size: 10px !important;
-            line-height: 10px;
-        }
-
-        .defect-category-legend .legend-value {
-            font-size: 10px !important;
-            line-height: 12px;
-        }
-
-        .border-custom-datatable{
-            margin: 0 !important;
-            padding: 0 !important;
-        }
-    }
-
-    /* TABLET */
-    @media (min-width: 768px) and (max-width: 991.98px) {
-        .category-wrapper {
-            height: 600px !important;
-            min-height: 600px !important;
-        }
-
-        .category-wrapper .category-row {
-            height: 100% !important;
-            min-height: 0 !important;
-        }
-
-        .category-wrapper .category-row > .col {
-            height: 100% !important;
-            min-height: 0 !important;
-        }
-
-        .category-wrapper .category-row > .col > .border-custom-datatable {
-            height: 100% !important;
-            min-height: 0 !important;
-        }
-
-        .category-wrapper .wrapper-sub {
-            height: 100% !important;
-            min-height: 0 !important;
-        }
-
-        #chart-defect-category {
-            flex: 1 1 0 !important;
-            width: 100% !important;
-            height: auto !important;
-            min-height: 0 !important;
-        }
-
-        .defect-category-legend {
-            flex-shrink: 0 !important;
-        }
-    }
-</style>
-
-<div class="flex-fill panel-slot panel-bottom category-wrapper">
-    <div class="row g-2 h-100 category-row">
-        <!-- TOP 5 DEFECTS -->
-        <div class="wrap-height col-12 col-lg-7">
-            <div class="border-custom-datatable rounded-1 h-100">
-                <div class="wrapper-sub" style="margin: 0 !important;padding:10px !important">
-
-                    <h6 class="subheader mb-2 fw-normal text-truncate">
-                        TOP 5 DEFECTS (FINAL INSPECTION)
-                    </h6>
-
-                    <div class="table-scroll-tbl rounded mt-2 w-100">
-                        <table class="table-res table-borderless table-hover tableBorder">
-                            <thead>
-                                <tr>
-                                    <th class="text-center">No</th>
-                                    <th class="text-center">Defect</th>
-                                    <th class="text-center">Qty (Pcs)</th>
-                                    <th class="text-center">%</th>
-                                    <th class="text-center"></th>
-                                </tr>
-                            </thead>
-
-                            <tbody class="text-center" id="tableDefectFinalBody">
-                                <tr>
-                                    <td>1</td>
-                                    <td>-</td>
-                                    <td>-</td>
-                                    <td>-</td>
-                                    <td>-</td>
-                                </tr>
-
-                                <tr>
-                                    <td>2</td>
-                                    <td>-</td>
-                                    <td>-</td>
-                                    <td>-</td>
-                                    <td>-</td>
-                                </tr>
-
-                                <tr>
-                                    <td>3</td>
-                                    <td>-</td>
-                                    <td>-</td>
-                                    <td>-</td>
-                                    <td>-</td>
-                                </tr>
-                            </tbody>
-
-                            <tfoot class="table-foot">
-                                <tr>
-                                    <th class="text-center" style="color:#4C8CF2;">
-                                        TOTAL
-                                    </th>
-
-                                    <th></th>
-
-                                    <th class="text-center"
-                                        style="color:#4C8CF2;"
-                                        id="footTotalDefectQty">
-                                        -
-                                    </th>
-
-                                    <th class="text-center"
-                                        style="color:#4C8CF2;"
-                                        id="footTotalDefectPct">
-                                        -%
-                                    </th>
-                                    <th></th>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-
-        <!-- DEFECT BY CATEGORY -->
-        <div class="col-12 col-lg-5">
-            <div class="border-custom-datatable rounded-1 h-100">
-                <div class="wrapper-sub">
-
-                    <h6 class="subheader mb-0 fw-normal text-truncate">
-                        DEFECT BY CATEGORY (FINAL INSPECTION)
-                    </h6>
-
-                    <div id="chart-defect-category"
-                        class="chart-donut">
-                    </div>
-
-
-                    <div class="d-flex justify-content-center gap-4 mt-2 defect-category-legend">
-
-                        <div class="d-flex align-items-center">
-                            <div class="d-flex">
-                                <div>
-                                    <span style="width:12px;height:12px;background:#0C46A5;border-radius:2px;display:inline-block;margin-right:8px;"></span>
-                                </div>
-                                <div>
-                                    <div class="fw-bold legend-title">
-                                        Process
-                                    </div>
-
-                                    <div id="process-text" class="legend-value">
-                                        0 (0%)
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="d-flex align-items-center">
-                            <div class="d-flex">
-                                <div>
-                                    <span style="width:12px;height:12px;background:#4CF299;border-radius:2px;display:inline-block;margin-right:8px;"></span>
-                                </div>
-                                <div>
-                                    <div class="fw-bold legend-title">
-                                        Non Process
-                                    </div>
-
-                                    <div id="non-process-text" class="legend-value">
-                                        0 (0%)
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-    </div>
-</div>
-
-
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        function renderDefectCategoryChart(chartId, processValue, nonProcessValue, processTextId, nonProcessTextId) {
-            const total = processValue + nonProcessValue;
-            const processPct = total > 0 ? ((processValue / total) * 100).toFixed(0) : 0;
-            const nonProcessPct = total > 0 ? ((nonProcessValue / total) * 100).toFixed(0) : 0;
-
-            const MIN_BAR_HEIGHT = 5;
-
-            const processChartValue = Number(processPct) === 0 ? MIN_BAR_HEIGHT : Number(processPct);
-            const nonProcessChartValue = Number(nonProcessPct) === 0 ? MIN_BAR_HEIGHT : Number(nonProcessPct);
-
-
-            if (processTextId && document.getElementById(processTextId)) {
-                document.getElementById(processTextId).innerText =
-                    processValue.toLocaleString('id-ID') + ' (' + processPct + '%)';
+                $qtyTakeoverByNewIdpo->put(
+                    $pair['rerouted'],
+                    $qtyTakeoverByNewIdpo->get($pair['rerouted'], 0) + (int) $originalCutoffQty
+                );
             }
-            if (nonProcessTextId && document.getElementById(nonProcessTextId)) {
-                document.getElementById(nonProcessTextId).innerText =
-                    nonProcessValue.toLocaleString('id-ID') + ' (' + nonProcessPct + '%)';
+        }
+
+        $netQty = 0;
+        foreach ($idpoList as $idpo) {
+            if ($excludedOriginals->contains((string) $idpo)) {
+                continue;
             }
 
-            const chartDom = document.getElementById(chartId);
-            if (!chartDom) return;
+            $ownRows = $familyRows->where('idpo', $idpo)->where('is_cutoff', '1');
+            $ownQty = $ownRows->filter(fn ($row) => is_null($row->combine_pro_set))->sum('qty_ori');
+            $ownQty += $ownRows->filter(fn ($row) => !is_null($row->combine_pro_set))
+                ->groupBy('combine_pro_set')
+                ->sum(fn ($group) => (int) $group->first()->qty_ori);
 
-            const myChart = echarts.init(chartDom);
-
-            const isSmallDesktop = window.innerWidth >= 992 && window.innerWidth <= 1400;
-
-            const option = {
-                backgroundColor: 'transparent',
-
-                grid: {
-                    left: '10%',
-                    right: '10%',
-                    top: '25%',
-                    bottom: '5%',
-                    containLabel: false
-                },
-
-                xAxis: {
-                    type: 'category',
-                    data: ['Process', 'Non Process'],
-                    show: false
-                },
-
-                yAxis: {
-                    type: 'value',
-                    show: false,
-                    max: 100
-                },
-
-                tooltip: {
-                    trigger: 'item',
-
-                    padding: isSmallDesktop ? [5, 8] : [8, 12],
-
-                    textStyle: {
-                        fontSize: isSmallDesktop ? 10 : 12
-                    },
-
-                    formatter: function (params) {
-                        return `
-                            ${params.name}<br>
-                            <b>${params.data.actualValue}%</b>
-                        `;
-                    }
-
-                },
-
-                series: [
-                    {
-                        type: 'bar',
-
-                        barWidth: isSmallDesktop ? '30%' : '35%',
-
-                        data: [
-                            {
-                                value: processChartValue,
-                                actualValue: Number(processPct),
-                                itemStyle: {
-                                    color: '#3b82f6',
-                                    borderRadius: [4, 4, 0, 0]
-                                }
-                            },
-                            {
-                                value: nonProcessChartValue,
-                                actualValue: Number(nonProcessPct),
-                                itemStyle: {
-                                    color: '#4ade80',
-                                    borderRadius: [4, 4, 0, 0]
-                                }
-                            }
-                        ],
-
-
-                        label: {
-                            show: true,
-                            position: 'top',
-                            color: '#ffffff',
-                            fontSize: isSmallDesktop ? 10 : 13,
-
-                            formatter: function (params) {
-                                return params.data.actualValue + ' %';
-                            }
-
-                        }
-                    }
-                ]
-            };
-
-
-            myChart.setOption(option);
-            window.addEventListener('resize', () => myChart.resize());
+            $netQty += (int) $ownQty;
         }
 
-        renderDefectCategoryChart('chart-defect-category', 0, 0, 'process-text', 'non-process-text');
-    });
-</script>
+        $netQty += (int) $qtyTakeoverByNewIdpo->sum();
 
-
+        return $netQty;
+    }
+}
