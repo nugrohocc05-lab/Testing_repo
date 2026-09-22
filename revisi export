@@ -31,11 +31,10 @@ function groupbuyer(Request $request)
         $dtb
     );
 
-    $qtyPerIdpo = $leafRows->groupBy('idpo')->map(fn ($rows) => (int) $rows->sum('qty_ori'));
-    $qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
+    $finalIdpoList = $this->getFinalIdpoList($request, $dta, $dtb);
 
     $qualifiedBuyerIds = $leafRows
-        ->whereIn('idpo', $qualifiedIdpo)
+        ->whereIn('idpo', $finalIdpoList)
         ->pluck('idbuyer')
         ->filter()
         ->unique()
@@ -119,11 +118,10 @@ function styleSelect(Request $request)
         $dtb
     );
 
-    $qtyPerIdpo = $leafRows->groupBy('idpo')->map(fn ($rows) => (int) $rows->sum('qty_ori'));
-    $qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
+    $finalIdpoList = $this->getFinalIdpoList($request, $dta, $dtb);
 
     $styleIds = $leafRows
-        ->whereIn('idpo', $qualifiedIdpo)
+        ->whereIn('idpo', $finalIdpoList)
         ->pluck('idstyle')
         ->filter()
         ->unique()
@@ -194,11 +192,10 @@ function poSelect(Request $request)
         $dtb
     );
 
-    $qtyPerIdpo = $leafRows->groupBy('idpo')->map(fn ($rows) => (int) $rows->sum('qty_ori'));
-    $qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
+    $finalIdpoList = $this->getFinalIdpoList($request, $dta, $dtb);
 
     $poRows = $leafRows
-        ->filter(fn ($row) => !empty($row->idpo) && $qualifiedIdpo->contains($row->idpo))
+        ->filter(fn ($row) => !empty($row->idpo) && $finalIdpoList->contains($row->idpo))
         ->unique('idpo')
         ->values();
 
