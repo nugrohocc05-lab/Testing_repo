@@ -39,6 +39,9 @@ class FinalInspectionController extends Controller
     protected $perPage = 20;
 
     private $leafRowsCache = [];
+    private $splitFinalCache = [];
+    private $ownerMapCache = [];
+    private $historyRowsByComboCache = [];
 
     function __construct()
     {
@@ -71,11 +74,10 @@ class FinalInspectionController extends Controller
         $od = (new OutputDetail())->getTable();
         $po = (new PurchaseOrder())->getTable();
 
-        $barcodesForHeader = OutputDetail::whereIn('idpo', $qualifiedIdpo)->pluck('barcode');
         $headerQuery = OutputDetailFinalInspection::query()
             ->join($od, "$od.barcode", '=', "$fi.barcode")
             ->join($po, "$po.idpo", '=', "$od.idpo")
-            ->whereIn("$fi.barcode", $barcodesForHeader);
+            ->whereIn("$od.idpo", $qualifiedIdpo);
 
         $finalComIdpoList = (clone $headerQuery)
             ->where("$fi.is_output", 1)
@@ -87,46 +89,9 @@ class FinalInspectionController extends Controller
         return $this->getActiveRerouteIdpoList($finalIdpoList);
     }
 
-    // function groupbuyer(Request $request)
-    // {
-    //     preconnect(session('db'));
-    //     $q = $request->get('q');
-    //     $page = (int) $request->get('page', 1);
-
-    //     $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
-    //     $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
-    //     $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
-    //     $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
-
-    //     $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', false, $dta, $dtb);
-    //     $qualifiedIdpo = $this->getFinalIdpoList($request, $dta, $dtb);
-
-    //     $qualifiedBuyerIds = $leafRows->whereIn('idpo', $qualifiedIdpo)
-    //         ->pluck('idbuyer')->filter()->unique()->values();
-    //     $qualifiedGroupBuyerIds = Buyer::whereIn('idbuyer', $qualifiedBuyerIds)
-    //         ->pluck('groupbuyer')->filter()->unique()->values();
-
-    //     $paginator = MasterGroupBuyer::select('id', 'group_name')
-    //         ->whereIn('id', $qualifiedGroupBuyerIds)
-    //         ->when($q, fn ($query) => $query->where('group_name', 'like', '%' . $q . '%'))
-    //         ->orderBy('group_name', 'asc')
-    //         ->paginate($this->perPage, ['id', 'group_name'], 'page', $page);
-
-    //     $data = collect($paginator->items())->map(fn ($item) => [
-    //         'id' => $item->id,
-    //         'text' => $item->group_name,
-    //     ]);
-
-    //     return response()->json([
-    //         'results' => $data,
-    //         'pagination' => ['more' => $paginator->hasMorePages()],
-    //     ]);
-    // }
-
     function groupbuyer(Request $request)
     {
         preconnect(session('db'));
-
         $q = $request->get('q');
         $page = (int) $request->get('page', 1);
 
@@ -148,12 +113,6 @@ class FinalInspectionController extends Controller
             ? $dateB->copy()->endOfDay()
             : $dateA->copy()->endOfDay();
 
-        /*
-        * Ambil data PO berdasarkan tanggal.
-        * Tidak menggunakan getFinalIdpoList(),
-        * karena Group Buyer tidak perlu bergantung
-        * pada data Final Inspection.
-        */
         $leafRows = $this->getLeafHistoryRows(
             $request,
             'combine_pro',
@@ -162,18 +121,15 @@ class FinalInspectionController extends Controller
             $dtb
         );
 
-        /*
-        * Ambil ID Buyer dari PO yang ditemukan.
-        */
+        $finalIdpoList = $this->getFinalIdpoList($request, $dta, $dtb);
+
         $qualifiedBuyerIds = $leafRows
+            ->whereIn('idpo', $finalIdpoList)
             ->pluck('idbuyer')
             ->filter()
             ->unique()
             ->values();
 
-        /*
-        * Ambil ID Group Buyer dari master Buyer.
-        */
         $qualifiedGroupBuyerIds = Buyer::whereIn(
             'idbuyer',
             $qualifiedBuyerIds
@@ -183,9 +139,6 @@ class FinalInspectionController extends Controller
             ->unique()
             ->values();
 
-        /*
-        * Ambil Group Buyer untuk Select2.
-        */
         $paginator = MasterGroupBuyer::select(
             'id',
             'group_name'
@@ -223,210 +176,146 @@ class FinalInspectionController extends Controller
         ]);
     }
 
-
-    // function styleSelect(Request $request)
-    // {
-    //     preconnect(session('db'));
-    //     $page = (int) $request->get('page', 1);
-
-    //     $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
-    //     $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
-    //     $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
-    //     $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
-
-    //     $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', false, $dta, $dtb);
-    //     $qualifiedIdpo = $this->getFinalIdpoList($request, $dta, $dtb);
-
-    //     $styleIds = $leafRows->whereIn('idpo', $qualifiedIdpo)
-    //         ->pluck('idstyle')->filter()->unique()->values();
-
-    //     $query = Style::whereIn('idstyle', $styleIds);
-    //     if ($request->filled('q')) {
-    //         $query->where('nmstyle', 'like', '%' . $request->q . '%');
-    //     }
-
-    //     $paginator = $query->select('idstyle', 'nmstyle')
-    //         ->paginate($this->perPage, ['idstyle', 'nmstyle'], 'page', $page);
-    //     $styles = collect($paginator->items());
-
-    //     return response()->json([
-    //         'results' => $styles->map(fn ($item) => [
-    //             'id' => $item->idstyle,
-    //             'text' => $item->nmstyle,
-    //         ])->values(),
-    //         'pagination' => ['more' => $paginator->hasMorePages()],
-    //     ]);
-    // }
-
-    // function poSelect(Request $request)
-    // {
-    //     preconnect(session('db'));
-    //     $page = (int) $request->get('page', 1);
-
-    //     $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
-    //     $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
-    //     $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
-    //     $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
-
-    //     $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true, $dta, $dtb);
-
-    //     $finalIdpoList = $this->getFinalIdpoList($request, $dta, $dtb);
-
-    //     $poRows = $leafRows->whereIn('idpo', $finalIdpoList)->unique('idpo')->values();
-
-    //     if ($request->filled('q')) {
-    //         $poRows = $poRows->filter(fn ($row) => stripos($row->po, $request->q) !== false)->values();
-    //     }
-
-    //     $total = $poRows->count();
-    //     $items = $poRows->forPage($page, $this->perPage)->values();
-
-    //     return response()->json([
-    //         'results' => $items->map(fn ($item) => [
-    //             'id' => $item->idpo,
-    //             'text' => $item->po,
-    //         ])->values(),
-    //         'pagination' => ['more' => ($page * $this->perPage) < $total],
-    //     ]);
-    // }
-
     function styleSelect(Request $request)
-{
-    preconnect(session('db'));
+    {
+        preconnect(session('db'));
 
-    $page = (int) $request->get('page', 1);
+        $page = (int) $request->get('page', 1);
 
-    $dateA = Carbon::createFromFormat(
-        'd-m-Y',
-        $request->datea
-    )->startOfDay();
+        $dateA = Carbon::createFromFormat(
+            'd-m-Y',
+            $request->datea
+        )->startOfDay();
 
-    $dateB = Carbon::createFromFormat(
-        'd-m-Y',
-        $request->dateb
-    )->startOfDay();
+        $dateB = Carbon::createFromFormat(
+            'd-m-Y',
+            $request->dateb
+        )->startOfDay();
 
-    $dta = $dateA->lessThanOrEqualTo($dateB)
-        ? $dateA
-        : $dateB;
+        $dta = $dateA->lessThanOrEqualTo($dateB)
+            ? $dateA
+            : $dateB;
 
-    $dtb = $dateA->lessThanOrEqualTo($dateB)
-        ? $dateB->copy()->endOfDay()
-        : $dateA->copy()->endOfDay();
+        $dtb = $dateA->lessThanOrEqualTo($dateB)
+            ? $dateB->copy()->endOfDay()
+            : $dateA->copy()->endOfDay();
 
-    $leafRows = $this->getLeafHistoryRows(
-        $request,
-        'combine_pro',
-        false,
-        $dta,
-        $dtb
-    );
-
-    // Tidak menggunakan getFinalIdpoList()
-    $styleIds = $leafRows
-        ->pluck('idstyle')
-        ->filter()
-        ->unique()
-        ->values();
-
-    $query = Style::whereIn('idstyle', $styleIds);
-
-    if ($request->filled('q')) {
-        $query->where(
-            'nmstyle',
-            'like',
-            '%' . $request->q . '%'
-        );
-    }
-
-    $paginator = $query
-        ->select('idstyle', 'nmstyle')
-        ->paginate(
-            $this->perPage,
-            ['idstyle', 'nmstyle'],
-            'page',
-            $page
+        $leafRows = $this->getLeafHistoryRows(
+            $request,
+            'combine_pro',
+            false,
+            $dta,
+            $dtb
         );
 
-    return response()->json([
-        'results' => collect($paginator->items())
-            ->map(fn ($item) => [
-                'id' => $item->idstyle,
-                'text' => $item->nmstyle,
-            ])
-            ->values(),
+        $finalIdpoList = $this->getFinalIdpoList($request, $dta, $dtb);
 
-        'pagination' => [
-            'more' => $paginator->hasMorePages(),
-        ],
-    ]);
-}
-
-function poSelect(Request $request)
-{
-    preconnect(session('db'));
-
-    $page = (int) $request->get('page', 1);
-
-    $dateA = Carbon::createFromFormat(
-        'd-m-Y',
-        $request->datea
-    )->startOfDay();
-
-    $dateB = Carbon::createFromFormat(
-        'd-m-Y',
-        $request->dateb
-    )->startOfDay();
-
-    $dta = $dateA->lessThanOrEqualTo($dateB)
-        ? $dateA
-        : $dateB;
-
-    $dtb = $dateA->lessThanOrEqualTo($dateB)
-        ? $dateB->copy()->endOfDay()
-        : $dateA->copy()->endOfDay();
-
-    $leafRows = $this->getLeafHistoryRows(
-        $request,
-        'combine_pro',
-        true,
-        $dta,
-        $dtb
-    );
-
-    $poRows = $leafRows
-        ->filter(fn ($row) => !empty($row->idpo))
-        ->unique('idpo')
-        ->values();
-
-    if ($request->filled('q')) {
-        $q = $request->q;
-
-        $poRows = $poRows
-            ->filter(function ($row) use ($q) {
-                return stripos($row->po, $q) !== false;
-            })
+        $styleIds = $leafRows
+            ->whereIn('idpo', $finalIdpoList)
+            ->pluck('idstyle')
+            ->filter()
+            ->unique()
             ->values();
+
+        $query = Style::whereIn('idstyle', $styleIds);
+
+        if ($request->filled('q')) {
+            $query->where(
+                'nmstyle',
+                'like',
+                '%' . $request->q . '%'
+            );
+        }
+
+        $paginator = $query
+            ->select('idstyle', 'nmstyle')
+            ->paginate(
+                $this->perPage,
+                ['idstyle', 'nmstyle'],
+                'page',
+                $page
+            );
+
+        return response()->json([
+            'results' => collect($paginator->items())
+                ->map(fn ($item) => [
+                    'id' => $item->idstyle,
+                    'text' => $item->nmstyle,
+                ])
+                ->values(),
+
+            'pagination' => [
+                'more' => $paginator->hasMorePages(),
+            ],
+        ]);
     }
 
-    $total = $poRows->count();
+    function poSelect(Request $request)
+    {
+        preconnect(session('db'));
 
-    $items = $poRows
-        ->forPage($page, $this->perPage)
-        ->values();
+        $page = (int) $request->get('page', 1);
 
-    return response()->json([
-        'results' => $items->map(fn ($item) => [
-            'id' => $item->idpo,
-            'text' => $item->po,
-        ])->values(),
+        $dateA = Carbon::createFromFormat(
+            'd-m-Y',
+            $request->datea
+        )->startOfDay();
 
-        'pagination' => [
-            'more' => ($page * $this->perPage) < $total,
-        ],
-    ]);
-}
+        $dateB = Carbon::createFromFormat(
+            'd-m-Y',
+            $request->dateb
+        )->startOfDay();
 
+        $dta = $dateA->lessThanOrEqualTo($dateB)
+            ? $dateA
+            : $dateB;
+
+        $dtb = $dateA->lessThanOrEqualTo($dateB)
+            ? $dateB->copy()->endOfDay()
+            : $dateA->copy()->endOfDay();
+
+        $leafRows = $this->getLeafHistoryRows(
+            $request,
+            'combine_pro',
+            true,
+            $dta,
+            $dtb
+        );
+
+        $finalIdpoList = $this->getFinalIdpoList($request, $dta, $dtb);
+
+        $poRows = $leafRows
+            ->filter(fn ($row) => !empty($row->idpo) && $finalIdpoList->contains($row->idpo))
+            ->unique('idpo')
+            ->values();
+
+        if ($request->filled('q')) {
+            $q = $request->q;
+
+            $poRows = $poRows
+                ->filter(function ($row) use ($q) {
+                    return stripos($row->po, $q) !== false;
+                })
+                ->values();
+        }
+
+        $total = $poRows->count();
+
+        $items = $poRows
+            ->forPage($page, $this->perPage)
+            ->values();
+
+        return response()->json([
+            'results' => $items->map(fn ($item) => [
+                'id' => $item->idpo,
+                'text' => $item->po,
+            ])->values(),
+
+            'pagination' => [
+                'more' => ($page * $this->perPage) < $total,
+            ],
+        ]);
+    }
 
     static function getReroutePO(string $idpo)
     {
@@ -483,11 +372,11 @@ function poSelect(Request $request)
         $split = $this->getSplitFinalCheckIdpoList($request, $dta, $dtb, $today);
 
         $qualifiedIdpo = collect($qtyPerIdpo)->filter(fn ($qty) => $qty > 0)->keys()->values();
-        $barcodesForHeader = OutputDetail::whereIn('idpo', $qualifiedIdpo)->pluck('barcode');
+
         $headerQuery = OutputDetailFinalInspection::query()
             ->join($od, "$od.barcode", '=', "$fi.barcode")
             ->join($po, "$po.idpo", '=', "$od.idpo")
-            ->whereIn("$fi.barcode", $barcodesForHeader);
+            ->whereIn("$od.idpo", $qualifiedIdpo);
 
         $finalComIdpoList = (clone $headerQuery)
             ->where("$fi.is_output", 1)
@@ -519,7 +408,10 @@ function poSelect(Request $request)
 
         $originalFinalIdpoList = $split['overdue']->merge($split['need_final'])
             ->merge($finalComIdpoList)->unique()->values();
-        $finalIdpoList = $this->getActiveRerouteIdpoList($originalFinalIdpoList);
+        // $finalIdpoList = $this->getActiveRerouteIdpoList($originalFinalIdpoList);
+
+        $finalIdpoList = $split['overdue']->merge($split['need_final'])
+            ->merge($finalComIdpoList)->unique()->values();
 
         $poList = collect();
         foreach ($finalIdpoList as $idpo) {
@@ -676,11 +568,10 @@ function poSelect(Request $request)
         $overdueList = $split['overdue'];
         $needFinalList = $split['need_final'];
 
-        $barcodesForHeader = OutputDetail::whereIn('idpo', $qualifiedIdpo)->pluck('barcode');
         $headerQuery = OutputDetailFinalInspection::query()
             ->join($od, "$od.barcode", '=', "$fi.barcode")
             ->join($po, "$po.idpo", '=', "$od.idpo")
-            ->whereIn("$fi.barcode", $barcodesForHeader);
+            ->whereIn("$od.idpo", $qualifiedIdpo);
 
         $finalComIdpoList = (clone $headerQuery)
             ->where("$fi.is_output", 1)
@@ -754,11 +645,10 @@ function poSelect(Request $request)
         $qtyPerIdpo = $leafRows->groupBy('idpo')->map(fn ($rows) => (int) $rows->sum('qty_ori'));
         $qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
 
-        $barcodes = OutputDetail::whereIn('idpo', $qualifiedIdpo)->pluck('barcode');
         $headerQuery = OutputDetailFinalInspection::query()
             ->join($od, "$od.barcode", '=', "$fi.barcode")
             ->join($po, "$po.idpo", '=', "$od.idpo")
-            ->whereIn("$fi.barcode", $barcodes);
+            ->whereIn("$od.idpo", $qualifiedIdpo);
 
         $finalComIdpoList = (clone $headerQuery)
             ->where("$fi.is_output", 1)
@@ -925,12 +815,10 @@ function poSelect(Request $request)
         $qtyPerIdpo = $leafRows->groupBy('idpo')->map(fn ($rows) => (int) $rows->sum('qty_ori'));
         $qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
 
-        $barcodes = OutputDetail::whereIn('idpo', $qualifiedIdpo)->pluck('barcode');
-
         $headerQuery = OutputDetailFinalInspection::query()
             ->join($od, "$od.barcode", '=', "$fi.barcode")
             ->join($po, "$po.idpo", '=', "$od.idpo")
-            ->whereIn("$fi.barcode", $barcodes);
+            ->whereIn("$od.idpo", $qualifiedIdpo);
 
         $defectRows = (clone $headerQuery)
             ->whereNotNull("$fi.date_output")
@@ -1256,11 +1144,10 @@ function poSelect(Request $request)
         $qtyPerIdpo = $leafRows->groupBy('idpo')->map(fn ($rows) => (int) $rows->sum('qty_ori'));
         $qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
 
-        $barcodes = OutputDetail::whereIn('idpo', $qualifiedIdpo)->pluck('barcode');
         $headerQuery = OutputDetailFinalInspection::query()
             ->join($od, "$od.barcode", '=', "$fi.barcode")
             ->join($po, "$po.idpo", '=', "$od.idpo")
-            ->whereIn("$fi.barcode", $barcodes);
+            ->whereIn("$od.idpo", $qualifiedIdpo);
 
         $finalComIdpoList = (clone $headerQuery)
             ->where("$fi.is_output", 1)
@@ -1501,8 +1388,49 @@ function poSelect(Request $request)
         return $activeIdpo->isNotEmpty() ? $activeIdpo : collect([$idpo]);
     }
 
-    // resolveRerouteIdpo, getActiveRerouteIdpoList, getRerouteIdpoList,
-    // resolveRerouteDuplicates, getNetCutoffQty.
+    private function getHistoryRowsByCombinePro(Collection $combineProList): Collection
+    {
+        $combineProList = collect($combineProList)->filter()->unique()->sort()->values();
+        if ($combineProList->isEmpty()) {
+            return collect();
+        }
+
+        $cacheKey = md5($combineProList->implode(','));
+        if (array_key_exists($cacheKey, $this->historyRowsByComboCache)) {
+            return $this->historyRowsByComboCache[$cacheKey];
+        }
+
+        return $this->historyRowsByComboCache[$cacheKey] = HistoryDataBreakdown::whereIn('combine_pro', $combineProList)
+            ->select(
+                'idpo', 'combine_pro', 'combine_pro_set',
+                'kp_item', 'kp_item_ref', 'revisi_kp',
+                'qty_ori', 'is_cutoff'
+            )
+            ->get();
+    }
+
+    private function getOwnerByCombineKpItem(Collection $combineProList): Collection
+    {
+        $combineProList = collect($combineProList)->filter()->unique()->sort()->values();
+        if ($combineProList->isEmpty()) {
+            return collect();
+        }
+
+        $cacheKey = md5($combineProList->implode(','));
+        if (array_key_exists($cacheKey, $this->ownerMapCache)) {
+            return $this->ownerMapCache[$cacheKey];
+        }
+
+        $rows = $this->getHistoryRowsByCombinePro($combineProList);
+
+        $ownerMap = $rows
+            ->groupBy(fn ($r) => $r->combine_pro . '|' . $r->kp_item)
+            ->map(fn ($group) => (string) $group->sortBy('idpo')->first()->idpo);
+
+        return $this->ownerMapCache[$cacheKey] = $ownerMap;
+    }
+
+    // priorityFinal, getSplitFinalCheckIdpoList
     private function getLastHistoryPoRevisi(Collection $idpoList): Collection
     {
         $idpoList = collect($idpoList)->filter()->unique()->values();
@@ -1581,13 +1509,8 @@ function poSelect(Request $request)
             return $idpoList;
         }
 
-        $rows = HistoryDataBreakdown::whereIn('combine_pro', $combineProList)
-            ->select('idpo', 'combine_pro', 'kp_item', 'kp_item_ref', 'revisi_kp')
-            ->get();
-
-        $ownerByCombineKpItem = $rows
-            ->groupBy(fn ($r) => $r->combine_pro . '|' . $r->kp_item)
-            ->map(fn ($group) => (string) $group->sortBy('idpo')->first()->idpo);
+        $ownerByCombineKpItem = $this->getOwnerByCombineKpItem($combineProList);
+        $rows = $this->getHistoryRowsByCombinePro($combineProList);
 
         $reroutedPairs = $rows
             ->filter(fn ($r) => $r->revisi_kp == 1 && !is_null($r->kp_item_ref))
@@ -1619,6 +1542,19 @@ function poSelect(Request $request)
     // poSelect, summaryFilter, priorityFinal, finalOverview, chartData
     private function getSplitFinalCheckIdpoList(Request $request, Carbon $dta, Carbon $dtb, Carbon $today): array
     {
+        $cacheKey = md5(json_encode([
+            'dta' => $dta->toDateTimeString(),
+            'dtb' => $dtb->toDateTimeString(),
+            'today' => $today->toDateString(),
+            'groupbuyer' => $request->get('groupbuyer'),
+            'po' => $request->get('po'),
+            'style' => $request->get('style'),
+        ]));
+
+        if (array_key_exists($cacheKey, $this->splitFinalCache)) {
+            return $this->splitFinalCache[$cacheKey];
+        }
+
         $fi = (new OutputDetailFinalInspection())->getTable();
         $od = (new OutputDetail())->getTable();
         $po = (new PurchaseOrder())->getTable();
@@ -1686,7 +1622,10 @@ function poSelect(Request $request)
             $needFinal->push($idpo);
         }
 
-        return ['overdue' => $overdue->values(), 'need_final' => $needFinal->values()];
+        return $this->splitFinalCache[$cacheKey] = [
+            'overdue' => $overdue->values(),
+            'need_final' => $needFinal->values(),
+        ];
     }
 
     // poSelect, priorityFinal (idpo lama -> idpo aktif hasil reroute)
@@ -1702,13 +1641,8 @@ function poSelect(Request $request)
             return $idpoList;
         }
 
-        $rows = HistoryDataBreakdown::whereIn('combine_pro', $combineProList)
-            ->select('idpo', 'combine_pro', 'kp_item', 'kp_item_ref', 'revisi_kp')
-            ->get();
-
-        $ownerByCombineKpItem = $rows
-            ->groupBy(fn ($r) => $r->combine_pro . '|' . $r->kp_item)
-            ->map(fn ($group) => (string) $group->sortBy('idpo')->first()->idpo);
+        $ownerByCombineKpItem = $this->getOwnerByCombineKpItem($combineProList);
+        $rows = $this->getHistoryRowsByCombinePro($combineProList);
 
         $newIdpoByOriginal = $rows
             ->filter(fn ($r) => $r->revisi_kp == 1 && !is_null($r->kp_item_ref))
@@ -1737,13 +1671,8 @@ function poSelect(Request $request)
             return $identityMap;
         }
 
-        $rows = HistoryDataBreakdown::whereIn('combine_pro', $combineProList)
-            ->select('idpo', 'combine_pro', 'kp_item', 'kp_item_ref', 'revisi_kp')
-            ->get();
-
-        $ownerByCombineKpItem = $rows
-            ->groupBy(fn ($r) => $r->combine_pro . '|' . $r->kp_item)
-            ->map(fn ($group) => (string) $group->sortBy('idpo')->first()->idpo);
+        $ownerByCombineKpItem = $this->getOwnerByCombineKpItem($combineProList);
+        $rows = $this->getHistoryRowsByCombinePro($combineProList);
 
         $newIdpoByOriginal = $rows
             ->filter(fn ($r) => $r->revisi_kp == 1 && !is_null($r->kp_item_ref))
@@ -1768,13 +1697,8 @@ function poSelect(Request $request)
             return $outputPerIdpo;
         }
 
-        $rows = HistoryDataBreakdown::whereIn('combine_pro', $combineProList)
-            ->select('idpo', 'combine_pro', 'kp_item', 'kp_item_ref', 'revisi_kp', 'qty_ori')
-            ->get();
-
-        $ownerByCombineKpItem = $rows
-            ->groupBy(fn ($r) => $r->combine_pro . '|' . $r->kp_item)
-            ->map(fn ($group) => (string) $group->sortBy('idpo')->first()->idpo);
+        $ownerByCombineKpItem = $this->getOwnerByCombineKpItem($combineProList);
+        $rows = $this->getHistoryRowsByCombinePro($combineProList);
 
         $childrenByOriginal = collect();
         $rows->filter(fn ($r) => $r->revisi_kp == 1 && !is_null($r->kp_item_ref))
@@ -1827,13 +1751,8 @@ function poSelect(Request $request)
                 ->where('is_cutoff', '1')->sum('qty_ori');
         }
 
-        $familyRows = HistoryDataBreakdown::whereIn('combine_pro', $combineProList)
-            ->select('idpo', 'combine_pro', 'combine_pro_set', 'kp_item', 'kp_item_ref', 'revisi_kp', 'qty_ori', 'is_cutoff')
-            ->get();
-
-        $ownerByCombineKpItem = $familyRows
-            ->groupBy(fn ($r) => $r->combine_pro . '|' . $r->kp_item)
-            ->map(fn ($group) => (string) $group->sortBy('idpo')->first()->idpo);
+        $ownerByCombineKpItem = $this->getOwnerByCombineKpItem($combineProList);
+        $familyRows = $this->getHistoryRowsByCombinePro($combineProList);
 
         $reroutedPairs = $familyRows
             ->filter(fn ($r) => $r->revisi_kp == 1 && !is_null($r->kp_item_ref))
