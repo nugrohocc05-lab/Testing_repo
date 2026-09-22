@@ -1,76 +1,231 @@
+function groupbuyer(Request $request)
+{
+    preconnect(session('db'));
 
-    function storedefect(Request $request)
-    {
-        if (session('db') == null) {
-            return redirect()
-                ->back()
-                ->with('status', 'dbwrong');
-        }
+    $q = $request->get('q');
+    $page = (int) $request->get('page', 1);
 
-        preconnect(session('db'));
+    $dateA = Carbon::createFromFormat(
+        'd-m-Y',
+        $request->datea
+    )->startOfDay();
 
-        $validation = Validator::make($request->all(), [
-            'rootcause.*' => 'required|string|max:20',
-            'problem.*' => 'required|string',
-            'action.*' => 'required|string',
-            'pic.*' => 'required|string|max:10',
-            'nikuser.*' => 'required|string|max:10',
-        ]);
+    $dateB = Carbon::createFromFormat(
+        'd-m-Y',
+        $request->dateb
+    )->startOfDay();
 
-        if ($validation->fails()) {
-            return redirect()
-                ->back()
-                ->with('status', 'validationfail');
-        }
+    $dta = $dateA->lessThanOrEqualTo($dateB)
+        ? $dateA
+        : $dateB;
 
-        DB::beginTransaction();
+    $dtb = $dateA->lessThanOrEqualTo($dateB)
+        ? $dateB->copy()->endOfDay()
+        : $dateA->copy()->endOfDay();
 
-        foreach ($request->rootcause as $k => $v) {
-            $q = SewingOutput::find($k);
+    $leafRows = $this->getLeafHistoryRows(
+        $request,
+        'combine_pro',
+        false,
+        $dta,
+        $dtb
+    );
 
-            if (!$q) {
-                DB::rollBack();
-                return redirect()
-                    ->back()
-                    ->with('status', 'savefailed');
-            }
+    $qtyPerIdpo = $leafRows->groupBy('idpo')->map(fn ($rows) => (int) $rows->sum('qty_ori'));
+    $qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
 
-            $pic = Employee::where('nik', $request->pic[$k])->first();
-            if (!$pic) {
-                DB::rollBack();
-                return redirect()
-                    ->back()
-                    ->with('status', 'userfailed');
-            }
+    $qualifiedBuyerIds = $leafRows
+        ->whereIn('idpo', $qualifiedIdpo)
+        ->pluck('idbuyer')
+        ->filter()
+        ->unique()
+        ->values();
 
-            $nikuser = Employee::where('nik', $request->nikuser[$k])->first();
-            if (!$nikuser) {
-                DB::rollBack();
-                return redirect()
-                    ->back()
-                    ->with('status', 'userfailed');
-            }
+    $qualifiedGroupBuyerIds = Buyer::whereIn(
+        'idbuyer',
+        $qualifiedBuyerIds
+    )
+        ->pluck('groupbuyer')
+        ->filter()
+        ->unique()
+        ->values();
 
-            try {
-                $q->problem = $request->problem[$k];
-                $q->action = $request->action[$k];
-                $q->nik_pic = $request->pic[$k];
-                $q->nik_user = $request->nikuser[$k];
-                $q->root_cause = $v;
+    $paginator = MasterGroupBuyer::select(
+        'id',
+        'group_name'
+    )
+        ->whereIn('id', $qualifiedGroupBuyerIds)
+        ->when($q, function ($query) use ($q) {
+            $query->where(
+                'group_name',
+                'like',
+                '%' . $q . '%'
+            );
+        })
+        ->orderBy('group_name', 'asc')
+        ->paginate(
+            $this->perPage,
+            ['id', 'group_name'],
+            'page',
+            $page
+        );
 
-                $q->updated_at = now();
+    $data = collect($paginator->items())
+        ->map(function ($item) {
+            return [
+                'id' => $item->id,
+                'text' => $item->group_name,
+            ];
+        })
+        ->values();
 
-                $q->save();
-            } catch (\Exception $e) {
-                DB::rollBack();
-                return redirect()
-                    ->back()
-                    ->with('status', 'savefailed');
-            }
-        }
+    return response()->json([
+        'results' => $data,
+        'pagination' => [
+            'more' => $paginator->hasMorePages(),
+        ],
+    ]);
+}
 
-        DB::commit();
-        return redirect()
-            ->back()
-            ->with('status', 'savesuccess');
+function styleSelect(Request $request)
+{
+    preconnect(session('db'));
+
+    $page = (int) $request->get('page', 1);
+
+    $dateA = Carbon::createFromFormat(
+        'd-m-Y',
+        $request->datea
+    )->startOfDay();
+
+    $dateB = Carbon::createFromFormat(
+        'd-m-Y',
+        $request->dateb
+    )->startOfDay();
+
+    $dta = $dateA->lessThanOrEqualTo($dateB)
+        ? $dateA
+        : $dateB;
+
+    $dtb = $dateA->lessThanOrEqualTo($dateB)
+        ? $dateB->copy()->endOfDay()
+        : $dateA->copy()->endOfDay();
+
+    $leafRows = $this->getLeafHistoryRows(
+        $request,
+        'combine_pro',
+        false,
+        $dta,
+        $dtb
+    );
+
+    $qtyPerIdpo = $leafRows->groupBy('idpo')->map(fn ($rows) => (int) $rows->sum('qty_ori'));
+    $qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
+
+    $styleIds = $leafRows
+        ->whereIn('idpo', $qualifiedIdpo)
+        ->pluck('idstyle')
+        ->filter()
+        ->unique()
+        ->values();
+
+    $query = Style::whereIn('idstyle', $styleIds);
+
+    if ($request->filled('q')) {
+        $query->where(
+            'nmstyle',
+            'like',
+            '%' . $request->q . '%'
+        );
     }
+
+    $paginator = $query
+        ->select('idstyle', 'nmstyle')
+        ->paginate(
+            $this->perPage,
+            ['idstyle', 'nmstyle'],
+            'page',
+            $page
+        );
+
+    return response()->json([
+        'results' => collect($paginator->items())
+            ->map(fn ($item) => [
+                'id' => $item->idstyle,
+                'text' => $item->nmstyle,
+            ])
+            ->values(),
+
+        'pagination' => [
+            'more' => $paginator->hasMorePages(),
+        ],
+    ]);
+}
+
+function poSelect(Request $request)
+{
+    preconnect(session('db'));
+
+    $page = (int) $request->get('page', 1);
+
+    $dateA = Carbon::createFromFormat(
+        'd-m-Y',
+        $request->datea
+    )->startOfDay();
+
+    $dateB = Carbon::createFromFormat(
+        'd-m-Y',
+        $request->dateb
+    )->startOfDay();
+
+    $dta = $dateA->lessThanOrEqualTo($dateB)
+        ? $dateA
+        : $dateB;
+
+    $dtb = $dateA->lessThanOrEqualTo($dateB)
+        ? $dateB->copy()->endOfDay()
+        : $dateA->copy()->endOfDay();
+
+    $leafRows = $this->getLeafHistoryRows(
+        $request,
+        'combine_pro',
+        true,
+        $dta,
+        $dtb
+    );
+
+    $qtyPerIdpo = $leafRows->groupBy('idpo')->map(fn ($rows) => (int) $rows->sum('qty_ori'));
+    $qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
+
+    $poRows = $leafRows
+        ->filter(fn ($row) => !empty($row->idpo) && $qualifiedIdpo->contains($row->idpo))
+        ->unique('idpo')
+        ->values();
+
+    if ($request->filled('q')) {
+        $q = $request->q;
+
+        $poRows = $poRows
+            ->filter(function ($row) use ($q) {
+                return stripos($row->po, $q) !== false;
+            })
+            ->values();
+    }
+
+    $total = $poRows->count();
+
+    $items = $poRows
+        ->forPage($page, $this->perPage)
+        ->values();
+
+    return response()->json([
+        'results' => $items->map(fn ($item) => [
+            'id' => $item->idpo,
+            'text' => $item->po,
+        ])->values(),
+
+        'pagination' => [
+            'more' => ($page * $this->perPage) < $total,
+        ],
+    ]);
+}
