@@ -1,63 +1,18 @@
-// composables/useTableFilters.js
-import { reactive, watch, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+// stores/keepAlive.js
+import { defineStore } from 'pinia'
 
-export function useTableFilters(defaultFilters = {}) {
-  const route = useRoute()
-  const router = useRouter()
-
-  const filters = reactive({ ...defaultFilters })
-  let ready = false // biar watch gak nembak waktu load awal
-
-  function loadFromQuery() {
-    Object.keys(filters).forEach((key) => {
-      const val = route.query[key]
-      if (val !== undefined) filters[key] = val
-    })
-    ready = true
-  }
-
-  function syncToQuery() {
-    const query = { ...route.query }
-    Object.entries(filters).forEach(([key, val]) => {
-      if (val === '' || val === null || val === undefined) {
-        delete query[key]
-      } else {
-        query[key] = val
+export const useKeepAliveStore = defineStore('keepAlive', {
+  state: () => ({
+    cachedViews: [],
+  }),
+  actions: {
+    add(name) {
+      if (name && !this.cachedViews.includes(name)) {
+        this.cachedViews.push(name)
       }
-    })
-    router.replace({ query })
-  }
-
-  onMounted(loadFromQuery)
-
-  watch(filters, () => {
-    if (ready) syncToQuery()
-  }, { deep: true })
-
-  return { filters, loadFromQuery }
-}
-
-
-
-
-import { useTableFilters } from '@/composables/useTableFilters'
-
-const { filters } = useTableFilters({
-  buyer: '',
-  kpno: '',
-  search: '',
-})
-
-// searchKeyword sekarang pakai filters.search
-
-
-onMounted(async () => {
-    loadDataBuyer()
-    if (filters.buyer && filters.kpno) {
-        await loadDataKp(filters.buyer)       // isi ulang opsi KP dulu
-        await loadDataFilter(filters.kpno)    // baru fetch data sesuai KP
-    } else {
-        loadData()
-    }
+    },
+    remove(name) {
+      this.cachedViews = this.cachedViews.filter(v => v !== name)
+    },
+  },
 })
