@@ -1,17 +1,188 @@
-// SEBELUM
-$originalNotFinalIdpoList = $split['overdue']
-    ->merge($split['need_final'])
-    ->unique()
-    ->diff($status['finalCom'])
-    ->values();
+private function buildFinalOverviewData(Request $request, Carbon $dta, Carbon $dtb): array
+{
+    $fi = (new OutputDetailFinalInspection())->getTable();
+    $od = (new OutputDetail())->getTable();
+    $po = (new PurchaseOrder())->getTable();
+    $odp = (new OutputDetailPacking())->getTable();
 
-// SESUDAH
-$activeNotFinalCandidate = $this->getActiveRerouteIdpoList(
-    $split['overdue']->merge($split['need_final'])->unique()->values()
-);
+    $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true, $dta, $dtb);
+    $qtyPerIdpo = $leafRows->groupBy('idpo')->map(fn ($rows) => (int) $rows->sum('qty_ori'));
+    $qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
+    $this->primeComboUniverse($qualifiedIdpo);
 
-$remappedFinalCom = $this->remapToReroutedIdpo($status['finalCom']);
+    $headerQuery = OutputDetailFinalInspection::query()
+        ->join($od, "$od.barcode", '=', "$fi.barcode")
+        ->join($po, "$po.idpo", '=', "$od.idpo")
+        ->whereIn("$od.idpo", $qualifiedIdpo);
 
-$originalNotFinalIdpoList = $activeNotFinalCandidate
-    ->diff($remappedFinalCom)
-    ->values();
+    $status = $this->getFinalCompletionStatus($qualifiedIdpo);
+
+    $finalComIdpoList = $status['finalCom'];
+    $rejectIdpoList = $status['reject'];
+    $passIdpoList = $status['pass'];
+
+    $poWithDefect = $rejectIdpoList->count();
+    $poNoDefect = $passIdpoList->count();
+
+    $qtyInspectPass = (clone $headerQuery)
+        ->whereIn("$od.idpo", $passIdpoList)
+        ->whereNotNull("$fi.date_output")
+        ->count(DB::raw("DISTINCT $od.barcode"));
+
+    $qtyInspectReject = (clone $headerQuery)
+        ->whereIn("$od.idpo", $rejectIdpoList)
+        ->whereNotNull("$fi.date_output")
+        ->count(DB::raw("DISTINCT $od.barcode"));
+
+    $byIdpoLeaf = $leafRows->groupBy('idpo');
+
+    $today = Carbon::today()->startOfDay();
+    $split = $this->getSplitFinalCheckIdpoList($request, $dta, $dtb, $today);
+
+    // samakan pola dengan buildSummaryFilterData / buildPriorityFinalData:
+    // reroute dulu overdue+need_final ke idpo aktif, lalu diff dari finalCom
+    // yang juga sudah di-remap ke idpo hasil reroute.
+    $finalComRemapped = $this->remapToReroutedIdpo($finalComIdpoList);
+
+    $originalFinalIdpoList = $split['overdue']->merge($split['need_final'])
+        ->merge($finalComIdpoList)->unique()->values();
+    $finalIdpoList = $this->getActiveRerouteIdpoList($originalFinalIdpoList);
+
+    $notFinalCandidates = $this->getActiveRerouteIdpoList(
+            $split['overdue']->merge($split['need_final'])->unique()->values()
+        )
+        ->diff($finalComRemapped)
+        ->values();
+
+    $originalNotFinalIdpoList = $notFinalCandidates
+        ->intersect($finalIdpoList)
+        ->values();
+
+    $qtyNotFinal = $originalNotFinalIdpoList->sum(
+        fn ($idpo) => $qtyPerIdpo->get($idpo, 0)
+    );
+
+    $countNotFinal = $originalNotFinalIdpoList->count();
+
+    $poList = $originalNotFinalIdpoList->map(function ($idpo) use ($byIdpoLeaf) {
+        $rows = $byIdpoLeaf->get($idpo);
+
+        if (!$rows) {
+            return null;
+        }
+
+        $first = $rows->first();
+
+        return (object) [
+            'idpo' => $idpo,
+            'po' => $first->po,
+            'idbuyer' => $first->idbuyer,
+            'idstyle' => $first->idstyle,
+            'idcolor' => $first->idcolor,
+        ];
+    })->filter()->values();
+
+    $outputPerIdpo = $this->getOutputPerIdpoFromPacking(
+        $originalNotFinalIdpoList
+    );
+
+    $outputNotFinal = $outputPerIdpo->sum();
+    $qtyInspectNotFinal = 0;
+
+    $getOutputPerIdpo = function ($idpoList) use ($od, $odp) {
+        if ($idpoList->isEmpty()) {
+            return collect();
+        }
+
+        return OutputDetail::query()
+            ->whereIn("$od.idpo", $idpoList)
+            ->whereNotNull("$od.barcode")
+            ->leftJoin("$odp", "$odp.barcode", '=', "$od.barcode")
+            ->select(
+                "$od.idpo",
+                DB::raw("COUNT(DISTINCT $odp.id_set) as total_output")
+            )
+            ->groupBy("$od.idpo")
+            ->get()
+            ->mapWithKeys(function ($row) {
+                return [
+                    (string) $row->idpo => (int) $row->total_output
+                ];
+            });
+    };
+
+    $outputPassPerIdpo = $this->redistributeReroutedOutput(
+        $passIdpoList,
+        $getOutputPerIdpo($passIdpoList)
+    );
+
+    $outputRejectPerIdpo = $this->redistributeReroutedOutput(
+        $rejectIdpoList,
+        $getOutputPerIdpo($rejectIdpoList)
+    );
+
+    $outputPass = $outputPassPerIdpo->sum();
+    $outputReject = $outputRejectPerIdpo->sum();
+
+    $qtyPass = $passIdpoList->sum(
+        fn ($idpo) => $qtyPerIdpo->get($idpo, 0)
+    );
+
+    $qtyReject = $rejectIdpoList->sum(
+        fn ($idpo) => $qtyPerIdpo->get($idpo, 0)
+    );
+
+    $progressPass = $qtyPass > 0
+        ? round(($outputPass / $qtyPass) * 100, 2)
+        : 0;
+
+    $progressReject = $qtyReject > 0
+        ? round(($outputReject / $qtyReject) * 100, 2)
+        : 0;
+
+    $progressNotFinal = $qtyNotFinal > 0
+        ? round(($outputNotFinal / $qtyNotFinal) * 100, 2)
+        : 0;
+
+    $totalPoAll = $poNoDefect + $poWithDefect + $countNotFinal;
+    $totalQtyOrderAll = $qtyPass + $qtyReject + $qtyNotFinal;
+    $totalQtyInspectAll = $qtyInspectPass + $qtyInspectReject;
+    $totalOutputAll = $outputPass + $outputReject + $outputNotFinal;
+
+    $totalProgressOutputAll = $totalQtyOrderAll > 0
+        ? round(($totalOutputAll / $totalQtyOrderAll) * 100, 2)
+        : 0;
+
+    return [
+        'data' => [[
+            'pass' => [
+                'count' => $poNoDefect,
+                'qty' => $qtyPass,
+                'qty_inspect' => $qtyInspectPass,
+                'output' => $outputPass,
+                'progress_output' => $progressPass,
+            ],
+            'reject' => [
+                'count' => $poWithDefect,
+                'qty' => $qtyReject,
+                'qty_inspect' => $qtyInspectReject,
+                'output' => $outputReject,
+                'progress_output' => $progressReject,
+            ],
+            'not_final' => [
+                'count' => $countNotFinal,
+                'qty' => $qtyNotFinal,
+                'qty_inspect' => $qtyInspectNotFinal,
+                'output' => $outputNotFinal,
+                'progress_output' => $progressNotFinal,
+            ],
+            'total' => [
+                'total_po' => $totalPoAll,
+                'qty_order' => $totalQtyOrderAll ?: 0,
+                'qty_inspect' => $totalQtyInspectAll ?: 0,
+                'output' => $totalOutputAll ?: 0,
+                'progress_output' => $totalProgressOutputAll,
+            ],
+        ]],
+    ];
+}
