@@ -1,11 +1,102 @@
-private array $activeRerouteCache = [];
+private function primeComboUniverse(Collection $qualifiedIdpo): void
+{
+    $qualifiedIdpo = $qualifiedIdpo->filter()->unique()->sort()->values();
+    $key = md5($qualifiedIdpo->implode(','));
+
+    if ($this->comboUniversePrimedKey === $key) {
+        return;
+    }
+
+    $t0 = microtime(true);
+
+    $this->comboUniverse = $qualifiedIdpo->isEmpty()
+        ? collect()
+        : HistoryDataBreakdown::whereIn('idpo', $qualifiedIdpo)
+            ->pluck('combine_pro')->filter()->unique()->values();
+
+    $this->comboUniversePrimedKey = $key;
+
+    if (request()->get('debug') === '1') {
+        // Hitung juga berapa idpo yang "ditarik balik" dari combine_pro ini
+        $allIdpoFromCombo = $this->comboUniverse->isEmpty()
+            ? collect()
+            : HistoryDataBreakdown::whereIn('combine_pro', $this->comboUniverse)
+                ->pluck('idpo')->filter()->unique()->values();
+
+        dd([
+            'qualifiedIdpo_count' => $qualifiedIdpo->count(),
+            'combineProList_count' => $this->comboUniverse->count(),
+            'allIdpo_from_combo_count' => $allIdpoFromCombo->count(), // <- ini yang harus dibandingkan
+            'ratio_widening' => $qualifiedIdpo->count() > 0
+                ? round($allIdpoFromCombo->count() / $qualifiedIdpo->count(), 2)
+                : 0,
+            'time_ms' => round((microtime(true) - $t0) * 1000, 2),
+            'sample_qualifiedIdpo' => $qualifiedIdpo->take(10),
+            'sample_allIdpo' => $allIdpoFromCombo->take(10),
+        ]);
+    }
+}
+
+
+function dashboardAll(Request $request)
+{
+    preconnect(session('db'));
+    $dateA = Carbon::createFromFormat('d-m-Y', $request->datea)->startOfDay();
+    $dateB = Carbon::createFromFormat('d-m-Y', $request->dateb)->startOfDay();
+    $dta = $dateA->lessThanOrEqualTo($dateB) ? $dateA : $dateB;
+    $dtb = $dateA->lessThanOrEqualTo($dateB) ? $dateB->copy()->endOfDay() : $dateA->copy()->endOfDay();
+
+    if ($request->get('debug') === '1') {
+        $timings = [];
+
+        $t = microtime(true);
+        $summaryFilter = $this->buildSummaryFilterData($request, $dta, $dtb);
+        $timings['summaryFilter'] = round((microtime(true) - $t) * 1000, 2);
+
+        $t = microtime(true);
+        $priorityFinal = $this->buildPriorityFinalData($request, $dta, $dtb);
+        $timings['priorityFinal'] = round((microtime(true) - $t) * 1000, 2);
+
+        $t = microtime(true);
+        $finalOverview = $this->buildFinalOverviewData($request, $dta, $dtb);
+        $timings['finalOverview'] = round((microtime(true) - $t) * 1000, 2);
+
+        $t = microtime(true);
+        $chartData = $this->buildChartData($request, $dta, $dtb);
+        $timings['chartData'] = round((microtime(true) - $t) * 1000, 2);
+
+        $t = microtime(true);
+        $topDefects = $this->buildTopDefectsData($request, $dta, $dtb);
+        $timings['topDefects'] = round((microtime(true) - $t) * 1000, 2);
+
+        dd([
+            'timings_ms' => $timings,
+            'total_ms' => array_sum($timings),
+        ]);
+    }
+
+    return response()->json([
+        'summaryFilter' => $this->buildSummaryFilterData($request, $dta, $dtb),
+        'priorityFinal' => $this->buildPriorityFinalData($request, $dta, $dtb),
+        'finalOverview' => $this->buildFinalOverviewData($request, $dta, $dtb),
+        'chartData' => $this->buildChartData($request, $dta, $dtb),
+        'topDefects' => $this->buildTopDefectsData($request, $dta, $dtb),
+    ]);
+}
+
+
+private static $activeRerouteCallCount = 0;
 
 private function getActiveRerouteIdpoList($idpoList)
 {
+    self::$activeRerouteCallCount++;
+
     $idpoList = collect($idpoList)->filter()->unique()->values();
     if ($idpoList->isEmpty()) {
         return collect();
     }
+
+    $t0 = microtime(true);
 
     $combineProList = $this->comboUniverse ?? HistoryDataBreakdown::whereIn('idpo', $idpoList)
         ->pluck('combine_pro')->filter()->unique()->values();
@@ -13,16 +104,22 @@ private function getActiveRerouteIdpoList($idpoList)
         return $idpoList;
     }
 
-    $cacheKey = md5($combineProList->sort()->implode(','));
-    if (isset($this->activeRerouteCache[$cacheKey])) {
-        return $this->activeRerouteCache[$cacheKey];
-    }
-
     $allIdpo = HistoryDataBreakdown::whereIn('combine_pro', $combineProList)
         ->pluck('idpo')->filter()->unique()->values();
 
     $lastHistory = $this->getLastHistoryPoRevisi($allIdpo);
 
-    return $this->activeRerouteCache[$cacheKey] = $lastHistory
-        ->filter(fn ($row) => (int) $row->qtypo > 0)->keys()->values();
+    $result = $lastHistory->filter(fn ($row) => (int) $row->qtypo > 0)->keys()->values();
+
+    if (request()->get('debug') === '1') {
+        \Log::info('getActiveRerouteIdpoList call #' . self::$activeRerouteCallCount, [
+            'input_count' => $idpoList->count(),
+            'combineProList_count' => $combineProList->count(),
+            'allIdpo_count' => $allIdpo->count(),
+            'time_ms' => round((microtime(true) - $t0) * 1000, 2),
+        ]);
+    }
+
+    return $result;
 }
+
