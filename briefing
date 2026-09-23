@@ -1,78 +1,65 @@
-private function buildSummaryFilterData(Request $request, Carbon $dta, Carbon $dtb): array
-{
-    $fi = (new OutputDetailFinalInspection())->getTable();
-    $od = (new OutputDetail())->getTable();
-    $po = (new PurchaseOrder())->getTable();
+$data = $poList->map(function ($item) use (
+    $buyerGroupMap, $groupBuyerNames, $styleMap, $colorMap,
+    $outputPerIdpoColor, $today, $statusByIdpo
+) {
+    $groupBuyerId = $buyerGroupMap->get($item->idbuyer);
+    $outputKey = $item->idpo . '|' . $item->idcolor;
+    $totalOutput = $outputPerIdpoColor->get($outputKey, 0);
+    $etd = $item->etd;
 
-    $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true, $dta, $dtb);
-    $qtyPerIdpo = $leafRows->groupBy('idpo')->map(fn ($rows) => (int) $rows->sum('qty_ori'));
+    $daysToEtd = $etd
+        ? $today->diffInDays(Carbon::parse($etd)->startOfDay(), false)
+        : null;
 
-    $qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
+    $totalQty = (int) $item->qty;
+    $progressOutput = $totalQty > 0 ? round(($totalOutput / $totalQty) * 100, 2) : 0;
 
-    $today = Carbon::today()->startOfDay();
-    $split = $this->getSplitFinalCheckIdpoList($request, $dta, $dtb, $today);
-
-    // Reroute masing-masing kategori dulu SEBELUM digabung, supaya intersect nanti akurat
-    $overdueRerouted = $this->getActiveRerouteIdpoList($split['overdue']);
-    $needFinalRerouted = $this->getActiveRerouteIdpoList($split['need_final'])
-        ->diff($overdueRerouted)->values();
-
-    $headerQuery = OutputDetailFinalInspection::query()
-        ->join($od, "$od.barcode", '=', "$fi.barcode")
-        ->join($po, "$po.idpo", '=', "$od.idpo")
-        ->whereIn("$od.idpo", $qualifiedIdpo);
-
-    $finalComIdpoList = (clone $headerQuery)
-        ->where("$fi.is_output", 1)
-        ->select("$od.idpo")->distinct()->pluck("$od.idpo");
-
-    // Gabungan 3 data (overdue rerouted + need_final rerouted + final completed)
-    $finalIdpoList = $overdueRerouted->merge($needFinalRerouted)
-        ->merge($finalComIdpoList)->unique()->values();
-
-    $totalQty = $finalIdpoList->sum(fn ($idpo) => $qtyPerIdpo->get($idpo, 0));
-
-    $totalQtyInspect = (clone $headerQuery)
-        ->whereNotNull("$fi.date_output")
-        ->count(DB::raw("DISTINCT $fi.id"));
-
-    // Split sesuai kategori, sekarang basisnya konsisten (sama-sama sudah rerouted)
-    $overdueFinalList = $overdueRerouted->intersect($finalIdpoList)->values();
-    $needFinalFinalList = $needFinalRerouted->intersect($finalIdpoList)->values();
-
-    $overdue = $overdueFinalList->count();
-    $poNeedFinal = $needFinalFinalList->count();
-    $finalCom = $finalComIdpoList->count();
-    $totalPo = $poNeedFinal + $overdue + $finalCom;
-
-    $totDefect = (clone $headerQuery)
-        ->whereNotNull("$fi.date_output")
-        ->whereNotNull("$fi.defect_code")
-        ->count(DB::raw("DISTINCT $fi.id"));
-
-    $oql = $totalQtyInspect > 0
-        ? number_format(($totDefect / $totalQtyInspect) * 100, 2, '.', '')
-        : '0.00';
-
-    $rejectIdpoList = (clone $headerQuery)
-        ->whereIn("$od.idpo", $finalComIdpoList)
-        ->whereNotNull("$fi.defect_code")
-        ->select("$od.idpo")->distinct()->pluck("$od.idpo");
-
-    $poWithDefect = $rejectIdpoList->count();
-    $poNoDefect = $finalCom - $poWithDefect;
-    $passingRate = $finalCom > 0 ? round(($poNoDefect / $finalCom) * 100, 2) : 0;
-    $rejectRate = $finalCom > 0 ? round(($poWithDefect / $finalCom) * 100, 2) : 0;
+    $rawStatus = $statusByIdpo->get((string) $item->idpo, '-');
+    $status = in_array($rawStatus, ['overdue', 'need_final'])
+        ? 'Need Final'
+        : ($rawStatus === 'pass' ? 'Pass' : ($rawStatus === 'reject' ? 'Reject' : '-'));
 
     return [
-        'total_po' => $totalPo,
-        'total_qty' => $totalQty,
-        'total_qty_inspect' => $totalQtyInspect,
-        'po_need_final' => $poNeedFinal,
-        'overdue' => $overdue,
-        'final_completed' => $finalCom,
-        'oql' => $oql,
-        'passing_rate' => $passingRate,
-        'reject_rate' => $rejectRate,
+        'po' => $item->po,
+        'idpo' => $item->idpo,
+        'style' => $styleMap->get($item->idstyle) ?: '-',
+        'idcolor' => $item->idcolor,
+        'color' => $colorMap->get($item->idcolor) ?: '-',
+        'buyer' => $groupBuyerId ? ($groupBuyerNames->get($groupBuyerId) ?: '-') : '-',
+        'qty_order' => $totalQty,
+        'output' => $totalOutput,
+        'progress_output' => $progressOutput,
+        'etd' => $etd ? Carbon::parse($etd)->format('d-m-Y') : '-',
+        'days_to_etd' => $daysToEtd,
+        'status' => $status,
+        // debug only
+        '_raw_status' => $rawStatus,
     ];
+})
+->sort(function ($a, $b) use ($statusOrder) {
+    $orderA = $statusOrder[$a['status']] ?? 99;
+    $orderB = $statusOrder[$b['status']] ?? 99;
+    if ($orderA !== $orderB) {
+        return $orderA <=> $orderB;
+    }
+    return ($a['days_to_etd'] ?? PHP_INT_MAX) <=> ($b['days_to_etd'] ?? PHP_INT_MAX);
+})
+->values();
+
+// ==== DEBUG: dd semua PO dengan status '-' ====
+if ($request->has('debug_dash')) {
+    dd([
+        'missing_status_items' => $data->where('status', '-')->values(),
+        'statusByIdpo' => $statusByIdpo,
+        'finalIdpoList' => $finalIdpoList,
+        'finalComIdpoList (remapped)' => $finalComIdpoList,
+        'rejectIdpoList (remapped)' => $rejectIdpoList,
+        'passIdpoList' => $passIdpoList,
+        'split_overdue' => $split['overdue'],
+        'split_need_final' => $split['need_final'],
+        'byIdpoThenColor_keys' => $byIdpoThenColor->keys(),
+    ]);
 }
+// ==== END DEBUG ====
+
+$totalQtyOrderAll = $data->sum('qty_order');
