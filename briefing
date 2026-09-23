@@ -21,7 +21,7 @@ private function buildFinalOverviewData(Request $request, Carbon $dta, Carbon $d
     $rejectIdpoList = $status['reject'];       // RAW
     $passIdpoList = $status['pass'];           // RAW
 
-    // COUNT (harus 23): pakai basis RAW, sama seperti buildSummaryFilterData.
+    // COUNT (harus 23): basis RAW, sama seperti buildSummaryFilterData.
     $poWithDefect = $rejectIdpoList->count();
     $poNoDefect = $passIdpoList->count();
 
@@ -42,7 +42,7 @@ private function buildFinalOverviewData(Request $request, Carbon $dta, Carbon $d
 
     $activeIdpoList = $this->getActiveRerouteIdpoList($qualifiedIdpo);
 
-    // --- List #1: untuk COUNT (& poList) -> basis RAW, total = 23 ---
+    // List untuk COUNT & poList -> basis RAW, total = 23
     $notFinalForCount = $activeIdpoList
         ->diff($finalComIdpoList)
         ->values();
@@ -64,7 +64,7 @@ private function buildFinalOverviewData(Request $request, Carbon $dta, Carbon $d
         ];
     })->filter()->values();
 
-    // --- List #2: untuk QTY & OUTPUT -> basis REMAPPED, total = 81 ---
+    // List untuk QTY ORDER -> basis REMAPPED, total = 81
     $finalComRemapped = $this->remapToReroutedIdpo($finalComIdpoList);
     $rejectRemapped = $this->remapToReroutedIdpo($rejectIdpoList);
     $passRemapped = $finalComRemapped->diff($rejectRemapped)->values();
@@ -74,63 +74,53 @@ private function buildFinalOverviewData(Request $request, Carbon $dta, Carbon $d
         ->values();
 
     $qtyNotFinal = $notFinalForQty->sum(fn ($idpo) => $qtyPerIdpo->get($idpo, 0));
-
     $qtyPass = $passRemapped->sum(fn ($idpo) => $qtyPerIdpo->get($idpo, 0));
     $qtyReject = $rejectRemapped->sum(fn ($idpo) => $qtyPerIdpo->get($idpo, 0));
 
-    // OUTPUT: query tetap pakai idpo RAW (data fisik nempel di idpo raw),
-    // baru diredistribusi proporsional ke idpo aktif hasil reroute.
-    $getOutputPerIdpo = function ($idpoList) use ($od, $odp) {
-        if ($idpoList->isEmpty()) {
-            return collect();
-        }
-
-        return OutputDetail::query()
-            ->whereIn("$od.idpo", $idpoList)
-            ->whereNotNull("$od.barcode")
-            ->leftJoin("$odp", "$odp.barcode", '=', "$od.barcode")
-            ->select(
-                "$od.idpo",
-                DB::raw("COUNT(DISTINCT $odp.id_set) as total_output")
-            )
-            ->groupBy("$od.idpo")
-            ->get()
-            ->mapWithKeys(function ($row) {
-                return [
-                    (string) $row->idpo => (int) $row->total_output
-                ];
-            });
-    };
-
-    $outputPassPerIdpo = $this->redistributeReroutedOutput(
-        $passIdpoList,
-        $getOutputPerIdpo($passIdpoList)
-    );
-
-    $outputRejectPerIdpo = $this->redistributeReroutedOutput(
-        $rejectIdpoList,
-        $getOutputPerIdpo($rejectIdpoList)
-    );
-
-    $outputPass = $outputPassPerIdpo->sum();
-    $outputReject = $outputRejectPerIdpo->sum();
-
+    // --- OUTPUT: samakan persis dengan mekanisme buildPriorityFinalData ---
+    // ambil seluruh idpo dalam keluarga combine_pro (bukan cuma pass/reject/notfinal),
+    // query output-nya per idpo, baru remap pakai buildRerouteMap() (full move,
+    // bukan proporsional split seperti redistributeReroutedOutput).
     $notFinalRawCandidates = $split['overdue']->merge($split['need_final'])
         ->unique()->values();
 
-    $outputNotFinalPerIdpo = $this->redistributeReroutedOutput(
-        $notFinalRawCandidates,
-        $this->getOutputPerIdpoFromPacking($notFinalRawCandidates)
-    );
+    $allRelevantIdpo = $finalComIdpoList
+        ->merge($notFinalRawCandidates)
+        ->unique()->values();
 
-    $notFinalQtySet = $notFinalForQty->map(fn ($idpo) => (string) $idpo)->flip();
+    $combineProList = $this->comboUniverse ?? HistoryDataBreakdown::whereIn('idpo', $allRelevantIdpo)
+        ->pluck('combine_pro')->filter()->unique()->values();
 
-    $outputNotFinal = 0;
-    foreach ($outputNotFinalPerIdpo as $idpo => $qty) {
-        if ($notFinalQtySet->has((string) $idpo)) {
-            $outputNotFinal += (int) $qty;
-        }
+    $allHistoryIdpo = $combineProList->isEmpty()
+        ? $allRelevantIdpo
+        : HistoryDataBreakdown::whereIn('combine_pro', $combineProList)
+            ->pluck('idpo')->filter()->unique()->values();
+
+    $outputRows = OutputDetail::query()
+        ->whereIn("$od.idpo", $allHistoryIdpo)
+        ->whereNotNull("$od.barcode")
+        ->leftJoin("$odp", "$odp.barcode", '=', "$od.barcode")
+        ->select(
+            "$od.idpo",
+            DB::raw("COUNT(DISTINCT $odp.id_set) as total_output")
+        )
+        ->groupBy("$od.idpo")
+        ->get();
+
+    $rerouteMap = $this->buildRerouteMap($outputRows->pluck('idpo')->unique()->values());
+
+    $outputPerIdpo = collect();
+    foreach ($outputRows as $row) {
+        $activeIdpo = $rerouteMap->get((string) $row->idpo, (string) $row->idpo);
+        $outputPerIdpo->put(
+            $activeIdpo,
+            $outputPerIdpo->get($activeIdpo, 0) + (int) $row->total_output
+        );
     }
+
+    $outputPass = $passRemapped->sum(fn ($idpo) => $outputPerIdpo->get((string) $idpo, 0));
+    $outputReject = $rejectRemapped->sum(fn ($idpo) => $outputPerIdpo->get((string) $idpo, 0));
+    $outputNotFinal = $notFinalForQty->sum(fn ($idpo) => $outputPerIdpo->get((string) $idpo, 0));
 
     $qtyInspectNotFinal = 0;
 
