@@ -1,92 +1,22 @@
-private function buildSummaryFilterData(Request $request, Carbon $dta, Carbon $dtb): array
-{
-    $fi = (new OutputDetailFinalInspection())->getTable();
-    $od = (new OutputDetail())->getTable();
-    $po = (new PurchaseOrder())->getTable();
+$overdueRerouted = $this->getActiveRerouteIdpoList($split['overdue']);
+$needFinalRerouted = $this->getActiveRerouteIdpoList($split['need_final'])
+    ->diff($overdueRerouted)->values();
 
-    $leafRows = $this->getLeafHistoryRows($request, 'combine_pro', true, $dta, $dtb);
-    $qtyPerIdpo = $leafRows->groupBy('idpo')->map(fn ($rows) => (int) $rows->sum('qty_ori'));
+$finalComIdpoList = (clone $headerQuery)
+    ->where("$fi.is_output", 1)
+    ->select("$od.idpo")->distinct()->pluck("$od.idpo");
 
-    $qualifiedIdpo = $qtyPerIdpo->filter(fn ($qty) => $qty > 0)->keys()->values();
+// gabungan total (3 data) — sekarang semua sudah dalam "bentuk" yang sama (sudah rerouted)
+$finalIdpoList = $overdueRerouted->merge($needFinalRerouted)
+    ->merge($finalComIdpoList)->unique()->values();
 
-    $today = Carbon::today()->startOfDay();
-    $split = $this->getSplitFinalCheckIdpoList($request, $dta, $dtb, $today);
+$totalQty = $finalIdpoList->sum(fn ($idpo) => $qtyPerIdpo->get($idpo, 0));
 
-    $overdueList = $split['overdue'];
-    $needFinalList = $split['need_final'];
+// sekarang split-nya akurat karena base-nya sama-sama sudah rerouted
+$overdueFinalList = $overdueRerouted->intersect($finalIdpoList)->values();
+$needFinalFinalList = $needFinalRerouted->intersect($finalIdpoList)->values();
 
-    // $overdueList = $this->getActiveRerouteIdpoList($split['overdue']);
-    // $needFinalList = $this->getActiveRerouteIdpoList($split['need_final'])
-    //     ->diff($overdueList)->values();
-
-    $headerQuery = OutputDetailFinalInspection::query()
-        ->join($od, "$od.barcode", '=', "$fi.barcode")
-        ->join($po, "$po.idpo", '=', "$od.idpo")
-        ->whereIn("$od.idpo", $qualifiedIdpo);
-
-    $finalComIdpoList = (clone $headerQuery)
-        ->where("$fi.is_output", 1)
-        ->select("$od.idpo")->distinct()->pluck("$od.idpo");
-
-    $originalFinalIdpoList = $split['overdue']->merge($split['need_final'])
-        ->merge($finalComIdpoList)->unique()->values();
-
-    $finalIdpoList = $this->getActiveRerouteIdpoList($originalFinalIdpoList);
-
-    // $finalIdpoList = $overdueList->merge($needFinalList)->merge($finalComIdpoList)->unique()->values();
-
-    $totalQty = $finalIdpoList->sum(fn ($idpo) => $qtyPerIdpo->get($idpo, 0));
-
-    $totalQtyInspect = (clone $headerQuery)
-        ->whereNotNull("$fi.date_output")
-        ->count(DB::raw("DISTINCT $fi.id"));
-
-    $overdueFinalList = $overdueList
-        ->intersect($finalIdpoList)
-        ->values();
-
-
-    $needFinalFinalList = $needFinalList
-        ->intersect($finalIdpoList)
-        ->values();
-
-    $overdue = $overdueFinalList->count();
-    $poNeedFinal = $needFinalFinalList->count();
-
-
-    // $overdue = $overdueList->count();
-    // $poNeedFinal = $needFinalList->count();
-    $finalCom = $finalComIdpoList->count();
-    $totalPo = $poNeedFinal + $overdue + $finalCom;
-
-    $totDefect = (clone $headerQuery)
-        ->whereNotNull("$fi.date_output")
-        ->whereNotNull("$fi.defect_code")
-        ->count(DB::raw("DISTINCT $fi.id"));
-
-    $oql = $totalQtyInspect > 0
-        ? number_format(($totDefect / $totalQtyInspect) * 100, 2, '.', '')
-        : '0.00';
-
-    $rejectIdpoList = (clone $headerQuery)
-        ->whereIn("$od.idpo", $finalComIdpoList)
-        ->whereNotNull("$fi.defect_code")
-        ->select("$od.idpo")->distinct()->pluck("$od.idpo");
-
-    $poWithDefect = $rejectIdpoList->count();
-    $poNoDefect = $finalCom - $poWithDefect;
-    $passingRate = $finalCom > 0 ? round(($poNoDefect / $finalCom) * 100, 2) : 0;
-    $rejectRate = $finalCom > 0 ? round(($poWithDefect / $finalCom) * 100, 2) : 0;
-
-    return [
-        'total_po' => $totalPo,
-        'total_qty' => $totalQty,
-        'total_qty_inspect' => $totalQtyInspect,
-        'po_need_final' => $poNeedFinal,
-        'overdue' => $overdue,
-        'final_completed' => $finalCom,
-        'oql' => $oql,
-        'passing_rate' => $passingRate,
-        'reject_rate' => $rejectRate,
-    ];
-}
+$overdue = $overdueFinalList->count();
+$poNeedFinal = $needFinalFinalList->count();
+$finalCom = $finalComIdpoList->count();
+$totalPo = $poNeedFinal + $overdue + $finalCom;
