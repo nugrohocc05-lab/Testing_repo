@@ -39,23 +39,14 @@ private function buildFinalOverviewData(Request $request, Carbon $dta, Carbon $d
     $today = Carbon::today()->startOfDay();
     $split = $this->getSplitFinalCheckIdpoList($request, $dta, $dtb, $today);
 
-    // samakan pola dengan buildSummaryFilterData / buildPriorityFinalData:
-    // reroute dulu overdue+need_final ke idpo aktif, lalu diff dari finalCom
-    // yang juga sudah di-remap ke idpo hasil reroute.
-    $finalComRemapped = $this->remapToReroutedIdpo($finalComIdpoList);
+    // Samakan dengan pola buildSummaryFilterData: ambil seluruh idpo aktif
+    // hasil reroute dari comboUniverse (basis idpo apa pun yang non-empty
+    // akan menghasilkan set yang sama selama comboUniverse sudah di-prime),
+    // lalu diff dengan finalCom RAW (belum di-remap) — bukan versi remapped.
+    $activeIdpoList = $this->getActiveRerouteIdpoList($qualifiedIdpo);
 
-    $originalFinalIdpoList = $split['overdue']->merge($split['need_final'])
-        ->merge($finalComIdpoList)->unique()->values();
-    $finalIdpoList = $this->getActiveRerouteIdpoList($originalFinalIdpoList);
-
-    $notFinalCandidates = $this->getActiveRerouteIdpoList(
-            $split['overdue']->merge($split['need_final'])->unique()->values()
-        )
-        ->diff($finalComRemapped)
-        ->values();
-
-    $originalNotFinalIdpoList = $notFinalCandidates
-        ->intersect($finalIdpoList)
+    $originalNotFinalIdpoList = $activeIdpoList
+        ->diff($finalComIdpoList)
         ->values();
 
     $qtyNotFinal = $originalNotFinalIdpoList->sum(
