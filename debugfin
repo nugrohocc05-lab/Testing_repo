@@ -1,0 +1,77 @@
+// buildsummary
+$finalComIdpoListRemapped = $this->remapToReroutedIdpo($finalComIdpoList);
+
+$overdueList = $this->remapToReroutedIdpo($split['overdue'])
+    ->diff($finalComIdpoListRemapped)
+    ->values();
+
+$needFinalList = $this->remapToReroutedIdpo($split['need_final'])
+    ->diff($overdueList)
+    ->diff($finalComIdpoListRemapped)
+    ->values();
+
+// === TEMPORARY DEBUG ===
+if ($request->query('debug')) {
+    dd([
+        'split_overdue_raw' => $split['overdue']->values()->toArray(),
+        'split_need_final_raw' => $split['need_final']->values()->toArray(),
+        'finalComIdpoList_raw' => $finalComIdpoList->values()->toArray(),
+        'finalComIdpoListRemapped' => $finalComIdpoListRemapped->toArray(),
+        'overdueList' => $overdueList->toArray(),
+        'needFinalList' => $needFinalList->toArray(),
+    ]);
+}
+// === END DEBUG ===
+
+// build final overview
+$allStatusIdpo = $passIdpoList->merge($rejectIdpoList)
+    ->merge($split['overdue'])->merge($split['need_final'])
+    ->unique()->values();
+
+$outputPerActiveIdpo = $this->getFamilyOutputPerActiveIdpo($allStatusIdpo);
+
+$outputPass = $passRemapped->sum(fn ($idpo) => $outputPerActiveIdpo->get((string) $idpo, 0));
+$outputReject = $rejectRemapped->sum(fn ($idpo) => $outputPerActiveIdpo->get((string) $idpo, 0));
+$outputNotFinal = $notFinalForQty->sum(fn ($idpo) => $outputPerActiveIdpo->get((string) $idpo, 0));
+
+// === TEMPORARY DEBUG ===
+if ($request->query('debug')) {
+    dd([
+        'passIdpoList_raw' => $passIdpoList->values()->toArray(),
+        'rejectIdpoList_raw' => $rejectIdpoList->values()->toArray(),
+        'passRemapped' => $passRemapped->toArray(),
+        'rejectRemapped' => $rejectRemapped->toArray(),
+        'notFinalForQty' => $notFinalForQty->toArray(),
+        'allStatusIdpo' => $allStatusIdpo->toArray(),
+        'outputPerActiveIdpo' => $outputPerActiveIdpo->toArray(), // <- ini kuncinya, per-idpo hasil family-wide
+        'outputPass' => $outputPass,
+        'outputReject' => $outputReject,
+        'outputNotFinal' => $outputNotFinal,
+        'qtyPass' => $qtyPass,
+        'qtyReject' => $qtyReject,
+        'qtyNotFinal' => $qtyNotFinal,
+    ]);
+}
+// === END DEBUG ===
+
+// Lihat data mentah tabel buildFinalOverviewData() atau buildSummaryFilterData()
+if ($request->query('debug_idpo')) {
+    $x = $request->query('debug_idpo');
+
+    $family = HistoryDataBreakdown::where('idpo', $x)
+        ->orWhereIn('combine_pro', HistoryDataBreakdown::where('idpo', $x)->pluck('combine_pro'))
+        ->get(['idpo','combine_pro','combine_pro_set','kp_item','kp_item_ref','revisi_kp','qty_ori','is_cutoff','deliverydate']);
+
+    $familyIdpo = $family->pluck('idpo')->unique()->values();
+
+    dd([
+        'family_rows' => $family->toArray(),
+        'history_po' => HistoryPO::whereIn('idpo', $familyIdpo)->get(['idpo','revisi','qtypo'])->toArray(),
+        'output_detail' => OutputDetail::whereIn('idpo', $familyIdpo)->get(['idpo','idcolor','barcode'])->toArray(),
+        'final_inspection' => OutputDetailFinalInspection::whereIn(
+            'barcode',
+            OutputDetail::whereIn('idpo', $familyIdpo)->pluck('barcode')
+        )->get(['barcode','is_output','date_output','defect_code'])->toArray(),
+    ]);
+}
+
