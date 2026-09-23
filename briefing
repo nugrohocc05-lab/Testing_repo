@@ -17,18 +17,21 @@ private function buildFinalOverviewData(Request $request, Carbon $dta, Carbon $d
 
     $status = $this->getFinalCompletionStatus($qualifiedIdpo);
 
-    // count PO & qty_inspect: pakai idpo RAW (data fisik barcode nempel
-    // di idpo raw, sama seperti pola buildChartData) - jangan di-remap.
-    $poWithDefect = $status['reject']->count();
-    $poNoDefect = $status['pass']->count();
+    $finalComIdpoList = $status['finalCom'];   // RAW
+    $rejectIdpoList = $status['reject'];       // RAW
+    $passIdpoList = $status['pass'];           // RAW
+
+    // COUNT (harus 23): pakai basis RAW, sama seperti buildSummaryFilterData.
+    $poWithDefect = $rejectIdpoList->count();
+    $poNoDefect = $passIdpoList->count();
 
     $qtyInspectPass = (clone $headerQuery)
-        ->whereIn("$od.idpo", $status['pass'])
+        ->whereIn("$od.idpo", $passIdpoList)
         ->whereNotNull("$fi.date_output")
         ->count(DB::raw("DISTINCT $od.barcode"));
 
     $qtyInspectReject = (clone $headerQuery)
-        ->whereIn("$od.idpo", $status['reject'])
+        ->whereIn("$od.idpo", $rejectIdpoList)
         ->whereNotNull("$fi.date_output")
         ->count(DB::raw("DISTINCT $od.barcode"));
 
@@ -37,32 +40,21 @@ private function buildFinalOverviewData(Request $request, Carbon $dta, Carbon $d
     $today = Carbon::today()->startOfDay();
     $split = $this->getSplitFinalCheckIdpoList($request, $dta, $dtb, $today);
 
-    // qty ORDER (qty_ori) harus pakai basis idpo yang sudah di-remap/active,
-    // supaya pass + reject + not_final = total qty aktif (match summary/priority).
-    $finalComRemapped = $this->remapToReroutedIdpo($status['finalCom']);
-    $rejectRemapped = $this->remapToReroutedIdpo($status['reject']);
-    $passRemapped = $finalComRemapped->diff($rejectRemapped)->values();
-
     $activeIdpoList = $this->getActiveRerouteIdpoList($qualifiedIdpo);
-    $notFinalRemapped = $activeIdpoList->diff($finalComRemapped)->values();
 
-    $originalNotFinalIdpoList = $notFinalRemapped;
+    // --- List #1: untuk COUNT (& poList) -> basis RAW, total = 23 ---
+    $notFinalForCount = $activeIdpoList
+        ->diff($finalComIdpoList)
+        ->values();
 
-    $qtyNotFinal = $originalNotFinalIdpoList->sum(
-        fn ($idpo) => $qtyPerIdpo->get($idpo, 0)
-    );
+    $countNotFinal = $notFinalForCount->count();
 
-    $countNotFinal = $originalNotFinalIdpoList->count();
-
-    $poList = $originalNotFinalIdpoList->map(function ($idpo) use ($byIdpoLeaf) {
+    $poList = $notFinalForCount->map(function ($idpo) use ($byIdpoLeaf) {
         $rows = $byIdpoLeaf->get($idpo);
-
         if (!$rows) {
             return null;
         }
-
         $first = $rows->first();
-
         return (object) [
             'idpo' => $idpo,
             'po' => $first->po,
@@ -72,6 +64,22 @@ private function buildFinalOverviewData(Request $request, Carbon $dta, Carbon $d
         ];
     })->filter()->values();
 
+    // --- List #2: untuk QTY & OUTPUT -> basis REMAPPED, total = 81 ---
+    $finalComRemapped = $this->remapToReroutedIdpo($finalComIdpoList);
+    $rejectRemapped = $this->remapToReroutedIdpo($rejectIdpoList);
+    $passRemapped = $finalComRemapped->diff($rejectRemapped)->values();
+
+    $notFinalForQty = $activeIdpoList
+        ->diff($finalComRemapped)
+        ->values();
+
+    $qtyNotFinal = $notFinalForQty->sum(fn ($idpo) => $qtyPerIdpo->get($idpo, 0));
+
+    $qtyPass = $passRemapped->sum(fn ($idpo) => $qtyPerIdpo->get($idpo, 0));
+    $qtyReject = $rejectRemapped->sum(fn ($idpo) => $qtyPerIdpo->get($idpo, 0));
+
+    // OUTPUT: query tetap pakai idpo RAW (data fisik nempel di idpo raw),
+    // baru diredistribusi proporsional ke idpo aktif hasil reroute.
     $getOutputPerIdpo = function ($idpoList) use ($od, $odp) {
         if ($idpoList->isEmpty()) {
             return collect();
@@ -94,25 +102,19 @@ private function buildFinalOverviewData(Request $request, Carbon $dta, Carbon $d
             });
     };
 
-    // output PASS/REJECT: query pakai idpo RAW (data fisik ada di idpo raw),
-    // baru redistributeReroutedOutput yang memindahkan qty ke idpo hasil
-    // reroute secara proporsional. Total sum tidak berubah, hanya pindah key.
     $outputPassPerIdpo = $this->redistributeReroutedOutput(
-        $status['pass'],
-        $getOutputPerIdpo($status['pass'])
+        $passIdpoList,
+        $getOutputPerIdpo($passIdpoList)
     );
 
     $outputRejectPerIdpo = $this->redistributeReroutedOutput(
-        $status['reject'],
-        $getOutputPerIdpo($status['reject'])
+        $rejectIdpoList,
+        $getOutputPerIdpo($rejectIdpoList)
     );
 
     $outputPass = $outputPassPerIdpo->sum();
     $outputReject = $outputRejectPerIdpo->sum();
 
-    // output NOT_FINAL: sama pola - query pakai idpo RAW dari split
-    // (overdue+need_final, sebelum di-remap), redistribusi, baru dijumlah
-    // hanya untuk key yang memang termasuk bucket not_final AKTIF.
     $notFinalRawCandidates = $split['overdue']->merge($split['need_final'])
         ->unique()->values();
 
@@ -121,26 +123,16 @@ private function buildFinalOverviewData(Request $request, Carbon $dta, Carbon $d
         $this->getOutputPerIdpoFromPacking($notFinalRawCandidates)
     );
 
-    $notFinalActiveSet = $originalNotFinalIdpoList
-        ->map(fn ($idpo) => (string) $idpo)
-        ->flip();
+    $notFinalQtySet = $notFinalForQty->map(fn ($idpo) => (string) $idpo)->flip();
 
     $outputNotFinal = 0;
     foreach ($outputNotFinalPerIdpo as $idpo => $qty) {
-        if ($notFinalActiveSet->has((string) $idpo)) {
+        if ($notFinalQtySet->has((string) $idpo)) {
             $outputNotFinal += (int) $qty;
         }
     }
 
     $qtyInspectNotFinal = 0;
-
-    $qtyPass = $passRemapped->sum(
-        fn ($idpo) => $qtyPerIdpo->get($idpo, 0)
-    );
-
-    $qtyReject = $rejectRemapped->sum(
-        fn ($idpo) => $qtyPerIdpo->get($idpo, 0)
-    );
 
     $progressPass = $qtyPass > 0
         ? round(($outputPass / $qtyPass) * 100, 2)
