@@ -1,65 +1,17 @@
-$data = $poList->map(function ($item) use (
-    $buyerGroupMap, $groupBuyerNames, $styleMap, $colorMap,
-    $outputPerIdpoColor, $today, $statusByIdpo
-) {
-    $groupBuyerId = $buyerGroupMap->get($item->idbuyer);
-    $outputKey = $item->idpo . '|' . $item->idcolor;
-    $totalOutput = $outputPerIdpoColor->get($outputKey, 0);
-    $etd = $item->etd;
+// SEBELUM
+$originalNotFinalIdpoList = $split['overdue']
+    ->merge($split['need_final'])
+    ->unique()
+    ->diff($status['finalCom'])
+    ->values();
 
-    $daysToEtd = $etd
-        ? $today->diffInDays(Carbon::parse($etd)->startOfDay(), false)
-        : null;
+// SESUDAH
+$activeNotFinalCandidate = $this->getActiveRerouteIdpoList(
+    $split['overdue']->merge($split['need_final'])->unique()->values()
+);
 
-    $totalQty = (int) $item->qty;
-    $progressOutput = $totalQty > 0 ? round(($totalOutput / $totalQty) * 100, 2) : 0;
+$remappedFinalCom = $this->remapToReroutedIdpo($status['finalCom']);
 
-    $rawStatus = $statusByIdpo->get((string) $item->idpo, '-');
-    $status = in_array($rawStatus, ['overdue', 'need_final'])
-        ? 'Need Final'
-        : ($rawStatus === 'pass' ? 'Pass' : ($rawStatus === 'reject' ? 'Reject' : '-'));
-
-    return [
-        'po' => $item->po,
-        'idpo' => $item->idpo,
-        'style' => $styleMap->get($item->idstyle) ?: '-',
-        'idcolor' => $item->idcolor,
-        'color' => $colorMap->get($item->idcolor) ?: '-',
-        'buyer' => $groupBuyerId ? ($groupBuyerNames->get($groupBuyerId) ?: '-') : '-',
-        'qty_order' => $totalQty,
-        'output' => $totalOutput,
-        'progress_output' => $progressOutput,
-        'etd' => $etd ? Carbon::parse($etd)->format('d-m-Y') : '-',
-        'days_to_etd' => $daysToEtd,
-        'status' => $status,
-        // debug only
-        '_raw_status' => $rawStatus,
-    ];
-})
-->sort(function ($a, $b) use ($statusOrder) {
-    $orderA = $statusOrder[$a['status']] ?? 99;
-    $orderB = $statusOrder[$b['status']] ?? 99;
-    if ($orderA !== $orderB) {
-        return $orderA <=> $orderB;
-    }
-    return ($a['days_to_etd'] ?? PHP_INT_MAX) <=> ($b['days_to_etd'] ?? PHP_INT_MAX);
-})
-->values();
-
-// ==== DEBUG: dd semua PO dengan status '-' ====
-if ($request->has('debug_dash')) {
-    dd([
-        'missing_status_items' => $data->where('status', '-')->values(),
-        'statusByIdpo' => $statusByIdpo,
-        'finalIdpoList' => $finalIdpoList,
-        'finalComIdpoList (remapped)' => $finalComIdpoList,
-        'rejectIdpoList (remapped)' => $rejectIdpoList,
-        'passIdpoList' => $passIdpoList,
-        'split_overdue' => $split['overdue'],
-        'split_need_final' => $split['need_final'],
-        'byIdpoThenColor_keys' => $byIdpoThenColor->keys(),
-    ]);
-}
-// ==== END DEBUG ====
-
-$totalQtyOrderAll = $data->sum('qty_order');
+$originalNotFinalIdpoList = $activeNotFinalCandidate
+    ->diff($remappedFinalCom)
+    ->values();
