@@ -17,20 +17,29 @@ private function buildFinalOverviewData(Request $request, Carbon $dta, Carbon $d
 
     $status = $this->getFinalCompletionStatus($qualifiedIdpo);
 
-    $finalComIdpoList = $status['finalCom'];
-    $rejectIdpoList = $status['reject'];
-    $passIdpoList = $status['pass'];
+    // Basis QTY (pass/reject/not_final) wajib satu set idpo aktif hasil reroute,
+    // sama seperti totalQty di buildSummaryFilterData/buildPriorityFinalData.
+    // Kalau tidak, qty PO yang direroute bisa kehitung dobel: sekali di pass/reject
+    // (pakai idpo lama), sekali lagi di not_final (pakai idpo aktif hasil reroute).
+    $finalComRemapped = $this->remapToReroutedIdpo($status['finalCom']);
+    $rejectRemapped = $this->remapToReroutedIdpo($status['reject']);
+    $passRemapped = $finalComRemapped->diff($rejectRemapped)->values();
 
-    $poWithDefect = $rejectIdpoList->count();
-    $poNoDefect = $passIdpoList->count();
+    $activeIdpoList = $this->getActiveRerouteIdpoList($qualifiedIdpo);
+    $notFinalRemapped = $activeIdpoList->diff($finalComRemapped)->values();
+
+    // Count PO tetap pakai status asli (pass/reject) - ini tidak bermasalah,
+    // yang salah cuma sisi qty-nya.
+    $poWithDefect = $status['reject']->count();
+    $poNoDefect = $status['pass']->count();
 
     $qtyInspectPass = (clone $headerQuery)
-        ->whereIn("$od.idpo", $passIdpoList)
+        ->whereIn("$od.idpo", $status['pass'])
         ->whereNotNull("$fi.date_output")
         ->count(DB::raw("DISTINCT $od.barcode"));
 
     $qtyInspectReject = (clone $headerQuery)
-        ->whereIn("$od.idpo", $rejectIdpoList)
+        ->whereIn("$od.idpo", $status['reject'])
         ->whereNotNull("$fi.date_output")
         ->count(DB::raw("DISTINCT $od.barcode"));
 
@@ -39,15 +48,7 @@ private function buildFinalOverviewData(Request $request, Carbon $dta, Carbon $d
     $today = Carbon::today()->startOfDay();
     $split = $this->getSplitFinalCheckIdpoList($request, $dta, $dtb, $today);
 
-    // Samakan dengan pola buildSummaryFilterData: ambil seluruh idpo aktif
-    // hasil reroute dari comboUniverse (basis idpo apa pun yang non-empty
-    // akan menghasilkan set yang sama selama comboUniverse sudah di-prime),
-    // lalu diff dengan finalCom RAW (belum di-remap) — bukan versi remapped.
-    $activeIdpoList = $this->getActiveRerouteIdpoList($qualifiedIdpo);
-
-    $originalNotFinalIdpoList = $activeIdpoList
-        ->diff($finalComIdpoList)
-        ->values();
+    $originalNotFinalIdpoList = $notFinalRemapped;
 
     $qtyNotFinal = $originalNotFinalIdpoList->sum(
         fn ($idpo) => $qtyPerIdpo->get($idpo, 0)
@@ -102,24 +103,26 @@ private function buildFinalOverviewData(Request $request, Carbon $dta, Carbon $d
             });
     };
 
+    // pakai basis idpo yang sudah di-remap juga di sini, biar konsisten
+    // dengan qty-nya (dan sama dengan pola buildPriorityFinalData).
     $outputPassPerIdpo = $this->redistributeReroutedOutput(
-        $passIdpoList,
-        $getOutputPerIdpo($passIdpoList)
+        $passRemapped,
+        $getOutputPerIdpo($passRemapped)
     );
 
     $outputRejectPerIdpo = $this->redistributeReroutedOutput(
-        $rejectIdpoList,
-        $getOutputPerIdpo($rejectIdpoList)
+        $rejectRemapped,
+        $getOutputPerIdpo($rejectRemapped)
     );
 
     $outputPass = $outputPassPerIdpo->sum();
     $outputReject = $outputRejectPerIdpo->sum();
 
-    $qtyPass = $passIdpoList->sum(
+    $qtyPass = $passRemapped->sum(
         fn ($idpo) => $qtyPerIdpo->get($idpo, 0)
     );
 
-    $qtyReject = $rejectIdpoList->sum(
+    $qtyReject = $rejectRemapped->sum(
         fn ($idpo) => $qtyPerIdpo->get($idpo, 0)
     );
 
