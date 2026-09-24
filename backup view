@@ -1,55 +1,35 @@
-array:2 [▼
-  "total_queries" => 16
-  "slowest" => array:10 [▼
-    0 => array:3 [▼
-      "query" => "select `outputdetail`.`idpo`, `outputdetail`.`idcolor`, COUNT(DISTINCT outputdetailpacking.id_set) as total_output from `outputdetail` left join `outputdetailpa ▶"
-      "bindings" => array:392 [▶]
-      "time" => 1393.27
-    ]
-    1 => array:3 [▼
-      "query" => "select count(DISTINCT outputdetailfinalinspection.id) as aggregate from `outputdetailfinalinspection` inner join `outputdetail` on `outputdetail`.`barcode` = `o ▶"
-      "bindings" => array:378 [▶]
-      "time" => 425.51
-    ]
-    2 => array:3 [▼
-      "query" => "select count(DISTINCT outputdetail.barcode) as aggregate from `outputdetailfinalinspection` inner join `outputdetail` on `outputdetail`.`barcode` = `outputdetai ▶"
-      "bindings" => array:450 [▶]
-      "time" => 358.57
-    ]
-    3 => array:3 [▼
-      "query" => "select count(DISTINCT outputdetail.barcode) as aggregate from `outputdetailfinalinspection` inner join `outputdetail` on `outputdetail`.`barcode` = `outputdetai ▶"
-      "bindings" => array:450 [▶]
-      "time" => 347.14
-    ]
-    4 => array:3 [▼
-      "query" => "select `combine_pro` from `historydbreakdown` where `idpo` in (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? ▶"
-      "bindings" => array:376 [▶]
-      "time" => 41.94
-    ]
-    5 => array:3 [▼
-      "query" => "select `idpo` from `historydbreakdown` where `combine_pro` in (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? ▶"
-      "bindings" => array:156 [▶]
-      "time" => 33.96
-    ]
-    6 => array:3 [▼
-      "query" => "select `idpo` from `historydbreakdown` where `combine_pro` in (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? ▶"
-      "bindings" => array:156 [▶]
-      "time" => 27.55
-    ]
-    7 => array:3 [▼
-      "query" => "select distinct `outputdetail`.`idpo` from `outputdetailfinalinspection` inner join `outputdetail` on `outputdetail`.`barcode` = `outputdetailfinalinspection`.` ▶"
-      "bindings" => array:450 [▶]
-      "time" => 21.09
-    ]
-    8 => array:3 [▼
-      "query" => "select `idpo`, `revisi`, `qtypo` from `historypo` where `idpo` in (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,  ▶"
-      "bindings" => array:392 [ …392]
-      "time" => 17.13
-    ]
-    9 => array:3 [▼
-      "query" => "select `idpo`, `revisi`, `qtypo` from `historypo` where `idpo` in (?, ?) order by `idpo` asc, `revisi` desc"
-      "bindings" => array:2 [ …2]
-      "time" => 10.48
-    ]
-  ]
-]
+if ($request->query('debug_index')) {
+    $od  = (new OutputDetail())->getTable();
+    $odp = (new OutputDetailPacking())->getTable();
+    $fi  = (new OutputDetailFinalInspection())->getTable();
+
+    $indexes = function ($table) {
+        return collect(DB::select("SHOW INDEX FROM `$table`"))
+            ->groupBy('Key_name')
+            ->map(fn ($g) => $g->sortBy('Seq_in_index')->pluck('Column_name')->implode(', '))
+            ->toArray();
+    };
+
+    $ids = $this->getLeafHistoryRows($request, 'combine_pro', true, $dta, $dtb)
+        ->pluck('idpo')->unique()->values();
+
+    $q = OutputDetail::query()
+        ->whereIn("$od.idpo", $ids)
+        ->whereNotNull("$od.barcode")
+        ->leftJoin($odp, "$odp.barcode", '=', "$od.barcode")
+        ->select("$od.idpo", "$od.idcolor", DB::raw("COUNT(DISTINCT $odp.id_set) as total_output"))
+        ->groupBy("$od.idpo", "$od.idcolor");
+
+    $status = collect(DB::select("SHOW TABLE STATUS WHERE Name IN (?, ?, ?)", [$od, $odp, $fi]))
+        ->map(fn ($r) => ['table' => $r->Name, 'approx_rows' => $r->Rows, 'engine' => $r->Engine])
+        ->toArray();
+
+    dd([
+        'cache_driver'  => config('cache.default'),
+        'table_status'  => $status,
+        'index_od'      => $indexes($od),
+        'index_odp'     => $indexes($odp),
+        'index_fi'      => $indexes($fi),
+        'explain_output_query' => DB::select('EXPLAIN ' . $q->toSql(), $q->getBindings()),
+    ]);
+}
