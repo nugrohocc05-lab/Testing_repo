@@ -1,6 +1,8 @@
-array:4 [▼
-  "qualifiedIdpo_count" => 101
-  "finalIdpoList_count" => 101
-  "missing_from_finalIdpo" => []
-  "extra_in_finalIdpo" => []
-]
+if ($request->query('debug_color_mismatch')) {
+    dd([
+        'outputPerIdpoColor_total' => $outputPerIdpoColor->sum(),
+        'poList_output_total' => $poList->sum(fn ($item) => $outputPerIdpoColor->get($item->idpo.'|'.$item->idcolor, 0)),
+        'idcolor_keys_in_output' => $outputPerIdpoColor->keys()->values()->toArray(),
+        'idcolor_keys_in_poList' => $poList->map(fn ($i) => $i->idpo.'|'.$i->idcolor)->values()->toArray(),
+    ]);
+}
