@@ -1,35 +1,23 @@
-array:8 [▼
-  "in_overdue" => array:2 [▼
-    0 => true
-    1 => true
-  ]
-  "in_need_final" => array:2 [▼
-    0 => false
-    1 => false
-  ]
-  "in_finalCom" => array:2 [▼
-    0 => false
-    1 => false
-  ]
-  "in_original" => array:2 [▼
-    0 => true
-    1 => true
-  ]
-  "in_leafRows" => array:2 [▼
-    0 => true
-    1 => true
-  ]
-  "remap_old" => array:2 [▼
-    0 => "0051939"
-    1 => "0051940"
-  ]
-  "remap_target" => array:3 [▼
-    "0051931" => "0051932"
-    "0051945" => "0051946"
-    "0051935" => "0051936"
-  ]
-  "qty_per_idpo" => array:2 [▼
-    0 => 2
-    1 => 2
-  ]
-]
+if ($request->query('debug_total_po')) {
+    $today = Carbon::today()->startOfDay();
+    $split = $this->getSplitFinalCheckIdpoList($request, $dta, $dtb, $today);
+    $s = fn ($c) => $c->map(fn ($v) => (string) $v);
+
+    $sumNot = $this->remapToReroutedIdpo(
+            $split['overdue']->merge($split['need_final'])->unique()->values()
+        )->diff($this->remapToReroutedIdpo($finalComIdpoList))->values();
+
+    $sumSet = $s($sumNot)->merge($s($finalComIdpoList))->unique()->values();
+    $ovSet  = $s($poList->pluck('idpo'))->merge($s($passIdpoList))->merge($s($rejectIdpoList))->unique()->values();
+
+    $pairs = $this->buildRerouteMap($qualifiedIdpo)
+        ->filter(fn ($c, $o) => (string) $c !== (string) $o);
+
+    dd([
+        'summary_total' => $sumNot->count() + $finalComIdpoList->count(),
+        'overview_total' => $countNotFinal + $poNoDefect + $poWithDefect,
+        'onlyInSummary' => $sumSet->diff($ovSet)->values()->toArray(),
+        'onlyInOverview' => $ovSet->diff($sumSet)->values()->toArray(),
+        'reroute_pairs' => $pairs->toArray(),
+    ]);
+}
