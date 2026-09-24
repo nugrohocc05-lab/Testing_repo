@@ -1,40 +1,10 @@
-if ($request->query('debug_multi')) {
-    $targetIdpo = collect(explode(',', $request->query('debug_multi')))
-        ->map(fn ($v) => trim($v))->filter()->values();
-
-    $od  = (new OutputDetail())->getTable();
-    $odp = (new OutputDetailPacking())->getTable();
-
-    $result = [];
-    foreach ($targetIdpo as $idpo) {
-        $historyPo = HistoryPO::where('idpo', $idpo)
-            ->orderByDesc('revisi')
-            ->get(['idpo', 'revisi', 'qtypo']);
-
-        // qty periode (dta-dtb) yang dipakai buildFinalOverviewData — untuk pembanding
-        $qtyPeriodeIni = $qtyPerIdpo->get($idpo, 0);
-
-        // seluruh baris OutputDetail utk idpo ini (raw, tanpa filter tanggal)
-        $outputDetailRows = OutputDetail::where("$od.idpo", $idpo)
-            ->whereNotNull("$od.barcode")
-            ->get(['idpo', 'idcolor', 'barcode']);
-
-        // baris packing terkait barcode2 tsb — select('*') supaya semua kolom termasuk
-        // kolom tanggal (apapun namanya di skema kalian) ikut ketahuan
-        $packingRows = OutputDetailPacking::whereIn(
-            "$odp.barcode",
-            $outputDetailRows->pluck('barcode')
-        )->get();
-
-        $result[$idpo] = [
-            'history_po'          => $historyPo->toArray(),
-            'qty_periode_ini'     => $qtyPeriodeIni,
-            'jumlah_barcode_od'   => $outputDetailRows->count(),
-            'jumlah_row_packing'  => $packingRows->count(),
-            'distinct_id_set'     => $packingRows->pluck('id_set')->filter()->unique()->count(),
-            'sample_packing_rows' => $packingRows->take(5)->toArray(), // biar keliatan kolom2nya
-        ];
-    }
-
-    dd($result);
-}
+array:1 [▼
+  1 => array:6 [▼
+    "history_po" => []
+    "qty_periode_ini" => 0
+    "jumlah_barcode_od" => 0
+    "jumlah_row_packing" => 0
+    "distinct_id_set" => 0
+    "sample_packing_rows" => []
+  ]
+]
