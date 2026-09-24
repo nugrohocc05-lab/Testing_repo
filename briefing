@@ -1,13 +1,15 @@
-array:5 [▼
-  "old_count" => 21
-  "new_count" => 21
-  "onlyInOld" => []
-  "onlyInNew" => []
-  "pairs" => array:1 [▼
-    "0051939" => array:3 [▼
-      "child" => "0051940"
-      "qtypo_idpo_lama" => 2
-      "dipindah_versi_baru" => false
-    ]
-  ]
-]
+if ($request->query('debug_remap')) {
+    $a = '0051939'; $b = '0051940';
+    $has = fn ($list, $x) => $list->map(fn ($v) => (string) $v)->contains($x);
+
+    dd([
+        'in_overdue'    => [$has($split['overdue'], $a),    $has($split['overdue'], $b)],
+        'in_need_final' => [$has($split['need_final'], $a), $has($split['need_final'], $b)],
+        'in_finalCom'   => [$has($status['finalCom'], $a),  $has($status['finalCom'], $b)],
+        'in_original'   => [$has($originalFinalIdpoList, $a), $has($originalFinalIdpoList, $b)],
+        'in_leafRows'   => [$byIdpoThenColor->has($a), $byIdpoThenColor->has($b)],
+        'remap_old'     => $this->remapToReroutedIdpo(collect([$a, $b]))->toArray(),
+        'remap_target'  => $this->getRerouteTargetMap($this->comboUniverse ?? collect())->toArray(),
+        'qty_per_idpo'  => [$qtyPerIdpo[$a] ?? null, $qtyPerIdpo[$b] ?? null],
+    ]);
+}
