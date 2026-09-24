@@ -1,35 +1,77 @@
-if ($request->query('debug_index')) {
-    $od  = (new OutputDetail())->getTable();
-    $odp = (new OutputDetailPacking())->getTable();
-    $fi  = (new OutputDetailFinalInspection())->getTable();
-
-    $indexes = function ($table) {
-        return collect(DB::select("SHOW INDEX FROM `$table`"))
-            ->groupBy('Key_name')
-            ->map(fn ($g) => $g->sortBy('Seq_in_index')->pluck('Column_name')->implode(', '))
-            ->toArray();
-    };
-
-    $ids = $this->getLeafHistoryRows($request, 'combine_pro', true, $dta, $dtb)
-        ->pluck('idpo')->unique()->values();
-
-    $q = OutputDetail::query()
-        ->whereIn("$od.idpo", $ids)
-        ->whereNotNull("$od.barcode")
-        ->leftJoin($odp, "$odp.barcode", '=', "$od.barcode")
-        ->select("$od.idpo", "$od.idcolor", DB::raw("COUNT(DISTINCT $odp.id_set) as total_output"))
-        ->groupBy("$od.idpo", "$od.idcolor");
-
-    $status = collect(DB::select("SHOW TABLE STATUS WHERE Name IN (?, ?, ?)", [$od, $odp, $fi]))
-        ->map(fn ($r) => ['table' => $r->Name, 'approx_rows' => $r->Rows, 'engine' => $r->Engine])
-        ->toArray();
-
-    dd([
-        'cache_driver'  => config('cache.default'),
-        'table_status'  => $status,
-        'index_od'      => $indexes($od),
-        'index_odp'     => $indexes($odp),
-        'index_fi'      => $indexes($fi),
-        'explain_output_query' => DB::select('EXPLAIN ' . $q->toSql(), $q->getBindings()),
-    ]);
-}
+array:6 [▼
+  "cache_driver" => "file"
+  "table_status" => array:3 [▼
+    0 => array:3 [▼
+      "table" => "outputdetail"
+      "approx_rows" => 6354461
+      "engine" => "InnoDB"
+    ]
+    1 => array:3 [▼
+      "table" => "outputdetailfinalinspection"
+      "approx_rows" => 3990
+      "engine" => "InnoDB"
+    ]
+    2 => array:3 [▼
+      "table" => "outputdetailpacking"
+      "approx_rows" => 4717483
+      "engine" => "InnoDB"
+    ]
+  ]
+  "index_od" => array:9 [▼
+    "PRIMARY" => "barcode"
+    "barcode_UNIQUE" => "barcode"
+    "tgl" => "kpno"
+    "idpo" => "idpo"
+    "idxkp" => "idpo, kpno"
+    "idxcomplete" => "kpno, idpo, sub_style_id, idcolor, idsize"
+    "idxbundle" => "bundlecode"
+    "combine_pro" => "combine_pro, sub_style_id"
+    "combine_pro_2" => "combine_pro"
+  ]
+  "index_odp" => array:5 [▼
+    "PRIMARY" => "barcode"
+    "barcode" => "barcode"
+    "cartoncode" => "cartoncode"
+    "line_in" => "line_in, tglpackingin"
+    "line_out" => "line_out, tglpackingout"
+  ]
+  "index_fi" => array:7 [▼
+    "PRIMARY" => "id"
+    "isoutput" => "is_output"
+    "defect" => "defect_code"
+    "outputxdefect" => "is_output, defect_code"
+    "barcode" => "barcode"
+    "datein" => "date_in"
+    "dateoutput" => "date_output"
+  ]
+  "explain_output_query" => array:2 [▼
+    0 => {#7763 ▼
+      +"id": 1
+      +"select_type": "SIMPLE"
+      +"table": "outputdetail"
+      +"partitions": null
+      +"type": "range"
+      +"possible_keys": "idpo,idxkp,idxcomplete"
+      +"key": "idxkp"
+      +"key_len": "29"
+      +"ref": null
+      +"rows": 54244
+      +"filtered": 100.0
+      +"Extra": "Using index condition; Using filesort"
+    }
+    1 => {#7753 ▼
+      +"id": 1
+      +"select_type": "SIMPLE"
+      +"table": "outputdetailpacking"
+      +"partitions": null
+      +"type": "eq_ref"
+      +"possible_keys": "PRIMARY,barcode"
+      +"key": "PRIMARY"
+      +"key_len": "64"
+      +"ref": "mesprima1.outputdetail.barcode"
+      +"rows": 1
+      +"filtered": 100.0
+      +"Extra": null
+    }
+  ]
+]
