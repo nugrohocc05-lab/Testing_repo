@@ -1,31 +1,13 @@
-if ($request->query('debug_remap')) {
-    $combo = $this->comboUniverse ?? collect();
-
-    // versi lama: selalu ganti ke idpo baru
-    $old = $this->remapToReroutedIdpo($originalFinalIdpoList)
-        ->map(fn ($v) => (string) $v);
-
-    // versi baru: ganti hanya kalau qtypo idpo lama sudah 0
-    $target = $this->getRerouteTargetMap($combo);
-    $new = $originalFinalIdpoList
-        ->map(fn ($i) => $target->get((string) $i, (string) $i))
-        ->unique()->values();
-
-    // semua pasangan reroute (tanpa cek qtypo) beserta qtypo idpo lamanya
-    $allPairs = $this->buildRerouteMap($originalFinalIdpoList)
-        ->filter(fn ($child, $orig) => (string) $child !== (string) $orig);
-
-    $lastPo = $this->getLastHistoryPoRevisi($allPairs->keys()->map(fn ($v) => (string) $v));
-
-    dd([
-        'old_count' => $old->count(),
-        'new_count' => $new->count(),
-        'onlyInOld' => $old->diff($new)->values()->toArray(),
-        'onlyInNew' => $new->diff($old)->values()->toArray(),
-        'pairs' => $allPairs->map(fn ($child, $orig) => [
-            'child' => $child,
-            'qtypo_idpo_lama' => optional($lastPo->get((string) $orig))->qtypo,
-            'dipindah_versi_baru' => $target->has((string) $orig),
-        ])->toArray(),
-    ]);
-}
+array:5 [▼
+  "old_count" => 21
+  "new_count" => 21
+  "onlyInOld" => []
+  "onlyInNew" => []
+  "pairs" => array:1 [▼
+    "0051939" => array:3 [▼
+      "child" => "0051940"
+      "qtypo_idpo_lama" => 2
+      "dipindah_versi_baru" => false
+    ]
+  ]
+]
