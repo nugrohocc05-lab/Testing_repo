@@ -1,23 +1,383 @@
-if ($request->query('debug_total_po')) {
-    $today = Carbon::today()->startOfDay();
-    $split = $this->getSplitFinalCheckIdpoList($request, $dta, $dtb, $today);
-    $s = fn ($c) => $c->map(fn ($v) => (string) $v);
+<template>
+    <div class="min-h-screen flex flex-col bg-[#ECF0F5] font-inter ">
+        <header class="sticky select-none top-0 z-9999 bg-[#FFFFFF] shadow-sm">
+            <div class="w-full max-w-[1600px] mx-auto flex items-center justify-between px-4 lg:px-10 xl:px-[8%] py-2">
+                <div class="flex items-center select-none gap-2" @click="openMenu = null">
+                    <button @click="sidebarOpen = true"
+                        class="lg:hidden p-2 text-[#373737] hover:text-[#1FBCC3] cursor-pointer">
+                        <Bars3Icon class="w-6 h-6" />
+                    </button>
 
-    $sumNot = $this->remapToReroutedIdpo(
-            $split['overdue']->merge($split['need_final'])->unique()->values()
-        )->diff($this->remapToReroutedIdpo($finalComIdpoList))->values();
+                    <img src="/images/logo/3MS.png" alt="Logo" class="h-9 w-auto py-1 select-none cursor-pointer"
+                        @click="home" draggable="false" />
+                    <div class="text-[7pt] font-bold border-l-2 text-[#0B759F] pl-2 pr-5 cursor-pointer" @click="home">
+                        <p class="-m-0.5">Tier 3</p>
+                        <p class="-m-0.5">Monitoring</p>
+                        <p class="-m-0.5">System</p>
+                    </div>
+                </div>
 
-    $sumSet = $s($sumNot)->merge($s($finalComIdpoList))->unique()->values();
-    $ovSet  = $s($poList->pluck('idpo'))->merge($s($passIdpoList))->merge($s($rejectIdpoList))->unique()->values();
+                <div class="hidden lg:flex items-center gap-2">
+                    <template v-for="menu in menuStore.rootMenus" :key="menu.id">
+                        <div v-if="menuStore.childrenOf(menu.id).length" class="relative">
+                            <button type="button" @click="toggleMenu(menu.id)"
+                                class="px-2 py-2 xl:px-4 text-[#373737] hover:text-[#1FBCC3] font-medium cursor-pointer transition"
+                                :class="{ 'text-cyan-500': openMenu === menu.id }">
+                                {{ menu.alias }}
+                            </button>
 
-    $pairs = $this->buildRerouteMap($qualifiedIdpo)
-        ->filter(fn ($c, $o) => (string) $c !== (string) $o);
+                            <div v-if="openMenu === menu.id" class="absolute left-0 top-full min-w-50 pt-1 z-50">
+                                <div
+                                    class="relative bg-white rounded text-sm font-medium shadow-lg border mt-3 p-2 border-gray-200 py-1 before:content-[''] before:absolute before:-top-2 before:left-6 before:border-l-10 before:border-r-10 before:border-b-10 before:border-l-transparent before:border-r-transparent before:border-b-white">
+                                    <template v-for="child in menuStore.childrenOf(menu.id)" :key="child.id">
+                                        <RouterLink v-if="child.route_vue && child.route_vue !== '#'"
+                                            :to="{ name: child.route_vue }" @click="openMenu = null"
+                                            class="block px-4 py-1 hover:py-2 rounded text-nowrap hover:font-bold"
+                                            :class="child.internal == '0' ? 'text-slate-500 hover:bg-[#eefafc]' : 'text-[#1FBCC3] hover:bg-[#E0E5E9]'">
+                                            {{ child.alias }}
+                                        </RouterLink>
 
-    dd([
-        'summary_total' => $sumNot->count() + $finalComIdpoList->count(),
-        'overview_total' => $countNotFinal + $poNoDefect + $poWithDefect,
-        'onlyInSummary' => $sumSet->diff($ovSet)->values()->toArray(),
-        'onlyInOverview' => $ovSet->diff($sumSet)->values()->toArray(),
-        'reroute_pairs' => $pairs->toArray(),
-    ]);
-}
+                                        <button v-else type="button"
+                                            class="block w-full px-4 py-1 text-left rounded text-nowrap" 
+                                            :class="child.internal == '0' ? 'text-slate-500' : 'text-[#1FBCC3]'">
+                                            {{ child.alias }}
+                                        </button>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+
+                        <RouterLink v-else :to="menu.route_vue || menu.route"
+                            class="px-4 py-2 text-[#373737] hover:text-emerald-700 rounded-lg transition">
+                            <span v-if="menu.alias === 'Alert'"
+                                class="inline-flex items-center justify-center w-8 h-8 bg-amber-500 text-white rounded-full">
+                                <ExclamationTriangleIcon class="w-5 h-5" />
+                            </span>
+
+                            <span v-else>
+                                {{ menu.alias }}
+                            </span>
+                        </RouterLink>
+                    </template>
+                </div>
+
+                <div class="text-sm select-none text-[#373737] text-nowrap font-medium hover:cursor-pointer hover:opacity-75 hover:animate-pulse"
+                    @click.stop="sign_out" @click=" sidebarOpen = false; openMenu = null;">
+                    <div>
+                        <span
+                            class="inline-flex items-center justify-center w-8 h-8 bg-slate-400 text-white rounded-full mr-2">
+                            {{ initials }}
+                        </span>
+                        <span class="xl:hidden">
+                            {{ firstName }}
+                        </span>
+
+                        <span class="hidden xl:inline text-nowrap">
+                            {{ authStore.name?.trim().split(/\s+/).slice(0, 2).join(" ") }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div v-if="user_sign_out" id="user-sign-out"
+            class="relative w-full max-w-[1600px] mx-auto px-4 lg:px-10 xl:px-[5%]">
+            <div class="fixed top-14 z-9999 right-[max(1rem,calc((100vw-1600px)/2+5%))]">
+                <div id="user-details"
+                    class="pt-8 mt-1 px-5 text-center text-[#373737] bg-[#ffff] shadow-sm rounded-xl">
+                    <span
+                        class="w-20 h-20 inline-flex items-center justify-center bg-slate-400 rounded-full font-bold text-white text-2xl">{{
+                            initials }}</span>
+                    <div class="px-5 mt-3 font-bold text-lg">
+                        {{ authStore.name }}
+                    </div>
+
+                    <div class="px-5 mt-2 select-none text-xs font-extrabold text-[#2483A9]">
+                        {{ authStore.factory?.namafactory }}
+                    </div>
+
+                    <div class="px-5 mt-1 select-none text-xs font-regular text-[#2483A9]">
+                        {{ authStore.group_user?.namagroupuser }}
+                    </div>
+                    <hr class="my-3 border-slate-200" />
+                    <div class="p-2 pb-5 mt-2">
+                        <UiButton @click="signOut">Sign Out</UiButton>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="sidebarOpen" @click="sidebarOpen = false" class="fixed inset-0 bg-black/30 z-9998 lg:hidden"></div>
+        <!-- BODY WRAPPER -->
+        <div class="flex flex-1 w-full max-w-[1600px] mx-auto">
+            <!-- SIDEBAR -->
+            <Transition name="sidebar">
+                <aside v-if="sidebarOpen" @click.stop
+                    class="fixed inset-y-0 left-0 z-9999 w-72 bg-white shadow-2xl lg:hidden">
+                    <!-- Header -->
+                    <div class="flex items-center justify-between px-5 py-2 border-b">
+                        <span class="font-bold text-[#1FBCC3]"> Menu </span>
+
+                        <button @click="sidebarOpen = false"
+                            class="p-2 text-gray-500 hover:text-red-500 cursor-pointer">
+                            <XMarkIcon class="w-6 h-6" />
+                        </button>
+                    </div>
+
+                    <!-- Menu -->
+                    <div class="p-3 overflow-y-auto h-[calc(100dvh-65px)] pb-24">
+                        <template v-for="menu in menuStore.rootMenus" :key="menu.id">
+                            <!-- With Child -->
+                            <div v-if="menuStore.childrenOf(menu.id).length">
+                                <button @click="toggleMenu(menu.id)"
+                                    class="w-full flex items-center justify-between px-4 py-3 rounded-lg text-left font-medium text-gray-700 hover:bg-[#E0E5E9] hover:text-[#1FBCC3]">
+                                    <span>
+                                        {{ menu.alias }}
+                                    </span>
+
+                                    <ChevronDownIcon class="w-4 h-4 transition-transform"
+                                        :class="{ 'rotate-180': openMenu === menu.id }" />
+                                </button>
+
+                                <!-- Children -->
+                                <div v-if="openMenu === menu.id" class="ml-4 mt-1 border-l-2 border-[#1FBCC3]">
+                                    <template v-for="child in menuStore.childrenOf(menu.id)" :key="child.id">
+                                        <RouterLink v-if="child.route_vue && child.route_vue !== '#'"
+                                            :to="{ name: child.route_vue }" @click="sidebarOpen = false"
+                                            class="block px-4 py-2 text-sm text-gray-600 rounded-r-lg hover:bg-[#E0E5E9] hover:text-[#1FBCC3]">
+                                            {{ child.alias }}
+                                        </RouterLink>
+
+                                        <button v-else type="button"
+                                            class="block w-full px-4 py-2 text-left text-sm text-gray-600 rounded-r-lg hover:bg-[#E0E5E9] hover:text-[#1FBCC3]">
+                                            {{ child.alias }}
+                                        </button>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <!-- Without Child -->
+                            <RouterLink v-else :to="menu.route_vue || menu.route" @click="sidebarOpen = false"
+                                class="block px-4 py-3 mb-1 rounded-lg font-medium text-gray-700 hover:bg-[#E0E5E9] hover:text-[#1FBCC3]">
+                                <span v-if="menu.alias === 'Alert'"
+                                    class="inline-flex items-center justify-center w-8 h-8 bg-amber-500 text-white rounded-full">
+                                    <ExclamationTriangleIcon class="w-5 h-5" />
+                                </span>
+
+                                <span v-else>
+                                    {{ menu.alias }}
+                                </span>
+                            </RouterLink>
+                        </template>
+                    </div>
+                </aside>
+            </Transition>
+
+            <!-- MAIN CONTENT -->
+            <main class="min-w-0 flex-1 relative z-10 lg:p-6 px-3 py-10 lg:py-10 lg:px-5" @click="openMenu = null">
+                <div class="w-full px-0 sm:px-6 lg:px-8 pb-4 sm:pb-6 lg:pb-8">
+                    <RouterView  v-slot="{ Component, route }">
+                        <KeepAlive>
+                            <component
+                                :is="Component"
+                                v-if="route.meta.keepAlive"
+                            />
+                        </KeepAlive>
+
+                        <component
+                            :is="Component"
+                            v-if="!route.meta.keepAlive"
+                        />
+                    </RouterView>
+                </div>
+            </main>
+        </div>
+
+
+
+        <!-- FOOTER (normal flow, bukan fixed) -->
+        <!-- <footer class="mt-auto bg-[#222] text-[#373737] text-sm py-3">
+        <div class="w-full max-w-[1600px] mx-auto flex justify-between px-4 lg:px-10 xl:px-[8%]">
+
+            <div class="hidden sm:block">
+            PT PAN BROTHERS Tbk & Groups
+            </div>
+
+            <div class="font-semibold">
+                Copyright © {{ new Date().getFullYear() }} Tier 3 Monitoring System
+            </div>
+
+        </div>
+        </footer> -->
+
+        <!-- Footer fixed -->
+        <footer class="fixed bottom-0 select-none left-0 right-0 bg-[#ffff] text-[#373737] text-xs sm:text-sm py-2 sm:py-3 z-9999">
+            <div class="w-full max-w-[1600px] mx-auto flex justify-between px-4 lg:px-10 xl:px-[8%]">
+                <div class="font-medium truncate">
+                    Copyright © {{ new Date().getFullYear() }} Tier 3 Monitoring System
+                </div>
+
+                <!-- <div class="hidden sm:block">PT PAN BROTHERS Tbk & Groups</div> -->
+                <div class="hidden sm:block font-medium">{{ authStore.factory?.namafactory }}</div>
+            </div>
+        </footer>
+    </div>
+
+    <div
+        class="pointer-events-none fixed -left-10 top-10 h-100 w-100 rounded-full bg-[#1FBCC3]/18 blur-3xl animate-float-1">
+    </div>
+
+    <div
+        class="pointer-events-none fixed right-20 top-20 h-125 w-125 rounded-full bg-[#67D5D9]/18 blur-3xl animate-float-2">
+    </div>
+
+    <div
+        class="pointer-events-none fixed left-80 top-1/5 h-125 w-125 rounded-full bg-[#67D5D9]/18 blur-3xl animate-float-3">
+    </div>
+
+    <div
+        class="pointer-events-none fixed bottom-20 left-1/3 h-175 w-175 rounded-full bg-[#9EEE8D]/18 blur-3xl animate-float-4">
+    </div>
+</template>
+
+<script setup>
+import { ref, onMounted, onUnmounted, computed } from "vue";
+import { Bars3Icon, XMarkIcon, ChevronDownIcon, ExclamationTriangleIcon, } from "@heroicons/vue/24/solid";
+import { useAuthStore } from "@/stores/auth";
+import { useMenuStore } from "@/stores/menus";
+import { useRouter } from "vue-router";
+import { useLoadingStore } from "@/stores/loading";
+import UiButton from "@/components/ui/UiButton.vue";
+import { RouterView } from "vue-router";
+
+const authStore = useAuthStore();
+const router = useRouter();
+const loading = useLoadingStore();
+const user_sign_out = ref(false);
+
+const menuStore = useMenuStore();
+const menus = computed(() => menuStore.menus);
+
+const sidebarOpen = ref(false);
+const openMenu = ref(null);
+
+const toggleMenu = (id) => {
+    openMenu.value = openMenu.value === id ? null : id;
+};
+
+const sign_out = () => {
+    user_sign_out.value = !user_sign_out.value;
+};
+
+const handleClickOutside = (event) => {
+    const userDetails = document.getElementById("user-sign-out");
+
+    if (userDetails && !userDetails.contains(event.target)) {
+        user_sign_out.value = false;
+    }
+};
+
+onMounted(() => {
+    document.addEventListener("click", handleClickOutside);
+});
+
+onUnmounted(() => {
+    document.removeEventListener("click", handleClickOutside);
+});
+
+const initials = computed(() => {
+    return (authStore.name || "")
+        .trim()
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((name) => name.charAt(0).toUpperCase())
+        .join("");
+});
+
+const firstName = computed(() => {
+    return (authStore.name || "").trim().split(/\s+/)[0];
+});
+
+const signOut = async () => {
+    loading.show();
+    try {
+        await authStore.logout();
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await router.push("/login");
+    } finally {
+        loading.hide();
+    }
+};
+const home = () => {
+    loading.show();
+    router.push("/mainmenu");
+    loading.hide();
+};
+</script>
+
+  {
+    path: '/order',
+    component: MainLayout,
+    meta: { 
+      requiresAuth: true,
+      requiresMenu: true,
+    },
+    children: [
+      {
+        path: 'order-allocation',
+        name: 'order-allocation',
+        component: Allocation,
+        meta: {
+            menuRoute: 'order-allocation',
+            keepAlive: true,
+            family: 'order-allocation',
+        },
+      },
+      {
+        path: 'order-allocation-detail/:po',
+        name: 'order-allocation-detail',
+        component: AllocationDetail,
+        meta: {
+            menuRoute: 'order-allocation',
+            keepAlive: true,
+            family: 'order-allocation',
+        },
+      },
+      {
+        path: 'order-allocation-process/:idorder',
+        name: 'order-allocation-process',
+        component: AllocationProcess,
+        meta: {
+            menuRoute: 'order-allocation',
+             keepAlive: true,
+    family: 'order-allocation',
+        },
+      },
+      {
+        path: 'order-confirmation',
+        name: 'order-confirmation',
+        component: OrderConfirmation,
+        meta: {
+            menuRoute: 'order-confirmation',
+             keepAlive: true,
+    family: 'order-confirmation',
+        },
+      },
+      {
+        path: 'order-confirmation-detail/:kk',
+        name: 'order-confirmation-detail',
+        component: OrderConfirmationDetail,
+        meta: {
+            menuRoute: 'order-confirmation',
+        },
+      },
+      {
+        path: 'data-material',
+        name: 'data-material',
+        component: DataMaterial,
+        meta: {
+            menuRoute: 'data-material',
+        },
+      },
+    ]
+  },
