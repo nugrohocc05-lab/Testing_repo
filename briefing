@@ -3,16 +3,15 @@
         <UiTitle align="center" title="CM Counter Sample" subtitle="Lorem Ipsum Dolores Amet" />
 
         <div class="mb-4 flex flex-col sm:flex-row w-full sm:items-end gap-3 justify-between">
-
             <div class="flex flex-col sm:flex-row items-stretch sm:items-end gap-2 w-full sm:w-auto">
                 <div class="w-full sm:w-60 lg:w-72">
                     <UiMultiSelect
-                        v-model="form.status"
-                        :options="list_status"
+                        v-model="filterStatus"
+                        :options="statusOptions"
                         label="Filter by Status"
                         placeholder="-- Select Status --"
                         class="w-full"
-                        @change="loadDataFilter"
+                        @change="loadData"
                     />
                 </div>
                 <div>
@@ -29,30 +28,28 @@
                     </template>
                 </UiInput>
             </div>
-
         </div>
-        <UiAgGrid :rowData="rawData" :columnDefs="columnDefs" :defaultColDef="defaultColDef" class="mb-10 my-zebra-grid"
-            :quickFilterText="searchKeyword" @grid-ready="onGridReady"></UiAgGrid>
+
+        <UiAgGrid
+            :rowData="rawData"
+            :columnDefs="columnDefs"
+            :defaultColDef="defaultColDef"
+            :quickFilterText="searchKeyword"
+            class="mb-10 my-zebra-grid"
+        />
     </div>
-    <UiModal
-        v-model="showModal"
-        :title="
-            isPlan
-                ? 'Sending Counter Sample'
-                : isConfirmPlan
-                    ? 'PPM Complete Confirmation'
-                    : 'Detail PPM Planning'
-        "
-        size="md"
-    >
+
+    <UiModal v-model="showModal" title="Sending Counter Sample" size="md">
         <div class="space-y-2 -mt-3">
-            <label class="block text-sm font-medium text-gray-700">
+            <label for="counter-sample-photo" class="block text-sm font-medium text-gray-700">
                 Upload Image
             </label>
 
             <input
+                id="counter-sample-photo"
+                ref="fileInput"
                 type="file"
-                accept=".jpg,.jpeg,.png,.webp"
+                :accept="ALLOWED_EXTENSIONS"
                 class="block w-full rounded-lg border border-gray-300 p-2 text-sm"
                 @change="handleFileChange"
             />
@@ -62,13 +59,10 @@
                 <span class="font-medium">{{ imageFile.name }}</span>
             </div>
         </div>
+
         <template #footer>
             <div class="flex justify-end gap-2">
-                <UiButton
-                    variant="primary"
-                    :loading="isSending"
-                    @click="sendCounterSample"
-                >
+                <UiButton variant="primary" :loading="isSending" @click="sendCounterSample">
                     Confirm
                 </UiButton>
             </div>
@@ -77,82 +71,155 @@
 </template>
 
 <script setup>
-import { getCurrentDateTime } from '@/utils/date';
-import { encrypt } from "@/utils/crypto";
-
-import { ref, onMounted, computed, defineComponent, h } from "vue";
+import { ref, onMounted, defineComponent, h } from "vue";
 import { useRouter } from "vue-router";
+import { InformationCircleIcon, MagnifyingGlassIcon, DocumentArrowUpIcon } from "@heroicons/vue/24/outline";
+
+import { encrypt } from "@/utils/crypto";
 import { useLoadingStore } from "@/stores/loading";
-import { InformationCircleIcon, MagnifyingGlassIcon, PaperAirplaneIcon, DocumentArrowUpIcon } from "@heroicons/vue/24/outline";
-
 import { customSwal } from "@/composable/customSwal";
-const { confirm, success, warning, error } = customSwal;
-const { datetime } = getCurrentDateTime('-', '-');
-
-import UiButton from "@/components/ui/UiButton.vue"
-import UiInput from "@/components/ui/UiInput.vue"
-import UiModal from "@/components/ui/UiModal.vue"
-import UiTitle from "@/components/ui/UiTitle.vue"
-import UiMultiSelect from "@/components/ui/UiMultiSelect.vue"
-import UiAgGrid from '@/components/ui/UiAgGrid.vue';
-
 import api from "@/services/api";
 
-defineOptions({name: 'CMCounterSample'});
+import UiButton from "@/components/ui/UiButton.vue";
+import UiInput from "@/components/ui/UiInput.vue";
+import UiModal from "@/components/ui/UiModal.vue";
+import UiTitle from "@/components/ui/UiTitle.vue";
+import UiMultiSelect from "@/components/ui/UiMultiSelect.vue";
+import UiAgGrid from "@/components/ui/UiAgGrid.vue";
 
+defineOptions({ name: "CMCounterSample" });
+
+const { success, warning, error } = customSwal;
+
+/* ---------- Constants ---------- */
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const ALLOWED_EXTENSIONS = ".jpg,.jpeg,.png,.webp";
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+
+const API = {
+    list: "/api/v1/cmcountersample/getdata",
+    status: "/api/v1/cmsamplereference/selectstatus",
+    sending: (idOrder) => `/api/v1/cmcountersample/sending/${idOrder}`,
+};
+
+/* ---------- State ---------- */
 const loading = useLoadingStore();
 const router = useRouter();
+
 const rawData = ref([]);
-const buyers = ref([]);
-const data_kp = ref([]);
-const dataSelected = ref([]);
-const ListKK = ref([]);
-const action = ref("");
-const isSending = ref(false)
-const showModal = ref(false)
-const searchKeyword = ref('')
-const originalForm = ref(null)
-const gridApi = ref(null);
-const list_status = ref([]);
+const statusOptions = ref([]);
+const filterStatus = ref("");
+const searchKeyword = ref("");
 
-const isPlan = ref(false);
-const isConfirmPlan = ref(false);
+const showModal = ref(false);
+const isSending = ref(false);
 const selectedRow = ref(null);
+const imageFile = ref(null);
+const fileInput = ref(null);
 
-const openProcessModal = (rowData) => {
-    selectedRow.value = rowData;
-    isPlan.value = true;
-    isConfirmPlan.value = false;
+/* ---------- Helpers ---------- */
+const handleApiError = (err) => {
+    console.error(err);
+    if (err?.response?.status === 401) {
+        router.push("/login");
+    }
+};
+
+// UiMultiSelect bisa mengembalikan string atau object option
+const getStatusValue = () => {
+    const s = filterStatus.value;
+    if (s && typeof s === "object") return s.value ?? s.status ?? "";
+    return s ?? "";
+};
+
+const normalizeData = (data) => {
+    const processedKK = new Set();
+
+    return (data ?? []).map((item, index) => {
+        const kk = item?.orderallocation?.kk ?? item?.kk ?? null;
+        const showProcess = item?.status === "Waiting" && !!kk && !processedKK.has(kk);
+
+        if (showProcess) processedKK.add(kk);
+
+        return { ...item, no: index + 1, kk, showProcess };
+    });
+};
+
+/* ---------- Data loading ---------- */
+const loadData = async () => {
+    try {
+        loading.show();
+
+        const status = getStatusValue();
+        const { data } = await api.get(API.list, {
+            params: status ? { status } : {},
+        });
+
+        rawData.value = normalizeData(Object.values(data?.data ?? {}).flat());
+    } catch (err) {
+        handleApiError(err);
+    } finally {
+        loading.hide();
+    }
+};
+
+const loadStatusOptions = async () => {
+    try {
+        const { data } = await api.get(API.status);
+        statusOptions.value = (data?.data ?? []).map((item) => ({
+            value: item,
+            label: item,
+        }));
+    } catch (err) {
+        handleApiError(err);
+    }
+};
+
+const resetFilter = () => {
+    filterStatus.value = "";
+    searchKeyword.value = "";
+    return loadData();
+};
+
+/* ---------- Modal & upload ---------- */
+const clearFile = () => {
+    imageFile.value = null;
+    if (fileInput.value) fileInput.value.value = "";
+};
+
+const openProcessModal = (row) => {
+    selectedRow.value = row;
+    clearFile();
     showModal.value = true;
 };
 
-const defaultColDef = {
-    sortable: true,
-    filter: false,
-    resizable: true,
+const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+
+    if (!file) {
+        imageFile.value = null;
+        return;
+    }
+
+    if (!ALLOWED_TYPES.includes(file.type)) {
+        warning("Format harus JPG, PNG, atau WEBP");
+        clearFile();
+        return;
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+        warning("Ukuran file maksimal 5 MB");
+        clearFile();
+        return;
+    }
+
+    imageFile.value = file;
 };
 
-const confimForm = ref({
-    auth_pass: "",
-    photo: "",
-});
-
-const form = ref({
-    status: "",
-});
-
-const isFormChanged = computed(() => {
-    if (!originalForm.value) return false
-
-    return Object.keys(confimForm.value).some(
-        key => confimForm.value[key] !== originalForm.value[key]
-    )
-})
-
-const imageFile = ref(null);
-
 const sendCounterSample = async () => {
-    if (!selectedRow.value?.idorder) {
+    const idOrder = selectedRow.value?.idorder;
+
+    if (!idOrder) {
         warning("ID Order tidak ditemukan");
         return;
     }
@@ -169,329 +236,116 @@ const sendCounterSample = async () => {
         const formData = new FormData();
         formData.append("photo", imageFile.value);
 
-        const endpoint =
-            `/api/v1/cmcountersample/sending/${selectedRow.value.idorder}`;
-
-        console.log("=== SEND COUNTER SAMPLE ===");
-        console.log("Endpoint:", endpoint);
-        console.log("ID Order:", selectedRow.value.idorder);
-        console.log("File:", imageFile.value);
-        console.log("File name:", imageFile.value.name);
-        console.log("File type:", imageFile.value.type);
-        console.log("File size:", imageFile.value.size);
-
-        const response = await api.post(endpoint, formData);
-
-        console.log("API SUCCESS:", response);
+        await api.post(API.sending(idOrder), formData, {
+            headers: { "Content-Type": "multipart/form-data" },
+        });
 
         success("Counter sample berhasil dikirim");
-
         showModal.value = false;
-        imageFile.value = null;
+        clearFile();
 
         await loadData();
-
     } catch (err) {
-        console.error("=== SEND COUNTER SAMPLE ERROR ===");
-        console.error("Error:", err);
-        console.error("Response:", err?.response);
-        console.error("Status:", err?.response?.status);
-        console.error("Data:", err?.response?.data);
-
+        console.error(err);
         error(
             err?.response?.data?.message ||
             err?.response?.data?.error ||
             "Gagal mengirim counter sample"
         );
-
     } finally {
         isSending.value = false;
         loading.hide();
     }
 };
 
+/* ---------- Grid ---------- */
+const goToDetail = (row) => {
+    const kk = row?.orderallocation?.kk;
+    const idOrder = row?.idorder;
 
-const onGridReady = (params) => {
-    gridApi.value = params.api;
+    if (!kk || !idOrder) {
+        console.error("KK atau ID Order tidak ditemukan:", row);
+        return;
+    }
+
+    router.push({
+        name: "cm-counter-sample-detail",
+        params: {
+            kk: encodeURIComponent(encrypt(kk)),
+            idorder: encodeURIComponent(encrypt(idOrder)),
+        },
+    });
 };
 
 const ActionRenderer = defineComponent({
     props: {
-        params: {
-            type: Object,
-            required: true,
-        },
+        params: { type: Object, required: true },
     },
-
     setup(props) {
-        const process = () => {
-            openProcessModal(props.params.data);
-
-        };
-
-        const detailData = () => {
-            dataSelected.value = props.params.data;
-
-            const kk = dataSelected.value?.orderallocation?.kk;
-            const idOrder = dataSelected.value?.idorder;
-
-            if (!kk) {
-                console.error("KK tidak ditemukan:", dataSelected.value);
-                return;
-            }
-
-            if (!idOrder) {
-                console.error("ID Order tidak ditemukan:", dataSelected.value);
-                return;
-            }
-
-            const encryptedKK = encrypt(kk);
-            const encryptedIdOrder = encrypt(idOrder);
-
-            router.push({
-                name: "cm-counter-sample-detail",
-                params: {
-                    kk: encodeURIComponent(encryptedKK),
-                    idorder: encodeURIComponent(encryptedIdOrder),
-                },
-            });
-        };
-
         return () =>
-            h(
-                "div",
-                {
-                    class: "flex h-full px-3 gap-2",
-                },
-                [
+            h("div", { class: "flex h-full px-3 gap-2" }, [
+                h(
+                    "button",
+                    {
+                        type: "button",
+                        title: "Detail",
+                        class: "cursor-pointer text-amber-500 transition hover:text-amber-700",
+                        onClick: () => goToDetail(props.params.data),
+                    },
+                    [h(InformationCircleIcon, { class: "h-5 w-5" })],
+                ),
+
+                props.params.data?.showProcess &&
                     h(
                         "button",
                         {
                             type: "button",
-                            title: "Detail",
-                            class:
-                                "cursor-pointer text-amber-500 transition hover:text-amber-700",
-                            onClick: detailData,
+                            title: "Process",
+                            class: "cursor-pointer text-cyan-500 hover:text-cyan-700",
+                            onClick: () => openProcessModal(props.params.data),
                         },
-                        [
-                            h(InformationCircleIcon, {
-                                class: "h-5 w-5",
-                            }),
-                        ],
+                        [h(DocumentArrowUpIcon, { class: "h-5 w-5" })],
                     ),
-
-                    ...(props.params.data?.showProcess
-                        ? [
-                            h(
-                                "button",
-                                {
-                                    type: "button",
-                                    title: "Process",
-                                    class:
-                                        "cursor-pointer text-cyan-500 hover:text-cyan-700",
-                                    onClick: process,
-                                },
-                                [
-                                    h(DocumentArrowUpIcon, {
-                                        class: "h-5 w-5",
-                                    }),
-                                ],
-                            ),
-                        ]
-                        : []),
-                ],
-            );
+            ]);
     },
 });
 
+const defaultColDef = {
+    sortable: true,
+    filter: false,
+    resizable: true,
+};
+
+const textColumn = (field, headerName, getter, extra = {}) => ({
+    field,
+    headerName,
+    minWidth: 125,
+    flex: 1,
+    valueGetter: ({ data }) => getter(data) ?? "-",
+    ...extra,
+});
+
 const columnDefs = [
-    {
-        headerName: "No",
-        field: "no",
-        width: 70,
-        sortable: false,
-        filter: false,
-        resizable: false,
-    },
-    {
-        field: "kk",
-        headerName: "KK",
-        minWidth: 125,
-        valueGetter: (params) => {
-            return params.data?.orderallocation?.kk ?? "-";
-        },
-        flex: 1,
-    },
-    {
-        field: "combine_pro",
-        headerName: "PRO",
-        minWidth: 125,
-        valueGetter: (params) => {
-            return params.data?.purchaseorder?.combine_pro ?? "-";
-        },
-        flex: 1,
-    },
-    {
-        field: "style",
-        headerName: "Style",
-        minWidth: 125,
-        valueGetter: (params) => {
-            return params.data?.purchaseorder?.style?.namastyle ?? "-";
-        },
-        flex: 1,
-    },
-    {
-        field: "total",
-        headerName: "Qty",
-        minWidth: 70,
-        maxWidth: 90,
-        valueGetter: (params) => {
-            return params.data?.purchaseorder?.total ?? "-";
-        },
-        flex: 1,
-    },
-    {
-        field: "comment",
-        headerName: "Comment",
-        minWidth: 80,
-        maxWidth: 150,
-        valueGetter: (params) => {
-            return params.data?.comment ?? "-";
-        },
-        flex: 1,
-    },
-    {
-        field: "status",
-        headerName: "Status",
-        minWidth: 150,
-        valueGetter: (params) => {
-            return params.data?.status ?? "-";
-        },
-        flex: 1,
-    },
+    { headerName: "No", field: "no", width: 70, sortable: false, resizable: false },
+    textColumn("kk", "KK", (d) => d?.orderallocation?.kk),
+    textColumn("combine_pro", "PRO", (d) => d?.purchaseorder?.combine_pro),
+    textColumn("style", "Style", (d) => d?.purchaseorder?.style?.namastyle),
+    textColumn("total", "Qty", (d) => d?.purchaseorder?.total, { minWidth: 70, maxWidth: 90 }),
+    textColumn("comment", "Comment", (d) => d?.comment, { minWidth: 80, maxWidth: 150 }),
+    textColumn("status", "Status", (d) => d?.status, { minWidth: 150 }),
     {
         headerName: "Action",
         minWidth: 80,
         maxWidth: 120,
         sortable: false,
-        filter: false,
         resizable: false,
         cellRenderer: ActionRenderer,
     },
 ];
 
-const normalizeData = (data) => {
-    const processedKK = new Set();
-
-    return (data ?? []).map((item, index) => {
-        const kk = item?.orderallocation?.kk ?? item?.kk ?? null;
-
-        let showProcess = false;
-
-        if (
-            item?.status === "Waiting" &&
-            kk &&
-            !processedKK.has(kk)
-        ) {
-            showProcess = true;
-            processedKK.add(kk);
-        }
-
-        return {
-            ...item,
-            no: index + 1,
-            kk,
-            showProcess,
-        };
-    });
-};
-
-
-const loadData = async () => {
-    try {
-        loading.show();
-
-        const endpoint = "/api/v1/cmcountersample/getdata";
-        const { data } = await api.get(endpoint);
-
-        const groupedData = data?.data ?? {};
-
-        rawData.value = normalizeData(
-            Object.values(groupedData).flat()
-        );
-
-    } catch (err) {
-        console.error(err);
-
-        if (err?.response?.status === 401) {
-            router.push("/login");
-        }
-    } finally {
-        loading.hide();
-    }
-};
-
-const loadDataFilter = async () => {
-    try {
-        const status = form.value?.status?.status ?? '';
-
-        loading.show();
-
-        const endpoint =
-            `/api/v1/cmcountersample/getdata?factory=${form.value.factory}&status=${status}`;
-
-        const { data } = await api.get(endpoint);
-
-        const groupedData = data?.data ?? {};
-
-        rawData.value = normalizeData(
-            Object.values(groupedData).flat()
-        );
-        console.log("filtered rawData:", rawData.value);
-
-    } catch (err) {
-        console.error(err);
-
-        if (err?.response?.status === 401) {
-            router.push("/login");
-        }
-    } finally {
-        loading.hide();
-    }
-};
-
-const loadDataStatus = async () => {
-    try {
-        loading.show();
-        const endpoint = "/api/v1/cmsamplereference/selectstatus";
-        const { data } = await api.get(endpoint);
-        list_status.value = (data.data ?? []).map((item) => ({
-            value: item,
-            label: item,
-        }));
-    } catch (err) {
-        if (err?.response?.status === 401) {
-            router.push("/login");
-        }
-    } finally {
-        loading.hide();
-    }
-};
-
+/* ---------- Lifecycle ---------- */
 onMounted(() => {
     loadData();
-    loadDataStatus();
+    loadStatusOptions();
 });
-
-const resetFilter = async () => {
-    form.value.status = "";
-
-    if (gridApi.value) {
-        await gridApi.value.setFilterModel(null);
-        gridApi.value.onFilterChanged();
-    }
-
-    await loadData();
-};
-
 </script>
