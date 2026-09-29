@@ -1,61 +1,497 @@
-<RouterView v-slot="{ Component, route }">
-    <KeepAlive :include="cachedViews">
-        <component :is="Component" v-if="route.meta.keepAlive" :key="route.name" />
-    </KeepAlive>
+<template>
+    <div class="px-6">
+        <UiTitle align="center" title="CM Counter Sample" subtitle="Lorem Ipsum Dolores Amet" />
 
-    <component :is="Component" v-if="!route.meta.keepAlive" :key="route.name" />
-</RouterView>
+        <div class="mb-4 flex flex-col sm:flex-row w-full sm:items-end gap-3 justify-between">
 
-import { ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-end gap-2 w-full sm:w-auto">
+                <div class="w-full sm:w-60 lg:w-72">
+                    <UiMultiSelect
+                        v-model="form.status"
+                        :options="list_status"
+                        label="Filter by Status"
+                        placeholder="-- Select Status --"
+                        class="w-full"
+                        @change="loadDataFilter"
+                    />
+                </div>
+                <div>
+                    <UiButton variant="warning" class="w-full sm:w-auto mb-5 sm:mb-0" @click="resetFilter">
+                        Reset
+                    </UiButton>
+                </div>
+            </div>
 
-const route = useRoute()
-const cachedViews = ref([])
+            <div class="w-full sm:w-60 lg:w-72">
+                <UiInput v-model="searchKeyword" placeholder="Search" class="w-full rounded-lg">
+                    <template #prefix>
+                        <MagnifyingGlassIcon class="h-5 w-5 text-gray-400" />
+                    </template>
+                </UiInput>
+            </div>
 
-watch(
-  () => route.fullPath,
-  () => {
-    const matched = route.matched[route.matched.length - 1]
-    const compName = matched?.components?.default?.name
-    const family = route.meta.family
+        </div>
+        <UiAgGrid :rowData="rawData" :columnDefs="columnDefs" :defaultColDef="defaultColDef" class="mb-10 my-zebra-grid"
+            :quickFilterText="searchKeyword" @grid-ready="onGridReady"></UiAgGrid>
+    </div>
+    <UiModal
+        v-model="showModal"
+        :title="
+            isPlan
+                ? 'Sending Counter Sample'
+                : isConfirmPlan
+                    ? 'PPM Complete Confirmation'
+                    : 'Detail PPM Planning'
+        "
+        size="md"
+    >
+        <div class="space-y-2 -mt-3">
+            <label class="block text-sm font-medium text-gray-700">
+                Upload Image
+            </label>
 
-    // cek family komponen yang lagi nyangkut di cache saat ini
-    // (asumsi 1 keluarga = 1 grup nama komponen, kita simpan mapping family -> names)
-    if (route.meta.keepAlive && compName) {
-      // kalau family berubah dari yang terakhir di-track, reset cache dulu
-      if (window.__lastFamily && window.__lastFamily !== family) {
-        cachedViews.value = []
-      }
-      window.__lastFamily = family
+            <input
+                type="file"
+                accept=".jpg,.jpeg,.png,.webp"
+                class="block w-full rounded-lg border border-gray-300 p-2 text-sm"
+                @change="handleFileChange"
+            />
 
-      if (!cachedViews.value.includes(compName)) {
-        cachedViews.value.push(compName)
-      }
+            <div v-if="imageFile" class="text-sm text-gray-600">
+                File terpilih:
+                <span class="font-medium">{{ imageFile.name }}</span>
+            </div>
+        </div>
+        <template #footer>
+            <div class="flex justify-end gap-2">
+                <UiButton
+                    variant="primary"
+                    :loading="isSending"
+                    @click="sendCounterSample"
+                >
+                    Confirm
+                </UiButton>
+            </div>
+        </template>
+    </UiModal>
+</template>
+
+<script setup>
+import { getCurrentDateTime } from '@/utils/date';
+import { encrypt } from "@/utils/crypto";
+
+import { ref, onMounted, computed, defineComponent, h } from "vue";
+import { useRouter } from "vue-router";
+import { useLoadingStore } from "@/stores/loading";
+import { InformationCircleIcon, MagnifyingGlassIcon, PaperAirplaneIcon, DocumentArrowUpIcon } from "@heroicons/vue/24/outline";
+
+import { customSwal } from "@/composable/customSwal";
+const { confirm, success, warning, error } = customSwal;
+const { datetime } = getCurrentDateTime('-', '-');
+
+import UiButton from "@/components/ui/UiButton.vue"
+import UiInput from "@/components/ui/UiInput.vue"
+import UiModal from "@/components/ui/UiModal.vue"
+import UiTitle from "@/components/ui/UiTitle.vue"
+import UiMultiSelect from "@/components/ui/UiMultiSelect.vue"
+import UiAgGrid from '@/components/ui/UiAgGrid.vue';
+
+import api from "@/services/api";
+
+defineOptions({name: 'CMCounterSample'});
+
+const loading = useLoadingStore();
+const router = useRouter();
+const rawData = ref([]);
+const buyers = ref([]);
+const data_kp = ref([]);
+const dataSelected = ref([]);
+const ListKK = ref([]);
+const action = ref("");
+const isSending = ref(false)
+const showModal = ref(false)
+const searchKeyword = ref('')
+const originalForm = ref(null)
+const gridApi = ref(null);
+const list_status = ref([]);
+
+const isPlan = ref(false);
+const isConfirmPlan = ref(false);
+const selectedRow = ref(null);
+
+const openProcessModal = (rowData) => {
+    selectedRow.value = rowData;
+    isPlan.value = true;
+    isConfirmPlan.value = false;
+    showModal.value = true;
+};
+
+const defaultColDef = {
+    sortable: true,
+    filter: false,
+    resizable: true,
+};
+
+const confimForm = ref({
+    auth_pass: "",
+    photo: "",
+});
+
+const form = ref({
+    status: "",
+});
+
+const isFormChanged = computed(() => {
+    if (!originalForm.value) return false
+
+    return Object.keys(confimForm.value).some(
+        key => confimForm.value[key] !== originalForm.value[key]
+    )
+})
+
+const imageFile = ref(null);
+
+const sendCounterSample = async () => {
+    if (!selectedRow.value?.idorder) {
+        warning("ID Order tidak ditemukan");
+        return;
     }
-  },
-  { immediate: true }
-)
 
-const lastFamily = ref(null)
-
-watch(
-  () => route.fullPath,
-  () => {
-    const matched = route.matched[route.matched.length - 1]
-    const compName = matched?.components?.default?.name
-    const family = route.meta.family
-
-    if (route.meta.keepAlive && compName) {
-      if (lastFamily.value && lastFamily.value !== family) {
-        cachedViews.value = []
-      }
-      lastFamily.value = family
-
-      if (!cachedViews.value.includes(compName)) {
-        cachedViews.value.push(compName)
-      }
+    if (!imageFile.value) {
+        warning("Silakan upload foto terlebih dahulu");
+        return;
     }
-  },
-  { immediate: true }
-)
 
+    try {
+        isSending.value = true;
+        loading.show();
+
+        const formData = new FormData();
+        formData.append("photo", imageFile.value);
+
+        const endpoint =
+            `/api/v1/cmcountersample/sending/${selectedRow.value.idorder}`;
+
+        console.log("=== SEND COUNTER SAMPLE ===");
+        console.log("Endpoint:", endpoint);
+        console.log("ID Order:", selectedRow.value.idorder);
+        console.log("File:", imageFile.value);
+        console.log("File name:", imageFile.value.name);
+        console.log("File type:", imageFile.value.type);
+        console.log("File size:", imageFile.value.size);
+
+        const response = await api.post(endpoint, formData);
+
+        console.log("API SUCCESS:", response);
+
+        success("Counter sample berhasil dikirim");
+
+        showModal.value = false;
+        imageFile.value = null;
+
+        await loadData();
+
+    } catch (err) {
+        console.error("=== SEND COUNTER SAMPLE ERROR ===");
+        console.error("Error:", err);
+        console.error("Response:", err?.response);
+        console.error("Status:", err?.response?.status);
+        console.error("Data:", err?.response?.data);
+
+        error(
+            err?.response?.data?.message ||
+            err?.response?.data?.error ||
+            "Gagal mengirim counter sample"
+        );
+
+    } finally {
+        isSending.value = false;
+        loading.hide();
+    }
+};
+
+
+const onGridReady = (params) => {
+    gridApi.value = params.api;
+};
+
+const ActionRenderer = defineComponent({
+    props: {
+        params: {
+            type: Object,
+            required: true,
+        },
+    },
+
+    setup(props) {
+        const process = () => {
+            openProcessModal(props.params.data);
+
+        };
+
+        const detailData = () => {
+            dataSelected.value = props.params.data;
+
+            const kk = dataSelected.value?.orderallocation?.kk;
+            const idOrder = dataSelected.value?.idorder;
+
+            if (!kk) {
+                console.error("KK tidak ditemukan:", dataSelected.value);
+                return;
+            }
+
+            if (!idOrder) {
+                console.error("ID Order tidak ditemukan:", dataSelected.value);
+                return;
+            }
+
+            const encryptedKK = encrypt(kk);
+            const encryptedIdOrder = encrypt(idOrder);
+
+            router.push({
+                name: "cm-counter-sample-detail",
+                params: {
+                    kk: encodeURIComponent(encryptedKK),
+                    idorder: encodeURIComponent(encryptedIdOrder),
+                },
+            });
+        };
+
+        return () =>
+            h(
+                "div",
+                {
+                    class: "flex h-full px-3 gap-2",
+                },
+                [
+                    h(
+                        "button",
+                        {
+                            type: "button",
+                            title: "Detail",
+                            class:
+                                "cursor-pointer text-amber-500 transition hover:text-amber-700",
+                            onClick: detailData,
+                        },
+                        [
+                            h(InformationCircleIcon, {
+                                class: "h-5 w-5",
+                            }),
+                        ],
+                    ),
+
+                    ...(props.params.data?.showProcess
+                        ? [
+                            h(
+                                "button",
+                                {
+                                    type: "button",
+                                    title: "Process",
+                                    class:
+                                        "cursor-pointer text-cyan-500 hover:text-cyan-700",
+                                    onClick: process,
+                                },
+                                [
+                                    h(DocumentArrowUpIcon, {
+                                        class: "h-5 w-5",
+                                    }),
+                                ],
+                            ),
+                        ]
+                        : []),
+                ],
+            );
+    },
+});
+
+const columnDefs = [
+    {
+        headerName: "No",
+        field: "no",
+        width: 70,
+        sortable: false,
+        filter: false,
+        resizable: false,
+    },
+    {
+        field: "kk",
+        headerName: "KK",
+        minWidth: 125,
+        valueGetter: (params) => {
+            return params.data?.orderallocation?.kk ?? "-";
+        },
+        flex: 1,
+    },
+    {
+        field: "combine_pro",
+        headerName: "PRO",
+        minWidth: 125,
+        valueGetter: (params) => {
+            return params.data?.purchaseorder?.combine_pro ?? "-";
+        },
+        flex: 1,
+    },
+    {
+        field: "style",
+        headerName: "Style",
+        minWidth: 125,
+        valueGetter: (params) => {
+            return params.data?.purchaseorder?.style?.namastyle ?? "-";
+        },
+        flex: 1,
+    },
+    {
+        field: "total",
+        headerName: "Qty",
+        minWidth: 70,
+        maxWidth: 90,
+        valueGetter: (params) => {
+            return params.data?.purchaseorder?.total ?? "-";
+        },
+        flex: 1,
+    },
+    {
+        field: "comment",
+        headerName: "Comment",
+        minWidth: 80,
+        maxWidth: 150,
+        valueGetter: (params) => {
+            return params.data?.comment ?? "-";
+        },
+        flex: 1,
+    },
+    {
+        field: "status",
+        headerName: "Status",
+        minWidth: 150,
+        valueGetter: (params) => {
+            return params.data?.status ?? "-";
+        },
+        flex: 1,
+    },
+    {
+        headerName: "Action",
+        minWidth: 80,
+        maxWidth: 120,
+        sortable: false,
+        filter: false,
+        resizable: false,
+        cellRenderer: ActionRenderer,
+    },
+];
+
+const normalizeData = (data) => {
+    const processedKK = new Set();
+
+    return (data ?? []).map((item, index) => {
+        const kk = item?.orderallocation?.kk ?? item?.kk ?? null;
+
+        let showProcess = false;
+
+        if (
+            item?.status === "Waiting" &&
+            kk &&
+            !processedKK.has(kk)
+        ) {
+            showProcess = true;
+            processedKK.add(kk);
+        }
+
+        return {
+            ...item,
+            no: index + 1,
+            kk,
+            showProcess,
+        };
+    });
+};
+
+
+const loadData = async () => {
+    try {
+        loading.show();
+
+        const endpoint = "/api/v1/cmcountersample/getdata";
+        const { data } = await api.get(endpoint);
+
+        const groupedData = data?.data ?? {};
+
+        rawData.value = normalizeData(
+            Object.values(groupedData).flat()
+        );
+
+    } catch (err) {
+        console.error(err);
+
+        if (err?.response?.status === 401) {
+            router.push("/login");
+        }
+    } finally {
+        loading.hide();
+    }
+};
+
+const loadDataFilter = async () => {
+    try {
+        const status = form.value?.status?.status ?? '';
+
+        loading.show();
+
+        const endpoint =
+            `/api/v1/cmcountersample/getdata?factory=${form.value.factory}&status=${status}`;
+
+        const { data } = await api.get(endpoint);
+
+        const groupedData = data?.data ?? {};
+
+        rawData.value = normalizeData(
+            Object.values(groupedData).flat()
+        );
+        console.log("filtered rawData:", rawData.value);
+
+    } catch (err) {
+        console.error(err);
+
+        if (err?.response?.status === 401) {
+            router.push("/login");
+        }
+    } finally {
+        loading.hide();
+    }
+};
+
+const loadDataStatus = async () => {
+    try {
+        loading.show();
+        const endpoint = "/api/v1/cmsamplereference/selectstatus";
+        const { data } = await api.get(endpoint);
+        list_status.value = (data.data ?? []).map((item) => ({
+            value: item,
+            label: item,
+        }));
+    } catch (err) {
+        if (err?.response?.status === 401) {
+            router.push("/login");
+        }
+    } finally {
+        loading.hide();
+    }
+};
+
+onMounted(() => {
+    loadData();
+    loadDataStatus();
+});
+
+const resetFilter = async () => {
+    form.value.status = "";
+
+    if (gridApi.value) {
+        await gridApi.value.setFilterModel(null);
+        gridApi.value.onFilterChanged();
+    }
+
+    await loadData();
+};
+
+</script>
