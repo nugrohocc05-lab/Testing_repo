@@ -1,642 +1,448 @@
+<script setup>
+import { useAttrs, ref, watch } from "vue";
+import { ArrowUpTrayIcon } from "@heroicons/vue/24/outline";
+
+defineOptions({
+    inheritAttrs: false,
+});
+
+const props = defineProps({
+    modelValue: {
+        type: [String, Number, Array, Object, null],
+        default: "",
+    },
+    type: {
+        type: String,
+        default: "text",
+    },
+
+    variant: {
+        type: String,
+        default: "default",
+        validator: (value) => ["default", "dropzone"].includes(value),
+    },
+
+    filter: {
+        type: String,
+        default: "free",
+        validator: (value) =>
+            [
+                "email",
+                "number",
+                "name-special",
+                "text",
+                "text-name",
+                "text-symbol",
+                "free",
+                "text-symbol-limit",
+            ].includes(value),
+    },
+    placeholder: { type: String, default: "" },
+    disabled: { type: Boolean, default: false },
+    readonly: { type: Boolean, default: false },
+    label: { type: String, default: "" },
+    labelClass: { type: [String, Array, Object], default: "" },
+    required: { type: Boolean, default: false },
+    name: { type: String, default: undefined },
+    autocomplete: { type: String, default: "off" },
+    error: { type: [String, Boolean], default: false },
+    hint: { type: String, default: "" },
+    case: {
+        type: String,
+        default: "none",
+        validator: (value) =>
+            ["none", "upper", "lower", "capitalize", "title"].includes(value),
+    },
+    min: { type: [String, Number], default: undefined },
+    max: { type: [String, Number], default: undefined },
+    multiple: { type: Boolean, default: false },
+    dropzoneText: { type: String, default: "Choose a file or drag & drop here", },
+    dropzoneHint: { type: String, default: "", },
+    accept: { type: String, default: "",},
+});
+
+const emit = defineEmits([
+    "update:modelValue",
+    "focus",
+    "blur",
+    "change",
+    "keydown",
+]);
+
+const attrs = useAttrs();
+const fileInput = ref(null);
+const selectedFiles = ref([]);
+const isDragging = ref(false);
+
+watch(
+    () => props.modelValue,
+    (newVal) => {
+        if (props.type !== "file") return;
+
+        if (!newVal) {
+            selectedFiles.value = [];
+            return;
+        }
+
+        if (Array.isArray(newVal)) {
+            selectedFiles.value = newVal;
+        } else if (newVal instanceof File) {
+            selectedFiles.value = [newVal];
+        }
+    },
+    { immediate: true }
+);
+
+const filterValue = (value) => {
+    let result = value;
+
+    switch (props.filter) {
+        case "text":
+            result = result.replace(/[^a-zA-Z0-9\s]/g, "");
+            break;
+
+        case "text-name":
+            result = result.replace(/[^a-zA-Z0-9\s-]/g, "");
+            break;
+
+        case "name-special":
+            result = result.replace(/[^a-zA-Z0-9\s.,/-]/g, "");
+            break;
+
+        case "number":
+            result = result.replace(/[^0-9]/g, "");
+            break;
+
+        case "text-symbol":
+            result = result.replace(
+                /[^a-zA-Z0-9\s.,!?'"()\\-\_/&@#:;+=%]/g,
+                ""
+            );
+            break;
+
+        case "text-symbol-limit":
+            result = result.replace(/[^a-zA-Z0-9\s.,\\-\_]/g, "");
+            break;
+
+        case "email":
+            result = result
+                .replace(/[^a-zA-Z0-9.!#$%&'*+/=?^_`{|}~@-]/g, "")
+                .replace(/(@.*)@/g, "$1");
+            break;
+    }
+
+    switch (props.case) {
+        case "upper":
+            result = result.toUpperCase();
+            break;
+
+        case "lower":
+            result = result.toLowerCase();
+            break;
+
+        case "capitalize":
+            result = result.replace(/\b\w/g, (char) => char.toUpperCase());
+            break;
+
+        case "title":
+            result = result
+                .toLowerCase()
+                .replace(/\b\w/g, (char) => char.toUpperCase());
+            break;
+    }
+
+    return result;
+};
+
+const allowedExtensions = ["pdf", "xls", "xlsx"];
+
+const handleFileChange = (event) => {
+    const files = Array.from(event.target.files || []);
+
+    const validFiles = files.filter((file) => {
+        const extension = file.name
+            .split(".")
+            .pop()
+            .toLowerCase();
+
+        return allowedExtensions.includes(extension);
+    });
+
+    if (validFiles.length !== files.length) {
+        event.target.value = "";
+
+        selectedFiles.value = [];
+
+        emit(
+            "update:modelValue",
+            props.multiple ? [] : null
+        );
+
+        return;
+    }
+
+    selectedFiles.value = props.multiple
+        ? validFiles
+        : validFiles.slice(0, 1);
+
+    emit(
+        "update:modelValue",
+        props.multiple
+            ? validFiles
+            : (validFiles[0] ?? null)
+    );
+
+    emit("change", event);
+};
+
+const handleDragOver = (event) => {
+    if (
+        props.disabled ||
+        props.variant !== "dropzone" ||
+        props.type !== "file"
+    ) {
+        return;
+    }
+
+    event.preventDefault();
+    isDragging.value = true;
+};
+
+const handleDragLeave = (event) => {
+    if (
+        props.disabled ||
+        props.variant !== "dropzone" ||
+        props.type !== "file"
+    ) {
+        return;
+    }
+
+    if (!event.currentTarget.contains(event.relatedTarget)) {
+        isDragging.value = false;
+    }
+};
+
+const handleDrop = (event) => {
+    if (
+        props.disabled ||
+        props.variant !== "dropzone" ||
+        props.type !== "file"
+    ) {
+        return;
+    }
+
+    event.preventDefault();
+    isDragging.value = false;
+
+    const files = Array.from(event.dataTransfer?.files || []);
+
+    selectedFiles.value = props.multiple
+        ? files
+        : files.slice(0, 1);
+
+    const valueToEmit = props.multiple
+        ? files
+        : (files[0] ?? null);
+
+    emit("update:modelValue", valueToEmit);
+    emit("change", event);
+};
+
+
+const handleInput = (event) => {
+    if (props.type === "file") return;
+
+    let value = filterValue(event.target.value);
+
+    if (props.max !== undefined && value !== "") {
+        value = Math.min(
+            Number(value),
+            Number(props.max)
+        ).toString();
+    }
+
+    if (props.min !== undefined && value !== "") {
+        value = Math.max(
+            Number(value),
+            Number(props.min)
+        ).toString();
+    }
+
+    event.target.value = value;
+
+    emit("update:modelValue", value);
+};
+
+const removeFile = (index) => {
+    selectedFiles.value.splice(index, 1);
+
+    if (fileInput.value) {
+        fileInput.value.value = "";
+    }
+
+    emit(
+        "update:modelValue",
+        props.multiple
+            ? [...selectedFiles.value]
+            : null
+    );
+};
+
+
+</script>
+
 <template>
-    <div class="px-6">
-        <UiTitle align="center" title="Master Factory" subtitle="" />
-        <!-- User Type -->
-        <div class="mb-4 flex gap-3">
-            <UiButton @click="setNewData" class="mr-auto">+Add Data</UiButton>
+    <div :class="['w-full', attrs.class]">
+        <label v-if="label" :class="[
+            'mb-1.5 block font-medium text-gray-700',
+            labelClass,
+        ]">
+            {{ label }}
 
-            <div class="w-50">
-                <UiInput v-model="searchKeyword" placeholder="Search" class="rounded-lg">
-                    <template #prefix>
-                        <MagnifyingGlassIcon class="h-5 w-5 text-gray-400" />
-                    </template>
-                </UiInput>
+            <span v-if="required" class="ml-0.5 text-red-500">
+                *
+            </span>
+        </label>
+
+        <div class="relative">
+            <!-- PREFIX -->
+            <div v-if="$slots.prefix" class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                <slot name="prefix" />
             </div>
 
-        </div>
+            <div v-if="type === 'file' && variant === 'default'" :class="[
+                'w-full rounded border bg-white py-2.5 text-sm flex items-center justify-between',
 
-        <UiAgGrid :rowData="rawData" :columnDefs="columnDefs" :defaultColDef="defaultColDef"
-            class="mb-10 my-zebra-grid" :quickFilterText="searchKeyword" ></UiAgGrid>
-    </div>
+                $slots.prefix ? 'pl-10' : 'pl-3',
+                $slots.suffix ? 'pr-10' : 'pr-3',
 
+                error
+                    ? 'border-red-400 focus-within:ring-2 focus-within:ring-red-500/20'
+                    : 'border-gray-300 focus-within:border-[#1FBCC3] focus-within:ring-2 focus-within:ring-[#1FBCC3]/20',
 
-    <UiModal v-model="showModal" :title="`${action} - [ ${dataSelected.namafactory ?? 'New Factory'} ]`" size="md">
-        <div class="space-y-3 -mt-3">
-            <div class="flex space-x-3">
-                <div :hidden="isNewData">
-                    <UiInput label="ID Factory" :readonly="!isNewData" v-model="form.idfactory" type="text" placeholder="ID Factory"></UiInput>
-                </div>
-                <UiInput label="Factory Code" filter="text" maxLength="5" required case="upper" labelClass="" v-model="form.kode" type="text" placeholder="Kode"></UiInput>
-            </div>
-            <UiInput label="Name" labelClass="" filter="text" maxLength="50" required case="capitalize" v-model="form.namafactory" type="text" placeholder="Full Name"></UiInput>
-            <div class="flex space-x-3">
-                <UiInput label="SAP Code" filter="text" case="upper" maxLength="5" labelClass="" v-model="form.sap_code" type="text" placeholder="SAP Code"></UiInput>
-                <UiInput label="Vendor SAP Code" filter="text" maxLength="10" labelClass="" v-model="form.vendor_sap_code" type="text" placeholder="Vendor SAP Code"></UiInput>
-            </div>
-            <UiInput label="Alamat" case="capitalize" required filter="name-special" maxLength="100" labelClass="" v-model="form.alamat" type="text" placeholder="Alamat"></UiInput>
-            <div class="flex space-x-3">
-                <UiInput label="Kota" filter="text" maxLength="25" required case="capitalize" labelClass="" v-model="form.kota" type="text" placeholder="Kota"></UiInput>
-                <UiInput label="Provinsi" maxLength="25" filter="text" required case="capitalize" labelClass="" v-model="form.provinsi" type="text" placeholder="Provinsi"></UiInput>
-            </div>
+                disabled
+                    ? 'cursor-not-allowed bg-gray-100 text-gray-400'
+                    : 'text-gray-900 cursor-pointer hover:bg-gray-50/50',
+            ]">
+                <span class="truncate text-gray-600 pr-2">
+                    {{ selectedFileNames || placeholder || "Select file..." }}
+                </span>
 
-            <div class="flex space-x-3">
-                <UiInput label="Kodepos" filter="number" labelClass="" maxLength="10" v-model="form.kodepos" type="text" placeholder="Kodepos"></UiInput>
-                <UiInput label="Work Day" maxLength="1" v-model="form.work_day" type="number" min="1" max="7" placeholder="Work Day"></UiInput>
+                <span class="text-xs font-semibold text-[#1FBCC3] uppercase tracking-wider shrink-0">
+                    Browse
+                </span>
 
+                <input v-bind="attrs" type="file" :disabled="disabled" :required="required" :name="name"
+                    :multiple="multiple" :autocomplete="autocomplete"
+                    class="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                    @change="handleFileChange" @focus="emit('focus', $event)" @blur="emit('blur', $event)"
+                    @keydown="emit('keydown', $event)" />
             </div>
 
-            <!-- Dokumen: NPWP, IUI, SIUP, Faktur -->
-            <div>
-                <UiAccordion
-                    v-for="doc in docTypes"
-                    :key="doc.key"
-                    :title="doc.label"
-                    variant="line"
-                    :default-open="doc.key === 'npwp'"
-                    :sticky="true"
-                >
-                    <div class="space-y-2">
-                        <div
-                            v-if="getFileInfo(doc.key)"
-                            class="flex items-center gap-2 rounded-lg border border-slate-200 p-2"
-                        >
-                            <img
-                                src="/images/icons/file/img.svg"
-                                class="h-10 w-10"
-                            />
+            <div v-else-if="type === 'file' && variant === 'dropzone'" :class="[
+                'relative w-full rounded-lg border-2 border-dashed bg-white p-6 text-center transition-all duration-150',
 
-                            <div class="min-w-0 flex-1">
-                                <div class="truncate text-sm sm:text-md">
-                                    {{ getFileInfo(doc.key).name }}
-                                </div>
+                isDragging
+                    ? 'border-[#1FBCC3] bg-[#1FBCC3]/5 ring-2 ring-[#1FBCC3]/20'
+                    : error
+                        ? 'border-red-400 bg-red-50/30'
+                        : 'border-gray-300 hover:border-[#1FBCC3] hover:bg-gray-50/50',
 
-                                <div class="text-xs text-slate-500">
-                                    {{
-                                        getFileInfo(doc.key).pending
-                                            ? 'Belum disimpan'
-                                            : 'Uploaded: ' + getFileInfo(doc.key).date
-                                    }}
-                                </div>
-                            </div>
+                disabled
+                    ? 'cursor-not-allowed bg-gray-100 opacity-60'
+                    : 'cursor-pointer',
+            ]" @dragover="handleDragOver" @dragleave="handleDragLeave" @drop="handleDrop">
+                <input v-bind="attrs" type="file" :disabled="disabled" :required="required" :name="name"
+                    :multiple="multiple" ref="fileInput" :accept="accept" :autocomplete="autocomplete"
+                    class="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                    @change="handleFileChange" @focus="emit('focus', $event)" @blur="emit('blur', $event)"
+                    @keydown="emit('keydown', $event)" />
 
-                            <UiButton variant="teritary-danger" @click="removeFile(doc.key)">
-                                <TrashIcon class="h-7 w-7" />
-                            </UiButton>
-                        </div>
+                <div class="flex flex-col items-center">
+                    <div v-if="!selectedFiles.length" class="flex flex-col items-center">
+                        <ArrowUpTrayIcon class="h-8 w-8 mb-2" :class="isDragging
+                            ? 'text-[#1FBCC3]'
+                            : 'text-gray-400'
+                            " />
 
-                        <div v-else class="text-center text-sm text-slate-400">
-                            Belum ada file
-                        </div>
+                        <p class="text-sm font-medium" :class="isDragging
+                            ? 'text-[#1FBCC3]'
+                            : 'text-gray-700'
+                            ">
+                            {{
+                                isDragging
+                                    ? "Drop file here"
+                                    : dropzoneText
+                            }}
+                        </p>
+                    </div>
+                    <p v-if="dropzoneHint" class="mt-2 text-xs text-gray-400">
+                        {{ dropzoneHint }}
+                    </p>
 
-                        <div class="mb-5 text-center">
-                            <UiButton
-                                rounded="full"
-                                variant="primary"
-                                @click="openUpload(doc.key)"
-                            >
-                                <DocumentPlusIcon class="h-5 w-5" />
-                                Upload File
-                            </UiButton>
+                    <div v-if="selectedFiles.length" class="flex flex-col gap-2 mt-2 w-full">
+                        <div v-for="(file, index) in selectedFiles" :key="`${file.name}-${index}`"
+                            class="relative flex items-center p-2 border rounded-lg text-[#1FBCC3]">
+                            <img v-if="['xls', 'xlsx'].includes(
+                                file.name.split('.').pop().toLowerCase()
+                            )" src="/images/icons/file/xls.svg" class="h-10 w-10 shrink-0" />
+
+                            <img v-else-if="['png', 'jpg', 'svg', 'jpeg', 'gif', 'webp'].includes(
+                                file.name.split('.').pop().toLowerCase()
+                            )" src="/images/icons/file/img.svg" class="h-10 w-10 shrink-0" />
+
+                            <img v-else-if="
+                                file.name.split('.').pop().toLowerCase() === 'pdf'
+                            " src="/images/icons/file/pdf.svg" class="h-10 w-10 shrink-0" />
+
+                            <span class="flex-1 truncate px-3 text-xs font-medium text-left">
+                                {{ file.name }}
+                            </span>
+
+                            <button type="button"
+                                class="relative z-10 ml-2 flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-full text-gray-400 hover:bg-red-50 hover:text-red-500"
+                                @click.stop="removeFile(index)">
+                                <span class="text-lg leading-none">&times;</span>
+                            </button>
                         </div>
                     </div>
-                </UiAccordion>
+
+
+                </div>
+            </div>
+
+            <input v-else v-bind="attrs" :type="type" :value="modelValue" :placeholder="placeholder"
+                :disabled="disabled" :readonly="readonly" :required="required" :name="name" :autocomplete="autocomplete"
+                :class="[
+                    'w-full rounded border bg-white py-2.5 text-sm placeholder:text-gray-600 transition-colors duration-150 outline-none',
+
+                    $slots.prefix ? 'pl-10' : 'pl-3',
+                    $slots.suffix ? 'pr-10' : 'pr-3',
+
+                    error
+                        ? 'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-500/20'
+                        : 'border-gray-300 focus:border-[#1FBCC3] focus:ring-2 focus:ring-[#1FBCC3]/20',
+
+                    disabled
+                        ? 'cursor-not-allowed bg-gray-100 text-gray-400'
+                        : 'text-gray-900',
+
+                    readonly ? 'bg-gray-50' : '',
+                ]" @input="handleInput" @focus="emit('focus', $event)" @blur="emit('blur', $event)"
+                @change="emit('change', $event)" @keydown="emit('keydown', $event)" />
+
+            <!-- SUFFIX -->
+            <div v-if="$slots.suffix" class="absolute inset-y-0 right-0 flex items-center pr-3">
+                <slot name="suffix" />
             </div>
         </div>
-        <template #footer>
-            <div class="flex justify-end">
-                <UiButton @click="showModal = false; isNewData = null; resetFiles()" variant="danger">Cancel</UiButton>
-                <UiButton @click="isNewData ? storeNewData() : submit()" :disabled="!isFormChanged" class="ml-3">Save</UiButton>
-            </div>
-        </template>
-    </UiModal>
 
-    <!-- Modal upload (dipakai bersama untuk 4 dokumen) -->
-    <UiModal
-        v-model="showModalUpload"
-        :title="`Upload ${uploadLabel}`"
-        size="md"
-    >
-        <div class="space-y-3">
-            <UiInput
-                :label="`${uploadLabel} Document`"
-                variant="dropzone"
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
-                dropzone-hint="Only PDF, JPG, JPEG, and PNG files are allowed."
-                @change="onPickFile"
-                @update:modelValue="onPickFile"
-            />
-            <div v-if="tempFile" class="text-sm text-slate-600">
-                {{ tempFile.name }}
-            </div>
-        </div>
+        <p v-if="error" class="mt-1.5 text-xs text-red-600">
+            {{ typeof error === "string" ? error : "" }}
+        </p>
 
-        <template #footer>
-            <div class="flex justify-end gap-2">
-                <UiButton
-                    variant="white-danger"
-                    @click="showModalUpload = false"
-                >
-                    Cancel
-                </UiButton>
-
-                <UiButton
-                    variant="primary"
-                    :disabled="!tempFile"
-                    @click="saveUpload"
-                >
-                    Save
-                </UiButton>
-            </div>
-        </template>
-    </UiModal>
-
+        <p v-else-if="hint" class="mt-1.5 text-xs text-gray-500">
+            {{ hint }}
+        </p>
+    </div>
 </template>
-
-<script setup>
-import { ref, onMounted, computed, defineComponent, h } from "vue";
-import { useRouter } from "vue-router";
-import { useLoadingStore } from "@/stores/loading";
-import { PencilSquareIcon, TrashIcon, MagnifyingGlassIcon } from "@heroicons/vue/24/outline";
-import { customSwal } from "@/composable/customSwal";
-const { confirmDelete, success, warning, error } = customSwal;
-
-import UiButton from "@/components/ui/UiButton.vue"
-import UiInput from "@/components/ui/UiInput.vue"
-import UiModal from "@/components/ui/UiModal.vue"
-import UiTitle from "@/components/ui/UiTitle.vue"
-
-import api from "@/services/api";
-
-import '@vuepic/vue-datepicker/dist/main.css'
-import UiAgGrid from "@/components/ui/UiAgGrid.vue";
-import UiTooltip from "@/components/ui/UiTooltip.vue";
-import { DocumentPlusIcon } from "@heroicons/vue/24/solid";
-import UiAccordion from "@/components/ui/UiAccordion.vue";
-
-const loading = useLoadingStore();
-const router = useRouter();
-const rawData = ref([]);
-const dataSelected = ref([]);
-const action = ref("");
-const isNewData = ref(false)
-const showModal = ref(false)
-const showModalUpload = ref(false)
-const searchKeyword = ref('')
-const originalForm = ref(null)
-
-const defaultColDef = {
-    sortable: true,
-    filter: false,
-    resizable: true,
-};
-
-const form = ref({
-    idfactory: "",
-    kode: "",
-    work_day: "",
-    namafactory: "",
-    kota: "",
-    sap_code: "",
-    vendor_sap_code: "",
-    alamat: "",
-    kodepos: "",
-    provinsi: "",
-});
-
-const maxDate = new Date()
-maxDate.setFullYear(maxDate.getFullYear() - 5)
-
-/* =========================================================
- *  FILE UPLOAD (NPWP, IUI, SIUP, FAKTUR)
- * ========================================================= */
-const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
-
-const docTypes = [
-    { key: 'npwp', label: 'NPWP' },
-    { key: 'iui', label: 'IUI' },
-    { key: 'siup', label: 'SIUP' },
-    { key: 'faktur', label: 'Faktur' },
-]
-const emptyDocs = () => ({ npwp: null, iui: null, siup: null, faktur: null })
-
-const pendingFiles = ref(emptyDocs())   // file baru yang belum dikirim ke server
-const removedFiles = ref(emptyDocs())   // true = hapus file lama di server
-const uploadTarget = ref(null)          // dokumen yang sedang di-upload
-const tempFile = ref(null)              // file yang dipilih di modal upload
-
-const uploadLabel = computed(
-    () => docTypes.find(d => d.key === uploadTarget.value)?.label ?? ''
-)
-
-const resetFiles = () => {
-    pendingFiles.value = emptyDocs()
-    removedFiles.value = emptyDocs()
-}
-
-// Info file yang ditampilkan: file baru (pending) > file lama dari server
-// SESUAIKAN nama field `${key}_file` dan `${key}_uploaded_at` dengan respons API Anda
-const getFileInfo = (key) => {
-    if (pendingFiles.value[key]) {
-        return { name: pendingFiles.value[key].name, pending: true }
-    }
-    if (removedFiles.value[key]) return null
-
-    const path = dataSelected.value?.[`${key}_file`]
-    if (!path) return null
-
-    return {
-        name: String(path).split('/').pop(),
-        date: dataSelected.value?.[`${key}_uploaded_at`] ?? '-',
-        pending: false,
-    }
-}
-
-const openUpload = (key) => {
-    uploadTarget.value = key
-    tempFile.value = null
-    showModalUpload.value = true
-}
-
-// Menangani event File / FileList / Event input
-const onPickFile = (val) => {
-    tempFile.value =
-        val instanceof File ? val
-        : val?.target?.files?.[0]
-        ?? val?.[0]
-        ?? null
-}
-
-const saveUpload = async () => {
-    const f = tempFile.value
-    if (!f) return
-
-    const okType = /\.(pdf|jpe?g|png)$/i.test(f.name)
-    if (!okType || f.size > MAX_FILE_SIZE) {
-        await warning({
-            title: "File tidak valid",
-            text: "Hanya PDF/JPG/PNG, maksimal 5MB.",
-        })
-        return
-    }
-
-    pendingFiles.value[uploadTarget.value] = f
-    removedFiles.value[uploadTarget.value] = false
-    showModalUpload.value = false
-}
-
-const removeFile = (key) => {
-    if (pendingFiles.value[key]) {
-        pendingFiles.value[key] = null
-    } else {
-        removedFiles.value[key] = true
-    }
-}
-
-const buildFormData = () => {
-    const fd = new FormData()
-    Object.entries(form.value).forEach(([k, v]) => fd.append(k, v ?? ''))
-
-    docTypes.forEach(({ key }) => {
-        if (pendingFiles.value[key]) {
-            fd.append(`${key}_file`, pendingFiles.value[key])
-        } else if (removedFiles.value[key]) {
-            fd.append(`delete_${key}`, 1)
-        }
-    })
-    return fd
-}
-
-/* ========================================================= */
-
-const isFormChanged = computed(() => {
-    if (!originalForm.value) return false
-
-    const fileChanged = docTypes.some(
-        ({ key }) => pendingFiles.value[key] || removedFiles.value[key]
-    )
-
-    return (
-        fileChanged ||
-        Object.keys(form.value).some(
-            key => form.value[key] !== originalForm.value[key]
-        )
-    )
-})
-
-const setForm = () => {
-    const data = dataSelected.value;
-
-    if (!data) return;
-    form.value = {
-        idfactory: data.idfactory ?? "",
-        kode: data.kode ?? "",
-        namafactory: data.namafactory ?? "",
-        kota: data.kota ?? "",
-        sap_code: data.sap_code ?? null,
-        vendor_sap_code: data.vendor_sap_code ?? "",
-        alamat: data.alamat ?? "",
-        kodepos: data.kodepos ?? "",
-        provinsi: data.provinsi ?? "",
-        work_day: data.work_day ?? ""
-    };
-    resetFiles();
-    isNewData.value = false;
-    originalForm.value = { ...form.value }
-};
-
-const setNewData = () => {
-    isNewData.value = true
-    dataSelected.value = "New Data";
-    action.value = "Add";
-
-    form.value = {
-        idfactory: "",
-        kode: "",
-        namafactory: "",
-        kota: "",
-        sap_code: "",
-        vendor_sap_code: "",
-        alamat: "",
-        kodepos: "",
-        provinsi: "",
-        work_day: "",
-    };
-
-    resetFiles();
-    showModal.value = true
-    originalForm.value = { ...form.value }
-};
-
-const closeModal = () => {
-    showModal.value = false;
-    isNewData.value = false;
-    resetFiles();
-};
-
-const ActionRenderer = defineComponent({
-    props: {
-        params: {
-            type: Object,
-            required: true,
-        },
-    },
-
-    setup(props) {
-
-        const editData = () => {
-            dataSelected.value = props.params.data;
-            action.value = "Edit Data";
-            setForm();
-            showModal.value = true;
-        };
-
-        const deleteData = () => {
-            dataSelected.value = props.params.data;
-            deleteThisData()
-        };
-
-        return () =>
-            h(
-                "div",
-                {
-                    class: "flex h-full items-center justify-center gap-3",
-                },
-                [
-                    h(
-                        "button",
-                        {
-                            type: "button",
-                            title: "Edit",
-                            class:
-                                "cursor-pointer text-blue-500 transition hover:text-blue-700",
-                            onClick: editData,
-                        },
-                        [
-                            h(PencilSquareIcon, {
-                                class: "h-5 w-5",
-                            }),
-                        ],
-                    ),
-
-                    h(
-                        "button",
-                        {
-                            type: "button",
-                            title: "Delete",
-                            class: "cursor-pointer text-red-500 hover:text-red-700",
-                            onClick: deleteData,
-                        },
-                        [
-                            h(TrashIcon, {
-                                class: "h-5 w-5",
-                            }),
-                        ],
-                    ),
-                ],
-            );
-    },
-});
-
-const columnDefs = [
-    {
-        headerName: "No",
-        field: "no",
-        width: 80,
-        filter: false,
-        resizable: true,
-    },
-    {
-        field: "namafactory",
-        headerName: "Name",
-        minWidth: 150,
-        flex: 1,
-    },
-    {
-        field: "sap_code",
-        headerName: "SAP Code",
-        minWidth: 150,
-        valueGetter: (params) => {
-            return params.data?.sap_code ?? "-";
-        },
-    },
-    {
-        field: "vendor_sap_code",
-        headerName: "Vendor SAP Code",
-        minWidth: 100,
-        valueGetter: (params) => {
-            return params.data?.vendor_sap_code ?? "-";
-        },
-    },
-    {
-        field: "kode",
-        headerName: "Factory Code",
-        minWidth: 100,
-        valueGetter: (params) => {
-            return params.data?.kode ?? "-";
-        },
-    },
-    {
-        headerName: "Action",
-        minWidth: 120,
-        maxWidth: 120,
-        sortable: false,
-        filter: false,
-        resizable: false,
-        cellRenderer: ActionRenderer,
-    },
-];
-
-const loadData = async () => {
-    try {
-        loading.show();
-        const endpoint = "/api/v1/master/getFactory";
-
-        const { data } = await api.get(endpoint);
-        rawData.value = data?.data ?? [];
-
-        rawData.value = (data?.data ?? []).map((item, index) => ({
-            ...item,
-            no: index + 1,
-        }));
-    } catch (err) {
-        if (err?.response?.status === 401) {
-            router.push("/login");
-        }
-    } finally {
-        loading.hide();
-    }
-};
-
-onMounted(() => {
-    loadData();
-});
-
-const storeNewData = async () => {
-    try {
-
-        if (
-            !form.value.namafactory ||
-            !form.value.kota ||
-            !form.value.alamat ||
-            !form.value.provinsi
-        ) {
-            await warning({
-                title: "Incomplete Data",
-                text: "Please complete all required fields.",
-            });
-            return
-        }
-
-        loading.show()
-
-        const endpoint = "api/v1/master/add-factory";
-        const { data } = await api.post(
-            endpoint,
-            buildFormData(),
-            { headers: { "Content-Type": "multipart/form-data" } }
-        );
-        isNewData.value = false
-        closeModal()
-        loading.hide()
-        await success({
-                title: "Success",
-                text: data?.message || "Data Added successfully.",
-            });
-        await loadData()
-
-    } catch (err) {
-        loading.hide()
-        if (err?.response?.status === 401) {
-            router.push("/login")
-            return
-        }
-
-        await error({
-            title:"Add Failed",
-            text:
-                err?.response?.data?.message ||
-                err?.message ||
-                "Failed to add the data. Please try again.",
-        });
-    }
-}
-
-const submit = async () => {
-    try {
-        loading.show()
-        const endpoint = `api/v1/master/update-factory/${dataSelected.value.idfactory}`;
-
-        const fd = buildFormData()
-        // Laravel tidak membaca multipart pada PUT asli, jadi pakai method spoofing.
-        // Jika backend BUKAN Laravel: hapus baris ini dan pakai api.put(endpoint, fd)
-        fd.append('_method', 'PUT')
-
-        const { data } = await api.post(
-            endpoint,
-            fd,
-            { headers: { "Content-Type": "multipart/form-data" } }
-        );
-        closeModal()
-        loading.hide()
-        await success({
-            title: "Success",
-            text: data?.message || "Data saved successfully.",
-        });
-        await loadData()
-    } catch (err) {
-        loading.hide()
-        if (err?.response?.status === 401) {
-            router.push("/login")
-            return
-        }
-
-        await error({
-            title:"Update Failed",
-            text:
-                err?.response?.data?.message ||
-                err?.message ||
-                "Failed to update the data. Please try again.",
-        });
-    }
-}
-
-const deleteThisData = async () => {
-
-    const result = await confirmDelete();
-    if (!result.isConfirmed) {
-        return
-    }
-
-    try {
-        loading.show()
-
-        const { data } = await api.delete(
-            `api/v1/master/delete-factory/${dataSelected.value.idfactory}`
-        )
-
-        loading.hide()
-        await success({
-            title: "Success",
-            text: data?.message || "Data has been deleted successfully.",
-        });
-        await loadData()
-
-    } catch (err) {
-
-        if (err?.response?.status === 401) {
-            router.push("/login")
-            return
-        }
-
-        loading.hide()
-        await error({
-            title:"Delete Failed",
-            text:
-                err?.response?.data?.message ||
-                err?.message ||
-                "Failed to delete the data. Please try again.",
-        });
-    }
-}
-</script>
