@@ -1,4 +1,3 @@
-```vue
 <template>
     <div class="px-6">
         <UiTitle align="center" title="Order Artwork Allocation"/>
@@ -58,8 +57,7 @@
         </div>
 
         <UiAgGrid :rowData="rawData" :columnDefs="columnDefs"
-            class="mb-10 my-zebra-grid" :quickFilterText="searchKeyword" @grid-ready="onGridReady"
-            @pagination-changed="onPaginationChanged" @grid-size-changed="onGridSizeChanged" @body-scroll="onBodyScroll"></UiAgGrid>
+            class="mb-10 my-zebra-grid" :quickFilterText="searchKeyword" @grid-ready="onGridReady"></UiAgGrid>
     </div>
 
 
@@ -85,7 +83,7 @@ import { exportToExcel } from "@/utils/excelExporter";
 import { getCurrentDateTime } from '@/utils/date';
 import { encrypt } from "@/utils/crypto";
 
-import { ref, onMounted, computed, defineComponent, h } from "vue";
+import { ref, shallowRef, onMounted, computed, defineComponent, h } from "vue";
 import { useRouter } from "vue-router";
 import { useLoadingStore } from "@/stores/loading";
 import { InformationCircleIcon, MagnifyingGlassIcon } from "@heroicons/vue/24/outline";
@@ -109,12 +107,14 @@ defineOptions({ name: 'Allocation' });
 const loading = useLoadingStore();
 const router = useRouter();
 
-const rawData = ref([]);
+// shallowRef: data tabel besar tidak perlu dibungkus proxy reaktif
+const rawData = shallowRef([]);
+const allData = shallowRef([]); // cache data penuh (tanpa filter)
+
 const buyers = ref([]);
 const data_kp = ref([]);
 const pos = ref([]);
 const dataSelected = ref([]);
-const ListKK = ref([]);
 const isNewData = ref(false);
 const showModal = ref(false);
 const searchKeyword = ref('');
@@ -146,15 +146,11 @@ const isFormChanged = computed(() => {
     );
 });
 
-/* ---------------- Grid events ---------------- */
+/* ---------------- Grid ---------------- */
 
 const onGridReady = (params) => {
     gridApi.value = params.api;
 };
-
-const onGridSizeChanged = () => { ListKK.value = []; };
-const onPaginationChanged = () => { ListKK.value = []; };
-const onBodyScroll = () => { ListKK.value = []; };
 
 /* ---------------- Export ---------------- */
 
@@ -192,7 +188,7 @@ const onBtnExportPdf = () => {
     });
 };
 
-/* ---------------- Filter helpers ---------------- */
+/* ---------------- Helpers ---------------- */
 
 const setNewFilter = () => {
     form.value = { filter: "", buyer: "", kpno: "", po: "" };
@@ -317,15 +313,22 @@ const columnDefs = [
 
 /* ---------------- Data loading ---------------- */
 
+let reqId = 0;
+
 // Satu fungsi untuk semua fetch tabel
 const fetchGrid = async (query = "") => {
+    const id = ++reqId;
     try {
         loading.show();
         const { data } = await api.get(`/api/v1/order-artwork/getdata${query}`);
-        rawData.value = (data?.data ?? []).map((item, index) => ({
+        if (id !== reqId) return; // abaikan respons usang
+
+        const rows = (data?.data ?? []).map((item, index) => ({
             ...item,
             no: index + 1,
         }));
+        rawData.value = rows;
+        if (!query) allData.value = rows; // simpan cache data penuh
     } catch (err) {
         if (err?.response?.status === 401) router.push("/login");
     } finally {
@@ -333,7 +336,14 @@ const fetchGrid = async (query = "") => {
     }
 };
 
+// Selalu fetch ulang dari server (dipakai saat awal & setelah reject)
 const loadData = () => fetchGrid();
+
+// Tampilkan semua data dari cache, tanpa request
+const showAll = () => {
+    if (allData.value.length) rawData.value = allData.value;
+    else fetchGrid();
+};
 
 const loadDataBuyer = async () => {
     try {
@@ -386,7 +396,7 @@ const loadDataKp = async (idbuyer) => {
 const onFilterChange = (val) => {
     form.value = { filter: val ?? "", buyer: "", kpno: "", po: "" };
     data_kp.value = [];
-    loadData();
+    showAll();
     if (val === "po" && !pos.value.length) loadDataPo();
 };
 
@@ -394,12 +404,12 @@ const onFilterChange = (val) => {
 const onBuyerChange = async (idbuyer) => {
     form.value.kpno = "";
     data_kp.value = [];
-    if (!idbuyer) return loadData();
+    if (!idbuyer) return showAll();
     await loadDataKp(idbuyer);
 };
 
-const loadDataByPo = (po) => (po ? fetchGrid(`?po=${po}`) : loadData());
-const loadDataByKp = (kpno) => (kpno ? fetchGrid(`?kpno=${kpno}`) : loadData());
+const loadDataByPo = (po) => (po ? fetchGrid(`?po=${po}`) : showAll());
+const loadDataByKp = (kpno) => (kpno ? fetchGrid(`?kpno=${kpno}`) : showAll());
 
 onMounted(() => {
     loadData();
@@ -457,4 +467,3 @@ const process_rejection = async () => {
     }
 };
 </script>
-```
