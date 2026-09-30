@@ -1,69 +1,11 @@
-<div class="space-y-2">
-    <template v-for="doc in docTypes" :key="doc.key">
-        <!-- Ada file: accordion terbuka -->
-        <UiAccordion
-            v-if="getFileInfo(doc.key)"
-            :title="doc.label"
-            variant="line"
-            :default-open="true"
-            :sticky="true"
-        >
-            <div class="space-y-2">
-                <div
-                    class="flex items-center gap-2 rounded-lg border border-slate-200 p-2"
-                >
-                    <img
-                        :src="fileIcon(getFileInfo(doc.key).name)"
-                        class="h-10 w-10"
-                    />
+const fileIcon = (name = '') => {
+    const ext = String(name).split('.').pop().toLowerCase()
 
-                    <div class="min-w-0 flex-1">
-                        <div class="truncate text-sm sm:text-md">
-                            {{ getFileInfo(doc.key).name }}
-                        </div>
+    if (ext === 'pdf') return '/images/icons/file/pdf.svg'
+    if (['xls', 'xlsx'].includes(ext)) return '/images/icons/file/xls.svg'
+    if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)) {
+        return '/images/icons/file/img.svg'
+    }
 
-                        <div class="text-xs text-slate-500">
-                            {{
-                                getFileInfo(doc.key).pending
-                                    ? 'Belum disimpan'
-                                    : 'Uploaded: ' + getFileInfo(doc.key).date
-                            }}
-                        </div>
-                    </div>
-
-                    <UiButton variant="teritary-danger" @click="removeFile(doc.key)">
-                        <TrashIcon class="h-7 w-7" />
-                    </UiButton>
-                </div>
-
-                <div class="mb-5 text-center">
-                    <UiButton
-                        rounded="full"
-                        variant="primary"
-                        @click="openUpload(doc.key)"
-                    >
-                        <DocumentPlusIcon class="h-5 w-5" />
-                        Ganti File
-                    </UiButton>
-                </div>
-            </div>
-        </UiAccordion>
-
-        <!-- Tidak ada file: langsung tampil tombol upload -->
-        <div
-            v-else
-            class="flex items-center justify-between border-b border-slate-200 py-2"
-        >
-            <span class="font-medium text-gray-700">{{ doc.label }}</span>
-
-            <UiButton
-                rounded="full"
-                variant="primary"
-                @click="openUpload(doc.key)"
-            >
-                <DocumentPlusIcon class="h-5 w-5" />
-                Upload File
-            </UiButton>
-        </div>
-    </template>
-</div>
+    return '/images/icons/file/img.svg' // ikon default
+}
