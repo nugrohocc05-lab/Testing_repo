@@ -38,21 +38,26 @@
                 <UiInput label="Kota" filter="text" maxLength="25" required case="capitalize" labelClass="" v-model="form.kota" type="text" placeholder="Kota"></UiInput>
                 <UiInput label="Provinsi" maxLength="25" filter="text" required case="capitalize" labelClass="" v-model="form.provinsi" type="text" placeholder="Provinsi"></UiInput>
             </div>
-            
+
             <div class="flex space-x-3">
                 <UiInput label="Kodepos" filter="number" labelClass="" maxLength="10" v-model="form.kodepos" type="text" placeholder="Kodepos"></UiInput>
                 <UiInput label="Work Day" maxLength="1" v-model="form.work_day" type="number" min="1" max="7" placeholder="Work Day"></UiInput>
-                
+
             </div>
+
+            <!-- Dokumen: NPWP, IUI, SIUP, Faktur -->
             <div>
                 <UiAccordion
-                    title="NPWP"
+                    v-for="doc in docTypes"
+                    :key="doc.key"
+                    :title="doc.label"
                     variant="line"
-                    :default-open="true"
+                    :default-open="doc.key === 'npwp'"
                     :sticky="true"
                 >
                     <div class="space-y-2">
                         <div
+                            v-if="getFileInfo(doc.key)"
                             class="flex items-center gap-2 rounded-lg border border-slate-200 p-2"
                         >
                             <img
@@ -62,24 +67,32 @@
 
                             <div class="min-w-0 flex-1">
                                 <div class="truncate text-sm sm:text-md">
-                                    counter-sample.jpg
+                                    {{ getFileInfo(doc.key).name }}
                                 </div>
 
                                 <div class="text-xs text-slate-500">
-                                    Uploaded: 30-09-2026
+                                    {{
+                                        getFileInfo(doc.key).pending
+                                            ? 'Belum disimpan'
+                                            : 'Uploaded: ' + getFileInfo(doc.key).date
+                                    }}
                                 </div>
                             </div>
 
-                            <UiButton variant="teritary-danger">
+                            <UiButton variant="teritary-danger" @click="removeFile(doc.key)">
                                 <TrashIcon class="h-7 w-7" />
                             </UiButton>
+                        </div>
+
+                        <div v-else class="text-center text-sm text-slate-400">
+                            Belum ada file
                         </div>
 
                         <div class="mb-5 text-center">
                             <UiButton
                                 rounded="full"
                                 variant="primary"
-                                @click="showModalUpload = true"
+                                @click="openUpload(doc.key)"
                             >
                                 <DocumentPlusIcon class="h-5 w-5" />
                                 Upload File
@@ -91,24 +104,31 @@
         </div>
         <template #footer>
             <div class="flex justify-end">
-                <UiButton @click="showModal = false; isNewData = null" variant="danger">Cancel</UiButton>
+                <UiButton @click="showModal = false; isNewData = null; resetFiles()" variant="danger">Cancel</UiButton>
                 <UiButton @click="isNewData ? storeNewData() : submit()" :disabled="!isFormChanged" class="ml-3">Save</UiButton>
             </div>
         </template>
     </UiModal>
+
+    <!-- Modal upload (dipakai bersama untuk 4 dokumen) -->
     <UiModal
         v-model="showModalUpload"
-        title="Upload NPWP"
+        :title="`Upload ${uploadLabel}`"
         size="md"
     >
         <div class="space-y-3">
             <UiInput
-                label="NPWP Document"
+                :label="`${uploadLabel} Document`"
                 variant="dropzone"
                 type="file"
                 accept=".pdf,.jpg,.jpeg,.png"
                 dropzone-hint="Only PDF, JPG, JPEG, and PNG files are allowed."
+                @change="onPickFile"
+                @update:modelValue="onPickFile"
             />
+            <div v-if="tempFile" class="text-sm text-slate-600">
+                {{ tempFile.name }}
+            </div>
         </div>
 
         <template #footer>
@@ -122,7 +142,8 @@
 
                 <UiButton
                     variant="primary"
-                    @click="showModalUpload = false"
+                    :disabled="!tempFile"
+                    @click="saveUpload"
                 >
                     Save
                 </UiButton>
@@ -186,11 +207,120 @@ const form = ref({
 const maxDate = new Date()
 maxDate.setFullYear(maxDate.getFullYear() - 5)
 
+/* =========================================================
+ *  FILE UPLOAD (NPWP, IUI, SIUP, FAKTUR)
+ * ========================================================= */
+const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+
+const docTypes = [
+    { key: 'npwp', label: 'NPWP' },
+    { key: 'iui', label: 'IUI' },
+    { key: 'siup', label: 'SIUP' },
+    { key: 'faktur', label: 'Faktur' },
+]
+const emptyDocs = () => ({ npwp: null, iui: null, siup: null, faktur: null })
+
+const pendingFiles = ref(emptyDocs())   // file baru yang belum dikirim ke server
+const removedFiles = ref(emptyDocs())   // true = hapus file lama di server
+const uploadTarget = ref(null)          // dokumen yang sedang di-upload
+const tempFile = ref(null)              // file yang dipilih di modal upload
+
+const uploadLabel = computed(
+    () => docTypes.find(d => d.key === uploadTarget.value)?.label ?? ''
+)
+
+const resetFiles = () => {
+    pendingFiles.value = emptyDocs()
+    removedFiles.value = emptyDocs()
+}
+
+// Info file yang ditampilkan: file baru (pending) > file lama dari server
+// SESUAIKAN nama field `${key}_file` dan `${key}_uploaded_at` dengan respons API Anda
+const getFileInfo = (key) => {
+    if (pendingFiles.value[key]) {
+        return { name: pendingFiles.value[key].name, pending: true }
+    }
+    if (removedFiles.value[key]) return null
+
+    const path = dataSelected.value?.[`${key}_file`]
+    if (!path) return null
+
+    return {
+        name: String(path).split('/').pop(),
+        date: dataSelected.value?.[`${key}_uploaded_at`] ?? '-',
+        pending: false,
+    }
+}
+
+const openUpload = (key) => {
+    uploadTarget.value = key
+    tempFile.value = null
+    showModalUpload.value = true
+}
+
+// Menangani event File / FileList / Event input
+const onPickFile = (val) => {
+    tempFile.value =
+        val instanceof File ? val
+        : val?.target?.files?.[0]
+        ?? val?.[0]
+        ?? null
+}
+
+const saveUpload = async () => {
+    const f = tempFile.value
+    if (!f) return
+
+    const okType = /\.(pdf|jpe?g|png)$/i.test(f.name)
+    if (!okType || f.size > MAX_FILE_SIZE) {
+        await warning({
+            title: "File tidak valid",
+            text: "Hanya PDF/JPG/PNG, maksimal 5MB.",
+        })
+        return
+    }
+
+    pendingFiles.value[uploadTarget.value] = f
+    removedFiles.value[uploadTarget.value] = false
+    showModalUpload.value = false
+}
+
+const removeFile = (key) => {
+    if (pendingFiles.value[key]) {
+        pendingFiles.value[key] = null
+    } else {
+        removedFiles.value[key] = true
+    }
+}
+
+const buildFormData = () => {
+    const fd = new FormData()
+    Object.entries(form.value).forEach(([k, v]) => fd.append(k, v ?? ''))
+
+    docTypes.forEach(({ key }) => {
+        if (pendingFiles.value[key]) {
+            fd.append(`${key}_file`, pendingFiles.value[key])
+        } else if (removedFiles.value[key]) {
+            fd.append(`delete_${key}`, 1)
+        }
+    })
+    return fd
+}
+
+/* ========================================================= */
+
 const isFormChanged = computed(() => {
     if (!originalForm.value) return false
 
-    return Object.keys(form.value).some(
-        key => form.value[key] !== originalForm.value[key]
+    const fileChanged = docTypes.some(
+        ({ key }) => pendingFiles.value[key] || removedFiles.value[key]
+    )
+
+    return (
+        fileChanged ||
+        Object.keys(form.value).some(
+            key => form.value[key] !== originalForm.value[key]
+        )
     )
 })
 
@@ -210,6 +340,7 @@ const setForm = () => {
         provinsi: data.provinsi ?? "",
         work_day: data.work_day ?? ""
     };
+    resetFiles();
     isNewData.value = false;
     originalForm.value = { ...form.value }
 };
@@ -232,6 +363,7 @@ const setNewData = () => {
         work_day: "",
     };
 
+    resetFiles();
     showModal.value = true
     originalForm.value = { ...form.value }
 };
@@ -239,6 +371,7 @@ const setNewData = () => {
 const closeModal = () => {
     showModal.value = false;
     isNewData.value = false;
+    resetFiles();
 };
 
 const ActionRenderer = defineComponent({
@@ -400,7 +533,8 @@ const storeNewData = async () => {
         const endpoint = "api/v1/master/add-factory";
         const { data } = await api.post(
             endpoint,
-            form.value
+            buildFormData(),
+            { headers: { "Content-Type": "multipart/form-data" } }
         );
         isNewData.value = false
         closeModal()
@@ -418,7 +552,7 @@ const storeNewData = async () => {
             return
         }
 
-await error({
+        await error({
             title:"Add Failed",
             text:
                 err?.response?.data?.message ||
@@ -432,9 +566,16 @@ const submit = async () => {
     try {
         loading.show()
         const endpoint = `api/v1/master/update-factory/${dataSelected.value.idfactory}`;
-        const { data } = await api.put(
+
+        const fd = buildFormData()
+        // Laravel tidak membaca multipart pada PUT asli, jadi pakai method spoofing.
+        // Jika backend BUKAN Laravel: hapus baris ini dan pakai api.put(endpoint, fd)
+        fd.append('_method', 'PUT')
+
+        const { data } = await api.post(
             endpoint,
-            form.value
+            fd,
+            { headers: { "Content-Type": "multipart/form-data" } }
         );
         closeModal()
         loading.hide()
@@ -450,7 +591,7 @@ const submit = async () => {
             return
         }
 
-await error({
+        await error({
             title:"Update Failed",
             text:
                 err?.response?.data?.message ||
@@ -489,12 +630,12 @@ const deleteThisData = async () => {
         }
 
         loading.hide()
-await error({
-            title:"Update Failed",
+        await error({
+            title:"Delete Failed",
             text:
                 err?.response?.data?.message ||
                 err?.message ||
-                "Failed to update the data. Please try again.",
+                "Failed to delete the data. Please try again.",
         });
     }
 }
