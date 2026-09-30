@@ -1,3 +1,4 @@
+```vue
 <template>
     <div class="px-6">
         <UiTitle align="center" title="Order Artwork Allocation"/>
@@ -5,20 +6,31 @@
         <div class="mb-4 flex w-full flex-col gap-3 lg:flex-row lg:items-end">
 
             <div class="flex-col flex gap-3 md:flex-row mb-2 md:mb-0">
+                <!-- Step 1: pilih Filter -->
                 <div class="w-full md:w-60">
-                    <UiMultiSelect v-model="form.filter" label="Filter" :options="filters" placeholder="-- Select Filter --"
-                        @change="loadDataKp"/>
+                    <UiMultiSelect v-model="form.filter" label="Filter" :options="filters"
+                        placeholder="-- Select Filter --" @change="onFilterChange"/>
                 </div>
 
-                <div class="w-full md:w-60">
-                    <UiMultiSelect v-model="form.buyer" label="Buyer" :options="buyers" placeholder="-- Select Buyer --"
-                        @change="loadDataKp"/>
+                <!-- Filter PO -->
+                <div v-if="form.filter === 'po'" class="w-full md:w-60">
+                    <UiMultiSelect v-model="form.po" label="PO" :options="pos"
+                        placeholder="-- Select PO --" @change="loadDataByPo"/>
                 </div>
 
-                <div class="w-full md:w-60">
-                    <UiMultiSelect v-model="form.kpno" :options="data_kp" @change="loadDataFilter" label="KP" placeholder="-- Select KP --" />
-                </div>
+                <!-- Filter KP: Buyer dulu, baru KP -->
+                <template v-if="form.filter === 'kp'">
+                    <div class="w-full md:w-60">
+                        <UiMultiSelect v-model="form.buyer" label="Buyer" :options="buyers"
+                            placeholder="-- Select Buyer --" @change="onBuyerChange"/>
+                    </div>
+                    <div v-if="form.buyer" class="w-full md:w-60">
+                        <UiMultiSelect v-model="form.kpno" label="KP" :options="data_kp"
+                            placeholder="-- Select KP --" @change="loadDataByKp"/>
+                    </div>
+                </template>
             </div>
+
             <div class="flex w-full justify-between gap-3 lg:ml-auto lg:w-auto lg:flex-row lg:items-end">
 
                 <div class="w-full sm:w-50">
@@ -35,17 +47,13 @@
                             <i class="fa-regular text-2xl fa-file-pdf"></i>
                         </UiButton>
                     </UiTooltip>
-                    
+
                     <UiTooltip content="Excel" position="bottom">
                         <UiButton variant="teritary" class="shrink-0" @click="onBtnExport">
                             <i class="fa-regular text-2xl fa-file-excel"></i>
                         </UiButton>
                     </UiTooltip>
                 </div>
-
-                <!-- <UiButton size="md" class="h-10 w-full shrink-0 sm:w-auto" @click="showModal = true">
-                    Import KK
-                </UiButton> -->
             </div>
         </div>
 
@@ -80,8 +88,7 @@ import { encrypt } from "@/utils/crypto";
 import { ref, onMounted, computed, defineComponent, h } from "vue";
 import { useRouter } from "vue-router";
 import { useLoadingStore } from "@/stores/loading";
-import { InformationCircleIcon, XCircleIcon, MagnifyingGlassIcon, DocumentArrowUpIcon, DocumentTextIcon, IdentificationIcon, DocumentDuplicateIcon, ClipboardDocumentListIcon }
-    from "@heroicons/vue/24/outline";
+import { InformationCircleIcon, MagnifyingGlassIcon } from "@heroicons/vue/24/outline";
 
 import { customSwal } from "@/composable/customSwal";
 const { confirm, success, warning, error } = customSwal;
@@ -93,25 +100,31 @@ import UiModal from "@/components/ui/UiModal.vue"
 import UiTitle from "@/components/ui/UiTitle.vue"
 import UiMultiSelect from "@/components/ui/UiMultiSelect.vue"
 import UiAgGrid from '@/components/ui/UiAgGrid.vue';
-
-import api from "@/services/api";
 import UiTooltip from '@/components/ui/UiTooltip.vue';
 
-defineOptions({name: 'Allocation'});
+import api from "@/services/api";
+
+defineOptions({ name: 'Allocation' });
 
 const loading = useLoadingStore();
 const router = useRouter();
+
 const rawData = ref([]);
-const filters = ref([]);
 const buyers = ref([]);
 const data_kp = ref([]);
+const pos = ref([]);
 const dataSelected = ref([]);
 const ListKK = ref([]);
-const isNewData = ref(false)
-const showModal = ref(false)
-const searchKeyword = ref('')
-const originalForm = ref(null)
+const isNewData = ref(false);
+const showModal = ref(false);
+const searchKeyword = ref('');
+const originalForm = ref(null);
 const gridApi = ref(null);
+
+const filters = ref([
+    { value: "po", label: "PO" },
+    { value: "kp", label: "KP" },
+]);
 
 const confimForm = ref({
     auth_pass: "",
@@ -122,31 +135,28 @@ const form = ref({
     filter: "",
     buyer: "",
     kpno: "",
+    po: "",
 });
 
 const isFormChanged = computed(() => {
-    if (!originalForm.value) return false
+    if (!originalForm.value) return false;
 
     return Object.keys(confimForm.value).some(
         key => confimForm.value[key] !== originalForm.value[key]
-    )
-})
+    );
+});
+
+/* ---------------- Grid events ---------------- */
 
 const onGridReady = (params) => {
     gridApi.value = params.api;
 };
 
-const onGridSizeChanged = () => {
-    ListKK.value = [];
-}
+const onGridSizeChanged = () => { ListKK.value = []; };
+const onPaginationChanged = () => { ListKK.value = []; };
+const onBodyScroll = () => { ListKK.value = []; };
 
-const onPaginationChanged = () => {
-    ListKK.value = [];
-};
-
-const onBodyScroll = () => {
-    ListKK.value = [];
-}
+/* ---------------- Export ---------------- */
 
 const onBtnExport = () => {
     if (!gridApi.value) {
@@ -159,8 +169,8 @@ const onBtnExport = () => {
         title: `Orders Allocation Report ${datetime}`,
         fileName: fileName,
         sheetName: "Orders Allocation",
-        headers: ["NO","KK", "KP", "PO", "COMBINE_PRO", "PO_CMT", "STYLE", "DELIVERY_DATE", "CM_VACTORY", "QTY", "STATUS"  ], 
-        fields: ["no","kk", "kpno", "po", "combine_pro", "po_sap", "style", "deliverydate", "factory", "total", "orderstatus.status", ], 
+        headers: ["NO", "KK", "KP", "PO", "COMBINE_PRO", "PO_CMT", "STYLE", "DELIVERY_DATE", "CM_VACTORY", "QTY", "STATUS"],
+        fields: ["no", "kk", "kpno", "po", "combine_pro", "po_sap", "style", "deliverydate", "factory", "total", "orderstatus.status"],
         gridData: gridApi
     });
 };
@@ -175,25 +185,26 @@ const onBtnExportPdf = () => {
     exportToPdf({
         title: `Orders Allocation Report ${datetime}`,
         fileName: `${nameFile}`,
-        headers: ["NO","KK", "KP", "PO", "Combine PRO", "PO CMT", "STYLE", "DELIVERY DATE", "CM FACTORY", "TOTAL", "STATUS"],
+        headers: ["NO", "KK", "KP", "PO", "Combine PRO", "PO CMT", "STYLE", "DELIVERY DATE", "CM FACTORY", "TOTAL", "STATUS"],
         fields: ["no", "kk", "kpno", "po", "combine_pro", "po_sap", "style", "deliverydate", "factory", "total", "orderstatus.status"],
         gridData: gridApi,
         orientation: 'l'
     });
 };
 
+/* ---------------- Filter helpers ---------------- */
+
 const setNewFilter = () => {
-    form.value = {
-        kpno: "",
-        buyer: "",
-        filter: "",
-    };
-}
+    form.value = { filter: "", buyer: "", kpno: "", po: "" };
+    data_kp.value = [];
+};
 
 const closeModal = () => {
     showModal.value = false;
     isNewData.value = false;
 };
+
+/* ---------------- Action column ---------------- */
 
 const ActionRenderer = defineComponent({
     props: {
@@ -221,23 +232,18 @@ const ActionRenderer = defineComponent({
         return () => {
             return h(
                 "div",
-                {
-                    class: "flex h-full gap-2",
-                },
+                { class: "flex h-full gap-2" },
                 [
                     h(
                         "button",
                         {
                             type: "button",
                             title: "Detail",
-                            class:
-                                "cursor-pointer text-amber-500 transition hover:text-amber-700",
+                            class: "cursor-pointer text-amber-500 transition hover:text-amber-700",
                             onClick: detailData,
                         },
                         [
-                            h(InformationCircleIcon, {
-                                class: "h-5 w-5",
-                            }),
+                            h(InformationCircleIcon, { class: "h-5 w-5" }),
                         ],
                     ),
                 ],
@@ -246,6 +252,7 @@ const ActionRenderer = defineComponent({
     },
 });
 
+/* ---------------- Columns ---------------- */
 
 const columnDefs = [
     {
@@ -283,9 +290,7 @@ const columnDefs = [
         field: "factory",
         headerName: "CM Factory",
         minWidth: 150,
-        valueGetter: (params) => {
-            return params.data?.factory ?? "-";
-        },
+        valueGetter: (params) => params.data?.factory ?? "-",
         flex: 1,
     },
     {
@@ -310,65 +315,51 @@ const columnDefs = [
     },
 ];
 
-const loadData = async () => {
+/* ---------------- Data loading ---------------- */
+
+// Satu fungsi untuk semua fetch tabel
+const fetchGrid = async (query = "") => {
     try {
         loading.show();
-        const endpoint = "/api/v1/order-artwork/getdata";
-        const { data } = await api.get(endpoint);
-
-        console.log(data);
-        rawData.value = data?.data ?? [];
+        const { data } = await api.get(`/api/v1/order-artwork/getdata${query}`);
         rawData.value = (data?.data ?? []).map((item, index) => ({
             ...item,
             no: index + 1,
         }));
     } catch (err) {
-        if (err?.response?.status === 401) {
-            router.push("/login");
-        }
+        if (err?.response?.status === 401) router.push("/login");
     } finally {
         loading.hide();
     }
 };
 
-const loadDataFilter = async (kpno) => {
-    try {
-        if (!kpno) {
-            loadData()
-            return;
-        }
-
-        loading.show();
-        const endpoint = `/api/v1/order-artwork/getdata?idbuyer=${form.value.buyer}&kpno=${kpno}`;
-        const { data } = await api.get(endpoint);
-
-        rawData.value = data?.data ?? [];
-        rawData.value = (data?.data ?? []).map((item, index) => ({
-            ...item,
-            no: index + 1,
-        }));
-    } catch (err) {
-        if (err?.response?.status === 401) {
-            router.push("/login");
-        }
-    } finally {
-        loading.hide();
-    }
-};
+const loadData = () => fetchGrid();
 
 const loadDataBuyer = async () => {
     try {
         loading.show();
-        const endpoint = "/api/v1/order-artwork/buyers";
-        const { data } = await api.get(endpoint);
+        const { data } = await api.get("/api/v1/order-artwork/buyers");
         buyers.value = (data?.data ?? []).map((item) => ({
             value: item.idbuyer,
             label: item.namabuyer,
         }));
     } catch (err) {
-        if (err?.response?.status === 401) {
-            router.push("/login");
-        }
+        if (err?.response?.status === 401) router.push("/login");
+    } finally {
+        loading.hide();
+    }
+};
+
+const loadDataPo = async () => {
+    try {
+        loading.show();
+        const { data } = await api.get("/api/v1/order-artwork/pos");
+        pos.value = (data?.data ?? []).map((item) => ({
+            value: item.po,
+            label: item.po,
+        }));
+    } catch (err) {
+        if (err?.response?.status === 401) router.push("/login");
     } finally {
         loading.hide();
     }
@@ -376,81 +367,84 @@ const loadDataBuyer = async () => {
 
 const loadDataKp = async (idbuyer) => {
     try {
-        data_kp.value = [];
-        form.value = {
-            kpno:  "",
-        };
-
-        if (!idbuyer) {
-            loadData()
-            return;
-        }
-
         loading.show();
-        const endpoint = `/api/v1/order-artwork/kps?idbuyer=${idbuyer}`;
-        const { data } = await api.get(endpoint);
-
+        const { data } = await api.get(`/api/v1/order-artwork/kps?idbuyer=${idbuyer}`);
         data_kp.value = (data?.data ?? []).map((item) => ({
             value: item.kpno,
             label: item.kpno,
         }));
     } catch (err) {
-        if (err?.response?.status === 401) {
-            router.push("/login");
-        }
+        if (err?.response?.status === 401) router.push("/login");
     } finally {
         loading.hide();
     }
 };
+
+/* ---------------- Filter handlers ---------------- */
+
+// Ganti filter -> reset semua pilihan di bawahnya
+const onFilterChange = (val) => {
+    form.value = { filter: val ?? "", buyer: "", kpno: "", po: "" };
+    data_kp.value = [];
+    loadData();
+    if (val === "po" && !pos.value.length) loadDataPo();
+};
+
+// Ganti buyer -> reset KP
+const onBuyerChange = async (idbuyer) => {
+    form.value.kpno = "";
+    data_kp.value = [];
+    if (!idbuyer) return loadData();
+    await loadDataKp(idbuyer);
+};
+
+const loadDataByPo = (po) => (po ? fetchGrid(`?po=${po}`) : loadData());
+const loadDataByKp = (kpno) => (kpno ? fetchGrid(`?kpno=${kpno}`) : loadData());
 
 onMounted(() => {
     loadData();
     loadDataBuyer();
 });
 
+/* ---------------- Reject ---------------- */
+
 const process_rejection = async () => {
     try {
-        if (
-            !confimForm.value.auth_pass ||
-            !confimForm.value.description
-        ) {
+        if (!confimForm.value.auth_pass || !confimForm.value.description) {
             await warning({
                 title: "Incomplete Data",
                 text: "Please complete all required fields.",
             });
-            return
+            return;
         }
 
         const result = await confirm({
-                title: "Are You Sure to Reject This Data?",
-                text: "Please do this action carefully!",
-            });
-        
+            title: "Are You Sure to Reject This Data?",
+            text: "Please do this action carefully!",
+        });
+
         if (!result.isConfirmed) {
-            return
+            return;
         }
 
-        loading.show()
+        loading.show();
         const endpoint = `api/v1/order-alocation/reject/${dataSelected.value.idorder}`;
-        const { data } = await api.post(
-            endpoint,
-            confimForm.value
-        );
+        const { data } = await api.post(endpoint, confimForm.value);
 
-        closeModal()
-        loading.hide()
+        closeModal();
+        loading.hide();
         await success({
             title: "Success",
             text: data?.message || "Data updated successfully.",
         });
 
-        setNewFilter()
-        loadData()
+        setNewFilter();
+        loadData();
     } catch (err) {
-        loading.hide()
+        loading.hide();
         if (err?.response?.status === 401) {
-            router.push("/login")
-            return
+            router.push("/login");
+            return;
         }
 
         await error({
@@ -461,14 +455,6 @@ const process_rejection = async () => {
                 "Failed to Reject the Data. Please try again.",
         });
     }
-}
-
+};
 </script>
-
-
-get http://192.168.91.178:8000/api/v1/order-artwork/buyers
-get http://192.168.91.178:8000/api/v1/order-artwork/kps?idbuyer=B00002
-get http://192.168.91.178:8000/api/v1/order-artwork/pos
-get http://192.168.91.178:8000/api/v1/order-artwork/getdata?po=0130794257
-get http://192.168.91.178:8000/api/v1/order-artwork/getdata?kpno=AD40001020
-get http://192.168.91.178:8000/api/v1/order-artwork/detail/21325  {id}
+```
