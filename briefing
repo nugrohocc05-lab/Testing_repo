@@ -1,11 +1,474 @@
-const fileIcon = (name = '') => {
-    const ext = String(name).split('.').pop().toLowerCase()
+<template>
+    <div class="px-6">
+        <UiTitle align="center" title="Order Artwork Allocation"/>
 
-    if (ext === 'pdf') return '/images/icons/file/pdf.svg'
-    if (['xls', 'xlsx'].includes(ext)) return '/images/icons/file/xls.svg'
-    if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)) {
-        return '/images/icons/file/img.svg'
+        <div class="mb-4 flex w-full flex-col gap-3 lg:flex-row lg:items-end">
+
+            <div class="flex-col flex gap-3 md:flex-row mb-2 md:mb-0">
+                <div class="w-full md:w-60">
+                    <UiMultiSelect v-model="form.filter" label="Filter" :options="filters" placeholder="-- Select Filter --"
+                        @change="loadDataKp"/>
+                </div>
+
+                <div class="w-full md:w-60">
+                    <UiMultiSelect v-model="form.buyer" label="Buyer" :options="buyers" placeholder="-- Select Buyer --"
+                        @change="loadDataKp"/>
+                </div>
+
+                <div class="w-full md:w-60">
+                    <UiMultiSelect v-model="form.kpno" :options="data_kp" @change="loadDataFilter" label="KP" placeholder="-- Select KP --" />
+                </div>
+            </div>
+            <div class="flex w-full justify-between gap-3 lg:ml-auto lg:w-auto lg:flex-row lg:items-end">
+
+                <div class="w-full sm:w-50">
+                    <UiInput v-model="searchKeyword" placeholder="Search" class="w-full rounded-lg">
+                        <template #prefix>
+                            <MagnifyingGlassIcon class="h-5 w-5 text-gray-400" />
+                        </template>
+                    </UiInput>
+                </div>
+
+                <div class="flex items-center justify-start gap-1">
+                    <UiTooltip content="PDF" position="bottom">
+                        <UiButton variant="teritary" class="shrink-0" @click="onBtnExportPdf">
+                            <i class="fa-regular text-2xl fa-file-pdf"></i>
+                        </UiButton>
+                    </UiTooltip>
+                    
+                    <UiTooltip content="Excel" position="bottom">
+                        <UiButton variant="teritary" class="shrink-0" @click="onBtnExport">
+                            <i class="fa-regular text-2xl fa-file-excel"></i>
+                        </UiButton>
+                    </UiTooltip>
+                </div>
+
+                <!-- <UiButton size="md" class="h-10 w-full shrink-0 sm:w-auto" @click="showModal = true">
+                    Import KK
+                </UiButton> -->
+            </div>
+        </div>
+
+        <UiAgGrid :rowData="rawData" :columnDefs="columnDefs"
+            class="mb-10 my-zebra-grid" :quickFilterText="searchKeyword" @grid-ready="onGridReady"
+            @pagination-changed="onPaginationChanged" @grid-size-changed="onGridSizeChanged" @body-scroll="onBodyScroll"></UiAgGrid>
+    </div>
+
+
+    <UiModal v-model="showModal" :title="`Reject This Order?`" size="md">
+        <form @submit.prevent="handleConfirmReject">
+            <div class="space-y-3 -mt-3">
+                <UiInput label="Password" type="password" placeholder="Input Password" v-model="confimForm.auth_pass" required></UiInput>
+                <UiInput label="Reason for Rejection" placeholder="Input Reason for Rejection" v-model="confimForm.description" required></UiInput>
+            </div>
+        </form>
+        <template #footer>
+            <div class="flex justify-end">
+                <UiButton variant="secondary" @click="showModal = false; isNewData = null">Cancel</UiButton>
+                <UiButton variant="danger" @click="process_rejection()" :disabled="!isFormChanged" class="ml-3">Reject</UiButton>
+            </div>
+        </template>
+    </UiModal>
+</template>
+
+<script setup>
+import { exportToPdf } from '@/utils/pdfExporter';
+import { exportToExcel } from "@/utils/excelExporter";
+import { getCurrentDateTime } from '@/utils/date';
+import { encrypt } from "@/utils/crypto";
+
+import { ref, onMounted, computed, defineComponent, h } from "vue";
+import { useRouter } from "vue-router";
+import { useLoadingStore } from "@/stores/loading";
+import { InformationCircleIcon, XCircleIcon, MagnifyingGlassIcon, DocumentArrowUpIcon, DocumentTextIcon, IdentificationIcon, DocumentDuplicateIcon, ClipboardDocumentListIcon }
+    from "@heroicons/vue/24/outline";
+
+import { customSwal } from "@/composable/customSwal";
+const { confirm, success, warning, error } = customSwal;
+const { datetime } = getCurrentDateTime('-', '-');
+
+import UiButton from "@/components/ui/UiButton.vue"
+import UiInput from "@/components/ui/UiInput.vue"
+import UiModal from "@/components/ui/UiModal.vue"
+import UiTitle from "@/components/ui/UiTitle.vue"
+import UiMultiSelect from "@/components/ui/UiMultiSelect.vue"
+import UiAgGrid from '@/components/ui/UiAgGrid.vue';
+
+import api from "@/services/api";
+import UiTooltip from '@/components/ui/UiTooltip.vue';
+
+defineOptions({name: 'Allocation'});
+
+const loading = useLoadingStore();
+const router = useRouter();
+const rawData = ref([]);
+const filters = ref([]);
+const buyers = ref([]);
+const data_kp = ref([]);
+const dataSelected = ref([]);
+const ListKK = ref([]);
+const isNewData = ref(false)
+const showModal = ref(false)
+const searchKeyword = ref('')
+const originalForm = ref(null)
+const gridApi = ref(null);
+
+const confimForm = ref({
+    auth_pass: "",
+    description: "",
+});
+
+const form = ref({
+    filter: "",
+    buyer: "",
+    kpno: "",
+});
+
+const isFormChanged = computed(() => {
+    if (!originalForm.value) return false
+
+    return Object.keys(confimForm.value).some(
+        key => confimForm.value[key] !== originalForm.value[key]
+    )
+})
+
+const onGridReady = (params) => {
+    gridApi.value = params.api;
+};
+
+const onGridSizeChanged = () => {
+    ListKK.value = [];
+}
+
+const onPaginationChanged = () => {
+    ListKK.value = [];
+};
+
+const onBodyScroll = () => {
+    ListKK.value = [];
+}
+
+const onBtnExport = () => {
+    if (!gridApi.value) {
+        alert("Please Wait!");
+        return;
     }
 
-    return '/images/icons/file/img.svg' // ikon default
+    const fileName = `orders-allocation-${datetime.replace(' ', '_')}.xlsx`;
+    exportToExcel({
+        title: `Orders Allocation Report ${datetime}`,
+        fileName: fileName,
+        sheetName: "Orders Allocation",
+        headers: ["NO","KK", "KP", "PO", "COMBINE_PRO", "PO_CMT", "STYLE", "DELIVERY_DATE", "CM_VACTORY", "QTY", "STATUS"  ], 
+        fields: ["no","kk", "kpno", "po", "combine_pro", "po_sap", "style", "deliverydate", "factory", "total", "orderstatus.status", ], 
+        gridData: gridApi
+    });
+};
+
+const onBtnExportPdf = () => {
+    if (!gridApi.value) {
+        alert("Please Wait!");
+        return;
+    }
+
+    const nameFile = `orders-allocation-${datetime.replace(' ', '_')}`;
+    exportToPdf({
+        title: `Orders Allocation Report ${datetime}`,
+        fileName: `${nameFile}`,
+        headers: ["NO","KK", "KP", "PO", "Combine PRO", "PO CMT", "STYLE", "DELIVERY DATE", "CM FACTORY", "TOTAL", "STATUS"],
+        fields: ["no", "kk", "kpno", "po", "combine_pro", "po_sap", "style", "deliverydate", "factory", "total", "orderstatus.status"],
+        gridData: gridApi,
+        orientation: 'l'
+    });
+};
+
+const setNewFilter = () => {
+    form.value = {
+        kpno: "",
+        buyer: "",
+        filter: "",
+    };
 }
+
+const closeModal = () => {
+    showModal.value = false;
+    isNewData.value = false;
+};
+
+const ActionRenderer = defineComponent({
+    props: {
+        params: {
+            type: Object,
+            required: true,
+        },
+    },
+
+    setup(props) {
+        const detailData = () => {
+            dataSelected.value = props.params.data;
+
+            const id = dataSelected.value.id;
+            const encryptedid = encrypt(id);
+
+            router.push({
+                name: "order-artwork-allocation-detail",
+                params: {
+                    id: encodeURIComponent(encryptedid),
+                },
+            });
+        };
+
+        return () => {
+            return h(
+                "div",
+                {
+                    class: "flex h-full gap-2",
+                },
+                [
+                    h(
+                        "button",
+                        {
+                            type: "button",
+                            title: "Detail",
+                            class:
+                                "cursor-pointer text-amber-500 transition hover:text-amber-700",
+                            onClick: detailData,
+                        },
+                        [
+                            h(InformationCircleIcon, {
+                                class: "h-5 w-5",
+                            }),
+                        ],
+                    ),
+                ],
+            );
+        };
+    },
+});
+
+
+const columnDefs = [
+    {
+        headerName: "No",
+        field: "no",
+        width: 80,
+        filter: false,
+        resizable: false,
+    },
+    {
+        field: "po",
+        headerName: "PO",
+        minWidth: 125,
+        flex: 1,
+    },
+    {
+        field: "kpno",
+        headerName: "KP",
+        minWidth: 125,
+        flex: 1,
+    },
+    {
+        field: "ordernumber",
+        headerName: "Order Number",
+        minWidth: 125,
+        flex: 1,
+    },
+    {
+        field: "style",
+        headerName: "Style",
+        minWidth: 125,
+        flex: 1,
+    },
+    {
+        field: "factory",
+        headerName: "CM Factory",
+        minWidth: 150,
+        valueGetter: (params) => {
+            return params.data?.factory ?? "-";
+        },
+        flex: 1,
+    },
+    {
+        field: "po_sap",
+        headerName: "PO CMT",
+        minWidth: 125,
+        flex: 1,
+    },
+    {
+        field: "status",
+        headerName: "Status",
+        minWidth: 125,
+        flex: 1,
+    },
+    {
+        headerName: "Action",
+        maxWidth: 150,
+        sortable: false,
+        filter: false,
+        resizable: false,
+        cellRenderer: ActionRenderer,
+    },
+];
+
+const loadData = async () => {
+    try {
+        loading.show();
+        const endpoint = "/api/v1/order-artwork/getdata";
+        const { data } = await api.get(endpoint);
+
+        console.log(data);
+        rawData.value = data?.data ?? [];
+        rawData.value = (data?.data ?? []).map((item, index) => ({
+            ...item,
+            no: index + 1,
+        }));
+    } catch (err) {
+        if (err?.response?.status === 401) {
+            router.push("/login");
+        }
+    } finally {
+        loading.hide();
+    }
+};
+
+const loadDataFilter = async (kpno) => {
+    try {
+        if (!kpno) {
+            loadData()
+            return;
+        }
+
+        loading.show();
+        const endpoint = `/api/v1/order-artwork/getdata?idbuyer=${form.value.buyer}&kpno=${kpno}`;
+        const { data } = await api.get(endpoint);
+
+        rawData.value = data?.data ?? [];
+        rawData.value = (data?.data ?? []).map((item, index) => ({
+            ...item,
+            no: index + 1,
+        }));
+    } catch (err) {
+        if (err?.response?.status === 401) {
+            router.push("/login");
+        }
+    } finally {
+        loading.hide();
+    }
+};
+
+const loadDataBuyer = async () => {
+    try {
+        loading.show();
+        const endpoint = "/api/v1/order-artwork/buyers";
+        const { data } = await api.get(endpoint);
+        buyers.value = (data?.data ?? []).map((item) => ({
+            value: item.idbuyer,
+            label: item.namabuyer,
+        }));
+    } catch (err) {
+        if (err?.response?.status === 401) {
+            router.push("/login");
+        }
+    } finally {
+        loading.hide();
+    }
+};
+
+const loadDataKp = async (idbuyer) => {
+    try {
+        data_kp.value = [];
+        form.value = {
+            kpno:  "",
+        };
+
+        if (!idbuyer) {
+            loadData()
+            return;
+        }
+
+        loading.show();
+        const endpoint = `/api/v1/order-artwork/kps?idbuyer=${idbuyer}`;
+        const { data } = await api.get(endpoint);
+
+        data_kp.value = (data?.data ?? []).map((item) => ({
+            value: item.kpno,
+            label: item.kpno,
+        }));
+    } catch (err) {
+        if (err?.response?.status === 401) {
+            router.push("/login");
+        }
+    } finally {
+        loading.hide();
+    }
+};
+
+onMounted(() => {
+    loadData();
+    loadDataBuyer();
+});
+
+const process_rejection = async () => {
+    try {
+        if (
+            !confimForm.value.auth_pass ||
+            !confimForm.value.description
+        ) {
+            await warning({
+                title: "Incomplete Data",
+                text: "Please complete all required fields.",
+            });
+            return
+        }
+
+        const result = await confirm({
+                title: "Are You Sure to Reject This Data?",
+                text: "Please do this action carefully!",
+            });
+        
+        if (!result.isConfirmed) {
+            return
+        }
+
+        loading.show()
+        const endpoint = `api/v1/order-alocation/reject/${dataSelected.value.idorder}`;
+        const { data } = await api.post(
+            endpoint,
+            confimForm.value
+        );
+
+        closeModal()
+        loading.hide()
+        await success({
+            title: "Success",
+            text: data?.message || "Data updated successfully.",
+        });
+
+        setNewFilter()
+        loadData()
+    } catch (err) {
+        loading.hide()
+        if (err?.response?.status === 401) {
+            router.push("/login")
+            return
+        }
+
+        await error({
+            title: "Rejection Failed",
+            text:
+                err?.response?.data?.message ||
+                err?.message ||
+                "Failed to Reject the Data. Please try again.",
+        });
+    }
+}
+
+</script>
+
+
+get http://192.168.91.178:8000/api/v1/order-artwork/buyers
+get http://192.168.91.178:8000/api/v1/order-artwork/kps?idbuyer=B00002
+get http://192.168.91.178:8000/api/v1/order-artwork/pos
+get http://192.168.91.178:8000/api/v1/order-artwork/getdata?po=0130794257
+get http://192.168.91.178:8000/api/v1/order-artwork/getdata?kpno=AD40001020
+get http://192.168.91.178:8000/api/v1/order-artwork/detail/21325  {id}
