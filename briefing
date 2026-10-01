@@ -1,206 +1,547 @@
 <template>
     <div class="px-6">
-        <UiTitle align="center" title="Order Artwork Allocation"/>
+        <UiTitle align="center" title="Master Factory" subtitle="" />
+        <!-- User Type -->
+        <div class="mb-4 flex gap-3">
+            <UiButton @click="setNewData" class="mr-auto">+Add Data</UiButton>
 
-        <div class="mb-4 flex w-full flex-col gap-3 lg:flex-row lg:items-end">
-
-            <div class="flex-col flex gap-3 md:flex-row mb-2 md:mb-0">
-                <!-- Step 1: pilih Filter -->
-                <div class="w-full md:w-60">
-                    <UiMultiSelect v-model="form.filter" label="Filter" :options="filters"
-                        placeholder="-- Select Filter --" @change="onFilterChange"/>
-                </div>
-
-                <!-- Filter PO -->
-                <div v-if="form.filter === 'po'" class="w-full md:w-60">
-                    <UiMultiSelect v-model="form.po" label="PO" :options="pos"
-                        placeholder="-- Select PO --" @change="loadDataByPo"/>
-                </div>
-
-                <!-- Filter KP: Buyer dulu, baru KP -->
-                <template v-if="form.filter === 'kp'">
-                    <div class="w-full md:w-60">
-                        <UiMultiSelect v-model="form.buyer" label="Buyer" :options="buyers"
-                            placeholder="-- Select Buyer --" @change="onBuyerChange"/>
-                    </div>
-                    <div v-if="form.buyer" class="w-full md:w-60">
-                        <UiMultiSelect v-model="form.kpno" label="KP" :options="data_kp"
-                            placeholder="-- Select KP --" @change="loadDataByKp"/>
-                    </div>
-                </template>
+            <div class="w-50">
+                <UiInput v-model="searchKeyword" placeholder="Search" class="rounded-lg">
+                    <template #prefix>
+                        <MagnifyingGlassIcon class="h-5 w-5 text-gray-400" />
+                    </template>
+                </UiInput>
             </div>
 
-            <div class="flex w-full justify-between gap-3 lg:ml-auto lg:w-auto lg:flex-row lg:items-end">
+        </div>
 
-                <div class="w-full sm:w-50">
-                    <UiInput v-model="searchKeyword" placeholder="Search" class="w-full rounded-lg">
-                        <template #prefix>
-                            <MagnifyingGlassIcon class="h-5 w-5 text-gray-400" />
-                        </template>
-                    </UiInput>
+        <UiAgGrid :rowData="rawData" :columnDefs="columnDefs" :defaultColDef="defaultColDef"
+            class="mb-10 my-zebra-grid" :quickFilterText="searchKeyword" ></UiAgGrid>
+    </div>
+
+    <UiModal v-model="showModal" :title="`${action} - [ ${dataSelected.namafactory ?? 'New Factory'} ]`" size="2xl">
+        <div class="space-y-3 -mt-3">
+            <div class="flex space-x-3">
+                <div :hidden="isNewData">
+                    <UiInput label="ID Factory" :readonly="!isNewData" v-model="form.idfactory" type="text" placeholder="ID Factory"></UiInput>
+                </div>
+                <UiInput label="Factory Code" filter="text" maxLength="5" required case="upper" labelClass="" v-model="form.kode" type="text" placeholder="Kode"></UiInput>
+            </div>
+            <UiInput label="Name" labelClass="" filter="text" maxLength="50" required case="capitalize" v-model="form.namafactory" type="text" placeholder="Full Name"></UiInput>
+            <div class="flex space-x-3">
+                <UiInput label="SAP Code" filter="text" case="upper" maxLength="5" labelClass="" v-model="form.sap_code" type="text" placeholder="SAP Code"></UiInput>
+                <UiInput label="Vendor SAP Code" filter="text" maxLength="10" labelClass="" v-model="form.vendor_sap_code" type="text" placeholder="Vendor SAP Code"></UiInput>
+            </div>
+            <UiInput label="Alamat" case="capitalize" required filter="name-special" maxLength="100" labelClass="" v-model="form.alamat" type="text" placeholder="Alamat"></UiInput>
+            <div class="flex space-x-3">
+                <UiInput label="Kota" filter="text" maxLength="25" required case="capitalize" labelClass="" v-model="form.kota" type="text" placeholder="Kota"></UiInput>
+                <UiInput label="Provinsi" maxLength="25" filter="text" required case="capitalize" labelClass="" v-model="form.provinsi" type="text" placeholder="Provinsi"></UiInput>
+            </div>
+            
+            <div class="flex space-x-3">
+                <UiInput label="Kodepos" filter="number" labelClass="" maxLength="10" v-model="form.kodepos" type="text" placeholder="Kodepos"></UiInput>
+                <UiInput label="Work Day" maxLength="1" v-model="form.work_day" type="number" min="1" max="7" placeholder="Work Day"></UiInput>
+            </div>
+            <div
+                v-for="(ip, index) in ipAddresses"
+                :key="index"
+                class="flex items-end gap-3 mb-3"
+            >
+                <div class="flex-1">
+                    <UiInput
+                        label="IP Address"
+                        filter="number"
+                        labelClass=""
+                        maxLength="15"
+                        v-model="ipAddresses[index]"
+                        type="text"
+                        placeholder="192.168.100.100"
+                    />
                 </div>
 
-                <div class="flex items-center justify-start gap-1">
-                    <UiTooltip content="PDF" position="bottom">
-                        <UiButton variant="teritary" class="shrink-0" @click="onBtnExportPdf">
-                            <i class="fa-regular text-2xl fa-file-pdf"></i>
-                        </UiButton>
-                    </UiTooltip>
+                <div class="flex gap-2 pb-[1px]">
+                    <UiButton
+                        v-if="index === 0"
+                        type="button"
+                        @click="addIp"
+                    >
+                        +
+                    </UiButton>
 
-                    <UiTooltip content="Excel" position="bottom">
-                        <UiButton variant="teritary" class="shrink-0" @click="onBtnExport">
-                            <i class="fa-regular text-2xl fa-file-excel"></i>
-                        </UiButton>
-                    </UiTooltip>
+                    <UiButton
+                        variant="danger"
+                        v-if="index > 0"
+                        type="button"
+                        @click="removeIp(index)"
+                    >
+                        -
+                    </UiButton>
+                </div>
+            </div>
+            <div class="space-y-2">
+                <UiAccordion
+                    title="Documents"
+                    variant="line"
+                    :default-open="true"
+                    :sticky="true"
+                >
+                    <div class="space-y-3">
+                        <template v-for="doc in docTypes" :key="doc.key">
+                            <div
+                                class="rounded-lg border border-slate-200 bg-white p-3"
+                            >
+                                <div
+                                    class="mb-3 flex items-center justify-between"
+                                >
+                                    <div>
+                                        <div class="text-sm font-semibold text-slate-700">
+                                            {{ doc.label }}
+                                            <span class="ml-0.5 text-red-500">
+                                                *
+                                            </span>
+                                        </div>
+
+                                        <div class="text-xs text-slate-400">
+                                            {{
+                                                getFileInfo(doc.key)
+                                                    ? 'File uploaded'
+                                                    : 'No file uploaded'
+                                            }}
+                                        </div>
+                                    </div>
+
+                                    <!-- Upload / Change -->
+                                    <UiButton
+                                        rounded="full"
+                                        variant="primary"
+                                        @click="openUpload(doc.key)"
+                                    >
+                                        <DocumentPlusIcon class="h-5 w-5" />
+
+                                        {{
+                                            getFileInfo(doc.key)
+                                                ? 'Change File'
+                                                : 'Upload File'
+                                        }}
+                                    </UiButton>
+                                </div>
+
+                                <!-- File Information -->
+                                <template v-if="getFileInfo(doc.key)">
+                                    <div
+                                        class="flex items-center gap-3 rounded-lg bg-slate-50 p-3"
+                                    >
+                                        <img
+                                            :src="fileIcon(getFileInfo(doc.key).name)"
+                                            class="h-10 w-10 shrink-0"
+                                        />
+
+                                        <div class="min-w-0 flex-1">
+                                            <div
+                                                class="truncate text-sm font-medium text-slate-700"
+                                            >
+                                                {{ getFileInfo(doc.key).name }}
+                                            </div>
+
+                                            <div class="mt-1 text-xs text-slate-500">
+                                                {{
+                                                    getFileInfo(doc.key).pending
+                                                        ? 'Not Saved'
+                                                        : 'Uploaded: ' +
+                                                        getFileInfo(doc.key).date
+                                                }}
+                                            </div>
+                                        </div>
+
+                                        <!-- Delete -->
+                                        <UiButton
+                                            v-if="getFileInfo(doc.key).pending"
+                                            variant="teritary-danger"
+                                            @click="removeFile(doc.key)"
+                                        >
+                                            <TrashIcon class="h-5 w-5" />
+                                        </UiButton>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </UiAccordion>
+            </div>
+        </div>
+        <template #footer>
+            <div class="flex justify-end">
+                <UiButton @click="showModal = false; isNewData = null; resetFiles()" variant="danger">Cancel</UiButton>
+                <UiButton @click="isNewData ? storeNewData() : submit()" :disabled="!isFormChanged" class="ml-3">Save</UiButton>
+            </div>
+        </template>
+    </UiModal>
+    <UiModal
+        v-model="showModalUpload"
+        :title="`Upload ${uploadLabel}`"
+        size="md"
+    >
+        <div class="space-y-3">
+            <label class="block font-medium text-gray-700">
+                {{ uploadLabel }} Document
+            </label>
+
+            <div
+                class="relative w-full cursor-pointer rounded-lg border-2 border-dashed bg-white p-6 text-center transition-all duration-150"
+                :class="isDragging
+                    ? 'border-[#1FBCC3] bg-[#1FBCC3]/5 ring-2 ring-[#1FBCC3]/20'
+                    : 'border-gray-300 hover:border-[#1FBCC3] hover:bg-gray-50/50'"
+                @click="uploadInput?.click()"
+                @dragover.prevent="isDragging = true"
+                @dragleave.prevent="isDragging = false"
+                @drop.prevent="onDropFile"
+            >
+                <input
+                    ref="uploadInput"
+                    type="file"
+                    accept=".pdf, .xls,.xlsx,.doc,.docx"
+                    class="hidden"
+                    @change="onPickFile"
+                />
+
+                <div v-if="!tempFile" class="flex flex-col items-center">
+                    <ArrowUpTrayIcon
+                        class="mb-2 h-8 w-8"
+                        :class="isDragging ? 'text-[#1FBCC3]' : 'text-gray-400'"
+                    />
+                    <p
+                        class="text-sm font-medium"
+                        :class="isDragging ? 'text-[#1FBCC3]' : 'text-gray-700'"
+                    >
+                        {{ isDragging ? 'Drop file here' : 'Choose a file or drag & drop here' }}
+                    </p>
+                    <p class="mt-2 text-xs text-gray-400">
+                        Only PDF, XLS, XLSX, DOC, or DOCX Formats, up to 2MB
+                    </p>
+                </div>
+
+                <div
+                    v-else
+                    class="flex items-center rounded-lg border p-2 text-[#1FBCC3]"
+                >
+                    <img
+                        :src="fileIcon(tempFile.name)"
+                        class="h-10 w-10 shrink-0"
+                    />
+                    <span class="flex-1 truncate px-3 text-left text-xs font-medium">
+                        {{ tempFile.name }}
+                    </span>
+                    <button
+                        type="button"
+                        class="ml-2 flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-full text-gray-400 hover:bg-red-50 hover:text-red-500"
+                        @click.stop="tempFile = null"
+                    >
+                        <span class="text-lg leading-none">&times;</span>
+                    </button>
                 </div>
             </div>
         </div>
 
-        <UiAgGrid :rowData="rawData" :columnDefs="columnDefs"
-            class="mb-10 my-zebra-grid" :quickFilterText="searchKeyword" @grid-ready="onGridReady"></UiAgGrid>
-    </div>
-
-
-    <UiModal v-model="showModal" :title="`Reject This Order?`" size="md">
-        <form @submit.prevent="handleConfirmReject">
-            <div class="space-y-3 -mt-3">
-                <UiInput label="Password" type="password" placeholder="Input Password" v-model="confimForm.auth_pass" required></UiInput>
-                <UiInput label="Reason for Rejection" placeholder="Input Reason for Rejection" v-model="confimForm.description" required></UiInput>
-            </div>
-        </form>
         <template #footer>
-            <div class="flex justify-end">
-                <UiButton variant="secondary" @click="showModal = false; isNewData = null">Cancel</UiButton>
-                <UiButton variant="danger" @click="process_rejection()" :disabled="!isFormChanged" class="ml-3">Reject</UiButton>
+            <div class="flex justify-end gap-2">
+                <UiButton
+                    variant="white-danger"
+                    @click="showModalUpload = false"
+                >
+                    Cancel
+                </UiButton>
+
+                <UiButton
+                    variant="primary"
+                    :disabled="!tempFile"
+                    @click="saveUpload"
+                >
+                    Save
+                </UiButton>
             </div>
         </template>
     </UiModal>
+
 </template>
 
 <script setup>
-import { exportToPdf } from '@/utils/pdfExporter';
-import { exportToExcel } from "@/utils/excelExporter";
-import { getCurrentDateTime } from '@/utils/date';
-import { encrypt } from "@/utils/crypto";
-
-import { ref, shallowRef, onMounted, computed, defineComponent, h } from "vue";
+import { ref, onMounted, computed, defineComponent, h } from "vue";
 import { useRouter } from "vue-router";
 import { useLoadingStore } from "@/stores/loading";
-import { InformationCircleIcon, MagnifyingGlassIcon } from "@heroicons/vue/24/outline";
-
+import { PencilSquareIcon, TrashIcon, MagnifyingGlassIcon, ArrowUpTrayIcon } from "@heroicons/vue/24/outline";
 import { customSwal } from "@/composable/customSwal";
-const { confirm, success, warning, error } = customSwal;
-const { datetime } = getCurrentDateTime('-', '-');
+const { confirmDelete, success, warning, error } = customSwal;
 
 import UiButton from "@/components/ui/UiButton.vue"
 import UiInput from "@/components/ui/UiInput.vue"
 import UiModal from "@/components/ui/UiModal.vue"
 import UiTitle from "@/components/ui/UiTitle.vue"
-import UiMultiSelect from "@/components/ui/UiMultiSelect.vue"
-import UiAgGrid from '@/components/ui/UiAgGrid.vue';
-import UiTooltip from '@/components/ui/UiTooltip.vue';
 
 import api from "@/services/api";
 
-defineOptions({ name: 'Allocation' });
+import '@vuepic/vue-datepicker/dist/main.css'
+import UiAgGrid from "@/components/ui/UiAgGrid.vue";
+import UiTooltip from "@/components/ui/UiTooltip.vue";
+import { DocumentPlusIcon } from "@heroicons/vue/24/solid";
+import UiAccordion from "@/components/ui/UiAccordion.vue";
 
 const loading = useLoadingStore();
 const router = useRouter();
-
-// shallowRef: data tabel besar tidak perlu dibungkus proxy reaktif
-const rawData = shallowRef([]);
-const allData = shallowRef([]); // cache data penuh (tanpa filter)
-
-const buyers = ref([]);
-const data_kp = ref([]);
-const pos = ref([]);
+const rawData = ref([]);
 const dataSelected = ref([]);
-const isNewData = ref(false);
-const showModal = ref(false);
-const searchKeyword = ref('');
-const originalForm = ref(null);
-const gridApi = ref(null);
+const action = ref("");
+const isNewData = ref(false)
+const showModal = ref(false)
+const showModalUpload = ref(false)
+const searchKeyword = ref('')
+const originalForm = ref(null)
 
-const filters = ref([
-    { value: "po", label: "PO" },
-    { value: "kp", label: "KP" },
-]);
-
-const confimForm = ref({
-    auth_pass: "",
-    description: "",
-});
+const defaultColDef = {
+    sortable: true,
+    filter: false,
+    resizable: true,
+};
 
 const form = ref({
-    filter: "",
-    buyer: "",
-    kpno: "",
-    po: "",
+    idfactory: "",
+    kode: "",
+    work_day: "",
+    namafactory: "",
+    kota: "",
+    sap_code: "",
+    vendor_sap_code: "",
+    alamat: "",
+    kodepos: "",
+    provinsi: "",
+    ip: [''],
 });
+
+const ipAddresses = ref([''])
+
+const addIp = () => {
+    ipAddresses.value.push('')
+}
+
+const removeIp = (index) => {
+    ipAddresses.value.splice(index, 1)
+}
+
+const maxDate = new Date()
+maxDate.setFullYear(maxDate.getFullYear() - 5)
+
+const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB
+
+const docTypes = [
+    { key: 'npwp', label: 'NPWP' },
+    { key: 'iui', label: 'IUI' },
+    { key: 'siup', label: 'SIUP' },
+    { key: 'faktur', label: 'Faktur' },
+]
+const emptyDocs = () => ({ npwp: null, iui: null, siup: null, faktur: null })
+
+const pendingFiles = ref(emptyDocs())   
+const removedFiles = ref(emptyDocs())   
+const uploadTarget = ref(null)          
+const tempFile = ref(null)             
+const uploadInput = ref(null)
+const isDragging = ref(false)
+
+const uploadLabel = computed(
+    () => docTypes.find(d => d.key === uploadTarget.value)?.label ?? ''
+)
+
+const resetFiles = () => {
+    pendingFiles.value = emptyDocs()
+    removedFiles.value = emptyDocs()
+}
+
+const fileIcon = (name = '') => {
+    const ext = String(name).split('.').pop().toLowerCase()
+
+    if (ext === 'pdf') return '/images/icons/file/pdf.svg'
+    if (['xls', 'xlsx', 'csv'].includes(ext)) return '/images/icons/file/xls.svg'
+    if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)) {
+        return '/images/icons/file/img.svg'
+    }
+
+    return '/images/icons/file/pdf.svg' 
+}
+
+const getFileInfo = (key) => {
+    if (pendingFiles.value[key]) {
+        return {
+            name: pendingFiles.value[key].name,
+            pending: true,
+        }
+    }
+
+    if (removedFiles.value[key]) {
+        return null
+    }
+
+    const file = dataSelected.value?.file?.find(
+        (item) => item.type?.toLowerCase() === key.toLowerCase()
+    )
+
+    if (!file) return null
+
+    return {
+        name: `${file.filename}.${file.extension}`,
+        date: file.uploaddate ?? '-',
+        pending: false,
+    }
+}
+
+const openUpload = (key) => {
+    uploadTarget.value = key
+    tempFile.value = null
+    isDragging.value = false
+    showModalUpload.value = true
+}
+
+const validateAndSetTemp = async (f) => {
+    if (!f) return
+
+    const okType = /\.(pdf|xls|xlsx|doc|docx)$/i.test(f.name)
+    if (!okType || f.size > MAX_FILE_SIZE) {
+        await warning({
+            title: "File not valid",
+            text: "PDF/XLS/XLSX/DOC only, maximum 2MB.",
+        })
+        return
+    }
+    tempFile.value = f
+}
+
+const onPickFile = (e) => {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    validateAndSetTemp(f)
+}
+
+const onDropFile = (e) => {
+    isDragging.value = false
+    validateAndSetTemp(e.dataTransfer?.files?.[0])
+}
+
+const saveUpload = () => {
+    if (!tempFile.value) return
+
+    pendingFiles.value[uploadTarget.value] = tempFile.value
+    removedFiles.value[uploadTarget.value] = false
+    tempFile.value = null
+    showModalUpload.value = false
+}
+
+const removeFile = (key) => {
+    if (pendingFiles.value[key]) {
+        pendingFiles.value[key] = null
+    } else {
+        removedFiles.value[key] = true
+    }
+}
+
+const buildFormData = () => {
+    const fd = new FormData()
+    Object.entries(form.value).forEach(([k, v]) => fd.append(k, v ?? ''))
+
+    docTypes.forEach(({ key }) => {
+        if (pendingFiles.value[key]) {
+            fd.append(`${key}`, pendingFiles.value[key])
+        } else if (removedFiles.value[key]) {
+            fd.append(`delete_${key}`, 1)
+        }
+    })
+    return fd
+}
 
 const isFormChanged = computed(() => {
-    if (!originalForm.value) return false;
+    if (!originalForm.value) return false
 
-    return Object.keys(confimForm.value).some(
-        key => confimForm.value[key] !== originalForm.value[key]
-    );
-});
+    const fileChanged = docTypes.some(
+        ({ key }) => pendingFiles.value[key] || removedFiles.value[key]
+    )
 
-/* ---------------- Grid ---------------- */
+    return (
+        fileChanged ||
+        Object.keys(form.value).some(
+            key => form.value[key] !== originalForm.value[key]
+        )
+    )
+})
 
-const onGridReady = (params) => {
-    gridApi.value = params.api;
+const setForm = () => {
+    const data = dataSelected.value;
+
+    if (!data) return;
+    form.value = {
+        idfactory: data.idfactory ?? "",
+        kode: data.kode ?? "",
+        namafactory: data.namafactory ?? "",
+        kota: data.kota ?? "",
+        sap_code: data.sap_code ?? null,
+        vendor_sap_code: data.vendor_sap_code ?? "",
+        alamat: data.alamat ?? "",
+        kodepos: data.kodepos ?? "",
+        provinsi: data.provinsi ?? "",
+        work_day: data.work_day ?? ""
+    };
+    resetFiles()
+    isNewData.value = false;
+    originalForm.value = { ...form.value }
 };
 
-/* ---------------- Export ---------------- */
+const setNewData = () => {
+    isNewData.value = true
+    dataSelected.value = "New Data";
+    action.value = "Add";
 
-const onBtnExport = () => {
-    if (!gridApi.value) {
-        alert("Please Wait!");
-        return;
-    }
+    form.value = {
+        idfactory: "",
+        kode: "",
+        namafactory: "",
+        kota: "",
+        sap_code: "",
+        vendor_sap_code: "",
+        alamat: "",
+        kodepos: "",
+        provinsi: "",
+        work_day: "",
+        ip: "",
+    };
 
-    const fileName = `orders-allocation-${datetime.replace(' ', '_')}.xlsx`;
-    exportToExcel({
-        title: `Orders Allocation Report ${datetime}`,
-        fileName: fileName,
-        sheetName: "Orders Allocation",
-        headers: ["NO", "KK", "KP", "PO", "COMBINE_PRO", "PO_CMT", "STYLE", "DELIVERY_DATE", "CM_VACTORY", "QTY", "STATUS"],
-        fields: ["no", "kk", "kpno", "po", "combine_pro", "po_sap", "style", "deliverydate", "factory", "total", "orderstatus.status"],
-        gridData: gridApi
-    });
-};
-
-const onBtnExportPdf = () => {
-    if (!gridApi.value) {
-        alert("Please Wait!");
-        return;
-    }
-
-    const nameFile = `orders-allocation-${datetime.replace(' ', '_')}`;
-    exportToPdf({
-        title: `Orders Allocation Report ${datetime}`,
-        fileName: `${nameFile}`,
-        headers: ["NO", "KK", "KP", "PO", "Combine PRO", "PO CMT", "STYLE", "DELIVERY DATE", "CM FACTORY", "TOTAL", "STATUS"],
-        fields: ["no", "kk", "kpno", "po", "combine_pro", "po_sap", "style", "deliverydate", "factory", "total", "orderstatus.status"],
-        gridData: gridApi,
-        orientation: 'l'
-    });
-};
-
-/* ---------------- Helpers ---------------- */
-
-const setNewFilter = () => {
-    form.value = { filter: "", buyer: "", kpno: "", po: "" };
-    data_kp.value = [];
+    resetFiles()
+    showModal.value = true
+    originalForm.value = { ...form.value }
 };
 
 const closeModal = () => {
     showModal.value = false;
     isNewData.value = false;
+    resetFiles()
 };
 
-/* ---------------- Action column ---------------- */
+const loadFactoryDetail = async (idfactory) => {
+    try {
+        loading.show()
+
+        const { data } = await api.get(
+            `/api/v1/master/getdatafactory?idfactory=${idfactory}`
+        )
+
+        const detail = Array.isArray(data?.data) ? data.data[0] : data?.data
+
+        if (detail) {
+            dataSelected.value = { ...dataSelected.value, ...detail }
+        }
+    } catch (err) {
+        if (err?.response?.status === 401) {
+            router.push("/login")
+        }
+    } finally {
+        loading.hide()
+    }
+}
 
 const ActionRenderer = defineComponent({
     props: {
@@ -211,44 +552,60 @@ const ActionRenderer = defineComponent({
     },
 
     setup(props) {
-        const detailData = () => {
+        const editData = () => {
             dataSelected.value = props.params.data;
-
-            const id = dataSelected.value.id;
-            const encryptedid = encrypt(id);
-
-            router.push({
-                name: "order-artwork-allocation-detail",
-                params: {
-                    id: encodeURIComponent(encryptedid),
-                },
-            });
+            action.value = "Edit Data";
+            setForm();
+            showModal.value = true;
+            loadFactoryDetail(props.params.data.idfactory);
         };
 
-        return () => {
-            return h(
+        const deleteData = () => {
+            dataSelected.value = props.params.data;
+            deleteThisData()
+        };
+
+        return () =>
+            h(
                 "div",
-                { class: "flex h-full gap-2" },
+                {
+                    class: "flex h-full items-center justify-center gap-3",
+                },
                 [
                     h(
                         "button",
                         {
                             type: "button",
-                            title: "Detail",
-                            class: "cursor-pointer text-amber-500 transition hover:text-amber-700",
-                            onClick: detailData,
+                            title: "Edit",
+                            class:
+                                "cursor-pointer text-blue-500 transition hover:text-blue-700",
+                            onClick: editData,
                         },
                         [
-                            h(InformationCircleIcon, { class: "h-5 w-5" }),
+                            h(PencilSquareIcon, {
+                                class: "h-5 w-5",
+                            }),
+                        ],
+                    ),
+
+                    h(
+                        "button",
+                        {
+                            type: "button",
+                            title: "Delete",
+                            class: "cursor-pointer text-red-500 hover:text-red-700",
+                            onClick: deleteData,
+                        },
+                        [
+                            h(TrashIcon, {
+                                class: "h-5 w-5",
+                            }),
                         ],
                     ),
                 ],
             );
-        };
     },
 });
-
-/* ---------------- Columns ---------------- */
 
 const columnDefs = [
     {
@@ -256,54 +613,42 @@ const columnDefs = [
         field: "no",
         width: 80,
         filter: false,
-        resizable: false,
+        resizable: true,
     },
     {
-        field: "po",
-        headerName: "PO",
-        minWidth: 125,
-        flex: 1,
-    },
-    {
-        field: "kpno",
-        headerName: "KP",
-        minWidth: 125,
-        flex: 1,
-    },
-    {
-        field: "ordernumber",
-        headerName: "Order Number",
-        minWidth: 125,
-        flex: 1,
-    },
-    {
-        field: "style",
-        headerName: "Style",
-        minWidth: 125,
-        flex: 1,
-    },
-    {
-        field: "factory",
-        headerName: "CM Factory",
+        field: "namafactory",
+        headerName: "Name",
         minWidth: 150,
-        valueGetter: (params) => params.data?.factory ?? "-",
         flex: 1,
     },
     {
-        field: "po_sap",
-        headerName: "PO CMT",
-        minWidth: 125,
-        flex: 1,
+        field: "sap_code",
+        headerName: "SAP Code",
+        minWidth: 150,
+        valueGetter: (params) => {
+            return params.data?.sap_code ?? "-";
+        },
     },
     {
-        field: "status",
-        headerName: "Status",
-        minWidth: 125,
-        flex: 1,
+        field: "vendor_sap_code",
+        headerName: "Vendor SAP Code",
+        minWidth: 100,
+        valueGetter: (params) => {
+            return params.data?.vendor_sap_code ?? "-";
+        },
+    },
+    {
+        field: "kode",
+        headerName: "Factory Code",
+        minWidth: 100,
+        valueGetter: (params) => {
+            return params.data?.kode ?? "-";
+        },
     },
     {
         headerName: "Action",
-        maxWidth: 150,
+        minWidth: 120,
+        maxWidth: 120,
         sortable: false,
         filter: false,
         resizable: false,
@@ -311,159 +656,174 @@ const columnDefs = [
     },
 ];
 
-/* ---------------- Data loading ---------------- */
-
-let reqId = 0;
-
-// Satu fungsi untuk semua fetch tabel
-const fetchGrid = async (query = "") => {
-    const id = ++reqId;
+const loadData = async () => {
     try {
         loading.show();
-        const { data } = await api.get(`/api/v1/order-artwork/getdata${query}`);
-        if (id !== reqId) return; // abaikan respons usang
+        const endpoint = "/api/v1/master/getFactory";
 
-        const rows = (data?.data ?? []).map((item, index) => ({
+        const { data } = await api.get(endpoint);
+        rawData.value = data?.data ?? [];
+
+        rawData.value = (data?.data ?? []).map((item, index) => ({
             ...item,
             no: index + 1,
         }));
-        rawData.value = rows;
-        if (!query) allData.value = rows; // simpan cache data penuh
     } catch (err) {
-        if (err?.response?.status === 401) router.push("/login");
+        if (err?.response?.status === 401) {
+            router.push("/login");
+        }
     } finally {
         loading.hide();
     }
 };
-
-// Selalu fetch ulang dari server (dipakai saat awal & setelah reject)
-const loadData = () => fetchGrid();
-
-// Tampilkan semua data dari cache, tanpa request
-const showAll = () => {
-    if (allData.value.length) rawData.value = allData.value;
-    else fetchGrid();
-};
-
-const loadDataBuyer = async () => {
-    try {
-        loading.show();
-        const { data } = await api.get("/api/v1/order-artwork/buyers");
-        buyers.value = (data?.data ?? []).map((item) => ({
-            value: item.idbuyer,
-            label: item.namabuyer,
-        }));
-    } catch (err) {
-        if (err?.response?.status === 401) router.push("/login");
-    } finally {
-        loading.hide();
-    }
-};
-
-const loadDataPo = async () => {
-    try {
-        loading.show();
-        const { data } = await api.get("/api/v1/order-artwork/pos");
-        pos.value = (data?.data ?? []).map((item) => ({
-            value: item.po,
-            label: item.po,
-        }));
-    } catch (err) {
-        if (err?.response?.status === 401) router.push("/login");
-    } finally {
-        loading.hide();
-    }
-};
-
-const loadDataKp = async (idbuyer) => {
-    try {
-        loading.show();
-        const { data } = await api.get(`/api/v1/order-artwork/kps?idbuyer=${idbuyer}`);
-        data_kp.value = (data?.data ?? []).map((item) => ({
-            value: item.kpno,
-            label: item.kpno,
-        }));
-    } catch (err) {
-        if (err?.response?.status === 401) router.push("/login");
-    } finally {
-        loading.hide();
-    }
-};
-
-/* ---------------- Filter handlers ---------------- */
-
-// Ganti filter -> reset semua pilihan di bawahnya
-const onFilterChange = (val) => {
-    form.value = { filter: val ?? "", buyer: "", kpno: "", po: "" };
-    data_kp.value = [];
-    showAll();
-    if (val === "po" && !pos.value.length) loadDataPo();
-};
-
-// Ganti buyer -> reset KP
-const onBuyerChange = async (idbuyer) => {
-    form.value.kpno = "";
-    data_kp.value = [];
-    if (!idbuyer) return showAll();
-    await loadDataKp(idbuyer);
-};
-
-const loadDataByPo = (po) => (po ? fetchGrid(`?po=${po}`) : showAll());
-const loadDataByKp = (kpno) => (kpno ? fetchGrid(`?kpno=${kpno}`) : showAll());
 
 onMounted(() => {
     loadData();
-    loadDataBuyer();
 });
 
-/* ---------------- Reject ---------------- */
-
-const process_rejection = async () => {
+const storeNewData = async () => {
     try {
-        if (!confimForm.value.auth_pass || !confimForm.value.description) {
+
+        if (
+            !form.value.kode ||
+            !form.value.namafactory ||
+            !form.value.kota ||
+            !form.value.alamat ||
+            !form.value.provinsi ||
+            docTypes.some(({ key }) => !pendingFiles.value[key] && !getFileInfo(key))
+        ) {
             await warning({
-                title: "Incomplete Data",
-                text: "Please complete all required fields.",
-            });
-            return;
+                title: 'Incomplete Data',
+                text: 'Please complete all required fields.',
+            })
+
+            return  
         }
 
-        const result = await confirm({
-            title: "Are You Sure to Reject This Data?",
-            text: "Please do this action carefully!",
-        });
+        loading.show()
 
-        if (!result.isConfirmed) {
-            return;
-        }
-
-        loading.show();
-        const endpoint = `api/v1/order-alocation/reject/${dataSelected.value.idorder}`;
-        const { data } = await api.post(endpoint, confimForm.value);
-
-        closeModal();
-        loading.hide();
+        const endpoint = "api/v1/master/add-factory";
+        const { data } = await api.post(
+            endpoint,
+            buildFormData(),
+            { headers: { "Content-Type": "multipart/form-data" } }
+        );
+        isNewData.value = false
+        closeModal()
+        loading.hide()
         await success({
-            title: "Success",
-            text: data?.message || "Data updated successfully.",
-        });
+                title: "Success",
+                text: data?.message || "Data Added successfully.",
+            });
+        await loadData()
 
-        setNewFilter();
-        loadData();
     } catch (err) {
-        loading.hide();
+        loading.hide()
         if (err?.response?.status === 401) {
-            router.push("/login");
-            return;
+            router.push("/login")
+            return
         }
 
-        await error({
-            title: "Rejection Failed",
+await error({
+            title:"Add Failed",
             text:
                 err?.response?.data?.message ||
                 err?.message ||
-                "Failed to Reject the Data. Please try again.",
+                "Failed to add the data. Please try again.",
         });
     }
-};
+}
+
+const submit = async () => {
+    try {
+
+        if (
+            !form.value.kode ||
+            !form.value.namafactory ||
+            !form.value.kota ||
+            !form.value.alamat ||
+            !form.value.provinsi ||
+            docTypes.some(({ key }) => !pendingFiles.value[key] && !getFileInfo(key))
+        ) {
+            await warning({
+                title: 'Incomplete Data',
+                text: 'Please complete all required fields.',
+            })
+
+            return  
+        }
+
+        loading.show()
+        const endpoint = `api/v1/master/update-factory/${dataSelected.value.idfactory}`;
+
+        const fd = buildFormData()
+        fd.append('_method', 'PUT')
+
+        const { data } = await api.post(
+            endpoint,
+            fd,
+            { headers: { "Content-Type": "multipart/form-data" } }
+        );
+        closeModal()
+        loading.hide()
+        await success({
+            title: "Success",
+            text: data?.message || "Data saved successfully.",
+        });
+        await loadData()
+    } catch (err) {
+        loading.hide()
+        if (err?.response?.status === 401) {
+            router.push("/login")
+            return
+        }
+
+await error({
+            title:"Update Failed",
+            text:
+                err?.response?.data?.message ||
+                err?.message ||
+                "Failed to update the data. Please try again.",
+        });
+    }
+}
+
+const deleteThisData = async () => {
+
+    const result = await confirmDelete();
+    if (!result.isConfirmed) {
+        return
+    }
+
+    try {
+        loading.show()
+
+        const { data } = await api.delete(
+            `api/v1/master/delete-factory/${dataSelected.value.idfactory}`
+        )
+
+        loading.hide()
+        await success({
+            title: "Success",
+            text: data?.message || "Data has been deleted successfully.",
+        });
+        await loadData()
+
+    } catch (err) {
+
+        if (err?.response?.status === 401) {
+            router.push("/login")
+            return
+        }
+
+        loading.hide()
+await error({
+            title:"Update Failed",
+            text:
+                err?.response?.data?.message ||
+                err?.message ||
+                "Failed to update the data. Please try again.",
+        });
+    }
+}
 </script>
