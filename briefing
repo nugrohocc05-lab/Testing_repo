@@ -2,7 +2,6 @@
 <template>
     <div class="px-6">
         <UiTitle align="center" title="Master Factory" subtitle="" />
-        <!-- User Type -->
         <div class="mb-4 flex gap-3">
             <UiButton @click="setNewData" class="mr-auto">+Add Data</UiButton>
 
@@ -110,7 +109,6 @@
                                         </div>
                                     </div>
 
-                                    <!-- Upload / Change -->
                                     <UiButton
                                         rounded="full"
                                         variant="primary"
@@ -126,34 +124,39 @@
                                     </UiButton>
                                 </div>
 
-                                <!-- File Information -->
                                 <template v-if="getFileInfo(doc.key)">
                                     <div
                                         class="flex items-center gap-3 rounded-lg bg-slate-50 p-3"
                                     >
-                                        <img
-                                            :src="fileIcon(getFileInfo(doc.key).name)"
-                                            class="h-10 w-10 shrink-0"
-                                        />
+                                        <button
+                                            type="button"
+                                            class="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left hover:opacity-80"
+                                            title="Download file"
+                                            @click="downloadFile(doc.key)"
+                                        >
+                                            <img
+                                                :src="fileIcon(getFileInfo(doc.key).name)"
+                                                class="h-10 w-10 shrink-0"
+                                            />
 
-                                        <div class="min-w-0 flex-1">
-                                            <div
-                                                class="truncate text-sm font-medium text-slate-700"
-                                            >
-                                                {{ getFileInfo(doc.key).name }}
+                                            <div class="min-w-0 flex-1">
+                                                <div
+                                                    class="truncate text-sm font-medium text-slate-700 hover:underline"
+                                                >
+                                                    {{ getFileInfo(doc.key).name }}
+                                                </div>
+
+                                                <div class="mt-1 text-xs text-slate-500">
+                                                    {{
+                                                        getFileInfo(doc.key).pending
+                                                            ? 'Not Saved'
+                                                            : 'Uploaded: ' +
+                                                            getFileInfo(doc.key).date
+                                                    }}
+                                                </div>
                                             </div>
+                                        </button>
 
-                                            <div class="mt-1 text-xs text-slate-500">
-                                                {{
-                                                    getFileInfo(doc.key).pending
-                                                        ? 'Not Saved'
-                                                        : 'Uploaded: ' +
-                                                        getFileInfo(doc.key).date
-                                                }}
-                                            </div>
-                                        </div>
-
-                                        <!-- Delete -->
                                         <UiButton
                                             v-if="getFileInfo(doc.key).pending"
                                             variant="teritary-danger"
@@ -315,14 +318,14 @@ const form = ref({
     provinsi: "",
 });
 
-/* ===================== IP ADDRESS ===================== */
+const IP_REGEX = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/
+
 const ipAddresses = ref([''])
 const originalIps = ref([])
 
 const addIp = () => ipAddresses.value.push('')
 const removeIp = (index) => ipAddresses.value.splice(index, 1)
 
-// hanya izinkan angka & titik
 watch(ipAddresses, (list) => {
     list.forEach((v, i) => {
         const c = String(v ?? '').replace(/[^0-9.]/g, '')
@@ -330,17 +333,27 @@ watch(ipAddresses, (list) => {
     })
 }, { deep: true })
 
-// terima array string / array object / string dipisah koma
 const normalizeIps = (raw) => {
     if (!raw) return []
     let list = typeof raw === 'string' ? raw.split(/[,;\s]+/) : raw
     if (!Array.isArray(list)) return []
     return list
-        .map(i => (i && typeof i === 'object')
-            ? (i.ip ?? i.ip_address ?? i.ipaddress ?? '')
-            : i)
+        .map(i => {
+            if (i && typeof i === 'object') {
+                return Object.values(i).find(v => IP_REGEX.test(String(v).trim())) ?? ''
+            }
+            return i
+        })
         .map(i => String(i ?? '').trim())
         .filter(Boolean)
+}
+
+const extractIps = (data) => {
+    if (!data) return []
+    const key = Object.keys(data).find(k =>
+        /^(ip|ips|ip_address(es)?|ipaddress(es)?|ip_list|list_ip|ip_factory)$/i.test(k)
+    )
+    return normalizeIps(key ? data[key] : null)
 }
 
 const setIps = (raw) => {
@@ -353,8 +366,6 @@ const cleanIps = () => [...new Set(
     ipAddresses.value.map(i => String(i ?? '').trim()).filter(Boolean)
 )]
 
-const IP_REGEX = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/
-
 const validateIps = async () => {
     const invalid = cleanIps().find(ip => !IP_REGEX.test(ip))
     if (invalid) {
@@ -366,12 +377,11 @@ const validateIps = async () => {
     }
     return true
 }
-/* ====================================================== */
 
 const maxDate = new Date()
 maxDate.setFullYear(maxDate.getFullYear() - 5)
 
-const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB
+const MAX_FILE_SIZE = 2 * 1024 * 1024
 
 const docTypes = [
     { key: 'npwp', label: 'NPWP' },
@@ -483,13 +493,61 @@ const removeFile = (key) => {
     }
 }
 
+const triggerDownload = (href, filename) => {
+    const a = document.createElement('a')
+    a.href = href
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+}
+
+const downloadFile = async (key) => {
+    const pending = pendingFiles.value[key]
+    if (pending) {
+        const url = URL.createObjectURL(pending)
+        triggerDownload(url, pending.name)
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+        return
+    }
+
+    const file = dataSelected.value?.file?.find(
+        (item) => item.type?.toLowerCase() === key.toLowerCase()
+    )
+    if (!file) return
+
+    const fileId = file.idfile ?? file.id
+    const filename = `${file.filename}.${file.extension}`
+
+    try {
+        loading.show()
+
+        const res = await api.get(
+            `/api/v1/master/showfile/${fileId}`,
+            { responseType: 'blob' }
+        )
+
+        const url = URL.createObjectURL(res.data)
+        triggerDownload(url, filename)
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (err) {
+        if (err?.response?.status === 401) {
+            router.push('/login')
+            return
+        }
+        await error({
+            title: 'Download Failed',
+            text: 'File tidak bisa diunduh. Silakan coba lagi.',
+        })
+    } finally {
+        loading.hide()
+    }
+}
+
 const buildFormData = () => {
     const fd = new FormData()
     Object.entries(form.value).forEach(([k, v]) => fd.append(k, v ?? ''))
 
-    // IP dikirim sebagai array: ip[]
-    // Kalau BE mau string dipisah koma, ganti dengan:
-    // fd.append('ip', cleanIps().join(','))
     cleanIps().forEach(ip => fd.append('ip[]', ip))
 
     docTypes.forEach(({ key }) => {
@@ -537,8 +595,7 @@ const setForm = () => {
         provinsi: data.provinsi ?? "",
         work_day: data.work_day ?? ""
     };
-    // sesuaikan nama field IP dari response BE kalau berbeda
-    setIps(data.ip ?? data.ip_address ?? data.ips)
+    setIps(extractIps(data))
     resetFiles()
     isNewData.value = false;
     originalForm.value = { ...form.value }
