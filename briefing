@@ -1,3 +1,4 @@
+```vue
 <template>
     <div class="px-6">
         <UiTitle align="center" title="Master Factory" subtitle="" />
@@ -50,7 +51,6 @@
                 <div class="flex-1">
                     <UiInput
                         label="IP Address"
-                        filter="number"
                         labelClass=""
                         maxLength="15"
                         v-model="ipAddresses[index]"
@@ -265,7 +265,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, defineComponent, h } from "vue";
+import { ref, onMounted, computed, defineComponent, h, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useLoadingStore } from "@/stores/loading";
 import { PencilSquareIcon, TrashIcon, MagnifyingGlassIcon, ArrowUpTrayIcon } from "@heroicons/vue/24/outline";
@@ -313,18 +313,60 @@ const form = ref({
     alamat: "",
     kodepos: "",
     provinsi: "",
-    ip: [''],
 });
 
+/* ===================== IP ADDRESS ===================== */
 const ipAddresses = ref([''])
+const originalIps = ref([])
 
-const addIp = () => {
-    ipAddresses.value.push('')
+const addIp = () => ipAddresses.value.push('')
+const removeIp = (index) => ipAddresses.value.splice(index, 1)
+
+// hanya izinkan angka & titik
+watch(ipAddresses, (list) => {
+    list.forEach((v, i) => {
+        const c = String(v ?? '').replace(/[^0-9.]/g, '')
+        if (c !== v) list[i] = c
+    })
+}, { deep: true })
+
+// terima array string / array object / string dipisah koma
+const normalizeIps = (raw) => {
+    if (!raw) return []
+    let list = typeof raw === 'string' ? raw.split(/[,;\s]+/) : raw
+    if (!Array.isArray(list)) return []
+    return list
+        .map(i => (i && typeof i === 'object')
+            ? (i.ip ?? i.ip_address ?? i.ipaddress ?? '')
+            : i)
+        .map(i => String(i ?? '').trim())
+        .filter(Boolean)
 }
 
-const removeIp = (index) => {
-    ipAddresses.value.splice(index, 1)
+const setIps = (raw) => {
+    const list = normalizeIps(raw)
+    ipAddresses.value = list.length ? [...list] : ['']
+    originalIps.value = [...list]
 }
+
+const cleanIps = () => [...new Set(
+    ipAddresses.value.map(i => String(i ?? '').trim()).filter(Boolean)
+)]
+
+const IP_REGEX = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/
+
+const validateIps = async () => {
+    const invalid = cleanIps().find(ip => !IP_REGEX.test(ip))
+    if (invalid) {
+        await warning({
+            title: 'IP Address not valid',
+            text: `Format IP "${invalid}" salah. Contoh: 192.168.100.100`,
+        })
+        return false
+    }
+    return true
+}
+/* ====================================================== */
 
 const maxDate = new Date()
 maxDate.setFullYear(maxDate.getFullYear() - 5)
@@ -445,6 +487,11 @@ const buildFormData = () => {
     const fd = new FormData()
     Object.entries(form.value).forEach(([k, v]) => fd.append(k, v ?? ''))
 
+    // IP dikirim sebagai array: ip[]
+    // Kalau BE mau string dipisah koma, ganti dengan:
+    // fd.append('ip', cleanIps().join(','))
+    cleanIps().forEach(ip => fd.append('ip[]', ip))
+
     docTypes.forEach(({ key }) => {
         if (pendingFiles.value[key]) {
             fd.append(`${key}`, pendingFiles.value[key])
@@ -462,8 +509,12 @@ const isFormChanged = computed(() => {
         ({ key }) => pendingFiles.value[key] || removedFiles.value[key]
     )
 
+    const ipChanged =
+        JSON.stringify(cleanIps()) !== JSON.stringify(originalIps.value)
+
     return (
         fileChanged ||
+        ipChanged ||
         Object.keys(form.value).some(
             key => form.value[key] !== originalForm.value[key]
         )
@@ -486,6 +537,8 @@ const setForm = () => {
         provinsi: data.provinsi ?? "",
         work_day: data.work_day ?? ""
     };
+    // sesuaikan nama field IP dari response BE kalau berbeda
+    setIps(data.ip ?? data.ip_address ?? data.ips)
     resetFiles()
     isNewData.value = false;
     originalForm.value = { ...form.value }
@@ -507,9 +560,9 @@ const setNewData = () => {
         kodepos: "",
         provinsi: "",
         work_day: "",
-        ip: "",
     };
 
+    setIps([])
     resetFiles()
     showModal.value = true
     originalForm.value = { ...form.value }
@@ -533,6 +586,7 @@ const loadFactoryDetail = async (idfactory) => {
 
         if (detail) {
             dataSelected.value = { ...dataSelected.value, ...detail }
+            setForm()
         }
     } catch (err) {
         if (err?.response?.status === 401) {
@@ -700,6 +754,8 @@ const storeNewData = async () => {
             return  
         }
 
+        if (!(await validateIps())) return
+
         loading.show()
 
         const endpoint = "api/v1/master/add-factory";
@@ -752,6 +808,8 @@ const submit = async () => {
 
             return  
         }
+
+        if (!(await validateIps())) return
 
         loading.show()
         const endpoint = `api/v1/master/update-factory/${dataSelected.value.idfactory}`;
@@ -827,3 +885,4 @@ await error({
     }
 }
 </script>
+```
