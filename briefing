@@ -1,2 +1,36 @@
-<div v-if="isOpen" class="grid grid-cols-[minmax(0,1fr)]">
-    <div class="min-h-0 min-w-0">
+const IP_KEY = /^(ip|ips|ip_?address(es)?|ip_list|list_ip|ip_factory|factory_ip)$/i
+
+const normalizeIps = (raw) => {
+    if (!raw) return []
+    let list = raw
+
+    if (typeof raw === 'string') {
+        try {
+            const parsed = JSON.parse(raw)
+            if (Array.isArray(parsed)) list = parsed
+        } catch {}
+        if (typeof list === 'string') list = list.split(/[,;\s]+/)
+    }
+
+    if (!Array.isArray(list)) return []
+
+    return list
+        .map(i => {
+            if (i && typeof i === 'object') {
+                return Object.values(i).find(v => IP_REGEX.test(String(v).trim())) ?? ''
+            }
+            return i
+        })
+        .map(i => String(i ?? '').trim())
+        .filter(Boolean)
+}
+
+const extractIps = (data) => {
+    if (!data) return []
+    for (const key of Object.keys(data)) {
+        if (!IP_KEY.test(key)) continue
+        const list = normalizeIps(data[key])
+        if (list.length) return list
+    }
+    return []
+}
