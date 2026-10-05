@@ -1,3 +1,6 @@
+Ini kode lengkapnya:
+
+```vue
 <template>
     <div class="px-6">
         <UiTitle align="center" title="Order Artwork Allocation"/>
@@ -57,105 +60,113 @@
         <UiAgGrid :rowData="rawData" :columnDefs="columnDefs"
             class="mb-10 my-zebra-grid" :quickFilterText="searchKeyword" @grid-ready="onGridReady"></UiAgGrid>
     </div>
-     <UiModal v-model="showModal" title="Upload KK" size="2xl">
-            <div class="divide-y divide-gray-200 text-sm md:text-base">
 
-                <!-- KP Number -->
-                <div class="grid grid-cols-1 gap-1 py-4 md:grid-cols-[140px_1fr] md:gap-4">
-                    <span class="font-semibold text-gray-700">
-                        KP Number
-                    </span>
+    <!-- Modal Upload KK -->
+    <UiModal v-model="showModal" title="Upload KK" size="2xl">
+        <div class="divide-y divide-gray-200 text-sm md:text-base">
 
-                    <span class="wrap-break-word text-gray-900">
-                        {{ selectedUploadData?.kpno ?? '-' }}
-                    </span>
+            <!-- KP Number -->
+            <div class="grid grid-cols-1 gap-1 py-4 md:grid-cols-[140px_1fr] md:gap-4">
+                <span class="font-semibold text-gray-700">KP Number</span>
+                <span class="wrap-break-word text-gray-900">
+                    {{ selectedUploadData?.kpno ?? '-' }}
+                </span>
+            </div>
+
+            <!-- Factory -->
+            <div class="grid grid-cols-1 gap-1 py-4 md:grid-cols-[140px_1fr] md:gap-4">
+                <span class="font-semibold text-gray-700">Factory</span>
+                <span class="wrap-break-word text-gray-900">
+                    {{ selectedUploadData?.factory ?? '-' }}
+                </span>
+            </div>
+
+            <!-- KK -->
+            <div class="flex items-end gap-3 my-2">
+                <div class="flex-1">
+                    <UiMultiSelect
+                        v-model="selectedKk"
+                        label="KK"
+                        :options="kkOptions"
+                        placeholder="-- Select KK --"
+                    />
                 </div>
 
-                <!-- Factory -->
-                <div class="grid grid-cols-1 gap-1 py-4 md:grid-cols-[140px_1fr] md:gap-4">
-                    <span class="font-semibold text-gray-700">
-                        Factory
-                    </span>
+                <UiButton :disabled="!selectedKk" @click="saveKk">
+                    Save KK
+                </UiButton>
+            </div>
 
-                    <span class="wrap-break-word text-gray-900">
-                        {{ selectedUploadData?.factory ?? '-' }}
-                    </span>
-                </div>
-
-                <!-- KK -->
-                <div class="flex items-end gap-3 my-2">
-                    <div class="flex-1">
-                        <UiMultiSelect
-                            v-model="form.buyer"
-                            label="KK"
-                            :options="buyers"
-                            placeholder="-- Select KK --"
-                        />
+            <!-- KK BC -->
+            <div class="space-y-2 pt-4">
+                <!-- Sudah ada file -->
+                <div v-if="hasKkbc"
+                    class="flex items-center justify-between gap-3 rounded-lg border border-gray-200 p-3">
+                    <div class="min-w-0">
+                        <p class="text-xs text-gray-500">KK BC File</p>
+                        <p class="truncate font-medium text-gray-900">{{ kkbcFileName }}</p>
                     </div>
-
-                    <UiButton>
-                        Save KK
-                    </UiButton>
+                    <div class="flex shrink-0 gap-2">
+                        <UiButton variant="secondary" @click="downloadKkbc">Download</UiButton>
+                        <UiButton variant="secondary" @click="deleteKkbc">Delete</UiButton>
+                    </div>
                 </div>
 
-                <div class="space-y-2">
-                    <UiInput type="file" variant="dropzone" label="KK BC" placeholder="Choose File" dropzone-hint="only PDF, XLS, or XLSX Formats, up to 2MB" accept=".pdf,.xls,.xlsx"></UiInput>
+                <!-- Belum ada file -->
+                <template v-else>
+                    <UiInput
+                        :key="dropzoneKey"
+                        type="file"
+                        variant="dropzone"
+                        label="KK BC"
+                        placeholder="Choose File"
+                        dropzone-hint="only PDF, XLS, or XLSX Formats, up to 2MB"
+                        accept=".pdf,.xls,.xlsx"
+                        @change="onFileChange"
+                    ></UiInput>
                     <div class="text-center">
-                        <UiButton>
-                                Upload
+                        <UiButton :disabled="!kkbcFile" @click="uploadKkbc">
+                            Upload
                         </UiButton>
                     </div>
-                </div>
+                </template>
             </div>
+        </div>
+
         <template #footer>
             <div class="mt-4">
-                <UiButton
-                    variant="primary"
-                    @click="submitForm"
-                >
+                <!-- Hanya tampil jika KK BC sudah ada filenya -->
+                <UiButton v-if="hasKkbc" variant="primary" @click="submitForm">
                     Complete Upload
                 </UiButton>
-                </div>
+            </div>
         </template>
-    </UiModal>  
-    <UiModal
-        v-model="showModalUndo"
-        size="md"
-    >
-        <!-- Confirmation -->
-        <div
-            class="space-y-4 -mt-2"
-        >
-                <!-- Icon -->
-                <div class="flex justify-center">
-                    <div class="flex h-32 w-32 items-center justify-center rounded-full bg-amber-100">
-                        <ExclamationCircleIcon
-                            class="h-28 w-28 text-amber-600"
-                        />
-                    </div>
-                </div>
+    </UiModal>
 
-                <!-- Title -->
-                <div class="mt-4 text-center">
-                    <p class="mt-1 text-xl font-bold  text-gray-500">
-                        Are you sure going to undo waiting list?
-                    </p>
-                    <p class="mt-1 text-md  text-gray-500">
-                        Once data processed, you can`t retrieve it again or recover the data! please do this action carefully!
-                    </p>
+    <!-- Modal Undo / Cancel Complete -->
+    <UiModal v-model="showModalUndo" size="md">
+        <div class="space-y-4 -mt-2">
+            <div class="flex justify-center">
+                <div class="flex h-32 w-32 items-center justify-center rounded-full bg-amber-100">
+                    <ExclamationCircleIcon class="h-28 w-28 text-amber-600" />
                 </div>
+            </div>
+
+            <div class="mt-4 text-center">
+                <p class="mt-1 text-xl font-bold text-gray-500">
+                    Are you sure going to undo waiting list?
+                </p>
+                <p class="mt-1 text-md text-gray-500">
+                    Once data processed, you can`t retrieve it again or recover the data! please do this action carefully!
+                </p>
+            </div>
         </div>
         <template #footer>
             <div class="flex justify-end gap-3">
-                <UiButton
-                    variant="secondary"
-                    @click="closeModal"
-                >
+                <UiButton variant="secondary" @click="closeUndoModal">
                     Cancel
                 </UiButton>
-                <UiButton
-                    @click="process"
-                >
+                <UiButton @click="process">
                     OK
                 </UiButton>
             </div>
@@ -172,10 +183,10 @@ import { encrypt } from "@/utils/crypto";
 import { ref, shallowRef, onMounted, computed, defineComponent, h } from "vue";
 import { useRouter } from "vue-router";
 import { useLoadingStore } from "@/stores/loading";
-import { ArrowTurnDownLeftIcon, ArrowUturnDownIcon, ArrowUturnLeftIcon, DocumentArrowUpIcon, ExclamationCircleIcon, InformationCircleIcon, MagnifyingGlassIcon, PaperAirplaneIcon } from "@heroicons/vue/24/outline";
+import { ArrowUturnLeftIcon, DocumentArrowUpIcon, ExclamationCircleIcon, InformationCircleIcon, MagnifyingGlassIcon } from "@heroicons/vue/24/outline";
 
 import { customSwal } from "@/composable/customSwal";
-const { confirm, success, warning, error } = customSwal;
+const { success, warning, error } = customSwal;
 const { datetime } = getCurrentDateTime('-', '-');
 
 import UiButton from "@/components/ui/UiButton.vue"
@@ -190,6 +201,10 @@ import api from "@/services/api";
 
 defineOptions({ name: 'Allocation' });
 
+const BASE = "/api/v1/order-artwork";
+const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
+const ALLOWED_EXT = ["pdf", "xls", "xlsx"];
+
 const loading = useLoadingStore();
 const router = useRouter();
 
@@ -200,23 +215,26 @@ const buyers = ref([]);
 const data_kp = ref([]);
 const pos = ref([]);
 const dataSelected = ref([]);
-const isNewData = ref(false);
 const showModal = ref(false);
 const showModalUndo = ref(false);
 const searchKeyword = ref('');
-const originalForm = ref(null);
 const gridApi = ref(null);
+
+// state modal upload
 const selectedUploadData = ref(null);
+const selectedUndoData = ref(null);
+const kkOptions = ref([]);
+const selectedKk = ref("");
+const kkbcFile = ref(null);       // File yang dipilih (belum diupload)
+const kkbcFileName = ref("");     // Nama file yang sudah tersimpan di server
+const dropzoneKey = ref(0);       // untuk reset dropzone
+
+const hasKkbc = computed(() => !!kkbcFileName.value);
 
 const filters = ref([
     { value: "po", label: "PO" },
     { value: "kp", label: "KP" },
 ]);
-
-const confimForm = ref({
-    auth_pass: "",
-    description: "",
-});
 
 const form = ref({
     filter: "",
@@ -225,18 +243,14 @@ const form = ref({
     po: "",
 });
 
-const isFormChanged = computed(() => {
-    if (!originalForm.value) return false;
-
-    return Object.keys(confimForm.value).some(
-        key => confimForm.value[key] !== originalForm.value[key]
-    );
-});
-
 const onGridReady = (params) => {
     gridApi.value = params.api;
 };
 
+const getErrMsg = (err, fallback = "Something went wrong") =>
+    err?.response?.data?.message ?? fallback;
+
+/* ---------------- Export ---------------- */
 const onBtnExport = () => {
     if (!gridApi.value) {
         alert("Please Wait!");
@@ -271,16 +285,201 @@ const onBtnExportPdf = () => {
     });
 };
 
-const setNewFilter = () => {
-    form.value = { filter: "", buyer: "", kpno: "", po: "" };
-    data_kp.value = [];
+/* ---------------- Modal helpers ---------------- */
+const resetUploadState = () => {
+    selectedUploadData.value = null;
+    kkOptions.value = [];
+    selectedKk.value = "";
+    kkbcFile.value = null;
+    kkbcFileName.value = "";
+    dropzoneKey.value++;
 };
 
 const closeModal = () => {
     showModal.value = false;
-    isNewData.value = false;
+    resetUploadState();
 };
 
+const closeUndoModal = () => {
+    showModalUndo.value = false;
+    selectedUndoData.value = null;
+};
+
+/* ---------------- KK: dropdown & save ---------------- */
+const loadKkOptions = async (kpno) => {
+    try {
+        const { data } = await api.get(`${BASE}/selectkk`, { params: { kpno } });
+        kkOptions.value = (data?.data ?? []).map((item) => ({
+            value: item.kk,
+            label: item.kk,
+        }));
+    } catch (err) {
+        kkOptions.value = [];
+        if (err?.response?.status === 401) router.push("/login");
+        else error(getErrMsg(err, "Failed to load KK list"));
+    }
+};
+
+const openUploadModal = async (row) => {
+    resetUploadState();
+    selectedUploadData.value = row;
+    selectedKk.value = row?.kk ?? "";
+    kkbcFileName.value = row?.kkbc ?? "";   // nama file KK BC yang sudah ada (jika ada)
+    showModal.value = true;
+
+    loading.show();
+    await loadKkOptions(row?.kpno);
+    loading.hide();
+};
+
+const saveKk = async () => {
+    if (!selectedKk.value) return warning("Please select KK first");
+
+    try {
+        loading.show();
+        const id = selectedUploadData.value.id;
+        const { data } = await api.put(`${BASE}/update-kk/${id}`, { kk: selectedKk.value });
+        success(data?.message ?? "KK saved");
+        selectedUploadData.value.kk = selectedKk.value;
+    } catch (err) {
+        if (err?.response?.status === 401) router.push("/login");
+        else error(getErrMsg(err, "Failed to save KK"));
+    } finally {
+        loading.hide();
+    }
+};
+
+/* ---------------- KK BC: pilih, upload, download, delete ---------------- */
+const onFileChange = (e) => {
+    // dukung event native, FileList, array, atau File langsung
+    const file = e?.target?.files?.[0] ?? e?.[0] ?? (e instanceof File ? e : null);
+
+    if (!file) {
+        kkbcFile.value = null;
+        return;
+    }
+
+    const ext = file.name.split(".").pop().toLowerCase();
+    if (!ALLOWED_EXT.includes(ext)) {
+        warning("Only PDF, XLS, or XLSX formats are allowed");
+        kkbcFile.value = null;
+        dropzoneKey.value++;
+        return;
+    }
+    if (file.size > MAX_FILE_SIZE) {
+        warning("File size must not exceed 2MB");
+        kkbcFile.value = null;
+        dropzoneKey.value++;
+        return;
+    }
+
+    kkbcFile.value = file;
+};
+
+const uploadKkbc = async () => {
+    if (!kkbcFile.value) return warning("Please choose a file first");
+
+    try {
+        loading.show();
+        const id = selectedUploadData.value.id;
+        const fd = new FormData();
+        fd.append("file", kkbcFile.value);
+
+        const { data } = await api.post(`${BASE}/upload-kkbc/${id}`, fd, {
+            headers: { "Content-Type": "multipart/form-data" },
+        });
+
+        success(data?.message ?? "File uploaded");
+        kkbcFileName.value = data?.data?.filename ?? kkbcFile.value.name;
+        kkbcFile.value = null;
+    } catch (err) {
+        if (err?.response?.status === 401) router.push("/login");
+        else error(getErrMsg(err, "Failed to upload file"));
+    } finally {
+        loading.hide();
+    }
+};
+
+const downloadKkbc = async () => {
+    try {
+        loading.show();
+        const id = selectedUploadData.value.id;
+        const res = await api.get(`${BASE}/showfille/${id}`, { responseType: "blob" });
+
+        const url = URL.createObjectURL(res.data);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = kkbcFileName.value || "kkbc";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    } catch (err) {
+        if (err?.response?.status === 401) router.push("/login");
+        else error(getErrMsg(err, "Failed to download file"));
+    } finally {
+        loading.hide();
+    }
+};
+
+const deleteKkbc = async () => {
+    if (!window.confirm("Delete this KK BC file?")) return;
+
+    try {
+        loading.show();
+        const id = selectedUploadData.value.id;
+        const { data } = await api.delete(`${BASE}/delete/${id}`);
+        success(data?.message ?? "File deleted");
+        kkbcFileName.value = "";
+        kkbcFile.value = null;
+        dropzoneKey.value++;
+    } catch (err) {
+        if (err?.response?.status === 401) router.push("/login");
+        else error(getErrMsg(err, "Failed to delete file"));
+    } finally {
+        loading.hide();
+    }
+};
+
+/* ---------------- Complete Upload ---------------- */
+const submitForm = async () => {
+    if (!hasKkbc.value) return warning("Please upload KK BC file first");
+
+    try {
+        loading.show();
+        const id = selectedUploadData.value.id;
+        const { data } = await api.post(`${BASE}/complete/${id}`);
+        success(data?.message ?? "Upload completed");
+        closeModal();
+        await fetchGrid(currentQuery);
+    } catch (err) {
+        if (err?.response?.status === 401) router.push("/login");
+        else error(getErrMsg(err, "Failed to complete upload"));
+    } finally {
+        loading.hide();
+    }
+};
+
+/* ---------------- Undo / Cancel Complete ---------------- */
+const process = async () => {
+    if (!selectedUndoData.value) return;
+
+    try {
+        loading.show();
+        const id = selectedUndoData.value.id;
+        const { data } = await api.post(`${BASE}/cancel-complete/${id}`);
+        success(data?.message ?? "Waiting list has been undone");
+        closeUndoModal();
+        await fetchGrid(currentQuery);
+    } catch (err) {
+        if (err?.response?.status === 401) router.push("/login");
+        else error(getErrMsg(err, "Failed to undo"));
+    } finally {
+        loading.hide();
+    }
+};
+
+/* ---------------- Action column ---------------- */
 const ActionRenderer = defineComponent({
     props: {
         params: {
@@ -304,14 +503,12 @@ const ActionRenderer = defineComponent({
             });
         };
 
-        const uploadkk = () => {
-            selectedUploadData.value = props.params.data;
-            showModal.value = true;
-        }
+        const uploadkk = () => openUploadModal(props.params.data);
 
         const undoUpload = () => {
-            showModalUndo.value = true
-        }
+            selectedUndoData.value = props.params.data;
+            showModalUndo.value = true;
+        };
 
         return () => {
             return h(
@@ -326,11 +523,9 @@ const ActionRenderer = defineComponent({
                             class: "cursor-pointer text-amber-500 transition hover:text-amber-700",
                             onClick: detailData,
                         },
-                        [
-                            h(InformationCircleIcon, { class: "h-5 w-5" }),
-                        ],
+                        [h(InformationCircleIcon, { class: "h-5 w-5" })],
                     ),
-                    
+
                     (props.params.data?.status === "New") &&
                     h(
                         "button",
@@ -340,10 +535,9 @@ const ActionRenderer = defineComponent({
                             class: "cursor-pointer text-sky-500 transition hover:text-sky-700",
                             onClick: uploadkk,
                         },
-                        [
-                            h(DocumentArrowUpIcon, { class: "h-5 w-5" }),
-                        ],
+                        [h(DocumentArrowUpIcon, { class: "h-5 w-5" })],
                     ),
+
                     (props.params.data?.status === "Waiting") &&
                     h(
                         "button",
@@ -353,9 +547,7 @@ const ActionRenderer = defineComponent({
                             class: "cursor-pointer text-red-500 transition hover:text-red-700",
                             onClick: undoUpload,
                         },
-                        [
-                            h(ArrowUturnLeftIcon, { class: "h-5 w-5" }),
-                        ],
+                        [h(ArrowUturnLeftIcon, { class: "h-5 w-5" })],
                     ),
                 ],
             );
@@ -364,37 +556,11 @@ const ActionRenderer = defineComponent({
 });
 
 const columnDefs = [
-    {
-        headerName: "No",
-        field: "no",
-        width: 80,
-        filter: false,
-        resizable: false,
-    },
-    {
-        field: "po",
-        headerName: "PO",
-        minWidth: 125,
-        flex: 1,
-    },
-    {
-        field: "kpno",
-        headerName: "KP",
-        minWidth: 125,
-        flex: 1,
-    },
-    {
-        field: "ordernumber",
-        headerName: "Order Number",
-        minWidth: 125,
-        flex: 1,
-    },
-    {
-        field: "style",
-        headerName: "Style",
-        minWidth: 125,
-        flex: 1,
-    },
+    { headerName: "No", field: "no", width: 80, filter: false, resizable: false },
+    { field: "po", headerName: "PO", minWidth: 125, flex: 1 },
+    { field: "kpno", headerName: "KP", minWidth: 125, flex: 1 },
+    { field: "ordernumber", headerName: "Order Number", minWidth: 125, flex: 1 },
+    { field: "style", headerName: "Style", minWidth: 125, flex: 1 },
     {
         field: "factory",
         headerName: "CM Factory",
@@ -402,18 +568,8 @@ const columnDefs = [
         valueGetter: (params) => params.data?.factory ?? "-",
         flex: 1,
     },
-    {
-        field: "po_sap",
-        headerName: "PO CMT",
-        minWidth: 125,
-        flex: 1,
-    },
-    {
-        field: "status",
-        headerName: "Status",
-        minWidth: 125,
-        flex: 1,
-    },
+    { field: "po_sap", headerName: "PO CMT", minWidth: 125, flex: 1 },
+    { field: "status", headerName: "Status", minWidth: 125, flex: 1 },
     {
         headerName: "Action",
         maxWidth: 150,
@@ -424,13 +580,16 @@ const columnDefs = [
     },
 ];
 
+/* ---------------- Fetch data ---------------- */
 let reqId = 0;
+let currentQuery = "";   // simpan filter aktif supaya refresh tetap di filter yang sama
 
 const fetchGrid = async (query = "") => {
     const id = ++reqId;
+    currentQuery = query;
     try {
         loading.show();
-        const { data } = await api.get(`/api/v1/order-artwork/getdata${query}`);
+        const { data } = await api.get(`${BASE}/getdata${query}`);
         if (id !== reqId) return;
 
         const rows = (data?.data ?? []).map((item, index) => ({
@@ -439,6 +598,7 @@ const fetchGrid = async (query = "") => {
         }));
         rawData.value = rows;
         if (!query) allData.value = rows;
+        else allData.value = [];   // cache "all" dianggap basi setelah ada perubahan
     } catch (err) {
         if (err?.response?.status === 401) router.push("/login");
     } finally {
@@ -449,14 +609,16 @@ const fetchGrid = async (query = "") => {
 const loadData = () => fetchGrid();
 
 const showAll = () => {
-    if (allData.value.length) rawData.value = allData.value;
-    else fetchGrid();
+    if (allData.value.length) {
+        rawData.value = allData.value;
+        currentQuery = "";
+    } else fetchGrid();
 };
 
 const loadDataBuyer = async () => {
     try {
         loading.show();
-        const { data } = await api.get("/api/v1/order-artwork/buyers");
+        const { data } = await api.get(`${BASE}/buyers`);
         buyers.value = (data?.data ?? []).map((item) => ({
             value: item.idbuyer,
             label: item.namabuyer,
@@ -471,7 +633,7 @@ const loadDataBuyer = async () => {
 const loadDataPo = async () => {
     try {
         loading.show();
-        const { data } = await api.get("/api/v1/order-artwork/pos");
+        const { data } = await api.get(`${BASE}/pos`);
         pos.value = (data?.data ?? []).map((item) => ({
             value: item.po,
             label: item.po,
@@ -486,7 +648,7 @@ const loadDataPo = async () => {
 const loadDataKp = async (idbuyer) => {
     try {
         loading.show();
-        const { data } = await api.get(`/api/v1/order-artwork/kps?idbuyer=${idbuyer}`);
+        const { data } = await api.get(`${BASE}/kps?idbuyer=${idbuyer}`);
         data_kp.value = (data?.data ?? []).map((item) => ({
             value: item.kpno,
             label: item.kpno,
@@ -520,26 +682,6 @@ onMounted(() => {
     loadDataBuyer();
 });
 </script>
+```
 
-Nampilin dropdown kk
-http://192.168.91.178:8000/api/v1/order-artwork/selectkk?kpno=AD40003047
-
-Save KK
-http://192.168.91.178:8000/api/v1/order-artwork/update-kk/kk
-
-KK BC File
-http://192.168.91.178:8000/api/v1/order-artwork/upload-kkbc/kk
-
-Delete
-http://192.168.91.178:8000/api/v1/order-artwork/delete/id
-
-Download 
-http://192.168.91.178:8000/api/v1/order-artwork/showfille/id
-
-Complete Upload 
-http://192.168.91.178:8000/api/v1/order-artwork/complete/id
-
-Cancel Complete / undo
-http://192.168.91.178:8000/api/v1/order-artwork/cancel-complete/id
-
-tombol complete upload tampil hanya saat kkbc sudah ada file nya 
+Asumsi yang tadi masih berlaku, jadi tolong cek lagi. Kalau ada yang tidak cocok dengan backend Anda, kirim contoh response `getdata` dan `selectkk`, nanti saya sesuaikan.
