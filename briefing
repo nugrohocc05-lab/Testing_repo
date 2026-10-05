@@ -1,533 +1,303 @@
+<script setup>
+import { computed, useId, nextTick } from "vue";
+import Multiselect from "@vueform/multiselect";
+
+import "@vueform/multiselect/themes/default.css";
+
+defineOptions({
+    inheritAttrs: false,
+});
+
+const props = defineProps({
+    modelValue: {
+        type: [String, Number, Object, Array, Boolean, null],
+        default: null,
+    },
+
+    canClear: {
+        type: Boolean,
+        default: true,
+    },
+
+    options: {
+        type: Array,
+        default: () => [],
+    },
+
+    label: {
+        type: String,
+        default: "",
+    },
+
+    optionLabel: {
+        type: String,
+        default: "label",
+    },
+
+    valueProp: {
+        type: String,
+        default: "value",
+    },
+
+    placeholder: {
+        type: String,
+        default: "Select option",
+    },
+
+    searchable: {
+        type: Boolean,
+        default: true,
+    },
+
+    multiple: {
+        type: Boolean,
+        default: false,
+    },
+
+    clearable: {
+        type: Boolean,
+        default: true,
+    },
+
+    disabled: {
+        type: Boolean,
+        default: false,
+    },
+
+    required: {
+        type: Boolean,
+        default: false,
+    },
+
+    canClear: {
+        type: Boolean,
+        default: true,
+    },
+
+    closeOnSelect: {
+        type: Boolean,
+        default: true,
+    },
+
+    hideSelected: {
+        type: Boolean,
+        default: false,
+    },
+
+    mode: {
+        type: String,
+        default: "single",
+        validator: (value) =>
+            ["single", "multiple", "tags"].includes(value),
+    },
+
+    max: {
+        type: Number,
+        default: undefined,
+    },
+
+    error: {
+        type: [String, Boolean],
+        default: false,
+    },
+
+    hint: {
+        type: String,
+        default: "",
+    },
+
+    size: {
+        type: String,
+        default: "md",
+        validator: (value) =>
+            ["sm", "md", "lg"].includes(value),
+    },
+
+    labelClass: {
+        type: [String, Array, Object],
+        default: "md",
+    },
+});
+
+const emit = defineEmits([
+    "update:modelValue",
+    "change",
+    "select",
+    "deselect",
+    "open",
+    "close",
+]);
+
+const generatedId = useId();
+
+const inputId = computed(() => {
+    return `multiselect-${generatedId}`;
+});
+
+const sizeClasses = computed(() => {
+    const sizes = {
+        sm: {
+            container: "min-h-[34px] text-xs",
+        },
+
+        md: {
+            container: "min-h-[42px] text-sm",
+        },
+
+        lg: {
+            container: "min-h-[48px] text-base",
+        },
+    };
+
+    return sizes[props.size];
+});
+
+const handleUpdate = async (value) => {
+    if (props.mode === "single" && value == null) {
+        document.activeElement?.blur();
+
+        await nextTick();
+
+        emit("update:modelValue", "");
+        return;
+    }
+
+    emit("update:modelValue", value);
+};
+
+const handleChange = (value) => {
+    emit("change", value);
+};
+
+const handleSelect = (value, option) => {
+    emit("select", value, option);
+};
+
+const handleDeselect = (value, option) => {
+    emit("deselect", value, option);
+};
+
+const handleOpen = () => {
+    emit("open");
+};
+
+const handleClose = () => {
+    emit("close");
+};
+</script>
+
 <template>
-    <div class="px-6">
-        <UiTitle align="center" title="Data Material" subtitle="Lorem Ipsum Dolores Amet" />
+    <div class="w-full">
+        <label v-if="label" :for="inputId" :class="[
+            'mb-1.5 block font-medium text-gray-700',
+            labelClass,
+        ]">
+            {{ label }}
 
-        <div class="mb-4 flex w-full flex-col gap-3 lg:flex-row lg:items-end">
-            <!-- Buyer -->
-            <div class="w-full lg:w-60">
-                <UiMultiSelect v-model="form.kk" label="KK" :options="kk" placeholder="-- Select KK --" @change="loadDataKp" />
-            </div>
+            <span v-if="required" class="ml-0.5 text-red-500">
+                *
+            </span>
+        </label>
 
-            <!-- KP -->
-            <div class="w-full lg:w-60">
-                <UiMultiSelect
-                    v-model="form.kp"
-                    :options="kpno"
-                    label="KP"
-                    placeholder="-- Select KP --"
-                />
-            </div>
 
-            <!-- Action -->
-            <div class="flex w-full flex-col gap-3 lg:ml-auto lg:w-auto lg:flex-row lg:items-end">
-                <!-- Export -->
-                <div class="flex items-center justify-start gap-1">
-                    <UiButton variant="teritary" class="shrink-0">
-                        <i class="fa-regular text-2xl fa-file-pdf"></i>
-                    </UiButton>
+        <Multiselect v-bind="$attrs" :id="inputId" :model-value="modelValue" :options="options" :label="optionLabel"
+            :value-prop="valueProp" :placeholder="placeholder" :searchable="searchable" :mode="mode"
+            :clearable="clearable" :can-clear="canClear" :disabled="disabled" :required="required"
+            :close-on-select="closeOnSelect" :hide-selected="hideSelected" :max="max" :class="[
+                sizeClasses.container,
 
-                    <UiButton variant="teritary" class="shrink-0">
-                        <i class="fa-regular text-2xl fa-file-excel"></i>
-                    </UiButton>
-                </div>
-                <!-- Search -->
-                <div class="w-full sm:w-50">
-                    <UiInput v-model="searchKeyword" placeholder="Search" class="w-full rounded-lg">
-                        <template #prefix>
-                            <MagnifyingGlassIcon class="h-5 w-5 text-gray-400" />
-                        </template>
-                    </UiInput>
-                </div>
-            </div>
-        </div>
+                error
+                    ? 'multiselect-error'
+                    : '',
+            ]" @update:model-value="handleUpdate" @change="handleChange" @select="handleSelect"
+            @deselect="handleDeselect" @open="handleOpen" @close="handleClose" />
 
-        <AgGridVue :theme="theme" :rowData="rawData" :columnDefs="columnDefs" :defaultColDef="defaultColDef"
-            :pagination="true" :paginationPageSize="10" :paginationPageSizeSelector="[5, 10, 20, 50, 100]"
-            domLayout="autoHeight" class="mb-10 my-zebra-grid" style="width: 100%;" :quickFilterText="searchKeyword" />
+        <!-- Error -->
+        <p v-if="error" class="mt-1.5 text-xs text-red-600">
+            {{ typeof error === "string" ? error : "" }}
+        </p>
+
+        <!-- Hint -->
+        <p v-else-if="hint" class="mt-1.5 text-xs text-gray-500">
+            {{ hint }}
+        </p>
     </div>
-
-    <UiModal v-model="showModal" :title="`Import KK`" size="md">
-        <div class="space-y-3 -mt-3">
-            <UiInput label="KK" placeholder="Input KK" v-model="form.kk"></UiInput>
-            <UiMultiSelect label="Factory CMT" placeholder="-- Select Factory --"></UiMultiSelect>
-        </div>
-        <template #footer>
-            <div class="flex justify-end">
-                <UiButton @click="showModal = false; isNewData = null" variant="danger">Cancel</UiButton>
-                <UiButton @click="isNewData ? storeNewData() : submit()" :disabled="!isFormChanged" class="ml-3">Save
-                </UiButton>
-            </div>
-        </template>
-    </UiModal>
 </template>
 
-<script setup>
-import { ref, onMounted, computed, defineComponent, h, watch } from "vue";
-import { useRouter } from "vue-router";
-import { AgGridVue } from "ag-grid-vue3";
-import { ModuleRegistry, AllCommunityModule, themeQuartz } from "ag-grid-community";
-import { useLoadingStore } from "@/stores/loading";
-import { ChevronDownIcon, PencilSquareIcon, TrashIcon, MagnifyingGlassIcon } from "@heroicons/vue/24/outline";
-import { customSwal } from "@/composable/customSwal";
-const { confirmDelete, success, warning, error } = customSwal;
+<style scoped>
+:deep(.multiselect) {
+    --ms-border-color: #d1d5db;
+    --ms-border-width: 1px;
+    --ms-radius: 0.25rem;
+    --ms-bg: #ffffff;
+    --ms-bg-disabled: #f3f4f6;
+    --ms-color: #111827;
+    --ms-placeholder-color: #9ca3af;
+    --ms-option-bg-pointed: #f3f4f6;
+    --ms-option-color-pointed: #111827;
+    --ms-option-bg-selected: #1fbcc3;
+    --ms-option-color-selected: #ffffff;
+    --ms-option-bg-selected-pointed: #19aeb5;
+    --ms-option-color-selected-pointed: #ffffff;
+    --ms-tag-bg: #e6f8f9;
+    --ms-tag-color: #147f84;
+    --ms-ring-color: rgba(31, 188, 195, 0.2);
 
-import UiButton from "@/components/ui/UiButton.vue"
-import UiInput from "@/components/ui/UiInput.vue"
-import UiModal from "@/components/ui/UiModal.vue"
-import UiCheckbox from "@/components/ui/UiCheckbox.vue"
-import UiTitle from "@/components/ui/UiTitle.vue"
-import UiMultiSelect from "@/components/ui/UiMultiSelect.vue"
-
-
-import api from "@/services/api";
-import Swal from "sweetalert2"
-
-import "sweetalert2/dist/sweetalert2.min.css"
-import '@vuepic/vue-datepicker/dist/main.css'
-
-
-ModuleRegistry.registerModules([AllCommunityModule]);
-
-const loading = useLoadingStore();
-const router = useRouter();
-const rawData = ref([]);
-const theme = themeQuartz;
-const dataSelected = ref([]);
-const action = ref("");
-const isNewData = ref(false)
-const showModal = ref(false)
-const showAddress = ref(false)
-const searchKeyword = ref('')
-const originalForm = ref(null)
-const kpno = ref([]);
-const kk = ref([]);
-
-const defaultColDef = {
-    sortable: true,
-    filter: false,
-    resizable: true,
-};
-
-const form = ref({
-    kk: "",
-    kp: "",
-});
-
-const maxDate = new Date()
-maxDate.setFullYear(maxDate.getFullYear() - 5)
-
-const isFormChanged = computed(() => {
-    if (!originalForm.value) return false
-
-    return Object.keys(form.value).some(
-        key => form.value[key] !== originalForm.value[key]
-    )
-})
-
-const setForm = () => {
-    const data = dataSelected.value;
-
-    if (!data) return;
-    form.value = {
-        idbuyer: data.idbuyer ?? "",
-        namabuyer: data.namabuyer ?? "",
-    };
-    isNewData.value = false;
-    originalForm.value = { ...form.value }
-};
-
-
-const setNewData = () => {
-    isNewData.value = true
-    dataSelected.value = "New Data";
-    action.value = "Add";
-
-    form.value = {
-        idbuyer: "",
-        namabuyer: "",
-    };
-
-    originalForm.value = { ...form.value }
-    showModal.value = true
-};
-
-const closeModal = () => {
-    showModal.value = false;
-    isNewData.value = false;
-};
-
-const ActionRenderer = defineComponent({
-    props: {
-        params: {
-            type: Object,
-            required: true,
-        },
-    },
-
-    setup(props) {
-
-        const editData = () => {
-            dataSelected.value = props.params.data;
-            action.value = "Edit Data";
-            setForm();
-            showModal.value = true;
-        };
-
-        const deleteData = () => {
-            dataSelected.value = props.params.data;
-            deleteThisData()
-        };
-
-        return () =>
-            h(
-                "div",
-                {
-                    class: "flex h-full items-center justify-center gap-3",
-                },
-                [
-                    h(
-                        "button",
-                        {
-                            type: "button",
-                            title: "Edit",
-                            class:
-                                "cursor-pointer text-blue-500 transition hover:text-blue-700",
-                            onClick: editData,
-                        },
-                        [
-                            h(PencilSquareIcon, {
-                                class: "h-5 w-5",
-                            }),
-                        ],
-                    ),
-
-                    h(
-                        "button",
-                        {
-                            type: "button",
-                            title: "Delete",
-                            class: "cursor-pointer text-red-500 hover:text-red-700",
-                            onClick: deleteData,
-                        },
-                        [
-                            h(TrashIcon, {
-                                class: "h-5 w-5",
-                            }),
-                        ],
-                    ),
-                ],
-            );
-    },
-});
-
-const columnDefs = [
-    {
-        headerName: "No",
-        field: "no",
-        width: 70,
-        sortable: false,
-        filter: false,
-        resizable: false,
-    },
-    {
-        field: "kk",
-        headerName: "KK",
-        minWidth: 125,
-        flex: 1,
-    },
-    {
-        field: "kpno",
-        headerName: "KP",
-        minWidth: 125,
-        flex: 1,
-    },
-    {
-        field: "po",
-        headerName: "PO",
-        minWidth: 125,
-        flex: 1,
-    },
-    {
-        field: "combine_pro",
-        headerName: "PRO",
-        minWidth: 125,
-        flex: 1,
-    },
-    {
-        field: "po_sap",
-        headerName: "PO CMT",
-        minWidth: 125,
-        flex: 1,
-    },
-    {
-        field: "Style",
-        headerName: "Style",
-        minWidth: 125,
-        flex: 1,
-    },
-    {
-        field: "Delivery Date",
-        headerName: "Delivery Date",
-        minWidth: 125,
-        valueGetter: (params) => {
-            return params.data?.alias ?? "-";
-        },
-        flex: 1,
-    },
-    {
-        field: "CM Factory",
-        headerName: "CM Factory",
-        minWidth: 150,
-        valueGetter: (params) => {
-            return params.data?.alias ?? "-";
-        },
-        flex: 1,
-    },
-    {
-        field: "Qty",
-        headerName: "Qty",
-        minWidth: 80,
-        valueGetter: (params) => {
-            return params.data?.qty ?? "-";
-        },
-        flex: 1,
-    },
-    {
-        field: "status",
-        headerName: "status",
-        minWidth: 150,
-        valueGetter: (params) => {
-            return params.data?.negarabill ?? "-";
-        },
-        flex: 1,
-    },
-    {
-        headerName: "Action",
-        minWidth: 80,
-        maxWidth: 80,
-        sortable: false,
-        filter: false,
-        resizable: false,
-        cellRenderer: ActionRenderer,
-    },
-];
-
-const loadData = async () => {
-    try {
-        if (!form.value.kk || !form.value.kp) {
-            rawData.value = [];
-            return;
-        }
-
-        loading.show();
-
-        const endpoint =
-            `/api/v1/datamaterial/getdata?` +
-            `kk=${encodeURIComponent(form.value.kk)}` +
-            `&kpno=${encodeURIComponent(form.value.kp)}`;
-
-        console.log("KK:", form.value.kk);
-        console.log("KP:", form.value.kp);
-        console.log("Endpoint:", endpoint);
-
-        const { data } = await api.get(endpoint);
-
-        console.log("API Response:", data);
-
-        rawData.value = (data?.data ?? []).map((item, index) => ({
-            ...item,
-            no: index + 1,
-        }));
-
-        console.log("Grid Data:", rawData.value);
-
-    } catch (err) {
-        console.error("LOAD DATA ERROR:", err);
-
-        if (err?.response?.status === 401) {
-            router.push("/login");
-        }
-    } finally {
-        loading.hide();
-    }
-};
-
-const loadDataKk = async () => {
-    try {
-        loading.show();
-
-        const endpoint = "/api/v1/datamaterial/getkk";
-
-        const { data } = await api.get(endpoint);
-
-        kk.value = (data?.data ?? []).map((item) => ({
-            value: item,
-            label: item,
-        }));
-    } catch (err) {
-        console.error("LOAD KK ERROR:", err);
-
-        if (err?.response?.status === 401) {
-            router.push("/login");
-        }
-    } finally {
-        loading.hide();
-    }
-};
-
-const loadDataKp = async () => {
-    try {
-        form.value.kp = "";
-        kpno.value = [];
-
-        if (!form.value.kk) {
-            return;
-        }
-
-        loading.show();
-
-        const endpoint = `/api/v1/datamaterial/getkpno?kk=${form.value.kk}`;
-
-        console.log(form.value.kk);
-
-        const { data } = await api.get(endpoint);
-        kpno.value = (data?.data ?? []).map((item) => ({
-            value: item.kpno ?? item,
-            label: item.kpno ?? item,
-        }));
-
-    } catch (err) {
-        console.error("LOAD KP ERROR:", err);
-
-        if (err?.response?.status === 401) {
-            router.push("/login");
-        }
-    } finally {
-        loading.hide();
-    }
-};
-
-onMounted(() => {
-    loadDataKk();
-    loadDataKp();
-});
-
-const storeNewData = async () => {
-    try {
-
-        if (
-            !form.value.alias ||
-            !form.value.namabuyer
-        ) {
-            await warning({
-                title: "Incomplete Data",
-                text: "Please complete all required fields.",
-            });
-            return
-        }
-
-        loading.show()
-        const endpoint = "api/v1/master/add-buyer";
-        const { data } = await api.post(
-            endpoint,
-            form.value
-        );
-        isNewData.value = false
-        closeModal()
-        loading.hide()
-        await success({
-            title: "Success",
-            text: data?.message || "Data updated successfully.",
-        });
-        await loadData()
-
-    } catch (err) {
-        loading.hide()
-        if (err?.response?.status === 401) {
-            router.push("/login")
-            return
-        }
-
-        await error({
-            title: "Update Failed",
-            text:
-                err?.response?.data?.message ||
-                err?.message ||
-                "Failed to update the data. Please try again.",
-        });
-    }
+    width: 100%;
 }
 
-const submit = async () => {
-    try {
-        loading.show()
-
-        const endpoint = `api/v1/master/update-buyer/${dataSelected.value.idbuyer}`;
-        const { data } = await api.put(
-            endpoint,
-            form.value
-        );
-
-        closeModal()
-        loading.hide()
-        await success({
-            title: "Success",
-            text: data?.message || "Data updated successfully.",
-        });
-        await loadData()
-    } catch (err) {
-        loading.hide()
-        if (err?.response?.status === 401) {
-            router.push("/login")
-            return
-        }
-
-        await error({
-            title: "Update Failed",
-            text:
-                err?.response?.data?.message ||
-                err?.message ||
-                "Failed to update the data. Please try again.",
-        });
-    }
+:deep(.multiselect.is-active) {
+    border-color: #1fbcc3;
+    box-shadow: 0 0 0 3px rgba(31, 188, 195, 0.12);
 }
 
-const deleteThisData = async () => {
+:deep(.multiselect-error) {
+    border-color: #f87171;
+}
 
-    const result = await confirmDelete();
-    if (!result.isConfirmed) {
-        return
-    }
+:deep(.multiselect-error.is-active) {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+}
 
-    try {
-        loading.show()
+:deep(.multiselect-dropdown) {
+    z-index: 60;
+    overflow: hidden;
+    border-radius: 0 0 0.5rem 0.5rem;
+}
 
-        const { data } = await api.delete(
-            `api/v1/master/delete-buyer/${dataSelected.value.idbuyer}`
-        )
+:deep(.multiselect-options) {
+    max-height: 300px;
+    overflow-y: auto;
+}
 
-        loading.hide()
-        await success({
-            title: "Success",
-            text: data?.message || "Data has been deleted successfully.",
-        });
-        await loadData()
+:deep(.multiselect-option:last-child) {
+    border-radius: 0 0 0.5rem 0.5rem;
+}
 
-    } catch (err) {
+:deep(.multiselect-option) {
+    transition: background-color 150ms ease;
+}
 
-        if (err?.response?.status === 401) {
-            router.push("/login")
-            return
-        }
+:deep(.multiselect-tag) {
+    border-radius: 0.375rem;
+}
 
-        loading.hide()
-        await error({
-            title: "Update Failed",
-            text:
-                err?.response?.data?.message ||
-                err?.message ||
-                "Failed to update the data. Please try again.",
-        });
+:deep(.multiselect-placeholder) {
+    color: #9ca3af;
+    
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+    padding-right: 1.5rem;
+
+    font-size: 0.8rem;
+}
+
+@media (min-width: 768px) {
+    :deep(.multiselect-placeholder) {
+        font-size: inherit; 
     }
 }
-</script>
+</style>
