@@ -1,303 +1,45 @@
-<script setup>
-import { computed, useId, nextTick } from "vue";
-import Multiselect from "@vueform/multiselect";
-
-import "@vueform/multiselect/themes/default.css";
-
-defineOptions({
-    inheritAttrs: false,
+onMounted(() => {
+    loadDataKk();
 });
 
-const props = defineProps({
-    modelValue: {
-        type: [String, Number, Object, Array, Boolean, null],
-        default: null,
-    },
-
-    canClear: {
-        type: Boolean,
-        default: true,
-    },
-
-    options: {
-        type: Array,
-        default: () => [],
-    },
-
-    label: {
-        type: String,
-        default: "",
-    },
-
-    optionLabel: {
-        type: String,
-        default: "label",
-    },
-
-    valueProp: {
-        type: String,
-        default: "value",
-    },
-
-    placeholder: {
-        type: String,
-        default: "Select option",
-    },
-
-    searchable: {
-        type: Boolean,
-        default: true,
-    },
-
-    multiple: {
-        type: Boolean,
-        default: false,
-    },
-
-    clearable: {
-        type: Boolean,
-        default: true,
-    },
-
-    disabled: {
-        type: Boolean,
-        default: false,
-    },
-
-    required: {
-        type: Boolean,
-        default: false,
-    },
-
-    canClear: {
-        type: Boolean,
-        default: true,
-    },
-
-    closeOnSelect: {
-        type: Boolean,
-        default: true,
-    },
-
-    hideSelected: {
-        type: Boolean,
-        default: false,
-    },
-
-    mode: {
-        type: String,
-        default: "single",
-        validator: (value) =>
-            ["single", "multiple", "tags"].includes(value),
-    },
-
-    max: {
-        type: Number,
-        default: undefined,
-    },
-
-    error: {
-        type: [String, Boolean],
-        default: false,
-    },
-
-    hint: {
-        type: String,
-        default: "",
-    },
-
-    size: {
-        type: String,
-        default: "md",
-        validator: (value) =>
-            ["sm", "md", "lg"].includes(value),
-    },
-
-    labelClass: {
-        type: [String, Array, Object],
-        default: "md",
-    },
+watch(() => form.value.kk, () => {
+    loadDataKp();
 });
 
-const emit = defineEmits([
-    "update:modelValue",
-    "change",
-    "select",
-    "deselect",
-    "open",
-    "close",
-]);
-
-const generatedId = useId();
-
-const inputId = computed(() => {
-    return `multiselect-${generatedId}`;
+watch(() => form.value.kp, () => {
+    loadData();
 });
 
-const sizeClasses = computed(() => {
-    const sizes = {
-        sm: {
-            container: "min-h-[34px] text-xs",
-        },
+const loadDataKp = async () => {
+    try {
+        form.value.kp = "";
+        kpno.value = [];
+        rawData.value = [];
 
-        md: {
-            container: "min-h-[42px] text-sm",
-        },
+        if (!form.value.kk) return;
 
-        lg: {
-            container: "min-h-[48px] text-base",
-        },
-    };
+        loading.show();
 
-    return sizes[props.size];
-});
+        const { data } = await api.get(
+            `/api/v1/datamaterial/getkpno?kk=${encodeURIComponent(form.value.kk)}`
+        );
 
-const handleUpdate = async (value) => {
-    if (props.mode === "single" && value == null) {
-        document.activeElement?.blur();
+        console.log("KP RESPONSE:", data?.data);
 
-        await nextTick();
-
-        emit("update:modelValue", "");
-        return;
+        kpno.value = (data?.data ?? []).map((item) => {
+            const val = String(typeof item === "object" ? item.kpno : item);
+            return { value: val, label: val };
+        });
+    } catch (err) {
+        console.error("LOAD KP ERROR:", err);
+        if (err?.response?.status === 401) router.push("/login");
+    } finally {
+        loading.hide();
     }
-
-    emit("update:modelValue", value);
 };
 
-const handleChange = (value) => {
-    emit("change", value);
-};
-
-const handleSelect = (value, option) => {
-    emit("select", value, option);
-};
-
-const handleDeselect = (value, option) => {
-    emit("deselect", value, option);
-};
-
-const handleOpen = () => {
-    emit("open");
-};
-
-const handleClose = () => {
-    emit("close");
-};
-</script>
-
-<template>
-    <div class="w-full">
-        <label v-if="label" :for="inputId" :class="[
-            'mb-1.5 block font-medium text-gray-700',
-            labelClass,
-        ]">
-            {{ label }}
-
-            <span v-if="required" class="ml-0.5 text-red-500">
-                *
-            </span>
-        </label>
-
-
-        <Multiselect v-bind="$attrs" :id="inputId" :model-value="modelValue" :options="options" :label="optionLabel"
-            :value-prop="valueProp" :placeholder="placeholder" :searchable="searchable" :mode="mode"
-            :clearable="clearable" :can-clear="canClear" :disabled="disabled" :required="required"
-            :close-on-select="closeOnSelect" :hide-selected="hideSelected" :max="max" :class="[
-                sizeClasses.container,
-
-                error
-                    ? 'multiselect-error'
-                    : '',
-            ]" @update:model-value="handleUpdate" @change="handleChange" @select="handleSelect"
-            @deselect="handleDeselect" @open="handleOpen" @close="handleClose" />
-
-        <!-- Error -->
-        <p v-if="error" class="mt-1.5 text-xs text-red-600">
-            {{ typeof error === "string" ? error : "" }}
-        </p>
-
-        <!-- Hint -->
-        <p v-else-if="hint" class="mt-1.5 text-xs text-gray-500">
-            {{ hint }}
-        </p>
-    </div>
-</template>
-
-<style scoped>
-:deep(.multiselect) {
-    --ms-border-color: #d1d5db;
-    --ms-border-width: 1px;
-    --ms-radius: 0.25rem;
-    --ms-bg: #ffffff;
-    --ms-bg-disabled: #f3f4f6;
-    --ms-color: #111827;
-    --ms-placeholder-color: #9ca3af;
-    --ms-option-bg-pointed: #f3f4f6;
-    --ms-option-color-pointed: #111827;
-    --ms-option-bg-selected: #1fbcc3;
-    --ms-option-color-selected: #ffffff;
-    --ms-option-bg-selected-pointed: #19aeb5;
-    --ms-option-color-selected-pointed: #ffffff;
-    --ms-tag-bg: #e6f8f9;
-    --ms-tag-color: #147f84;
-    --ms-ring-color: rgba(31, 188, 195, 0.2);
-
-    width: 100%;
-}
-
-:deep(.multiselect.is-active) {
-    border-color: #1fbcc3;
-    box-shadow: 0 0 0 3px rgba(31, 188, 195, 0.12);
-}
-
-:deep(.multiselect-error) {
-    border-color: #f87171;
-}
-
-:deep(.multiselect-error.is-active) {
-    border-color: #ef4444;
-    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
-}
-
-:deep(.multiselect-dropdown) {
-    z-index: 60;
-    overflow: hidden;
-    border-radius: 0 0 0.5rem 0.5rem;
-}
-
-:deep(.multiselect-options) {
-    max-height: 300px;
-    overflow-y: auto;
-}
-
-:deep(.multiselect-option:last-child) {
-    border-radius: 0 0 0.5rem 0.5rem;
-}
-
-:deep(.multiselect-option) {
-    transition: background-color 150ms ease;
-}
-
-:deep(.multiselect-tag) {
-    border-radius: 0.375rem;
-}
-
-:deep(.multiselect-placeholder) {
-    color: #9ca3af;
-    
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    width: 100%;
-    padding-right: 1.5rem;
-
-    font-size: 0.8rem;
-}
-
-@media (min-width: 768px) {
-    :deep(.multiselect-placeholder) {
-        font-size: inherit; 
-    }
-}
-</style>
+{ field: "style", headerName: "Style", minWidth: 125, flex: 1 },
+{ field: "delivery_date", headerName: "Delivery Date", minWidth: 125, flex: 1 },
+{ field: "cm_factory", headerName: "CM Factory", minWidth: 150, flex: 1 },
+{ field: "qty", headerName: "Qty", minWidth: 80, flex: 1 },
+{ field: "status", headerName: "Status", minWidth: 150, flex: 1 },
