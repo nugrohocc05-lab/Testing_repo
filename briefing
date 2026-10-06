@@ -8,29 +8,25 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\WatchController;
 use App\Http\Models\CardAllocation;
 use App\Http\Models\Color;
-use App\Http\Models\DOStock;
-use App\Http\Models\FactoryParameter;
-use App\Http\Models\HistoryPO;
 use App\Http\Models\Main\Buyer;
 use App\Http\Models\Main\FGStorageStock;
+use App\Http\Models\Main\FGReceiveGarmentStock; // sesuaikan namespace jika berbeda
 use App\Http\Models\Main\MainCardConvert;
-use App\Http\Models\Main\MasterEmployeeGroup;
 use App\Http\Models\Main\MasterGroupBuyer;
 use App\Http\Models\Main\Style;
 use App\Http\Models\Main\SubStyle;
-use App\Http\Models\MasterId;
 use App\Http\Models\OutputDetail;
-use App\Http\Models\OutputDetailFinalInspection;
-use App\Http\Models\OutputDetailPacking;
 use App\Http\Models\OutputDetailPackingStock;
 use App\Http\Models\PurchaseOrder;
-use App\Http\Models\SewingOutput;
 use App\Http\Models\Size;
 use Carbon\Carbon;
 
 class PackingReceiveFromStorageController extends Controller
 {
     protected $m_modul = 'packing';
+
+    const SRC_STORAGE = 'storage';
+    const SRC_RECEIVE = 'receive';
 
     function __construct()
     {
@@ -43,85 +39,46 @@ class PackingReceiveFromStorageController extends Controller
         return view('packing::packingreceivefromstorage.index');
     }
 
-    function getdatado(Request $request) {
-        try {
-            $storage = FGStorageStock::where('delivery_order_out',$request->donumber)
-                        ->whereNull('deleted_at')
-                        ->get();
-            
-            if(!$storage){
-                throw new \Exception( "Data not found!");
-            }
-
-            foreach($storage as $item){
-                if($item->date_receive_packing || $item->date_receive_packing ){
-                    throw new \Exception( $item->barcode. " Has been received Packing!");
-                }
-                if(!$item->gi_number){
-                    throw new \Exception("Gi First!");
-                }
-            }
-
-            $od = (new OutputDetail())->getTable();
-            $po = (new PurchaseOrder())->getTable();           
-
-            $data = OutputDetail::select(
-                    "$od.barcode",
-                    "$od.kpno",
-                    "$od.sub_style_id",
-                    "$od.combine_pro",
-                    "$od.idpo",
-                    "$od.idcolor",
-                    "$od.idsize",
-                    "$po.idstyle",
-                    "$po.po",
-                    "$po.idbuyer",
-                    "$po.season",
-                )
-                ->whereIn("$od.barcode",$storage->pluck('barcode'))
-                ->join($po, function ($join) use ($po, $od) {
-                    $join->on("$po.idpo", '=', "$od.idpo");
-                    $join->on("$po.kpno", '=', "$od.kpno");
-                })
-                ->get();
-
-            foreach($data as $d){
-                $sty = Style::find($d->idstyle);
-                $d->style = $sty->nmstyle ?? '-';
-                $substy = SubStyle::find($d->sub_style_id);
-                $d->substyle = $substy->name ?? '-';
-                $color = Color::find($d->idcolor);
-                $d->color = $color->nmcolor ?? '-';
-                $size = Size::find($d->idsize);
-                $d->size = $size->nmsize ?? '-';
-            }
-            
-           return response()->json($data);
-
-        } catch (\Throwable $e) {
-            return response()->json($e->getMessage(), 400);
-        }
+    private function stockModel($source)
+    {
+        return $source === self::SRC_RECEIVE ? FGReceiveGarmentStock::class : FGStorageStock::class;
     }
 
-    function getdata(Request $request) {
+    function getdatado(Request $request) {
         try {
-            $card = MainCardConvert::where("id_card", $request->barcode)
-                ->first();
+            // 1. Cek FGStorageStock dulu
+            $source = self::SRC_STORAGE;
+            $stocks = FGStorageStock::where('delivery_order_out', $request->donumber)
+                        ->whereNull('deleted_at')
+                        ->get();
 
-            if(!$card){
-                throw new \Exception("Barcode not found!");
+            // 2. Kalau tidak ada, cek FGReceiveGarmentStock
+            if ($stocks->isEmpty()) {
+                $source = self::SRC_RECEIVE;
+                $stocks = FGReceiveGarmentStock::where('delivery_order', $request->donumber)
+                            ->whereNull('deleted_at')
+                            ->get();
             }
 
-            $barcode = $card->id_convert;
-
-            $storage = FGStorageStock::where('barcode', $barcode)->first();
-            if(!$storage) {
-                throw new \Exception("Barcode not match!");
+            if ($stocks->isEmpty()) {
+                throw new \Exception("Data not found!");
             }
 
-            if($storage->date_receive_packing || $storage->date_receive_packing ) {
-                    throw new \Exception( $storage->barcode. " Has been received Packing!");
+            // 3. Validasi sesuai sumber
+            foreach ($stocks as $item) {
+                if ($source === self::SRC_STORAGE) {
+                    if ($item->date_receive_packing) {
+                        throw new \Exception($item->barcode . " Has been received Packing!");
+                    }
+                    if (!$item->gi_number) {
+                        throw new \Exception("Gi First!");
+                    }
+                } else {
+                    if ($item->date_gi) {
+                        throw new \Exception($item->barcode . " Has been received Packing!");
+                    }
                 }
+            }
 
             $od = (new OutputDetail())->getTable();
             $po = (new PurchaseOrder())->getTable();
@@ -139,20 +96,86 @@ class PackingReceiveFromStorageController extends Controller
                     "$po.idbuyer",
                     "$po.season",
                 )
-                ->where("$od.barcode",$barcode)
+                ->whereIn("$od.barcode", $stocks->pluck('barcode'))
+                ->join($po, function ($join) use ($po, $od) {
+                    $join->on("$po.idpo", '=', "$od.idpo");
+                    $join->on("$po.kpno", '=', "$od.kpno");
+                })
+                ->get();
+
+            foreach ($data as $d) {
+                $sty = Style::find($d->idstyle);
+                $d->style = $sty->nmstyle ?? '-';
+                $substy = SubStyle::find($d->sub_style_id);
+                $d->substyle = $substy->name ?? '-';
+                $color = Color::find($d->idcolor);
+                $d->color = $color->nmcolor ?? '-';
+                $size = Size::find($d->idsize);
+                $d->size = $size->nmsize ?? '-';
+            }
+
+            return response()->json([
+                'source' => $source,
+                'items'  => $data,
+            ]);
+
+        } catch (\Throwable $e) {
+            return response()->json($e->getMessage(), 400);
+        }
+    }
+
+    function getdata(Request $request) {
+        try {
+            $source = $request->source;
+            $model  = $this->stockModel($source);
+
+            $card = MainCardConvert::where("id_card", $request->barcode)->first();
+            if (!$card) {
+                throw new \Exception("Barcode not found!");
+            }
+
+            $barcode = $card->id_convert;
+
+            $stock = $model::where('barcode', $barcode)->first();
+            if (!$stock) {
+                throw new \Exception("Barcode not match!");
+            }
+
+            $already = $source === self::SRC_RECEIVE ? $stock->date_gi : $stock->date_receive_packing;
+            if ($already) {
+                throw new \Exception($stock->barcode . " Has been received Packing!");
+            }
+
+            $od = (new OutputDetail())->getTable();
+            $po = (new PurchaseOrder())->getTable();
+
+            $data = OutputDetail::select(
+                    "$od.barcode",
+                    "$od.kpno",
+                    "$od.sub_style_id",
+                    "$od.combine_pro",
+                    "$od.idpo",
+                    "$od.idcolor",
+                    "$od.idsize",
+                    "$po.idstyle",
+                    "$po.po",
+                    "$po.idbuyer",
+                    "$po.season",
+                )
+                ->where("$od.barcode", $barcode)
                 ->join($po, function ($join) use ($po, $od) {
                     $join->on("$po.idpo", '=', "$od.idpo");
                     $join->on("$po.kpno", '=', "$od.kpno");
                 })
                 ->first();
 
-            if(!$data){
+            if (!$data) {
                 throw new \Exception("Data not found!");
             }
-          
+
             $data->grade = $data->grade ?? "OK";
             $byr = Buyer::find($data->idbuyer);
-            $gbyr = MasterGroupBuyer::find($byr->groupbuyer??null);
+            $gbyr = MasterGroupBuyer::find($byr->groupbuyer ?? null);
             $data->nmgroupbuyer = $byr->nmbuyer ?? '-';
             $data->nmbuyer = $gbyr->group_name ?? '-';
             $sty = Style::find($data->idstyle);
@@ -163,7 +186,7 @@ class PackingReceiveFromStorageController extends Controller
             $data->nmcolor = $color->nmcolor ?? '-';
             $size = Size::find($data->idsize);
             $data->nmsize = $size->nmsize ?? '-';
-                
+
             return response()->json($data);
 
         } catch (\Throwable $e) {
@@ -175,11 +198,11 @@ class PackingReceiveFromStorageController extends Controller
         try {
             preconnect(session('db'));
 
-            if(!$request->packingid){
+            if (!$request->packingid) {
                 throw new \Exception("Invalid Garment ID!");
             }
 
-            if(!$request->barcode){
+            if (!$request->barcode) {
                 throw new \Exception("Scan Garment ID First!");
             }
 
@@ -189,31 +212,29 @@ class PackingReceiveFromStorageController extends Controller
 
             $cek_alloc = CardAllocation::find($request->packingid);
 
-            if(!$cek_alloc || $cek_alloc->line != '104'){
+            if (!$cek_alloc || $cek_alloc->line != '104') {
                 throw new \Exception("Allocation Packing First!");
             }
 
-            if($card){
+            if ($card) {
                 throw new \Exception("Card ID is Used!");
             }
 
-            $data  = $request->barcode;
-                    
-            return response()->json($data);
-        }catch (\Throwable $e) {
+            return response()->json($request->barcode);
+        } catch (\Throwable $e) {
             return response()->json($e->getMessage(), 400);
         }
     }
-    
+
     function card_convert(Request $request){
         preconnect(session('db'));
         try {
-            foreach($request->data as $d){
+            foreach ($request->data as $d) {
                 $card = MainCardConvert::where('id_convert', $d['barcode'])
                             ->where('factory_id', session('db')->iddb)
                             ->where('id_reference', '06')
                             ->first();
-                if($card){
+                if ($card) {
                     $card->id_card = $d['packingid'];
                     $card->save();
                 }
@@ -228,35 +249,47 @@ class PackingReceiveFromStorageController extends Controller
         preconnect(session('db'));
         try {
             $db = getconnection(session('db'));
-            
+
+            $source = $request->source;
+            $model  = $this->stockModel($source);
+
             $data = $request->barcode;
-            if(count($data)<1){
+            if (!$data || count($data) < 1) {
                 throw new \Exception("Scan minimum 1 Garment ID!");
             }
 
             DB::beginTransaction();
-            foreach($data as $d){
+            foreach ($data as $d) {
 
-                $barcode = $d['barcode'];
+                $barcode   = $d['barcode'];
                 $packingid = $d['packingid'];
 
-                $fgs = FGStorageStock::where('barcode', $barcode)->first();
+                $stock = $model::where('barcode', $barcode)->first();
 
-                if(!$fgs){
+                if (!$stock) {
                     throw new \Exception($barcode . " is Not Found!");
                 }
 
-                if($fgs->date_receive_packing){
-                    throw new \Exception($barcode . " Already receive packing!");
-                }
+                $now = Carbon::now();
 
-                $fgs->date_receive_packing = Carbon::now();
-                $fgs->userid_receive_packing = session('user')->nik ?? null;
-                $fgs->deleted_at = Carbon::now();
-                $fgs->save();
+                if ($source === self::SRC_RECEIVE) {
+                    if ($stock->date_gi) {
+                        throw new \Exception($barcode . " Already receive packing!");
+                    }
+                    $stock->date_interface = $now;
+                    $stock->date_gi = $now;
+                } else {
+                    if ($stock->date_receive_packing) {
+                        throw new \Exception($barcode . " Already receive packing!");
+                    }
+                    $stock->date_receive_packing = $now;
+                }
+                $stock->userid_receive_packing = session('user')->nik ?? null;
+                $stock->deleted_at = $now;
+                $stock->save();
 
                 $odps = OutputDetailPackingStock::on($db)->where('barcode', $barcode)->first();
-                if($odps){
+                if ($odps) {
                     $odps->tglpackingout = null;
                     $odps->nikpackingout = null;
                     $odps->id_set = null;
@@ -267,11 +300,11 @@ class PackingReceiveFromStorageController extends Controller
                 $card = MainCardConvert::where('id_convert', $barcode)->first();
 
                 $cek_alloc = CardAllocation::find($packingid);
-                if(!$cek_alloc or ('104' != $cek_alloc->line)){
+                if (!$cek_alloc or ('104' != $cek_alloc->line)) {
                     throw new \Exception("Allocation Packing First!");
                 }
 
-                if($card){
+                if ($card) {
                     $card->id_card = $packingid;
                     $card->save();
                 } else {
@@ -283,553 +316,12 @@ class PackingReceiveFromStorageController extends Controller
                     $mc->save();
                 }
             }
-            return response()->json('Successfully Receieve Packing From Storage.');
+
             DB::commit();
+            return response()->json('Successfully Receieve Packing From Storage.');
         } catch (\Throwable $e) {
             DB::rollback();
-            throw new \Exception($e->getMessage());
+            return response()->json($e->getMessage(), 400);
         }
     }
 }
-
-
-@extends('layouts.master')
-@section('extracss')
-<style>
-    .modal-dialog-centered{
-        margin: 30vh auto !important;
-        border-radius: 10px;
-        overflow: hidden;
-    }
-    .detail-holder table{
-        font-size: 15px !important;
-        font-weight: 600 !important;
-    }
-    .detail-holder table tr{
-        height: 27px;
-    }
-    .header-holder{
-        margin-top: 20px;
-    }
-    .table-row{
-        min-width: fit-content;
-        height: fit-content;
-        max-height: calc(100vh - 400px);
-        overflow-y: auto;
-        overflow-x: hidden;
-    }
-    .table{
-        margin-bottom: 0 !important;
-    }
-
-    td.no-data{
-        min-width: 345px;
-    }
-    .table thead{
-        position: sticky;
-        top: 0;
-        background: #fff;
-    }
-    .table thead tr:first-child th{
-        border-style: solid solid hidden !important;
-    }
-    .table-footer{
-        margin-top: 10px
-    }
-    .header-holder{
-        display: none;
-    }
-    .box-footer{
-        position: absolute;
-        bottom: 0;
-        width: 100%;
-        display: none;
-    }
-    .status{
-        margin-top: 15px;
-        font-size: 17px;
-        font-weight: 600;
-    }
-    .table-row{
-        min-width: fit-content;
-        height: fit-content;
-        max-height: calc(100vh - 490px);
-        overflow-y: auto;
-        overflow-x: hidden;
-    }
-    .table{
-        margin-bottom: 0 !important;
-    }
-
-    td.no-data{
-        min-width: 345px;
-    }
-    .table thead{
-        position: sticky;
-        top: 0;
-        background: #fff;
-    }
-    .table thead tr:first-child th{
-        border-style: solid solid hidden !important;
-    }
-    .table-footer{
-        margin-top: 10px
-    }
-    .header-holder{
-        display: none;
-    }
-    .table-holder{
-        display: none;
-    }
-</style>
-@endsection
-@section('content')
-<div class="container-fluid">
-    <div class="row" style="margin-top: 7rem;">
-        <div class="col-sm-12">
-            <div class="box box-primary" style="height: calc(100vh - 130px)">
-                <div class="box-header with-border">
-                    <div class="box-title"><b>Packing Receive From Storage</b></div>
-                </div>
-                <div class="box-body scanner">
-                    <div class="row" id="donumber-holder">
-                        <div class="col-md-4 col-sm-4"></div>
-                        <div class="col-md-4 col-sm-4 text-center">
-                            <label>Scan DO Storage</label>
-                            <input type="text" name="donumber" id="donumber"
-                                class="form-control nospecialcharacter" required="required" autocomplete="off">
-                        </div>
-                    </div>
-                    <div class="row" id="barcode-holder" style="display: none">
-                        <div class="col-md-4 col-sm-4"></div>
-                        <div class="col-md-4 col-sm-4 text-center">
-                            <label>Scan Garment ID</label>
-                            <input type="text" name="barcode" id="barcode"
-                                class="form-control nospecialcharacter" required="required" autocomplete="off">
-                        </div>
-                    </div>
-                    <div id="table-holder" style="display: none">
-                        <div class="box-body">
-                            <div class="table-row">
-                                <table class="table table-bordered table-striped" style="width: 100%">
-                                    <thead>
-                                        <tr>
-                                            <th>No</th>
-                                            <th>Garment ID</th>
-                                            <th>Style</th>
-                                            <th>Sub-Style</th>
-                                            <th>Color</th>
-                                            <th>Size</th>
-                                            <th>#</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="scanbody"></tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                {{-- @if (isset($access) and $access == 'f') --}}
-                <div class="box-footer">
-                    <div style="float: left;margin-top:5px;">
-                        <b>Total Records : <span id="totalrecords">0</span></b>
-                    </div>
-                    <div style="right: 0px; float: right;">
-                        <a class="btn btn-danger" id="btn-cancel">Cancel</a>
-                        <a class="btn btn-success" id="btn-finish" style="display: none">Finish</a>
-                    </div>
-                </div>
-                {{-- @endif --}}
-            </div>
-        </div>
-    </div>
-</div>
-<div class="modal fade" id="modal-scan" role="dialog" data-backdrop="static" data-keyboard="false" style="display: none;">
-    <div class="modal-dialog modal-dialog-centered modal-md">
-        <!-- Modal content-->
-        <div class="modal-content">
-            <div class="modal-body detail-holder">
-                <center>
-                    <h3 style="margin-bottom: 20px;"><b>Generate RFID Packing ID</b></h3>
-                    <div class="row body-modal detail-holder" style="margin-top: 40px">
-                        <center>
-                            <table >
-                                <tr>
-                                    <td style="width: 95px">Garment ID</td><td style="width: 20px">:</td><td style="min-width: 175px" id="last-barcode"></td>
-                                    <td style="width: 85px">Sub-Style</td><td style="width: 20px">:</td><td id="nmsubstyle"></td>
-                                </tr>
-                                <tr>
-                                    <td style="width: 95px">Style</td><td style="width: 20px">:</td><td id="nmstyle"></td>
-                                    <td style="width: 85px">Grade</td><td style="width: 20px">:</td><td id="grade"></td>
-                                </tr>
-                                <tr>
-                                    <td style="width: 95px">Color</td><td style="width: 20px">:</td><td id="nmcolor"></td>
-                                    <td style="width: 85px">Size</td><td style="width: 20px">:</td><td id="nmsize"></td>
-                                </tr>
-                                <tr>
-                                    <td style="width: 95px">KP</td><td style="width: 20px">:</td><td id="kpno"></td>
-                                    <td style="width: 85px">season</td><td style="width: 20px">:</td><td id="season"></td>
-                                </tr>
-                            </table>
-                        </center>
-                    </div>
-                    <div class="row body-modal" style="margin-top: 30px">
-                        <div class="col-sm-12 col-md-12">
-                            <label>Scan Your Packing ID</label>
-                            <input type="text" name="packingid" id="packingid"
-                                class="form-control nospecialcharacter scanonly" required="required" autofocus autocomplete="off">
-                        </div>
-                    </div>
-                    <div class="status"></div>
-                </center>
-            </div>
-        </div>
-    </div>
-</div>
-@include('layouts.loading')
-@endsection
-
-@section('extrascript')
-<script type="text/javascript">
-    var dtbarcode = [];
-    var bcd_len = [];
-
-    var last_barcode = 0;
-
-    var count = 0;
-    var qty = 0;
-
-    $(document).ready(function() {
-        $('#donumber').focus();
-        $('.box:not(.table)').on('click', function () {
-            if ($('#donumber-holder').is(':visible')) {
-                $('#donumber').focus();
-            } else if ($('#modal-scan ').is(':visible')){
-                $('#packingid').focus();
-            }
-            else {
-                $('#barcode').focus();
-            }
-        });
-
-        $('.modal-scan').on('click', function () {
-            $('#packingid').focus();
-        });
-
-        var delay = (function(){
-            var timer = 0;
-            return function(callback, ms){
-                clearTimeout (timer);
-                    timer = setTimeout(callback, ms);
-                };
-        })();
-
-        function processDoNumber(e) {
-            e.preventDefault();
-
-            $('#donumber').attr('readonly','readonly');
-            $('#donumber').blur();
-
-            const donumber = $("#donumber").val();
-            $('#loading').show();
-            $.ajax({
-                type: 'GET',
-                url: `{{route("packing_packingreceivefromstoragegetdatado") }}`,
-                dataType: "json",
-                data: {
-                    donumber
-                },
-                success: function(r) {
-                    let rows = r.map((item, i) => {
-                        qty = qty+1;
-                        return `
-                            <tr class="tr${item.key}">
-                                <td class="row-number">${$('.row-number').length + i + 1}</td>
-                                <td>${item.barcode}</td>
-                                <td>${item.style}</td>
-                                <td>${item.substyle}</td>
-                                <td>${item.color}</td>
-                                <td>${item.size}</td>
-                                <td>
-                                    <div style="pointer-events: none;">
-                                        <input type="checkbox" style="height:20px;width:20px;" id="${item.barcode}" class="setstyle minimal"" name="setsubstyle[]">
-                                    </div>
-                                </td>
-                            </tr>
-                        `;
-                    }).join('');
-
-                    if(qty == '0'){
-                        swal('Warning!', 'Invalid DO Type! Please scan DO Storage', 'warning').then(()=>{
-                            $('#donumber').removeAttr('readonly');
-                            $('#donumber').val('');
-                        });
-                        return;
-                    }
-
-                    $('#scanbody').append(rows);
-                    $('#donumber-holder').hide();
-                    $('#gi-holder').hide();
-                    $('#scanout-body').show();
-                    $('#table-holder').show();
-                    $('#barcode-holder').show();
-                    $('#barcode').focus();
-                    $('.box-footer').show();
-                },
-                error: (e) => {
-                    swal("Warning", e.responseJSON, 'warning').then(function(){
-                        $('#donumber').val('');
-                        $('#donumber').removeAttr('readonly');
-                        $('#donumber').focus();
-                    });
-                },
-                complete: () => {
-                    $('#donumber').val('');
-                    $('#donumber').removeAttr('readonly');
-                    $('#donumber').focus();
-                    $('#loading').hide();
-                }
-            });
-        }
-
-        App.bindBarcodeHandler({
-            selector: "#donumber",
-            preventCopyPaste: false,
-            onChange: processDoNumber,
-        })
-
-        function processBarcode(e) {
-            e.preventDefault();
-            if ($('#barcode').val().length >= 24) {
-                $('#barcode').attr('readonly','readonly');
-                $('#barcode').blur();
-
-                const barcode = $("#barcode").val();
-                let totalrecord = $('#totalrecords').text();
-                $('#loading').show();
-                $.ajax({
-                    type: 'GET',
-                    url: `{{route("packing_packingreceivefromstoragegetdata") }}`,
-                    dataType: "json",
-                    data: {
-                        barcode
-                    },
-                    success: function(r) {
-                        if(bcd_len.includes(r.barcode)){
-                            swal('Warning!', 'Garment ID already scanned!', 'warning').then(()=>{
-                                $('#barcode').removeAttr('readonly');
-                                $('#barcode').val('');
-                                $('#barcode').focus();
-                            });
-                            return;
-                        } else if (count == qty){
-                            swal('Warning!', 'Quantity has been fulfilled!', 'warning').then(()=>{
-                                $('#barcode').removeAttr('readonly');
-                                $('#barcode').val('');
-                                $('#barcode').focus();
-                            });
-                            return;
-                        }else{
-                            var $el = $('#' + r.barcode);
-
-                            if ($el.length) {
-                                last_barcode = r.barcode;
-                                setHeader(r)
-                                bcd_len.push(r.barcode);
-                                count = count + 1;
-                                $("#totalrecords").text(count)
-
-                                $el.on('ifChecked', function () {});
-                                $el.iCheck('check');
-                                $('#modal-scan').modal('show');
-                            } else {
-                                swal('Warning!', 'Wrong Garment ID!', 'warning').then(()=>{
-                                    $('#barcode').val('');
-                                });
-                                return;
-                            }
-                            $('#barcode').val('');
-                            if(count === qty){
-                                $('#btn-finish').show();
-                            }
-                        }
-                    },
-                    error: (e) => {
-                        swal("Warning", e.responseJSON, 'warning').then(function(){
-                            $('#barcode').val('');
-                            $('#barcode').removeAttr('readonly');
-                            $('#barcode').focus();
-                        });
-                    },
-                    complete: () => {
-                        $('#barcode').val('');
-                        $('#barcode').removeAttr('readonly');
-                        $('#loading').hide();
-                    }
-                });
-            }else{
-                $('#barcode').val('');
-                $('#barcode').removeAttr('readonly');
-                $('#barcode').focus();
-            }
-        }
-
-        App.bindBarcodeHandler({
-            onChange: processBarcode
-        })
-
-        function processPackingId(e) {
-            $("#packingid").blur();
-            e.preventDefault();
-            $('#loading').show();
-            const packingid = $("#packingid").val();
-            $.ajax({
-                type: 'GET',
-                url: `{{ route('packing_packingreceivefromstoragegetpackingid') }}`,
-                dataType: "json",
-                data: {
-                    packingid: packingid,
-                    barcode: last_barcode,
-                },
-                success: function(d) {
-                    if(d){
-                        const found = dtbarcode.some(el => el.packingid === packingid);
-
-                        if (found) {
-                            swal("Warning", "Card Convert ID Already Scanned", 'warning').then(() => {
-                                $('#packingid').val('');
-                            });
-                            return;
-                        }
-                        dtbarcode.push({ "barcode": last_barcode, "packingid": packingid});
-                        $('#modal-scan').modal('hide');
-                        console.log(dtbarcode);
-                    }
-                },
-                error: (e) => {
-                    $('#packingid').val('');
-                    $('#packingid').blur();
-                    swal("Warning", e.responseJSON, 'warning').then(function(){
-                        $('#packingid').focus();
-                        $('#packingid').val('');
-                    });
-                },
-                complete: () => {
-                    $('#packingid').val('');
-                    $('#barcode').focus();
-                    $('#loading').hide();
-                }
-            });
-        }
-
-        App.bindBarcodeHandler({
-            selector: "#packingid",
-            preventCopyPaste: false,
-            onChange: processPackingId
-        })
-
-        function setHeader(d){
-            $('#nmbuyer').text('');
-            $('#kpno').text('');
-            $('#nmstyle').text('');
-            $('#nmsubstyle').text('');
-            $('#nmsize').text('');
-            $('#nmcolor').text('');
-            $('#last-barcode').text(last_barcode);
-            $('#nmbuyer').text(d.nmbuyer);
-            $('#kpno').text(d.kpno);
-            $('#nmstyle').text(d.nmstyle);
-            $('#nmsubstyle').text(d.nmsubstyle);
-            $('#nmsize').text(d.nmsize);
-            $('#nmcolor').text(d.nmcolor);
-            $('#season').text('').text(d.season);
-            $('#grade').text('').text(d.grade);
-            $('#info-holder').show();
-        }
-
-
-        $('body').on('click', '.minline', function(event) {
-            event.preventDefault();
-            const _id = String($(this).data('bcd'));
-            $(this).parents('.tr'+_id).remove();
-            dtbarcode = dtbarcode.filter((v, i) => {
-                return v != _id;
-            });
-            let totalrecord = $('#totalrecords').text();
-            const ttlrecord = parseInt(totalrecord)-1;
-            $('#totalrecords').text(ttlrecord);
-            var n = 1;
-            $('.row-number').each(function(){
-                $(this).text(n++);
-            });
-            cekminline();
-        });
-
-        $('#btn-cancel').on('click', function(){
-            $('#loading').show();
-            window.location.reload();
-        });
-
-        $('#btn-finish').on('click', function(ev){
-            ev.preventDefault();
-            swal({
-                title: `Are you sure to Finish ${dtbarcode.length} Garment?`,
-                text: 'Please do this action carefully!',
-                icon: 'warning',
-                buttons: true,
-                dangerMode: true
-            }).then((v) => {
-                if(v){
-                    finishpacking();
-                }
-            });
-        });
-
-        function finishpacking(){
-            $('#loading').show();
-            $.ajax({
-                type: 'POST',
-                url: `{{ route("packing_packingreceivefromstoragefinish") }}`,
-                dataType: "json",
-                data: {
-                    barcode : dtbarcode,
-                },
-                success: function(r) {
-                    swal("Success", r, 'success').then(function(){
-                        $('#box-footer').hide();
-                        $('#table-holder').hide();
-                        dtbarcode = [];
-                        $('#barcode').attr('readonly','readonly');
-                        window.location.reload();
-                    });
-                },
-                error: (e) => {
-                    swal("Warning", e.responseJSON, 'warning').then(function(){
-                        $('#barcode').val('');
-                        $('#barcode').removeAttr('readonly');
-                        $('#barcode').focus();
-                        $('#loading').hide();
-                    });
-                },
-                complete: () => {
-                    $('#barcode').val('');
-                    $('#barcode').removeAttr('readonly');
-                    $('#barcode').focus();
-                    $('#loading').hide();
-                }
-            });
-        }
-
-        function cekminline(){
-            if(dtbarcode.length < 2){
-                $('.minline').hide();
-                $('#barcode').focus();
-                $('#barcode').val('');
-            }else{
-                $('.minline').show();
-                $('.table-holder').show();
-            }
-        }
-    });
-</script>
-@endsection
