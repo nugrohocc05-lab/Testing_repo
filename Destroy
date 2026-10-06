@@ -1,0 +1,398 @@
+<!-- Menampilkan Destroy -->
+
+<?php
+
+namespace Modules\Packing\Http\Controllers;
+
+use DB;
+use Illuminate\Http\Request;
+use App\Http\Controllers\Controller;
+use App\Http\Controllers\WatchController;
+use App\Http\Models\CardAllocation;
+use App\Http\Models\Color;
+use App\Http\Models\Main\Buyer;
+use App\Http\Models\Main\FGStorageStock;
+use App\Http\Models\Main\FGReceiveGarmentStock; // sesuaikan namespace jika berbeda
+use App\Http\Models\Main\MainCardConvert;
+use App\Http\Models\Main\MasterGroupBuyer;
+use App\Http\Models\Main\Style;
+use App\Http\Models\Main\SubStyle;
+use App\Http\Models\OutputDetail;
+use App\Http\Models\OutputDetailPackingStock;
+use App\Http\Models\PurchaseOrder;
+use App\Http\Models\Size;
+use Carbon\Carbon;
+
+class PackingReceiveFromStorageController extends Controller
+{
+    protected $m_modul = 'packing';
+
+    const SRC_STORAGE = 'storage';
+    const SRC_RECEIVE = 'receive';
+
+    function __construct()
+    {
+        $this->middleware('auth');
+    }
+
+    function index()
+    {
+        WatchController::watch($this->get_class_name());
+        return view('packing::packingreceivefromstorage.index');
+    }
+
+    private function stockModel($source)
+    {
+        return $source === self::SRC_RECEIVE ? FGReceiveGarmentStock::class : FGStorageStock::class;
+    }
+
+    // Destroy hanya berlaku untuk FGReceiveGarmentStock: status_lab bernilai 0
+    private function isDestroy($item)
+    {
+        return $item->status_lab !== null && (string) $item->status_lab === '0';
+    }
+
+    function getdatado(Request $request)
+    {
+        try {
+            // 1. Cek FGStorageStock dulu
+            $source = self::SRC_STORAGE;
+            $stocks = FGStorageStock::where('delivery_order_out', $request->donumber)
+                ->whereNull('deleted_at')
+                ->get();
+
+            // 2. Kalau tidak ada, cek FGReceiveGarmentStock
+            if ($stocks->isEmpty()) {
+                $source = self::SRC_RECEIVE;
+                $stocks = FGReceiveGarmentStock::where('delivery_order', $request->donumber)
+                    ->whereNull('deleted_at')
+                    ->get();
+            }
+
+            if ($stocks->isEmpty()) {
+                throw new \Exception("Data not found!");
+            }
+
+            // Garment destroy (status_lab = 0) tetap ditampilkan, tapi tidak bisa diproses
+            $destroyBarcodes = [];
+            if ($source === self::SRC_RECEIVE) {
+                $destroyBarcodes = $stocks->filter(function ($item) {
+                    return $this->isDestroy($item);
+                })->pluck('barcode')->all();
+            }
+
+            // 3. Validasi sesuai sumber
+            foreach ($stocks as $item) {
+                if ($source === self::SRC_STORAGE) {
+                    if ($item->date_receive_packing) {
+                        throw new \Exception($item->barcode . " Has been received Packing!");
+                    }
+                    if (!$item->gi_number) {
+                        throw new \Exception("Gi First!");
+                    }
+                } else {
+                    // destroy dilewati, tidak ikut divalidasi
+                    if (!$this->isDestroy($item) && $item->date_gi) {
+                        throw new \Exception($item->barcode . " Has been received Packing!");
+                    }
+                }
+            }
+
+            $od = (new OutputDetail())->getTable();
+            $po = (new PurchaseOrder())->getTable();
+
+            $data = OutputDetail::select(
+                "$od.barcode",
+                "$od.kpno",
+                "$od.sub_style_id",
+                "$od.combine_pro",
+                "$od.idpo",
+                "$od.idcolor",
+                "$od.idsize",
+                "$po.idstyle",
+                "$po.po",
+                "$po.idbuyer",
+                "$po.season",
+            )
+                ->whereIn("$od.barcode", $stocks->pluck('barcode'))
+                ->join($po, function ($join) use ($po, $od) {
+                    $join->on("$po.idpo", '=', "$od.idpo");
+                    $join->on("$po.kpno", '=', "$od.kpno");
+                })
+                ->get();
+
+            foreach ($data as $d) {
+                $d->is_destroy = in_array($d->barcode, $destroyBarcodes) ? 1 : 0;
+                $sty = Style::find($d->idstyle);
+                $d->style = $sty->nmstyle ?? '-';
+                $substy = SubStyle::find($d->sub_style_id);
+                $d->substyle = $substy->name ?? '-';
+                $color = Color::find($d->idcolor);
+                $d->color = $color->nmcolor ?? '-';
+                $size = Size::find($d->idsize);
+                $d->size = $size->nmsize ?? '-';
+            }
+
+            return response()->json([
+                'source' => $source,
+                'items'  => $data,
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json($e->getMessage(), 400);
+        }
+    }
+
+    function getdata(Request $request)
+    {
+        try {
+            $source = $request->source;
+            $model  = $this->stockModel($source);
+
+            $card = MainCardConvert::where("id_card", $request->barcode)->first();
+            if (!$card) {
+                throw new \Exception("Barcode not found!");
+            }
+
+            $barcode = $card->id_convert;
+
+            $stock = $model::where('barcode', $barcode)->first();
+            if (!$stock) {
+                throw new \Exception("Barcode not match!");
+            }
+
+            if ($source === self::SRC_RECEIVE && $this->isDestroy($stock)) {
+                throw new \Exception($stock->barcode . " is Destroy!");
+            }
+
+            $already = $source === self::SRC_RECEIVE ? $stock->date_gi : $stock->date_receive_packing;
+            if ($already) {
+                throw new \Exception($stock->barcode . " Has been received Packing!");
+            }
+
+            $od = (new OutputDetail())->getTable();
+            $po = (new PurchaseOrder())->getTable();
+
+            $data = OutputDetail::select(
+                "$od.barcode",
+                "$od.kpno",
+                "$od.sub_style_id",
+                "$od.combine_pro",
+                "$od.idpo",
+                "$od.idcolor",
+                "$od.idsize",
+                "$po.idstyle",
+                "$po.po",
+                "$po.idbuyer",
+                "$po.season",
+            )
+                ->where("$od.barcode", $barcode)
+                ->join($po, function ($join) use ($po, $od) {
+                    $join->on("$po.idpo", '=', "$od.idpo");
+                    $join->on("$po.kpno", '=', "$od.kpno");
+                })
+                ->first();
+
+            if (!$data) {
+                throw new \Exception("Data not found!");
+            }
+
+            $data->grade = $data->grade ?? "OK";
+            $byr = Buyer::find($data->idbuyer);
+            $gbyr = MasterGroupBuyer::find($byr->groupbuyer ?? null);
+            $data->nmgroupbuyer = $byr->nmbuyer ?? '-';
+            $data->nmbuyer = $gbyr->group_name ?? '-';
+            $sty = Style::find($data->idstyle);
+            $data->nmstyle = $sty->nmstyle ?? '-';
+            $substy = SubStyle::find($data->sub_style_id);
+            $data->nmsubstyle = $substy->name ?? '-';
+            $color = Color::find($data->idcolor);
+            $data->nmcolor = $color->nmcolor ?? '-';
+            $size = Size::find($data->idsize);
+            $data->nmsize = $size->nmsize ?? '-';
+
+            return response()->json($data);
+        } catch (\Throwable $e) {
+            return response()->json($e->getMessage(), 400);
+        }
+    }
+
+    function getpackingid(Request $request)
+    {
+        try {
+            preconnect(session('db'));
+
+            if (!$request->packingid) {
+                throw new \Exception("Invalid Garment ID!");
+            }
+
+            if (!$request->barcode) {
+                throw new \Exception("Scan Garment ID First!");
+            }
+
+            $card = MainCardConvert::select('id_convert')
+                ->where('id_card', $request->packingid)
+                ->first();
+
+            $cek_alloc = CardAllocation::find($request->packingid);
+
+            if (!$cek_alloc || $cek_alloc->line != '104') {
+                throw new \Exception("Allocation Packing First!");
+            }
+
+            if ($card) {
+                throw new \Exception("Card ID is Used!");
+            }
+
+            return response()->json($request->barcode);
+        } catch (\Throwable $e) {
+            return response()->json($e->getMessage(), 400);
+        }
+    }
+
+    function card_convert(Request $request)
+    {
+        preconnect(session('db'));
+        try {
+            foreach ($request->data as $d) {
+                $card = MainCardConvert::where('id_convert', $d['barcode'])
+                    ->where('factory_id', session('db')->iddb)
+                    ->where('id_reference', '06')
+                    ->first();
+                if ($card) {
+                    $card->id_card = $d['packingid'];
+                    $card->save();
+                }
+            }
+            return response()->json('Successfully Packing Output!');
+        } catch (\Throwable $e) {
+            return response()->json($e->getMessage(), 400);
+        }
+    }
+
+    function finish(Request $request)
+    {
+        preconnect(session('db'));
+        try {
+            $db = getconnection(session('db'));
+
+            $source = $request->source;
+            $model  = $this->stockModel($source);
+
+            $data = $request->barcode;
+            if (!$data || count($data) < 1) {
+                throw new \Exception("Scan minimum 1 Garment ID!");
+            }
+
+            DB::beginTransaction();
+            foreach ($data as $d) {
+
+                $barcode   = $d['barcode'];
+                $packingid = $d['packingid'];
+
+                $stock = $model::where('barcode', $barcode)->first();
+
+                if (!$stock) {
+                    throw new \Exception($barcode . " is Not Found!");
+                }
+
+                $now = Carbon::now();
+
+                if ($source === self::SRC_RECEIVE) {
+                    if ($this->isDestroy($stock)) {
+                        throw new \Exception($barcode . " is Destroy!");
+                    }
+                    if ($stock->date_gi) {
+                        throw new \Exception($barcode . " Already receive packing!");
+                    }
+                    $stock->date_interface = $now;
+                    $stock->date_gi = $now;
+                } else {
+                    if ($stock->date_receive_packing) {
+                        throw new \Exception($barcode . " Already receive packing!");
+                    }
+                    $stock->date_receive_packing = $now;
+                }
+                $stock->userid_receive_packing = session('user')->nik ?? null;
+                $stock->deleted_at = $now;
+                $stock->save();
+
+                $odps = OutputDetailPackingStock::on($db)->where('barcode', $barcode)->first();
+                if ($odps) {
+                    $odps->tglpackingout = null;
+                    $odps->nikpackingout = null;
+                    $odps->id_set = null;
+                    $odps->cartoncode = null;
+                    $odps->save();
+                }
+
+                $card = MainCardConvert::where('id_convert', $barcode)->first();
+
+                $cek_alloc = CardAllocation::find($packingid);
+                if (!$cek_alloc or ('104' != $cek_alloc->line)) {
+                    throw new \Exception("Allocation Packing First!");
+                }
+
+                if ($card) {
+                    $card->id_card = $packingid;
+                    $card->save();
+                } else {
+                    $mc = new MainCardConvert();
+                    $mc->factory_id = session('db')->iddb;
+                    $mc->id_card = $packingid;
+                    $mc->id_convert = $barcode;
+                    $mc->id_reference = "06";
+                    $mc->save();
+                }
+            }
+
+            DB::commit();
+            return response()->json('Successfully Receieve Packing From Storage.');
+        } catch (\Throwable $e) {
+            DB::rollback();
+            return response()->json($e->getMessage(), 400);
+        }
+    }
+}
+
+
+// View
+doSource = r.source;
+let rows = r.items.map((item, i) => {
+    if (item.is_destroy == 1) {
+        return `
+            <tr class="tr${item.barcode}" style="background:#f8d7da;">
+                <td class="row-number">${$('.row-number').length + i + 1}</td>
+                <td>${item.barcode}</td>
+                <td>${item.style}</td>
+                <td>${item.substyle}</td>
+                <td>${item.color}</td>
+                <td>${item.size}</td>
+                <td><span class="label label-danger">DESTROY</span></td>
+            </tr>
+        `;
+    }
+    qty = qty + 1;
+    return `
+        <tr class="tr${item.barcode}">
+            <td class="row-number">${$('.row-number').length + i + 1}</td>
+            <td>${item.barcode}</td>
+            <td>${item.style}</td>
+            <td>${item.substyle}</td>
+            <td>${item.color}</td>
+            <td>${item.size}</td>
+            <td>
+                <div style="pointer-events: none;">
+                    <input type="checkbox" style="height:20px;width:20px;" id="${item.barcode}" class="setstyle minimal" name="setsubstyle[]">
+                </div>
+            </td>
+        </tr>
+    `;
+}).join('');
+
+if (r.items.length == 0) {
+    swal('Warning!', 'Invalid DO Type! Please scan DO Storage', 'warning').then(()=>{
+        $('#donumber').removeAttr('readonly');
+        $('#donumber').val('');
+    });
+    return;
+}
