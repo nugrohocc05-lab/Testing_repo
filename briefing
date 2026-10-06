@@ -1,727 +1,835 @@
-<template>
-    <div class="px-6">
-        <UiTitle align="center" title="Order Artwork Allocation"/>
+<?php
 
-        <div class="mb-4 flex w-full flex-col gap-3 lg:flex-row lg:items-end">
+namespace Modules\Packing\Http\Controllers;
 
-            <div class="flex-col flex gap-3 md:flex-row mb-2 md:mb-0">
-                <!-- Pilih Filter -->
-                <div class="w-full md:w-60">
-                    <UiMultiSelect v-model="form.filter" label="Filter" :options="filters"
-                        placeholder="-- Select Filter --" @change="onFilterChange"/>
-                </div>
+use DB;
+use Illuminate\Http\Request;
+use App\Http\Controllers\Controller;
+use App\Http\Controllers\WatchController;
+use App\Http\Models\CardAllocation;
+use App\Http\Models\Color;
+use App\Http\Models\DOStock;
+use App\Http\Models\FactoryParameter;
+use App\Http\Models\HistoryPO;
+use App\Http\Models\Main\Buyer;
+use App\Http\Models\Main\FGStorageStock;
+use App\Http\Models\Main\MainCardConvert;
+use App\Http\Models\Main\MasterEmployeeGroup;
+use App\Http\Models\Main\MasterGroupBuyer;
+use App\Http\Models\Main\Style;
+use App\Http\Models\Main\SubStyle;
+use App\Http\Models\MasterId;
+use App\Http\Models\OutputDetail;
+use App\Http\Models\OutputDetailFinalInspection;
+use App\Http\Models\OutputDetailPacking;
+use App\Http\Models\OutputDetailPackingStock;
+use App\Http\Models\PurchaseOrder;
+use App\Http\Models\SewingOutput;
+use App\Http\Models\Size;
+use Carbon\Carbon;
 
-                <!-- Filter PO -->
-                <div v-if="form.filter === 'po'" class="w-full md:w-60">
-                    <UiMultiSelect v-model="form.po" label="PO" :options="pos"
-                        placeholder="-- Select PO --" @change="loadDataByPo"/>
-                </div>
+class PackingReceiveFromStorageController extends Controller
+{
+    protected $m_modul = 'packing';
 
-                <!-- Filter KP: Buyer dulu, baru KP -->
-                <template v-if="form.filter === 'kp'">
-                    <div class="w-full md:w-60">
-                        <UiMultiSelect v-model="form.buyer" label="Buyer" :options="buyers"
-                            placeholder="-- Select Buyer --" @change="onBuyerChange"/>
-                    </div>
-                    <div v-if="form.buyer" class="w-full md:w-60">
-                        <UiMultiSelect v-model="form.kpno" label="KP" :options="data_kp"
-                            placeholder="-- Select KP --" @change="loadDataByKp"/>
-                    </div>
-                </template>
-            </div>
-
-            <div class="flex w-full justify-between gap-3 lg:ml-auto lg:w-auto lg:flex-row lg:items-end">
-                <div class="flex items-center justify-start gap-1">
-                    <UiTooltip content="PDF" position="bottom">
-                        <UiButton variant="teritary" class="shrink-0" @click="onBtnExportPdf">
-                            <i class="fa-regular text-2xl fa-file-pdf"></i>
-                        </UiButton>
-                    </UiTooltip>
-
-                    <UiTooltip content="Excel" position="bottom">
-                        <UiButton variant="teritary" class="shrink-0" @click="onBtnExport">
-                            <i class="fa-regular text-2xl fa-file-excel"></i>
-                        </UiButton>
-                    </UiTooltip>
-                </div>
-                <div class="w-full sm:w-50">
-                    <UiInput v-model="searchKeyword" placeholder="Search" class="w-full rounded-lg">
-                        <template #prefix>
-                            <MagnifyingGlassIcon class="h-5 w-5 text-gray-400" />
-                        </template>
-                    </UiInput>
-                </div>
-            </div>
-        </div>
-
-        <UiAgGrid :rowData="rawData" :columnDefs="columnDefs"
-            class="mb-10 my-zebra-grid" :quickFilterText="searchKeyword" @grid-ready="onGridReady"></UiAgGrid>
-    </div>
-
-    <!-- Modal Upload KK -->
-    <UiModal v-model="showModal" title="Upload KK" size="2xl">
-        <div class="divide-y divide-gray-200 text-sm md:text-base">
-
-            <!-- KP Number -->
-            <div class="grid grid-cols-1 gap-1 py-4 md:grid-cols-[140px_1fr] md:gap-4">
-                <span class="font-semibold text-gray-700">KP Number</span>
-                <span class="wrap-break-word text-gray-900">
-                    {{ selectedUploadData?.kpno ?? '-' }}
-                </span>
-            </div>
-
-            <!-- Factory -->
-            <div class="grid grid-cols-1 gap-1 py-4 md:grid-cols-[140px_1fr] md:gap-4">
-                <span class="font-semibold text-gray-700">Factory</span>
-                <span class="wrap-break-word text-gray-900">
-                    {{ selectedUploadData?.factory ?? '-' }}
-                </span>
-            </div>
-
-            <!-- KK -->
-            <div class="flex items-end gap-3 my-2">
-                <div class="flex-1">
-                    <UiMultiSelect
-                        v-model="selectedKk"
-                        label="KK"
-                        :options="kkOptions"
-                        placeholder="-- Select KK --"
-                    />
-                </div>
-
-                <UiButton :disabled="!selectedKk" @click="saveKk">
-                    Save KK
-                </UiButton>
-            </div>
-
-            <!-- KK BC -->
-            <div class="space-y-2 pt-4">
-                <!-- Sudah ada file -->
-                <div v-if="hasKkbc"
-                    class="flex items-center justify-between gap-3 rounded-lg border border-gray-200 p-3">
-                    <div class="min-w-0">
-                        <p class="text-xs text-gray-500">KK BC File</p>
-                        <p class="truncate font-medium text-gray-900">{{ kkbcFileName }}</p>
-                    </div>
-                    <div class="flex shrink-0 gap-2">
-                        <UiButton variant="secondary" @click="downloadKkbc">Download</UiButton>
-                        <UiButton variant="secondary" @click="deleteKkbc">Delete</UiButton>
-                    </div>
-                </div>
-
-                <!-- Belum ada file -->
-                <template v-else>
-                    <UiInput
-                        :key="dropzoneKey"
-                        type="file"
-                        variant="dropzone"
-                        label="KK BC"
-                        placeholder="Choose File"
-                        dropzone-hint="only PDF, XLS, or XLSX Formats, up to 2MB"
-                        accept=".pdf,.xls,.xlsx"
-                        @change="onFileChange"
-                    ></UiInput>
-                    <div class="text-center">
-                        <UiButton :disabled="!kkbcFile" @click="uploadKkbc">
-                            Upload
-                        </UiButton>
-                    </div>
-                </template>
-            </div>
-        </div>
-
-        <template #footer>
-            <div class="mt-4">
-                <!-- Hanya tampil jika KK BC sudah ada filenya -->
-                <UiButton v-if="hasKkbc" variant="primary" @click="submitForm">
-                    Complete Upload
-                </UiButton>
-            </div>
-        </template>
-    </UiModal>
-
-    <!-- Modal Undo / Cancel Complete -->
-    <UiModal v-model="showModalUndo" size="md">
-        <div class="space-y-4 -mt-2">
-            <div class="flex justify-center">
-                <div class="flex h-32 w-32 items-center justify-center rounded-full bg-amber-100">
-                    <ExclamationCircleIcon class="h-28 w-28 text-amber-600" />
-                </div>
-            </div>
-
-            <div class="mt-4 text-center">
-                <p class="mt-1 text-xl font-bold text-gray-500">
-                    Are you sure going to undo waiting list?
-                </p>
-                <p class="mt-1 text-md text-gray-500">
-                    Once data processed, you can`t retrieve it again or recover the data! please do this action carefully!
-                </p>
-            </div>
-        </div>
-        <template #footer>
-            <div class="flex justify-end gap-3">
-                <UiButton variant="secondary" @click="closeUndoModal">
-                    Cancel
-                </UiButton>
-                <UiButton @click="process">
-                    OK
-                </UiButton>
-            </div>
-        </template>
-    </UiModal>
-</template>
-
-<script setup>
-import { exportToPdf } from '@/utils/pdfExporter';
-import { exportToExcel } from "@/utils/excelExporter";
-import { getCurrentDateTime } from '@/utils/date';
-import { encrypt } from "@/utils/crypto";
-
-import { ref, shallowRef, onMounted, computed, defineComponent, h } from "vue";
-import { useRouter } from "vue-router";
-import { useLoadingStore } from "@/stores/loading";
-import { ArrowUturnLeftIcon, DocumentArrowUpIcon, ExclamationCircleIcon, InformationCircleIcon, MagnifyingGlassIcon } from "@heroicons/vue/24/outline";
-
-import { customSwal } from "@/composable/customSwal";
-const { success, warning, error } = customSwal;
-const { datetime } = getCurrentDateTime('-', '-');
-
-import UiButton from "@/components/ui/UiButton.vue"
-import UiInput from "@/components/ui/UiInput.vue"
-import UiModal from "@/components/ui/UiModal.vue"
-import UiTitle from "@/components/ui/UiTitle.vue"
-import UiMultiSelect from "@/components/ui/UiMultiSelect.vue"
-import UiAgGrid from '@/components/ui/UiAgGrid.vue';
-import UiTooltip from '@/components/ui/UiTooltip.vue';
-
-import api from "@/services/api";
-
-defineOptions({ name: 'Allocation' });
-
-const BASE = "/api/v1/order-artwork";
-const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
-const ALLOWED_EXT = ["pdf", "xls", "xlsx"];
-
-const loading = useLoadingStore();
-const router = useRouter();
-
-const rawData = shallowRef([]);
-const allData = shallowRef([]);
-
-const buyers = ref([]);
-const data_kp = ref([]);
-const pos = ref([]);
-const dataSelected = ref([]);
-const showModal = ref(false);
-const showModalUndo = ref(false);
-const searchKeyword = ref('');
-const gridApi = ref(null);
-
-// state modal upload
-const selectedUploadData = ref(null);
-const selectedUndoData = ref(null);
-const kkOptions = ref([]);
-const selectedKk = ref("");
-const kkbcFile = ref(null);       // File yang dipilih (belum diupload)
-const kkbcFileName = ref("");     // Nama file yang sudah tersimpan di server
-const kkbcBlob = ref(null);       // Isi file yang sudah tersimpan di server
-const dropzoneKey = ref(0);       // untuk reset dropzone
-
-const hasKkbc = computed(() => !!kkbcFileName.value);
-
-const filters = ref([
-    { value: "po", label: "PO" },
-    { value: "kp", label: "KP" },
-]);
-
-const form = ref({
-    filter: "",
-    buyer: "",
-    kpno: "",
-    po: "",
-});
-
-const onGridReady = (params) => {
-    gridApi.value = params.api;
-};
-
-const getErrMsg = (err, fallback = "Something went wrong") =>
-    err?.response?.data?.message ?? fallback;
-
-/* ---------------- Export ---------------- */
-const onBtnExport = () => {
-    if (!gridApi.value) {
-        alert("Please Wait!");
-        return;
+    function __construct()
+    {
+        $this->middleware('auth');
     }
 
-    const fileName = `orders-artwork-${datetime.replace(' ', '_')}.xlsx`;
-    exportToExcel({
-        title: `Orders Artwork Allocation Report ${datetime}`,
-        fileName: fileName,
-        sheetName: "Orders Artwork",
-        headers: ["NO", "PO", "KP", "Order Number", "Style", "CM Factory", "PO CMT", "Status"],
-        fields: ["no", "po", "kpno", "ordernumber", "style", "factory", "po_sap", "status"],
-        gridData: gridApi
-    });
-};
-
-const onBtnExportPdf = () => {
-    if (!gridApi.value) {
-        alert("Please Wait!");
-        return;
+    function index()
+    {
+        WatchController::watch($this->get_class_name());
+        return view('packing::packingreceivefromstorage.index');
     }
 
-    const nameFile = `orders-artwork-${datetime.replace(' ', '_')}`;
-    exportToPdf({
-        title: `Orders Artwork Allocation Report ${datetime}`,
-        fileName: `${nameFile}`,
-        headers: ["NO", "PO", "KP", "Order Number", "Style", "CM Factory", "PO CMT", "Status"],
-        fields: ["no", "po", "kpno", "ordernumber", "style", "factory", "po_sap", "status"],
-        gridData: gridApi,
-        orientation: 'l'
-    });
-};
+    function getdatado(Request $request) {
+        try {
+            $storage = FGStorageStock::where('delivery_order_out',$request->donumber)
+                        ->whereNull('deleted_at')
+                        ->get();
+            
+            if(!$storage){
+                throw new \Exception( "Data not found!");
+            }
 
-/* ---------------- Modal helpers ---------------- */
-const resetUploadState = () => {
-    selectedUploadData.value = null;
-    kkOptions.value = [];
-    selectedKk.value = "";
-    kkbcFile.value = null;
-    kkbcFileName.value = "";
-    kkbcBlob.value = null;
-    dropzoneKey.value++;
-};
+            foreach($storage as $item){
+                if($item->date_receive_packing || $item->date_receive_packing ){
+                    throw new \Exception( $item->barcode. " Has been received Packing!");
+                }
+                if(!$item->gi_number){
+                    throw new \Exception("Gi First!");
+                }
+            }
 
-const closeModal = () => {
-    showModal.value = false;
-    resetUploadState();
-};
+            $od = (new OutputDetail())->getTable();
+            $po = (new PurchaseOrder())->getTable();           
 
-const closeUndoModal = () => {
-    showModalUndo.value = false;
-    selectedUndoData.value = null;
-};
+            $data = OutputDetail::select(
+                    "$od.barcode",
+                    "$od.kpno",
+                    "$od.sub_style_id",
+                    "$od.combine_pro",
+                    "$od.idpo",
+                    "$od.idcolor",
+                    "$od.idsize",
+                    "$po.idstyle",
+                    "$po.po",
+                    "$po.idbuyer",
+                    "$po.season",
+                )
+                ->whereIn("$od.barcode",$storage->pluck('barcode'))
+                ->join($po, function ($join) use ($po, $od) {
+                    $join->on("$po.idpo", '=', "$od.idpo");
+                    $join->on("$po.kpno", '=', "$od.kpno");
+                })
+                ->get();
 
-const pickFirst = (obj, keys) => {
-    for (const k of keys) if (obj?.[k]) return obj[k];
-    return "";
-};
+            foreach($data as $d){
+                $sty = Style::find($d->idstyle);
+                $d->style = $sty->nmstyle ?? '-';
+                $substy = SubStyle::find($d->sub_style_id);
+                $d->substyle = $substy->name ?? '-';
+                $color = Color::find($d->idcolor);
+                $d->color = $color->nmcolor ?? '-';
+                $size = Size::find($d->idsize);
+                $d->size = $size->nmsize ?? '-';
+            }
+            
+           return response()->json($data);
 
-const getFileNameFromHeader = (headers) => {
-    const cd = headers?.["content-disposition"] ?? "";
-    const m = cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
-    return m ? decodeURIComponent(m[1]) : "";
-};
-
-/* ---------------- KK: dropdown & save ---------------- */
-// KK dari endpoint; kalau kosong, pakai KK yang sedang dipakai di data baris
-const loadKkOptions = async (kpno, currentKk) => {
-    let list = [];
-    try {
-        const { data } = await api.get(`${BASE}/selectkk`, { params: { kpno } });
-        list = (data?.data ?? []).map((item) => ({
-            value: item.kk,
-            label: item.kk,
-        }));
-    } catch (err) {
-        if (err?.response?.status === 401) return router.push("/login");
-    }
-
-    if (currentKk && !list.some((o) => o.value === currentKk)) {
-        list.unshift({ value: currentKk, label: currentKk });
-    }
-    kkOptions.value = list;
-};
-
-// Cek apakah file KK BC sudah pernah diupload (lewat endpoint showfille)
-const checkKkbc = async (row) => {
-    try {
-        const res = await api.get(`${BASE}/showfille/${row.id}`, { responseType: "blob" });
-        const isJson = String(res.data?.type ?? "").includes("json");
-
-        if (res.data?.size > 0 && !isJson) {
-            kkbcBlob.value = res.data;
-            kkbcFileName.value =
-                getFileNameFromHeader(res.headers) ||
-                pickFirst(row, ["kkbc", "kk_bc", "kkbc_file", "file_kkbc", "filename"]) ||
-                `KK-BC-${row.kpno ?? row.id}`;
+        } catch (\Throwable $e) {
+            return response()->json($e->getMessage(), 400);
         }
-    } catch (err) {
-        if (err?.response?.status === 401) router.push("/login");
-        // 404 / error lain = file belum ada
-    }
-};
-
-const openUploadModal = async (row) => {
-    resetUploadState();
-    selectedUploadData.value = row;
-
-    const currentKk = pickFirst(row, ["kk", "kkno", "no_kk", "kk_no"]);
-    selectedKk.value = currentKk;
-    showModal.value = true;
-
-    loading.show();
-    await Promise.all([loadKkOptions(row?.kpno, currentKk), checkKkbc(row)]);
-    loading.hide();
-};
-
-const saveKk = async () => {
-    if (!selectedKk.value) return warning("Please select KK first");
-
-    try {
-        loading.show();
-        const id = selectedUploadData.value.id;
-        const { data } = await api.put(`${BASE}/update-kk/${id}`, { kk: selectedKk.value });
-        success(data?.message ?? "KK saved");
-        selectedUploadData.value.kk = selectedKk.value;
-    } catch (err) {
-        if (err?.response?.status === 401) router.push("/login");
-        else error(getErrMsg(err, "Failed to save KK"));
-    } finally {
-        loading.hide();
-    }
-};
-
-/* ---------------- KK BC: pilih, upload, download, delete ---------------- */
-const onFileChange = (e) => {
-    // dukung event native, FileList, array, atau File langsung
-    const file = e?.target?.files?.[0] ?? e?.[0] ?? (e instanceof File ? e : null);
-
-    if (!file) {
-        kkbcFile.value = null;
-        return;
     }
 
-    const ext = file.name.split(".").pop().toLowerCase();
-    if (!ALLOWED_EXT.includes(ext)) {
-        warning("Only PDF, XLS, or XLSX formats are allowed");
-        kkbcFile.value = null;
-        dropzoneKey.value++;
-        return;
+    function getdata(Request $request) {
+        try {
+            $card = MainCardConvert::where("id_card", $request->barcode)
+                ->first();
+
+            if(!$card){
+                throw new \Exception("Barcode not found!");
+            }
+
+            $barcode = $card->id_convert;
+
+            $storage = FGStorageStock::where('barcode', $barcode)->first();
+            if(!$storage) {
+                throw new \Exception("Barcode not match!");
+            }
+
+            if($storage->date_receive_packing || $storage->date_receive_packing ) {
+                    throw new \Exception( $storage->barcode. " Has been received Packing!");
+                }
+
+            $od = (new OutputDetail())->getTable();
+            $po = (new PurchaseOrder())->getTable();
+
+            $data = OutputDetail::select(
+                    "$od.barcode",
+                    "$od.kpno",
+                    "$od.sub_style_id",
+                    "$od.combine_pro",
+                    "$od.idpo",
+                    "$od.idcolor",
+                    "$od.idsize",
+                    "$po.idstyle",
+                    "$po.po",
+                    "$po.idbuyer",
+                    "$po.season",
+                )
+                ->where("$od.barcode",$barcode)
+                ->join($po, function ($join) use ($po, $od) {
+                    $join->on("$po.idpo", '=', "$od.idpo");
+                    $join->on("$po.kpno", '=', "$od.kpno");
+                })
+                ->first();
+
+            if(!$data){
+                throw new \Exception("Data not found!");
+            }
+          
+            $data->grade = $data->grade ?? "OK";
+            $byr = Buyer::find($data->idbuyer);
+            $gbyr = MasterGroupBuyer::find($byr->groupbuyer??null);
+            $data->nmgroupbuyer = $byr->nmbuyer ?? '-';
+            $data->nmbuyer = $gbyr->group_name ?? '-';
+            $sty = Style::find($data->idstyle);
+            $data->nmstyle = $sty->nmstyle ?? '-';
+            $substy = SubStyle::find($data->sub_style_id);
+            $data->nmsubstyle = $substy->name ?? '-';
+            $color = Color::find($data->idcolor);
+            $data->nmcolor = $color->nmcolor ?? '-';
+            $size = Size::find($data->idsize);
+            $data->nmsize = $size->nmsize ?? '-';
+                
+            return response()->json($data);
+
+        } catch (\Throwable $e) {
+            return response()->json($e->getMessage(), 400);
+        }
     }
-    if (file.size > MAX_FILE_SIZE) {
-        warning("File size must not exceed 2MB");
-        kkbcFile.value = null;
-        dropzoneKey.value++;
-        return;
+
+    function getpackingid(Request $request){
+        try {
+            preconnect(session('db'));
+
+            if(!$request->packingid){
+                throw new \Exception("Invalid Garment ID!");
+            }
+
+            if(!$request->barcode){
+                throw new \Exception("Scan Garment ID First!");
+            }
+
+            $card = MainCardConvert::select('id_convert')
+                ->where('id_card', $request->packingid)
+                ->first();
+
+            $cek_alloc = CardAllocation::find($request->packingid);
+
+            if(!$cek_alloc || $cek_alloc->line != '104'){
+                throw new \Exception("Allocation Packing First!");
+            }
+
+            if($card){
+                throw new \Exception("Card ID is Used!");
+            }
+
+            $data  = $request->barcode;
+                    
+            return response()->json($data);
+        }catch (\Throwable $e) {
+            return response()->json($e->getMessage(), 400);
+        }
+    }
+    
+    function card_convert(Request $request){
+        preconnect(session('db'));
+        try {
+            foreach($request->data as $d){
+                $card = MainCardConvert::where('id_convert', $d['barcode'])
+                            ->where('factory_id', session('db')->iddb)
+                            ->where('id_reference', '06')
+                            ->first();
+                if($card){
+                    $card->id_card = $d['packingid'];
+                    $card->save();
+                }
+            }
+            return response()->json('Successfully Packing Output!');
+        } catch (\Throwable $e) {
+            return response()->json($e->getMessage(), 400);
+        }
     }
 
-    kkbcFile.value = file;
-};
+    function finish(Request $request) {
+        preconnect(session('db'));
+        try {
+            $db = getconnection(session('db'));
+            
+            $data = $request->barcode;
+            if(count($data)<1){
+                throw new \Exception("Scan minimum 1 Garment ID!");
+            }
 
-const uploadKkbc = async () => {
-    if (!kkbcFile.value) return warning("Please choose a file first");
+            DB::beginTransaction();
+            foreach($data as $d){
 
-    try {
-        loading.show();
-        const id = selectedUploadData.value.id;
-        const fd = new FormData();
-        fd.append("file", kkbcFile.value);
+                $barcode = $d['barcode'];
+                $packingid = $d['packingid'];
 
-        const { data } = await api.post(`${BASE}/upload-kkbc/${id}`, fd, {
-            headers: { "Content-Type": "multipart/form-data" },
+                $fgs = FGStorageStock::where('barcode', $barcode)->first();
+
+                if(!$fgs){
+                    throw new \Exception($barcode . " is Not Found!");
+                }
+
+                if($fgs->date_receive_packing){
+                    throw new \Exception($barcode . " Already receive packing!");
+                }
+
+                $fgs->date_receive_packing = Carbon::now();
+                $fgs->userid_receive_packing = session('user')->nik ?? null;
+                $fgs->deleted_at = Carbon::now();
+                $fgs->save();
+
+                $odps = OutputDetailPackingStock::on($db)->where('barcode', $barcode)->first();
+                if($odps){
+                    $odps->tglpackingout = null;
+                    $odps->nikpackingout = null;
+                    $odps->id_set = null;
+                    $odps->cartoncode = null;
+                    $odps->save();
+                }
+
+                $card = MainCardConvert::where('id_convert', $barcode)->first();
+
+                $cek_alloc = CardAllocation::find($packingid);
+                if(!$cek_alloc or ('104' != $cek_alloc->line)){
+                    throw new \Exception("Allocation Packing First!");
+                }
+
+                if($card){
+                    $card->id_card = $packingid;
+                    $card->save();
+                } else {
+                    $mc = new MainCardConvert();
+                    $mc->factory_id = session('db')->iddb;
+                    $mc->id_card = $packingid;
+                    $mc->id_convert = $barcode;
+                    $mc->id_reference = "06";
+                    $mc->save();
+                }
+            }
+            return response()->json('Successfully Receieve Packing From Storage.');
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollback();
+            throw new \Exception($e->getMessage());
+        }
+    }
+}
+
+
+@extends('layouts.master')
+@section('extracss')
+<style>
+    .modal-dialog-centered{
+        margin: 30vh auto !important;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    .detail-holder table{
+        font-size: 15px !important;
+        font-weight: 600 !important;
+    }
+    .detail-holder table tr{
+        height: 27px;
+    }
+    .header-holder{
+        margin-top: 20px;
+    }
+    .table-row{
+        min-width: fit-content;
+        height: fit-content;
+        max-height: calc(100vh - 400px);
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+    .table{
+        margin-bottom: 0 !important;
+    }
+
+    td.no-data{
+        min-width: 345px;
+    }
+    .table thead{
+        position: sticky;
+        top: 0;
+        background: #fff;
+    }
+    .table thead tr:first-child th{
+        border-style: solid solid hidden !important;
+    }
+    .table-footer{
+        margin-top: 10px
+    }
+    .header-holder{
+        display: none;
+    }
+    .box-footer{
+        position: absolute;
+        bottom: 0;
+        width: 100%;
+        display: none;
+    }
+    .status{
+        margin-top: 15px;
+        font-size: 17px;
+        font-weight: 600;
+    }
+    .table-row{
+        min-width: fit-content;
+        height: fit-content;
+        max-height: calc(100vh - 490px);
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+    .table{
+        margin-bottom: 0 !important;
+    }
+
+    td.no-data{
+        min-width: 345px;
+    }
+    .table thead{
+        position: sticky;
+        top: 0;
+        background: #fff;
+    }
+    .table thead tr:first-child th{
+        border-style: solid solid hidden !important;
+    }
+    .table-footer{
+        margin-top: 10px
+    }
+    .header-holder{
+        display: none;
+    }
+    .table-holder{
+        display: none;
+    }
+</style>
+@endsection
+@section('content')
+<div class="container-fluid">
+    <div class="row" style="margin-top: 7rem;">
+        <div class="col-sm-12">
+            <div class="box box-primary" style="height: calc(100vh - 130px)">
+                <div class="box-header with-border">
+                    <div class="box-title"><b>Packing Receive From Storage</b></div>
+                </div>
+                <div class="box-body scanner">
+                    <div class="row" id="donumber-holder">
+                        <div class="col-md-4 col-sm-4"></div>
+                        <div class="col-md-4 col-sm-4 text-center">
+                            <label>Scan DO Storage</label>
+                            <input type="text" name="donumber" id="donumber"
+                                class="form-control nospecialcharacter" required="required" autocomplete="off">
+                        </div>
+                    </div>
+                    <div class="row" id="barcode-holder" style="display: none">
+                        <div class="col-md-4 col-sm-4"></div>
+                        <div class="col-md-4 col-sm-4 text-center">
+                            <label>Scan Garment ID</label>
+                            <input type="text" name="barcode" id="barcode"
+                                class="form-control nospecialcharacter" required="required" autocomplete="off">
+                        </div>
+                    </div>
+                    <div id="table-holder" style="display: none">
+                        <div class="box-body">
+                            <div class="table-row">
+                                <table class="table table-bordered table-striped" style="width: 100%">
+                                    <thead>
+                                        <tr>
+                                            <th>No</th>
+                                            <th>Garment ID</th>
+                                            <th>Style</th>
+                                            <th>Sub-Style</th>
+                                            <th>Color</th>
+                                            <th>Size</th>
+                                            <th>#</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="scanbody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {{-- @if (isset($access) and $access == 'f') --}}
+                <div class="box-footer">
+                    <div style="float: left;margin-top:5px;">
+                        <b>Total Records : <span id="totalrecords">0</span></b>
+                    </div>
+                    <div style="right: 0px; float: right;">
+                        <a class="btn btn-danger" id="btn-cancel">Cancel</a>
+                        <a class="btn btn-success" id="btn-finish" style="display: none">Finish</a>
+                    </div>
+                </div>
+                {{-- @endif --}}
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="modal-scan" role="dialog" data-backdrop="static" data-keyboard="false" style="display: none;">
+    <div class="modal-dialog modal-dialog-centered modal-md">
+        <!-- Modal content-->
+        <div class="modal-content">
+            <div class="modal-body detail-holder">
+                <center>
+                    <h3 style="margin-bottom: 20px;"><b>Generate RFID Packing ID</b></h3>
+                    <div class="row body-modal detail-holder" style="margin-top: 40px">
+                        <center>
+                            <table >
+                                <tr>
+                                    <td style="width: 95px">Garment ID</td><td style="width: 20px">:</td><td style="min-width: 175px" id="last-barcode"></td>
+                                    <td style="width: 85px">Sub-Style</td><td style="width: 20px">:</td><td id="nmsubstyle"></td>
+                                </tr>
+                                <tr>
+                                    <td style="width: 95px">Style</td><td style="width: 20px">:</td><td id="nmstyle"></td>
+                                    <td style="width: 85px">Grade</td><td style="width: 20px">:</td><td id="grade"></td>
+                                </tr>
+                                <tr>
+                                    <td style="width: 95px">Color</td><td style="width: 20px">:</td><td id="nmcolor"></td>
+                                    <td style="width: 85px">Size</td><td style="width: 20px">:</td><td id="nmsize"></td>
+                                </tr>
+                                <tr>
+                                    <td style="width: 95px">KP</td><td style="width: 20px">:</td><td id="kpno"></td>
+                                    <td style="width: 85px">season</td><td style="width: 20px">:</td><td id="season"></td>
+                                </tr>
+                            </table>
+                        </center>
+                    </div>
+                    <div class="row body-modal" style="margin-top: 30px">
+                        <div class="col-sm-12 col-md-12">
+                            <label>Scan Your Packing ID</label>
+                            <input type="text" name="packingid" id="packingid"
+                                class="form-control nospecialcharacter scanonly" required="required" autofocus autocomplete="off">
+                        </div>
+                    </div>
+                    <div class="status"></div>
+                </center>
+            </div>
+        </div>
+    </div>
+</div>
+@include('layouts.loading')
+@endsection
+
+@section('extrascript')
+<script type="text/javascript">
+    var dtbarcode = [];
+    var bcd_len = [];
+
+    var last_barcode = 0;
+
+    var count = 0;
+    var qty = 0;
+
+    $(document).ready(function() {
+        $('#donumber').focus();
+        $('.box:not(.table)').on('click', function () {
+            if ($('#donumber-holder').is(':visible')) {
+                $('#donumber').focus();
+            } else if ($('#modal-scan ').is(':visible')){
+                $('#packingid').focus();
+            }
+            else {
+                $('#barcode').focus();
+            }
         });
 
-        success(data?.message ?? "File uploaded");
-        kkbcFileName.value = data?.data?.filename ?? kkbcFile.value.name;
-        kkbcBlob.value = null;   // akan diambil ulang saat download
-        kkbcFile.value = null;
-    } catch (err) {
-        if (err?.response?.status === 401) router.push("/login");
-        else error(getErrMsg(err, "Failed to upload file"));
-    } finally {
-        loading.hide();
-    }
-};
+        $('.modal-scan').on('click', function () {
+            $('#packingid').focus();
+        });
 
-const downloadKkbc = async () => {
-    try {
-        loading.show();
-        let blob = kkbcBlob.value;
+        var delay = (function(){
+            var timer = 0;
+            return function(callback, ms){
+                clearTimeout (timer);
+                    timer = setTimeout(callback, ms);
+                };
+        })();
 
-        if (!blob) {
-            const id = selectedUploadData.value.id;
-            const res = await api.get(`${BASE}/showfille/${id}`, { responseType: "blob" });
-            blob = res.data;
-            kkbcBlob.value = blob;
+        function processDoNumber(e) {
+            e.preventDefault();
+
+            $('#donumber').attr('readonly','readonly');
+            $('#donumber').blur();
+
+            const donumber = $("#donumber").val();
+            $('#loading').show();
+            $.ajax({
+                type: 'GET',
+                url: `{{route("packing_packingreceivefromstoragegetdatado") }}`,
+                dataType: "json",
+                data: {
+                    donumber
+                },
+                success: function(r) {
+                    let rows = r.map((item, i) => {
+                        qty = qty+1;
+                        return `
+                            <tr class="tr${item.key}">
+                                <td class="row-number">${$('.row-number').length + i + 1}</td>
+                                <td>${item.barcode}</td>
+                                <td>${item.style}</td>
+                                <td>${item.substyle}</td>
+                                <td>${item.color}</td>
+                                <td>${item.size}</td>
+                                <td>
+                                    <div style="pointer-events: none;">
+                                        <input type="checkbox" style="height:20px;width:20px;" id="${item.barcode}" class="setstyle minimal"" name="setsubstyle[]">
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('');
+
+                    if(qty == '0'){
+                        swal('Warning!', 'Invalid DO Type! Please scan DO Storage', 'warning').then(()=>{
+                            $('#donumber').removeAttr('readonly');
+                            $('#donumber').val('');
+                        });
+                        return;
+                    }
+
+                    $('#scanbody').append(rows);
+                    $('#donumber-holder').hide();
+                    $('#gi-holder').hide();
+                    $('#scanout-body').show();
+                    $('#table-holder').show();
+                    $('#barcode-holder').show();
+                    $('#barcode').focus();
+                    $('.box-footer').show();
+                },
+                error: (e) => {
+                    swal("Warning", e.responseJSON, 'warning').then(function(){
+                        $('#donumber').val('');
+                        $('#donumber').removeAttr('readonly');
+                        $('#donumber').focus();
+                    });
+                },
+                complete: () => {
+                    $('#donumber').val('');
+                    $('#donumber').removeAttr('readonly');
+                    $('#donumber').focus();
+                    $('#loading').hide();
+                }
+            });
         }
 
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = kkbcFileName.value || "kkbc";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-    } catch (err) {
-        if (err?.response?.status === 401) router.push("/login");
-        else error(getErrMsg(err, "Failed to download file"));
-    } finally {
-        loading.hide();
-    }
-};
+        App.bindBarcodeHandler({
+            selector: "#donumber",
+            preventCopyPaste: false,
+            onChange: processDoNumber,
+        })
 
-const deleteKkbc = async () => {
-    if (!window.confirm("Delete this KK BC file?")) return;
+        function processBarcode(e) {
+            e.preventDefault();
+            if ($('#barcode').val().length >= 24) {
+                $('#barcode').attr('readonly','readonly');
+                $('#barcode').blur();
 
-    try {
-        loading.show();
-        const id = selectedUploadData.value.id;
-        const { data } = await api.delete(`${BASE}/delete/${id}`);
-        success(data?.message ?? "File deleted");
-        kkbcFileName.value = "";
-        kkbcBlob.value = null;
-        kkbcFile.value = null;
-        dropzoneKey.value++;
-    } catch (err) {
-        if (err?.response?.status === 401) router.push("/login");
-        else error(getErrMsg(err, "Failed to delete file"));
-    } finally {
-        loading.hide();
-    }
-};
+                const barcode = $("#barcode").val();
+                let totalrecord = $('#totalrecords').text();
+                $('#loading').show();
+                $.ajax({
+                    type: 'GET',
+                    url: `{{route("packing_packingreceivefromstoragegetdata") }}`,
+                    dataType: "json",
+                    data: {
+                        barcode
+                    },
+                    success: function(r) {
+                        if(bcd_len.includes(r.barcode)){
+                            swal('Warning!', 'Garment ID already scanned!', 'warning').then(()=>{
+                                $('#barcode').removeAttr('readonly');
+                                $('#barcode').val('');
+                                $('#barcode').focus();
+                            });
+                            return;
+                        } else if (count == qty){
+                            swal('Warning!', 'Quantity has been fulfilled!', 'warning').then(()=>{
+                                $('#barcode').removeAttr('readonly');
+                                $('#barcode').val('');
+                                $('#barcode').focus();
+                            });
+                            return;
+                        }else{
+                            var $el = $('#' + r.barcode);
 
-/* ---------------- Complete Upload ---------------- */
-const submitForm = async () => {
-    if (!hasKkbc.value) return warning("Please upload KK BC file first");
+                            if ($el.length) {
+                                last_barcode = r.barcode;
+                                setHeader(r)
+                                bcd_len.push(r.barcode);
+                                count = count + 1;
+                                $("#totalrecords").text(count)
 
-    try {
-        loading.show();
-        const id = selectedUploadData.value.id;
-        const { data } = await api.post(`${BASE}/complete/${id}`);
-        success(data?.message ?? "Upload completed");
-        closeModal();
-        await fetchGrid(currentQuery);
-    } catch (err) {
-        if (err?.response?.status === 401) router.push("/login");
-        else error(getErrMsg(err, "Failed to complete upload"));
-    } finally {
-        loading.hide();
-    }
-};
+                                $el.on('ifChecked', function () {});
+                                $el.iCheck('check');
+                                $('#modal-scan').modal('show');
+                            } else {
+                                swal('Warning!', 'Wrong Garment ID!', 'warning').then(()=>{
+                                    $('#barcode').val('');
+                                });
+                                return;
+                            }
+                            $('#barcode').val('');
+                            if(count === qty){
+                                $('#btn-finish').show();
+                            }
+                        }
+                    },
+                    error: (e) => {
+                        swal("Warning", e.responseJSON, 'warning').then(function(){
+                            $('#barcode').val('');
+                            $('#barcode').removeAttr('readonly');
+                            $('#barcode').focus();
+                        });
+                    },
+                    complete: () => {
+                        $('#barcode').val('');
+                        $('#barcode').removeAttr('readonly');
+                        $('#loading').hide();
+                    }
+                });
+            }else{
+                $('#barcode').val('');
+                $('#barcode').removeAttr('readonly');
+                $('#barcode').focus();
+            }
+        }
 
-/* ---------------- Undo / Cancel Complete ---------------- */
-const process = async () => {
-    if (!selectedUndoData.value) return;
+        App.bindBarcodeHandler({
+            onChange: processBarcode
+        })
 
-    try {
-        loading.show();
-        const id = selectedUndoData.value.id;
-        const { data } = await api.post(`${BASE}/cancel-complete/${id}`);
-        success(data?.message ?? "Waiting list has been undone");
-        closeUndoModal();
-        await fetchGrid(currentQuery);
-    } catch (err) {
-        if (err?.response?.status === 401) router.push("/login");
-        else error(getErrMsg(err, "Failed to undo"));
-    } finally {
-        loading.hide();
-    }
-};
-
-/* ---------------- Action column ---------------- */
-const ActionRenderer = defineComponent({
-    props: {
-        params: {
-            type: Object,
-            required: true,
-        },
-    },
-
-    setup(props) {
-        const detailData = () => {
-            dataSelected.value = props.params.data;
-
-            const id = dataSelected.value.id;
-            const encryptedid = encrypt(id);
-
-            router.push({
-                name: "order-artwork-allocation-detail",
-                params: {
-                    id: encodeURIComponent(encryptedid),
+        function processPackingId(e) {
+            $("#packingid").blur();
+            e.preventDefault();
+            $('#loading').show();
+            const packingid = $("#packingid").val();
+            $.ajax({
+                type: 'GET',
+                url: `{{ route('packing_packingreceivefromstoragegetpackingid') }}`,
+                dataType: "json",
+                data: {
+                    packingid: packingid,
+                    barcode: last_barcode,
                 },
+                success: function(d) {
+                    if(d){
+                        const found = dtbarcode.some(el => el.packingid === packingid);
+
+                        if (found) {
+                            swal("Warning", "Card Convert ID Already Scanned", 'warning').then(() => {
+                                $('#packingid').val('');
+                            });
+                            return;
+                        }
+                        dtbarcode.push({ "barcode": last_barcode, "packingid": packingid});
+                        $('#modal-scan').modal('hide');
+                        console.log(dtbarcode);
+                    }
+                },
+                error: (e) => {
+                    $('#packingid').val('');
+                    $('#packingid').blur();
+                    swal("Warning", e.responseJSON, 'warning').then(function(){
+                        $('#packingid').focus();
+                        $('#packingid').val('');
+                    });
+                },
+                complete: () => {
+                    $('#packingid').val('');
+                    $('#barcode').focus();
+                    $('#loading').hide();
+                }
             });
-        };
+        }
 
-        const uploadkk = () => openUploadModal(props.params.data);
+        App.bindBarcodeHandler({
+            selector: "#packingid",
+            preventCopyPaste: false,
+            onChange: processPackingId
+        })
 
-        const undoUpload = () => {
-            selectedUndoData.value = props.params.data;
-            showModalUndo.value = true;
-        };
+        function setHeader(d){
+            $('#nmbuyer').text('');
+            $('#kpno').text('');
+            $('#nmstyle').text('');
+            $('#nmsubstyle').text('');
+            $('#nmsize').text('');
+            $('#nmcolor').text('');
+            $('#last-barcode').text(last_barcode);
+            $('#nmbuyer').text(d.nmbuyer);
+            $('#kpno').text(d.kpno);
+            $('#nmstyle').text(d.nmstyle);
+            $('#nmsubstyle').text(d.nmsubstyle);
+            $('#nmsize').text(d.nmsize);
+            $('#nmcolor').text(d.nmcolor);
+            $('#season').text('').text(d.season);
+            $('#grade').text('').text(d.grade);
+            $('#info-holder').show();
+        }
 
-        return () => {
-            return h(
-                "div",
-                { class: "flex h-full gap-2" },
-                [
-                    h(
-                        "button",
-                        {
-                            type: "button",
-                            title: "Detail",
-                            class: "cursor-pointer text-amber-500 transition hover:text-amber-700",
-                            onClick: detailData,
-                        },
-                        [h(InformationCircleIcon, { class: "h-5 w-5" })],
-                    ),
 
-                    (props.params.data?.status === "New") &&
-                    h(
-                        "button",
-                        {
-                            type: "button",
-                            title: "Upload KK",
-                            class: "cursor-pointer text-sky-500 transition hover:text-sky-700",
-                            onClick: uploadkk,
-                        },
-                        [h(DocumentArrowUpIcon, { class: "h-5 w-5" })],
-                    ),
+        $('body').on('click', '.minline', function(event) {
+            event.preventDefault();
+            const _id = String($(this).data('bcd'));
+            $(this).parents('.tr'+_id).remove();
+            dtbarcode = dtbarcode.filter((v, i) => {
+                return v != _id;
+            });
+            let totalrecord = $('#totalrecords').text();
+            const ttlrecord = parseInt(totalrecord)-1;
+            $('#totalrecords').text(ttlrecord);
+            var n = 1;
+            $('.row-number').each(function(){
+                $(this).text(n++);
+            });
+            cekminline();
+        });
 
-                    (props.params.data?.status === "Waiting") &&
-                    h(
-                        "button",
-                        {
-                            type: "button",
-                            title: "Undo Waiting List",
-                            class: "cursor-pointer text-red-500 transition hover:text-red-700",
-                            onClick: undoUpload,
-                        },
-                        [h(ArrowUturnLeftIcon, { class: "h-5 w-5" })],
-                    ),
-                ],
-            );
-        };
-    },
-});
+        $('#btn-cancel').on('click', function(){
+            $('#loading').show();
+            window.location.reload();
+        });
 
-const columnDefs = [
-    { headerName: "No", field: "no", width: 80, filter: false, resizable: false },
-    { field: "po", headerName: "PO", minWidth: 125, flex: 1 },
-    { field: "kpno", headerName: "KP", minWidth: 125, flex: 1 },
-    { field: "ordernumber", headerName: "Order Number", minWidth: 125, flex: 1 },
-    { field: "style", headerName: "Style", minWidth: 125, flex: 1 },
-    {
-        field: "factory",
-        headerName: "CM Factory",
-        minWidth: 150,
-        valueGetter: (params) => params.data?.factory ?? "-",
-        flex: 1,
-    },
-    { field: "po_sap", headerName: "PO CMT", minWidth: 125, flex: 1 },
-    { field: "status", headerName: "Status", minWidth: 125, flex: 1 },
-    {
-        headerName: "Action",
-        maxWidth: 150,
-        sortable: false,
-        filter: false,
-        resizable: false,
-        cellRenderer: ActionRenderer,
-    },
-];
+        $('#btn-finish').on('click', function(ev){
+            ev.preventDefault();
+            swal({
+                title: `Are you sure to Finish ${dtbarcode.length} Garment?`,
+                text: 'Please do this action carefully!',
+                icon: 'warning',
+                buttons: true,
+                dangerMode: true
+            }).then((v) => {
+                if(v){
+                    finishpacking();
+                }
+            });
+        });
 
-/* ---------------- Fetch data ---------------- */
-let reqId = 0;
-let currentQuery = "";   // simpan filter aktif supaya refresh tetap di filter yang sama
+        function finishpacking(){
+            $('#loading').show();
+            $.ajax({
+                type: 'POST',
+                url: `{{ route("packing_packingreceivefromstoragefinish") }}`,
+                dataType: "json",
+                data: {
+                    barcode : dtbarcode,
+                },
+                success: function(r) {
+                    swal("Success", r, 'success').then(function(){
+                        $('#box-footer').hide();
+                        $('#table-holder').hide();
+                        dtbarcode = [];
+                        $('#barcode').attr('readonly','readonly');
+                        window.location.reload();
+                    });
+                },
+                error: (e) => {
+                    swal("Warning", e.responseJSON, 'warning').then(function(){
+                        $('#barcode').val('');
+                        $('#barcode').removeAttr('readonly');
+                        $('#barcode').focus();
+                        $('#loading').hide();
+                    });
+                },
+                complete: () => {
+                    $('#barcode').val('');
+                    $('#barcode').removeAttr('readonly');
+                    $('#barcode').focus();
+                    $('#loading').hide();
+                }
+            });
+        }
 
-const fetchGrid = async (query = "") => {
-    const id = ++reqId;
-    currentQuery = query;
-    try {
-        loading.show();
-        const { data } = await api.get(`${BASE}/getdata${query}`);
-        if (id !== reqId) return;
-
-        const rows = (data?.data ?? []).map((item, index) => ({
-            ...item,
-            no: index + 1,
-        }));
-        rawData.value = rows;
-        if (!query) allData.value = rows;
-        else allData.value = [];   // cache "all" dianggap basi setelah ada perubahan
-    } catch (err) {
-        if (err?.response?.status === 401) router.push("/login");
-    } finally {
-        loading.hide();
-    }
-};
-
-const loadData = () => fetchGrid();
-
-const showAll = () => {
-    if (allData.value.length) {
-        rawData.value = allData.value;
-        currentQuery = "";
-    } else fetchGrid();
-};
-
-const loadDataBuyer = async () => {
-    try {
-        loading.show();
-        const { data } = await api.get(`${BASE}/buyers`);
-        buyers.value = (data?.data ?? []).map((item) => ({
-            value: item.idbuyer,
-            label: item.namabuyer,
-        }));
-    } catch (err) {
-        if (err?.response?.status === 401) router.push("/login");
-    } finally {
-        loading.hide();
-    }
-};
-
-const loadDataPo = async () => {
-    try {
-        loading.show();
-        const { data } = await api.get(`${BASE}/pos`);
-        pos.value = (data?.data ?? []).map((item) => ({
-            value: item.po,
-            label: item.po,
-        }));
-    } catch (err) {
-        if (err?.response?.status === 401) router.push("/login");
-    } finally {
-        loading.hide();
-    }
-};
-
-const loadDataKp = async (idbuyer) => {
-    try {
-        loading.show();
-        const { data } = await api.get(`${BASE}/kps?idbuyer=${idbuyer}`);
-        data_kp.value = (data?.data ?? []).map((item) => ({
-            value: item.kpno,
-            label: item.kpno,
-        }));
-    } catch (err) {
-        if (err?.response?.status === 401) router.push("/login");
-    } finally {
-        loading.hide();
-    }
-};
-
-const onFilterChange = (val) => {
-    form.value = { filter: val ?? "", buyer: "", kpno: "", po: "" };
-    data_kp.value = [];
-    showAll();
-    if (val === "po" && !pos.value.length) loadDataPo();
-};
-
-const onBuyerChange = async (idbuyer) => {
-    form.value.kpno = "";
-    data_kp.value = [];
-    if (!idbuyer) return showAll();
-    await loadDataKp(idbuyer);
-};
-
-const loadDataByPo = (po) => (po ? fetchGrid(`?po=${po}`) : showAll());
-const loadDataByKp = (kpno) => (kpno ? fetchGrid(`?kpno=${kpno}`) : showAll());
-
-onMounted(() => {
-    loadData();
-    loadDataBuyer();
-});
+        function cekminline(){
+            if(dtbarcode.length < 2){
+                $('.minline').hide();
+                $('#barcode').focus();
+                $('#barcode').val('');
+            }else{
+                $('.minline').show();
+                $('.table-holder').show();
+            }
+        }
+    });
 </script>
+@endsection
