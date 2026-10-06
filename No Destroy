@@ -1,3 +1,5 @@
+<!-- Tidak menampilkan data destroy -->
+
 <?php
 
 namespace Modules\Packing\Http\Controllers;
@@ -44,6 +46,12 @@ class PackingReceiveFromStorageController extends Controller
         return $source === self::SRC_RECEIVE ? FGReceiveGarmentStock::class : FGStorageStock::class;
     }
 
+    // Destroy hanya berlaku untuk FGReceiveGarmentStock: status_lab bernilai 0
+    private function isDestroy($item)
+    {
+        return $item->status_lab !== null && (string) $item->status_lab === '0';
+    }
+
     function getdatado(Request $request) {
         try {
             // 1. Cek FGStorageStock dulu
@@ -62,6 +70,17 @@ class PackingReceiveFromStorageController extends Controller
 
             if ($stocks->isEmpty()) {
                 throw new \Exception("Data not found!");
+            }
+
+            // Garment destroy (status_lab = 0) tidak ikut ke packing
+            if ($source === self::SRC_RECEIVE) {
+                $stocks = $stocks->reject(function ($item) {
+                    return $this->isDestroy($item);
+                })->values();
+
+                if ($stocks->isEmpty()) {
+                    throw new \Exception("All garment in this DO are Destroy!");
+                }
             }
 
             // 3. Validasi sesuai sumber
@@ -139,6 +158,10 @@ class PackingReceiveFromStorageController extends Controller
             $stock = $model::where('barcode', $barcode)->first();
             if (!$stock) {
                 throw new \Exception("Barcode not match!");
+            }
+
+            if ($source === self::SRC_RECEIVE && $this->isDestroy($stock)) {
+                throw new \Exception($stock->barcode . " is Destroy!");
             }
 
             $already = $source === self::SRC_RECEIVE ? $stock->date_gi : $stock->date_receive_packing;
@@ -273,6 +296,9 @@ class PackingReceiveFromStorageController extends Controller
                 $now = Carbon::now();
 
                 if ($source === self::SRC_RECEIVE) {
+                    if ($this->isDestroy($stock)) {
+                        throw new \Exception($barcode . " is Destroy!");
+                    }
                     if ($stock->date_gi) {
                         throw new \Exception($barcode . " Already receive packing!");
                     }
