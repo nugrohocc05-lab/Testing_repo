@@ -44,7 +44,7 @@ class PackingReceiveFromStorageController extends Controller
         return $source === self::SRC_LAB ? FGReceiveGarmentStock::class : FGStorageStock::class;
     }
 
-    // Destroy hanya berlaku untuk FGReceiveGarmentStock: status_lab bernilai 0
+    // Destroy
     private function isDestroy($item)
     {
         return $item->status_lab !== null && (string) $item->status_lab === '0';
@@ -52,13 +52,13 @@ class PackingReceiveFromStorageController extends Controller
 
     function getdatado(Request $request) {
         try {
-            // 1. Cek FGStorageStock dulu
+            // Cek FGStorageStock
             $source = self::SRC_STORAGE;
             $stocks = FGStorageStock::where('delivery_order_out', $request->donumber)
                         ->whereNull('deleted_at')
                         ->get();
 
-            // 2. Kalau tidak ada, cek FGReceiveGarmentStock
+            // Kalau gaada, cek FGReceiveGarmentStock
             if ($stocks->isEmpty()) {
                 $source = self::SRC_LAB;
                 $stocks = FGReceiveGarmentStock::where('delivery_order', $request->donumber)
@@ -70,7 +70,7 @@ class PackingReceiveFromStorageController extends Controller
                 throw new \Exception("Data not found!");
             }
 
-            // Garment destroy (status_lab = 0) tidak ikut ke packing
+            // destroy (status_lab = 0) tidak ikut ke packing
             if ($source === self::SRC_LAB) {
                 $stocks = $stocks->reject(function ($item) {
                     return $this->isDestroy($item);
@@ -81,7 +81,7 @@ class PackingReceiveFromStorageController extends Controller
                 }
             }
 
-            // 3. Validasi sesuai sumber
+            // Validasi sesuai sumber
             foreach ($stocks as $item) {
                 if ($source === self::SRC_STORAGE) {
                     if ($item->date_receive_packing) {
