@@ -1,6 +1,3 @@
-Ini kode lengkapnya:
-
-```vue
 <template>
     <div class="px-6">
         <UiTitle align="center" title="Order Artwork Allocation"/>
@@ -227,6 +224,7 @@ const kkOptions = ref([]);
 const selectedKk = ref("");
 const kkbcFile = ref(null);       // File yang dipilih (belum diupload)
 const kkbcFileName = ref("");     // Nama file yang sudah tersimpan di server
+const kkbcBlob = ref(null);       // Isi file yang sudah tersimpan di server
 const dropzoneKey = ref(0);       // untuk reset dropzone
 
 const hasKkbc = computed(() => !!kkbcFileName.value);
@@ -292,6 +290,7 @@ const resetUploadState = () => {
     selectedKk.value = "";
     kkbcFile.value = null;
     kkbcFileName.value = "";
+    kkbcBlob.value = null;
     dropzoneKey.value++;
 };
 
@@ -305,30 +304,66 @@ const closeUndoModal = () => {
     selectedUndoData.value = null;
 };
 
+const pickFirst = (obj, keys) => {
+    for (const k of keys) if (obj?.[k]) return obj[k];
+    return "";
+};
+
+const getFileNameFromHeader = (headers) => {
+    const cd = headers?.["content-disposition"] ?? "";
+    const m = cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+    return m ? decodeURIComponent(m[1]) : "";
+};
+
 /* ---------------- KK: dropdown & save ---------------- */
-const loadKkOptions = async (kpno) => {
+// KK dari endpoint; kalau kosong, pakai KK yang sedang dipakai di data baris
+const loadKkOptions = async (kpno, currentKk) => {
+    let list = [];
     try {
         const { data } = await api.get(`${BASE}/selectkk`, { params: { kpno } });
-        kkOptions.value = (data?.data ?? []).map((item) => ({
+        list = (data?.data ?? []).map((item) => ({
             value: item.kk,
             label: item.kk,
         }));
     } catch (err) {
-        kkOptions.value = [];
+        if (err?.response?.status === 401) return router.push("/login");
+    }
+
+    if (currentKk && !list.some((o) => o.value === currentKk)) {
+        list.unshift({ value: currentKk, label: currentKk });
+    }
+    kkOptions.value = list;
+};
+
+// Cek apakah file KK BC sudah pernah diupload (lewat endpoint showfille)
+const checkKkbc = async (row) => {
+    try {
+        const res = await api.get(`${BASE}/showfille/${row.id}`, { responseType: "blob" });
+        const isJson = String(res.data?.type ?? "").includes("json");
+
+        if (res.data?.size > 0 && !isJson) {
+            kkbcBlob.value = res.data;
+            kkbcFileName.value =
+                getFileNameFromHeader(res.headers) ||
+                pickFirst(row, ["kkbc", "kk_bc", "kkbc_file", "file_kkbc", "filename"]) ||
+                `KK-BC-${row.kpno ?? row.id}`;
+        }
+    } catch (err) {
         if (err?.response?.status === 401) router.push("/login");
-        else error(getErrMsg(err, "Failed to load KK list"));
+        // 404 / error lain = file belum ada
     }
 };
 
 const openUploadModal = async (row) => {
     resetUploadState();
     selectedUploadData.value = row;
-    selectedKk.value = row?.kk ?? "";
-    kkbcFileName.value = row?.kkbc ?? "";   // nama file KK BC yang sudah ada (jika ada)
+
+    const currentKk = pickFirst(row, ["kk", "kkno", "no_kk", "kk_no"]);
+    selectedKk.value = currentKk;
     showModal.value = true;
 
     loading.show();
-    await loadKkOptions(row?.kpno);
+    await Promise.all([loadKkOptions(row?.kpno, currentKk), checkKkbc(row)]);
     loading.hide();
 };
 
@@ -391,6 +426,7 @@ const uploadKkbc = async () => {
 
         success(data?.message ?? "File uploaded");
         kkbcFileName.value = data?.data?.filename ?? kkbcFile.value.name;
+        kkbcBlob.value = null;   // akan diambil ulang saat download
         kkbcFile.value = null;
     } catch (err) {
         if (err?.response?.status === 401) router.push("/login");
@@ -403,10 +439,16 @@ const uploadKkbc = async () => {
 const downloadKkbc = async () => {
     try {
         loading.show();
-        const id = selectedUploadData.value.id;
-        const res = await api.get(`${BASE}/showfille/${id}`, { responseType: "blob" });
+        let blob = kkbcBlob.value;
 
-        const url = URL.createObjectURL(res.data);
+        if (!blob) {
+            const id = selectedUploadData.value.id;
+            const res = await api.get(`${BASE}/showfille/${id}`, { responseType: "blob" });
+            blob = res.data;
+            kkbcBlob.value = blob;
+        }
+
+        const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
         a.download = kkbcFileName.value || "kkbc";
@@ -431,6 +473,7 @@ const deleteKkbc = async () => {
         const { data } = await api.delete(`${BASE}/delete/${id}`);
         success(data?.message ?? "File deleted");
         kkbcFileName.value = "";
+        kkbcBlob.value = null;
         kkbcFile.value = null;
         dropzoneKey.value++;
     } catch (err) {
@@ -682,6 +725,3 @@ onMounted(() => {
     loadDataBuyer();
 });
 </script>
-```
-
-Asumsi yang tadi masih berlaku, jadi tolong cek lagi. Kalau ada yang tidak cocok dengan backend Anda, kirim contoh response `getdata` dan `selectkk`, nanti saya sesuaikan.
