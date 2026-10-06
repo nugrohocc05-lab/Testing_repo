@@ -1,5 +1,3 @@
-<!-- Menampilkan Destroy -->
-
 <?php
 
 namespace Modules\Packing\Http\Controllers;
@@ -28,7 +26,7 @@ class PackingReceiveFromStorageController extends Controller
     protected $m_modul = 'packing';
 
     const SRC_STORAGE = 'storage';
-    const SRC_RECEIVE = 'receive';
+    const SRC_LAB     = 'laboratory';
 
     function __construct()
     {
@@ -43,7 +41,7 @@ class PackingReceiveFromStorageController extends Controller
 
     private function stockModel($source)
     {
-        return $source === self::SRC_RECEIVE ? FGReceiveGarmentStock::class : FGStorageStock::class;
+        return $source === self::SRC_LAB ? FGReceiveGarmentStock::class : FGStorageStock::class;
     }
 
     // Destroy hanya berlaku untuk FGReceiveGarmentStock: status_lab bernilai 0
@@ -52,21 +50,20 @@ class PackingReceiveFromStorageController extends Controller
         return $item->status_lab !== null && (string) $item->status_lab === '0';
     }
 
-    function getdatado(Request $request)
-    {
+    function getdatado(Request $request) {
         try {
             // 1. Cek FGStorageStock dulu
             $source = self::SRC_STORAGE;
             $stocks = FGStorageStock::where('delivery_order_out', $request->donumber)
-                ->whereNull('deleted_at')
-                ->get();
+                        ->whereNull('deleted_at')
+                        ->get();
 
             // 2. Kalau tidak ada, cek FGReceiveGarmentStock
             if ($stocks->isEmpty()) {
-                $source = self::SRC_RECEIVE;
+                $source = self::SRC_LAB;
                 $stocks = FGReceiveGarmentStock::where('delivery_order', $request->donumber)
-                    ->whereNull('deleted_at')
-                    ->get();
+                            ->whereNull('deleted_at')
+                            ->get();
             }
 
             if ($stocks->isEmpty()) {
@@ -75,7 +72,7 @@ class PackingReceiveFromStorageController extends Controller
 
             // Garment destroy (status_lab = 0) tetap ditampilkan, tapi tidak bisa diproses
             $destroyBarcodes = [];
-            if ($source === self::SRC_RECEIVE) {
+            if ($source === self::SRC_LAB) {
                 $destroyBarcodes = $stocks->filter(function ($item) {
                     return $this->isDestroy($item);
                 })->pluck('barcode')->all();
@@ -102,18 +99,18 @@ class PackingReceiveFromStorageController extends Controller
             $po = (new PurchaseOrder())->getTable();
 
             $data = OutputDetail::select(
-                "$od.barcode",
-                "$od.kpno",
-                "$od.sub_style_id",
-                "$od.combine_pro",
-                "$od.idpo",
-                "$od.idcolor",
-                "$od.idsize",
-                "$po.idstyle",
-                "$po.po",
-                "$po.idbuyer",
-                "$po.season",
-            )
+                    "$od.barcode",
+                    "$od.kpno",
+                    "$od.sub_style_id",
+                    "$od.combine_pro",
+                    "$od.idpo",
+                    "$od.idcolor",
+                    "$od.idsize",
+                    "$po.idstyle",
+                    "$po.po",
+                    "$po.idbuyer",
+                    "$po.season",
+                )
                 ->whereIn("$od.barcode", $stocks->pluck('barcode'))
                 ->join($po, function ($join) use ($po, $od) {
                     $join->on("$po.idpo", '=', "$od.idpo");
@@ -137,13 +134,13 @@ class PackingReceiveFromStorageController extends Controller
                 'source' => $source,
                 'items'  => $data,
             ]);
+
         } catch (\Throwable $e) {
             return response()->json($e->getMessage(), 400);
         }
     }
 
-    function getdata(Request $request)
-    {
+    function getdata(Request $request) {
         try {
             $source = $request->source;
             $model  = $this->stockModel($source);
@@ -160,11 +157,11 @@ class PackingReceiveFromStorageController extends Controller
                 throw new \Exception("Barcode not match!");
             }
 
-            if ($source === self::SRC_RECEIVE && $this->isDestroy($stock)) {
+            if ($source === self::SRC_LAB && $this->isDestroy($stock)) {
                 throw new \Exception($stock->barcode . " is Destroy!");
             }
 
-            $already = $source === self::SRC_RECEIVE ? $stock->date_gi : $stock->date_receive_packing;
+            $already = $source === self::SRC_LAB ? $stock->date_gi : $stock->date_receive_packing;
             if ($already) {
                 throw new \Exception($stock->barcode . " Has been received Packing!");
             }
@@ -173,18 +170,18 @@ class PackingReceiveFromStorageController extends Controller
             $po = (new PurchaseOrder())->getTable();
 
             $data = OutputDetail::select(
-                "$od.barcode",
-                "$od.kpno",
-                "$od.sub_style_id",
-                "$od.combine_pro",
-                "$od.idpo",
-                "$od.idcolor",
-                "$od.idsize",
-                "$po.idstyle",
-                "$po.po",
-                "$po.idbuyer",
-                "$po.season",
-            )
+                    "$od.barcode",
+                    "$od.kpno",
+                    "$od.sub_style_id",
+                    "$od.combine_pro",
+                    "$od.idpo",
+                    "$od.idcolor",
+                    "$od.idsize",
+                    "$po.idstyle",
+                    "$po.po",
+                    "$po.idbuyer",
+                    "$po.season",
+                )
                 ->where("$od.barcode", $barcode)
                 ->join($po, function ($join) use ($po, $od) {
                     $join->on("$po.idpo", '=', "$od.idpo");
@@ -211,13 +208,13 @@ class PackingReceiveFromStorageController extends Controller
             $data->nmsize = $size->nmsize ?? '-';
 
             return response()->json($data);
+
         } catch (\Throwable $e) {
             return response()->json($e->getMessage(), 400);
         }
     }
 
-    function getpackingid(Request $request)
-    {
+    function getpackingid(Request $request){
         try {
             preconnect(session('db'));
 
@@ -249,15 +246,14 @@ class PackingReceiveFromStorageController extends Controller
         }
     }
 
-    function card_convert(Request $request)
-    {
+    function card_convert(Request $request){
         preconnect(session('db'));
         try {
             foreach ($request->data as $d) {
                 $card = MainCardConvert::where('id_convert', $d['barcode'])
-                    ->where('factory_id', session('db')->iddb)
-                    ->where('id_reference', '06')
-                    ->first();
+                            ->where('factory_id', session('db')->iddb)
+                            ->where('id_reference', '06')
+                            ->first();
                 if ($card) {
                     $card->id_card = $d['packingid'];
                     $card->save();
@@ -269,8 +265,7 @@ class PackingReceiveFromStorageController extends Controller
         }
     }
 
-    function finish(Request $request)
-    {
+    function finish(Request $request) {
         preconnect(session('db'));
         try {
             $db = getconnection(session('db'));
@@ -297,7 +292,7 @@ class PackingReceiveFromStorageController extends Controller
 
                 $now = Carbon::now();
 
-                if ($source === self::SRC_RECEIVE) {
+                if ($source === self::SRC_LAB) {
                     if ($this->isDestroy($stock)) {
                         throw new \Exception($barcode . " is Destroy!");
                     }
