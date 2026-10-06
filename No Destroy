@@ -1,5 +1,3 @@
-<!-- Tidak menampilkan data destroy -->
-
 <?php
 
 namespace Modules\Packing\Http\Controllers;
@@ -28,7 +26,7 @@ class PackingReceiveFromStorageController extends Controller
     protected $m_modul = 'packing';
 
     const SRC_STORAGE = 'storage';
-    const SRC_RECEIVE = 'receive';
+    const SRC_LAB     = 'laboratory';
 
     function __construct()
     {
@@ -43,7 +41,7 @@ class PackingReceiveFromStorageController extends Controller
 
     private function stockModel($source)
     {
-        return $source === self::SRC_RECEIVE ? FGReceiveGarmentStock::class : FGStorageStock::class;
+        return $source === self::SRC_LAB ? FGReceiveGarmentStock::class : FGStorageStock::class;
     }
 
     // Destroy hanya berlaku untuk FGReceiveGarmentStock: status_lab bernilai 0
@@ -62,7 +60,7 @@ class PackingReceiveFromStorageController extends Controller
 
             // 2. Kalau tidak ada, cek FGReceiveGarmentStock
             if ($stocks->isEmpty()) {
-                $source = self::SRC_RECEIVE;
+                $source = self::SRC_LAB;
                 $stocks = FGReceiveGarmentStock::where('delivery_order', $request->donumber)
                             ->whereNull('deleted_at')
                             ->get();
@@ -73,7 +71,7 @@ class PackingReceiveFromStorageController extends Controller
             }
 
             // Garment destroy (status_lab = 0) tidak ikut ke packing
-            if ($source === self::SRC_RECEIVE) {
+            if ($source === self::SRC_LAB) {
                 $stocks = $stocks->reject(function ($item) {
                     return $this->isDestroy($item);
                 })->values();
@@ -160,11 +158,11 @@ class PackingReceiveFromStorageController extends Controller
                 throw new \Exception("Barcode not match!");
             }
 
-            if ($source === self::SRC_RECEIVE && $this->isDestroy($stock)) {
+            if ($source === self::SRC_LAB && $this->isDestroy($stock)) {
                 throw new \Exception($stock->barcode . " is Destroy!");
             }
 
-            $already = $source === self::SRC_RECEIVE ? $stock->date_gi : $stock->date_receive_packing;
+            $already = $source === self::SRC_LAB ? $stock->date_gi : $stock->date_receive_packing;
             if ($already) {
                 throw new \Exception($stock->barcode . " Has been received Packing!");
             }
@@ -295,7 +293,7 @@ class PackingReceiveFromStorageController extends Controller
 
                 $now = Carbon::now();
 
-                if ($source === self::SRC_RECEIVE) {
+                if ($source === self::SRC_LAB) {
                     if ($this->isDestroy($stock)) {
                         throw new \Exception($barcode . " is Destroy!");
                     }
