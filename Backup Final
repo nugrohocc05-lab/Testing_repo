@@ -1,49 +1,706 @@
-```php
-private function resolveDo($donumber)
-{
-    $donumber = trim((string) $donumber);
+<template>
+    <div class="px-6">
+        <UiTitle align="center" title="Order Artwork Allocation"/>
 
-    if ($donumber === '') {
-        throw new \Exception("Invalid DO!");
+        <div class="mb-4 flex w-full flex-col gap-3 lg:flex-row lg:items-end">
+
+            <div class="flex-col flex gap-3 md:flex-row mb-2 md:mb-0">
+                <div class="w-full md:w-60">
+                    <UiMultiSelect v-model="form.filter" label="Filter" :options="filters"
+                        placeholder="-- Select Filter --" @change="onFilterChange"/>
+                </div>
+
+                <div v-if="form.filter === 'po'" class="w-full md:w-60">
+                    <UiMultiSelect v-model="form.po" label="PO" :options="pos"
+                        placeholder="-- Select PO --" @change="loadDataByPo"/>
+                </div>
+
+                <template v-if="form.filter === 'kp'">
+                    <div class="w-full md:w-60">
+                        <UiMultiSelect v-model="form.buyer" label="Buyer" :options="buyers"
+                            placeholder="-- Select Buyer --" @change="onBuyerChange"/>
+                    </div>
+                    <div v-if="form.buyer" class="w-full md:w-60">
+                        <UiMultiSelect v-model="form.kpno" label="KP" :options="data_kp"
+                            placeholder="-- Select KP --" @change="loadDataByKp"/>
+                    </div>
+                </template>
+            </div>
+
+            <div class="flex w-full justify-between gap-3 lg:ml-auto lg:w-auto lg:flex-row lg:items-end">
+                <div class="flex items-center justify-start gap-1">
+                    <UiTooltip content="PDF" position="bottom">
+                        <UiButton variant="teritary" class="shrink-0" @click="onBtnExportPdf">
+                            <i class="fa-regular text-2xl fa-file-pdf"></i>
+                        </UiButton>
+                    </UiTooltip>
+
+                    <UiTooltip content="Excel" position="bottom">
+                        <UiButton variant="teritary" class="shrink-0" @click="onBtnExport">
+                            <i class="fa-regular text-2xl fa-file-excel"></i>
+                        </UiButton>
+                    </UiTooltip>
+                </div>
+                <div class="w-full sm:w-50">
+                    <UiInput v-model="searchKeyword" placeholder="Search" class="w-full rounded-lg">
+                        <template #prefix>
+                            <MagnifyingGlassIcon class="h-5 w-5 text-gray-400" />
+                        </template>
+                    </UiInput>
+                </div>
+            </div>
+        </div>
+
+        <UiAgGrid :rowData="rawData" :columnDefs="columnDefs"
+            class="mb-10 my-zebra-grid" :quickFilterText="searchKeyword" @grid-ready="onGridReady"></UiAgGrid>
+    </div>
+
+    <UiModal v-model="showModal" title="Upload KK" size="2xl">
+        <div class="divide-y divide-gray-200 text-sm md:text-base">
+
+            <div class="grid grid-cols-1 gap-1 py-4 md:grid-cols-[140px_1fr] md:gap-4">
+                <span class="font-semibold text-gray-700">KP Number</span>
+                <span class="wrap-break-word text-gray-900">
+                    {{ selectedUploadData?.kpno ?? '-' }}
+                </span>
+            </div>
+
+            <div class="grid grid-cols-1 gap-1 py-4 md:grid-cols-[140px_1fr] md:gap-4">
+                <span class="font-semibold text-gray-700">Factory</span>
+                <span class="wrap-break-word text-gray-900">
+                    {{ selectedUploadData?.factory ?? '-' }}
+                </span>
+            </div>
+
+            <div class="flex items-end gap-3 my-2">
+                <div class="flex-1">
+                    <UiMultiSelect
+                        v-model="selectedKk"
+                        label="KK"
+                        :options="kkOptions"
+                        placeholder="-- Select KK --"
+                    />
+                </div>
+
+                <UiButton :disabled="!selectedKk" @click="saveKk">
+                    Save KK
+                </UiButton>
+            </div>
+
+            <div class="space-y-2 pt-4">
+                <div v-if="hasKkbc && !isReplacing"
+                    class="flex items-center justify-between gap-3 rounded-lg border border-gray-200 p-3">
+                    <div class="min-w-0">
+                        <p class="text-xs text-gray-500">KK BC File</p>
+                        <p class="truncate font-medium text-gray-900">{{ kkbcFileName }}</p>
+                    </div>
+                    <div class="flex shrink-0 gap-2">
+                        <UiButton variant="secondary" @click="downloadKkbc">Download</UiButton>
+                        <UiButton variant="secondary" @click="startReplace">Change</UiButton>
+                        <UiButton variant="secondary" @click="deleteKkbc">Delete</UiButton>
+                    </div>
+                </div>
+
+                <template v-else>
+                    <p v-if="isReplacing" class="text-xs text-gray-500">
+                        Current file: {{ kkbcFileName }}. Choose a new file to replace it.
+                    </p>
+                    <UiInput
+                        :key="dropzoneKey"
+                        type="file"
+                        variant="dropzone"
+                        label="KK BC"
+                        placeholder="Choose File"
+                        dropzone-hint="only PDF, XLS, or XLSX Formats, up to 2MB"
+                        accept=".pdf,.xls,.xlsx"
+                        @change="onFileChange"
+                    ></UiInput>
+                    <div class="flex justify-center gap-2">
+                        <UiButton v-if="isReplacing" variant="secondary" @click="cancelReplace">
+                            Cancel
+                        </UiButton>
+                        <UiButton :disabled="!kkbcFile" @click="uploadKkbc">
+                            Upload
+                        </UiButton>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <template #footer>
+            <div class="mt-4">
+                <UiButton v-if="hasKkbc" variant="primary" @click="submitForm">
+                    Complete Upload
+                </UiButton>
+            </div>
+        </template>
+    </UiModal>
+
+    <UiModal v-model="showModalUndo" size="md">
+        <div class="space-y-4 -mt-2">
+            <div class="flex justify-center">
+                <div class="flex h-32 w-32 items-center justify-center rounded-full bg-amber-100">
+                    <ExclamationCircleIcon class="h-28 w-28 text-amber-600" />
+                </div>
+            </div>
+
+            <div class="mt-4 text-center">
+                <p class="mt-1 text-xl font-bold text-gray-500">
+                    Are you sure going to undo waiting list?
+                </p>
+                <p class="mt-1 text-md text-gray-500">
+                    Once data processed, you can`t retrieve it again or recover the data! please do this action carefully!
+                </p>
+            </div>
+        </div>
+        <template #footer>
+            <div class="flex justify-end gap-3">
+                <UiButton variant="secondary" @click="closeUndoModal">
+                    Cancel
+                </UiButton>
+                <UiButton @click="process">
+                    OK
+                </UiButton>
+            </div>
+        </template>
+    </UiModal>
+</template>
+
+<script setup>
+import { exportToPdf } from '@/utils/pdfExporter';
+import { exportToExcel } from "@/utils/excelExporter";
+import { getCurrentDateTime } from '@/utils/date';
+import { encrypt } from "@/utils/crypto";
+
+import { ref, shallowRef, onMounted, computed, defineComponent, h } from "vue";
+import { useRouter } from "vue-router";
+import { useLoadingStore } from "@/stores/loading";
+import { ArrowUturnLeftIcon, DocumentArrowUpIcon, ExclamationCircleIcon, InformationCircleIcon, MagnifyingGlassIcon } from "@heroicons/vue/24/outline";
+
+import { customSwal } from "@/composable/customSwal";
+const { success, warning, error } = customSwal;
+const { datetime } = getCurrentDateTime('-', '-');
+
+import UiButton from "@/components/ui/UiButton.vue"
+import UiInput from "@/components/ui/UiInput.vue"
+import UiModal from "@/components/ui/UiModal.vue"
+import UiTitle from "@/components/ui/UiTitle.vue"
+import UiMultiSelect from "@/components/ui/UiMultiSelect.vue"
+import UiAgGrid from '@/components/ui/UiAgGrid.vue';
+import UiTooltip from '@/components/ui/UiTooltip.vue';
+
+import api from "@/services/api";
+
+defineOptions({ name: 'Allocation' });
+
+const BASE = "/api/v1/order-artwork";
+const MAX_FILE_SIZE = 2 * 1024 * 1024;
+const ALLOWED_EXT = ["pdf", "xls", "xlsx"];
+
+const loading = useLoadingStore();
+const router = useRouter();
+
+const rawData = shallowRef([]);
+const allData = shallowRef([]);
+
+const buyers = ref([]);
+const data_kp = ref([]);
+const pos = ref([]);
+const dataSelected = ref([]);
+const showModal = ref(false);
+const showModalUndo = ref(false);
+const searchKeyword = ref('');
+const gridApi = ref(null);
+
+const selectedUploadData = ref(null);
+const selectedUndoData = ref(null);
+const kkOptions = ref([]);
+const selectedKk = ref("");
+const kkbcFile = ref(null);
+const kkbcFileName = ref("");
+const isReplacing = ref(false);
+const dropzoneKey = ref(0);
+
+const hasKkbc = computed(() => !!kkbcFileName.value);
+
+const filters = ref([
+    { value: "po", label: "PO" },
+    { value: "kp", label: "KP" },
+]);
+
+const form = ref({
+    filter: "",
+    buyer: "",
+    kpno: "",
+    po: "",
+});
+
+const onGridReady = (params) => {
+    gridApi.value = params.api;
+};
+
+const getErrMsg = (err, fallback = "Something went wrong") =>
+    err?.response?.data?.message ?? fallback;
+
+const pickFirst = (obj, keys) => {
+    for (const k of keys) if (obj?.[k]) return obj[k];
+    return "";
+};
+
+const toFileName = (val) => (val ? String(val).split(/[\\/]/).pop() : "");
+
+const onBtnExport = () => {
+    if (!gridApi.value) {
+        alert("Please Wait!");
+        return;
     }
 
-    // process diambil dari DOStock (delivery_order_stocks)
-    $dos = DOStock::where('delivery_order', $donumber)->first();
-    if (!$dos) {
-        throw new \Exception("Data not found!");
-    }
-    $process = (int) $dos->process;
+    const fileName = `orders-artwork-${datetime.replace(' ', '_')}.xlsx`;
+    exportToExcel({
+        title: `Orders Artwork Allocation Report ${datetime}`,
+        fileName: fileName,
+        sheetName: "Orders Artwork",
+        headers: ["NO", "PO", "KP", "Order Number", "Style", "CM Factory", "PO CMT", "Status"],
+        fields: ["no", "po", "kpno", "ordernumber", "style", "factory", "po_sap", "status"],
+        gridData: gridApi
+    });
+};
 
-    if ($process === 6) {
-        // Laboratory: cek kode factory (2 digit awal) dan kode jenis (2 digit berikutnya bukan 24)
-        $factory = (string) session('db')->iddb;
-
-        if (strlen($donumber) < 4) {
-            throw new \Exception("Invalid DO!");
-        }
-        if (substr($donumber, 0, 2) !== $factory) {
-            throw new \Exception("Invalid DO! DO is not from this factory.");
-        }
-        if (substr($donumber, 2, 2) === '24') {
-            throw new \Exception("Invalid DO!");
-        }
-
-        $source = self::SRC_LAB;
-        $stocks = FGReceiveGarmentStock::where('delivery_order', $donumber)
-                    ->whereNull('deleted_at')
-                    ->get();
-    } else {
-        // Storage: process bukan 6 saja, tanpa cek factory dan kode jenis
-        $source = self::SRC_STORAGE;
-        $stocks = FGStorageStock::where('delivery_order_out', $donumber)
-                    ->whereNull('deleted_at')
-                    ->get();
+const onBtnExportPdf = () => {
+    if (!gridApi.value) {
+        alert("Please Wait!");
+        return;
     }
 
-    if ($stocks->isEmpty()) {
-        throw new \Exception("Data not found!");
+    const nameFile = `orders-artwork-${datetime.replace(' ', '_')}`;
+    exportToPdf({
+        title: `Orders Artwork Allocation Report ${datetime}`,
+        fileName: `${nameFile}`,
+        headers: ["NO", "PO", "KP", "Order Number", "Style", "CM Factory", "PO CMT", "Status"],
+        fields: ["no", "po", "kpno", "ordernumber", "style", "factory", "po_sap", "status"],
+        gridData: gridApi,
+        orientation: 'l'
+    });
+};
+
+const resetUploadState = () => {
+    selectedUploadData.value = null;
+    kkOptions.value = [];
+    selectedKk.value = "";
+    kkbcFile.value = null;
+    kkbcFileName.value = "";
+    isReplacing.value = false;
+    dropzoneKey.value++;
+};
+
+const closeModal = () => {
+    showModal.value = false;
+    resetUploadState();
+};
+
+const closeUndoModal = () => {
+    showModalUndo.value = false;
+    selectedUndoData.value = null;
+};
+
+const loadKkOptions = async (kpno, currentKk) => {
+    let list = [];
+    try {
+        const { data } = await api.get(`${BASE}/selectkk`, { params: { kpno } });
+        list = (data?.data ?? []).map((item) => ({
+            value: item.kk,
+            label: item.kk,
+        }));
+    } catch (err) {
+        if (err?.response?.status === 401) return router.push("/login");
     }
 
-    return ['source' => $source, 'stocks' => $stocks];
-}
-```
+    if (currentKk && !list.some((o) => o.value === currentKk)) {
+        list.unshift({ value: currentKk, label: currentKk });
+    }
+    kkOptions.value = list;
+};
+
+const openUploadModal = async (row) => {
+    resetUploadState();
+    selectedUploadData.value = row;
+
+    const currentKk = pickFirst(row, ["kk", "kkno", "no_kk", "kk_no"]);
+    selectedKk.value = currentKk;
+    kkbcFileName.value = toFileName(pickFirst(row, ["file", "kkbc", "kk_bc", "kkbc_file", "file_kkbc"]));
+    showModal.value = true;
+
+    loading.show();
+    await loadKkOptions(row?.kpno, currentKk);
+    loading.hide();
+};
+
+const saveKk = async () => {
+    if (!selectedKk.value) return warning("Please select KK first");
+
+    try {
+        loading.show();
+        const id = selectedUploadData.value.id;
+        const { data } = await api.put(`${BASE}/update-kk/${id}`, { kk: selectedKk.value });
+        success(data?.message ?? "KK saved");
+        selectedUploadData.value.kk = selectedKk.value;
+    } catch (err) {
+        if (err?.response?.status === 401) router.push("/login");
+        else error(getErrMsg(err, "Failed to save KK"));
+    } finally {
+        loading.hide();
+    }
+};
+
+const startReplace = () => {
+    kkbcFile.value = null;
+    dropzoneKey.value++;
+    isReplacing.value = true;
+};
+
+const cancelReplace = () => {
+    kkbcFile.value = null;
+    dropzoneKey.value++;
+    isReplacing.value = false;
+};
+
+const onFileChange = (e) => {
+    const file = e?.target?.files?.[0] ?? e?.[0] ?? (e instanceof File ? e : null);
+
+    if (!file) {
+        kkbcFile.value = null;
+        return;
+    }
+
+    const ext = file.name.split(".").pop().toLowerCase();
+    if (!ALLOWED_EXT.includes(ext)) {
+        warning("Only PDF, XLS, or XLSX formats are allowed");
+        kkbcFile.value = null;
+        dropzoneKey.value++;
+        return;
+    }
+    if (file.size > MAX_FILE_SIZE) {
+        warning("File size must not exceed 2MB");
+        kkbcFile.value = null;
+        dropzoneKey.value++;
+        return;
+    }
+
+    kkbcFile.value = file;
+};
+
+const uploadKkbc = async () => {
+    if (!kkbcFile.value) return warning("Please choose a file first");
+
+    try {
+        loading.show();
+        const id = selectedUploadData.value.id;
+        const fd = new FormData();
+        fd.append("file", kkbcFile.value);
+
+        const { data } = await api.post(`${BASE}/upload-kkbc/${id}`, fd, {
+            headers: { "Content-Type": "multipart/form-data" },
+        });
+
+        success(data?.message ?? (isReplacing.value ? "File replaced" : "File uploaded"));
+
+        const newName = toFileName(data?.data?.file ?? data?.data?.filename) || kkbcFile.value.name;
+        kkbcFileName.value = newName;
+        selectedUploadData.value.file = newName;
+
+        kkbcFile.value = null;
+        isReplacing.value = false;
+        dropzoneKey.value++;
+
+        fetchGrid(currentQuery);
+    } catch (err) {
+        if (err?.response?.status === 401) router.push("/login");
+        else error(getErrMsg(err, "Failed to upload file"));
+    } finally {
+        loading.hide();
+    }
+};
+
+const downloadKkbc = async () => {
+    try {
+        loading.show();
+        const id = selectedUploadData.value.id;
+        const res = await api.get(`${BASE}/showfille/${id}`, { responseType: "blob" });
+
+        const url = URL.createObjectURL(res.data);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = kkbcFileName.value || "kkbc";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    } catch (err) {
+        if (err?.response?.status === 401) router.push("/login");
+        else error(getErrMsg(err, "Failed to download file"));
+    } finally {
+        loading.hide();
+    }
+};
+
+const deleteKkbc = async () => {
+    if (!window.confirm("Delete this KK BC file?")) return;
+
+    try {
+        loading.show();
+        const id = selectedUploadData.value.id;
+        const { data } = await api.delete(`${BASE}/delete/${id}`);
+        success(data?.message ?? "File deleted");
+
+        kkbcFileName.value = "";
+        selectedUploadData.value.file = null;
+        kkbcFile.value = null;
+        isReplacing.value = false;
+        dropzoneKey.value++;
+
+        fetchGrid(currentQuery);
+    } catch (err) {
+        if (err?.response?.status === 401) router.push("/login");
+        else error(getErrMsg(err, "Failed to delete file"));
+    } finally {
+        loading.hide();
+    }
+};
+
+const submitForm = async () => {
+    if (!hasKkbc.value) return warning("Please upload KK BC file first");
+
+    try {
+        loading.show();
+        const id = selectedUploadData.value.id;
+        const { data } = await api.post(`${BASE}/complete/${id}`);
+        success(data?.message ?? "Upload completed");
+        closeModal();
+        await fetchGrid(currentQuery);
+    } catch (err) {
+        if (err?.response?.status === 401) router.push("/login");
+        else error(getErrMsg(err, "Failed to complete upload"));
+    } finally {
+        loading.hide();
+    }
+};
+
+const process = async () => {
+    if (!selectedUndoData.value) return;
+
+    try {
+        loading.show();
+        const id = selectedUndoData.value.id;
+        const { data } = await api.post(`${BASE}/cancel-complete/${id}`);
+        success(data?.message ?? "Waiting list has been undone");
+        closeUndoModal();
+        await fetchGrid(currentQuery);
+    } catch (err) {
+        if (err?.response?.status === 401) router.push("/login");
+        else error(getErrMsg(err, "Failed to undo"));
+    } finally {
+        loading.hide();
+    }
+};
+
+const ActionRenderer = defineComponent({
+    props: {
+        params: {
+            type: Object,
+            required: true,
+        },
+    },
+
+    setup(props) {
+        const detailData = () => {
+            dataSelected.value = props.params.data;
+
+            const id = dataSelected.value.id;
+            const encryptedid = encrypt(id);
+
+            router.push({
+                name: "order-artwork-allocation-detail",
+                params: {
+                    id: encodeURIComponent(encryptedid),
+                },
+            });
+        };
+
+        const uploadkk = () => openUploadModal(props.params.data);
+
+        const undoUpload = () => {
+            selectedUndoData.value = props.params.data;
+            showModalUndo.value = true;
+        };
+
+        return () => {
+            return h(
+                "div",
+                { class: "flex h-full gap-2" },
+                [
+                    h(
+                        "button",
+                        {
+                            type: "button",
+                            title: "Detail",
+                            class: "cursor-pointer text-amber-500 transition hover:text-amber-700",
+                            onClick: detailData,
+                        },
+                        [h(InformationCircleIcon, { class: "h-5 w-5" })],
+                    ),
+
+                    (props.params.data?.status === "New") &&
+                    h(
+                        "button",
+                        {
+                            type: "button",
+                            title: "Upload KK",
+                            class: "cursor-pointer text-sky-500 transition hover:text-sky-700",
+                            onClick: uploadkk,
+                        },
+                        [h(DocumentArrowUpIcon, { class: "h-5 w-5" })],
+                    ),
+
+                    (props.params.data?.status === "Waiting") &&
+                    h(
+                        "button",
+                        {
+                            type: "button",
+                            title: "Undo Waiting List",
+                            class: "cursor-pointer text-red-500 transition hover:text-red-700",
+                            onClick: undoUpload,
+                        },
+                        [h(ArrowUturnLeftIcon, { class: "h-5 w-5" })],
+                    ),
+                ],
+            );
+        };
+    },
+});
+
+const columnDefs = [
+    { headerName: "No", field: "no", width: 80, filter: false, resizable: false },
+    { field: "po", headerName: "PO", minWidth: 125, flex: 1 },
+    { field: "kpno", headerName: "KP", minWidth: 125, flex: 1 },
+    { field: "ordernumber", headerName: "Order Number", minWidth: 125, flex: 1 },
+    { field: "style", headerName: "Style", minWidth: 125, flex: 1 },
+    {
+        field: "factory",
+        headerName: "CM Factory",
+        minWidth: 150,
+        valueGetter: (params) => params.data?.factory ?? "-",
+        flex: 1,
+    },
+    { field: "po_sap", headerName: "PO CMT", minWidth: 125, flex: 1 },
+    { field: "status", headerName: "Status", minWidth: 125, flex: 1 },
+    {
+        headerName: "Action",
+        maxWidth: 150,
+        sortable: false,
+        filter: false,
+        resizable: false,
+        cellRenderer: ActionRenderer,
+    },
+];
+
+let reqId = 0;
+let currentQuery = "";
+
+const fetchGrid = async (query = "") => {
+    const id = ++reqId;
+    currentQuery = query;
+    try {
+        loading.show();
+        const { data } = await api.get(`${BASE}/getdata${query}`);
+        if (id !== reqId) return;
+
+        const rows = (data?.data ?? []).map((item, index) => ({
+            ...item,
+            no: index + 1,
+        }));
+        rawData.value = rows;
+        if (!query) allData.value = rows;
+        else allData.value = [];
+    } catch (err) {
+        if (err?.response?.status === 401) router.push("/login");
+    } finally {
+        loading.hide();
+    }
+};
+
+const loadData = () => fetchGrid();
+
+const showAll = () => {
+    if (allData.value.length) {
+        rawData.value = allData.value;
+        currentQuery = "";
+    } else fetchGrid();
+};
+
+const loadDataBuyer = async () => {
+    try {
+        loading.show();
+        const { data } = await api.get(`${BASE}/buyers`);
+        buyers.value = (data?.data ?? []).map((item) => ({
+            value: item.idbuyer,
+            label: item.namabuyer,
+        }));
+    } catch (err) {
+        if (err?.response?.status === 401) router.push("/login");
+    } finally {
+        loading.hide();
+    }
+};
+
+const loadDataPo = async () => {
+    try {
+        loading.show();
+        const { data } = await api.get(`${BASE}/pos`);
+        pos.value = (data?.data ?? []).map((item) => ({
+            value: item.po,
+            label: item.po,
+        }));
+    } catch (err) {
+        if (err?.response?.status === 401) router.push("/login");
+    } finally {
+        loading.hide();
+    }
+};
+
+const loadDataKp = async (idbuyer) => {
+    try {
+        loading.show();
+        const { data } = await api.get(`${BASE}/kps?idbuyer=${idbuyer}`);
+        data_kp.value = (data?.data ?? []).map((item) => ({
+            value: item.kpno,
+            label: item.kpno,
+        }));
+    } catch (err) {
+        if (err?.response?.status === 401) router.push("/login");
+    } finally {
+        loading.hide();
+    }
+};
+
+const onFilterChange = (val) => {
+    form.value = { filter: val ?? "", buyer: "", kpno: "", po: "" };
+    data_kp.value = [];
+    showAll();
+    if (val === "po" && !pos.value.length) loadDataPo();
+};
+
+const onBuyerChange = async (idbuyer) => {
+    form.value.kpno = "";
+    data_kp.value = [];
+    if (!idbuyer) return showAll();
+    await loadDataKp(idbuyer);
+};
+
+const loadDataByPo = (po) => (po ? fetchGrid(`?po=${po}`) : showAll());
+const loadDataByKp = (kpno) => (kpno ? fetchGrid(`?kpno=${kpno}`) : showAll());
+
+onMounted(() => {
+    loadData();
+    loadDataBuyer();
+});
+</script>
