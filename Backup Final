@@ -1,31 +1,408 @@
-const FILE_KEYS = ["filename", "file_name", "original_name", "originalname", "name", "path", "url", "file"];
+<template>
+    <div class="px-6">
+        <UiTitle align="center" title="Order Artwork Allocation"/>
 
-const resolveFileName = (val, depth = 0) => {
-    if (!val || depth > 3) return "";
-    if (typeof val === "string") return val.split(/[\\/]/).pop();
-    if (typeof val === "object") {
-        for (const k of FILE_KEYS) {
-            const r = resolveFileName(val[k], depth + 1);
-            if (r) return r;
-        }
+        <div class="mb-4 flex w-full flex-col gap-3 lg:flex-row lg:items-end">
+            <div class="flex-col flex gap-3 md:flex-row mb-2 md:mb-0">
+                <div class="w-full md:w-60">
+                    <UiMultiSelect v-model="form.filter" label="Filter" :options="filters"
+                        placeholder="-- Select Filter --" @change="onFilterChange"/>
+                </div>
+
+                <div v-if="form.filter === 'po'" class="w-full md:w-60">
+                    <UiMultiSelect v-model="form.po" label="PO" :options="pos"
+                        placeholder="-- Select PO --" @change="(v) => fetchGrid(v ? `?po=${v}` : '')"/>
+                </div>
+
+                <template v-if="form.filter === 'kp'">
+                    <div class="w-full md:w-60">
+                        <UiMultiSelect v-model="form.buyer" label="Buyer" :options="buyers"
+                            placeholder="-- Select Buyer --" @change="onBuyerChange"/>
+                    </div>
+                    <div v-if="form.buyer" class="w-full md:w-60">
+                        <UiMultiSelect v-model="form.kpno" label="KP" :options="kps"
+                            placeholder="-- Select KP --" @change="(v) => fetchGrid(v ? `?kpno=${v}` : '')"/>
+                    </div>
+                </template>
+            </div>
+
+            <div class="flex w-full justify-between gap-3 lg:ml-auto lg:w-auto lg:flex-row lg:items-end">
+                <div class="flex items-center justify-start gap-1">
+                    <UiTooltip content="PDF" position="bottom">
+                        <UiButton variant="teritary" class="shrink-0" @click="onExportPdf">
+                            <i class="fa-regular text-2xl fa-file-pdf"></i>
+                        </UiButton>
+                    </UiTooltip>
+                    <UiTooltip content="Excel" position="bottom">
+                        <UiButton variant="teritary" class="shrink-0" @click="onExportExcel">
+                            <i class="fa-regular text-2xl fa-file-excel"></i>
+                        </UiButton>
+                    </UiTooltip>
+                </div>
+                <div class="w-full sm:w-50">
+                    <UiInput v-model="searchKeyword" placeholder="Search" class="w-full rounded-lg">
+                        <template #prefix>
+                            <MagnifyingGlassIcon class="h-5 w-5 text-gray-400" />
+                        </template>
+                    </UiInput>
+                </div>
+            </div>
+        </div>
+
+        <UiAgGrid :rowData="rows" :columnDefs="columnDefs" class="mb-10 my-zebra-grid"
+            :quickFilterText="searchKeyword" @grid-ready="(p) => (gridApi = p.api)"></UiAgGrid>
+    </div>
+
+    <UiModal v-model="showModal" title="Upload KK" size="2xl">
+        <div class="divide-y divide-gray-200 text-sm md:text-base">
+            <div class="grid grid-cols-1 gap-1 py-4 md:grid-cols-[140px_1fr] md:gap-4">
+                <span class="font-semibold text-gray-700">KP Number</span>
+                <span class="text-gray-900">{{ selected?.kpno ?? '-' }}</span>
+            </div>
+
+            <div class="grid grid-cols-1 gap-1 py-4 md:grid-cols-[140px_1fr] md:gap-4">
+                <span class="font-semibold text-gray-700">Factory</span>
+                <span class="text-gray-900">{{ selected?.factory ?? '-' }}</span>
+            </div>
+
+            <div class="flex items-end gap-3 my-2">
+                <div class="flex-1">
+                    <UiMultiSelect v-model="selectedKk" label="KK" :options="kkOptions"
+                        placeholder="-- Select KK --"/>
+                </div>
+                <UiButton :disabled="!selectedKk" @click="saveKk">Save KK</UiButton>
+            </div>
+
+            <div class="space-y-2 pt-4">
+                <div v-if="fileItem && !replacing"
+                    class="flex items-center justify-between gap-3 rounded-lg border border-gray-200 p-3">
+                    <div class="min-w-0">
+                        <p class="text-xs text-gray-500">KK BC File</p>
+                        <p class="truncate font-medium text-gray-900">{{ fileName }}</p>
+                    </div>
+                    <div class="flex shrink-0 gap-2">
+                        <UiButton variant="secondary" @click="downloadFile">Download</UiButton>
+                        <UiButton variant="secondary" @click="startReplace(true)">Change</UiButton>
+                        <UiButton variant="secondary" @click="deleteFile">Delete</UiButton>
+                    </div>
+                </div>
+
+                <template v-else>
+                    <UiInput :key="dropKey" type="file" variant="dropzone" label="KK BC"
+                        placeholder="Choose File" accept=".pdf,.xls,.xlsx"
+                        dropzone-hint="only PDF, XLS, or XLSX Formats, up to 2MB"
+                        @change="onFileChange"></UiInput>
+                    <div class="flex justify-center gap-2">
+                        <UiButton v-if="replacing" variant="secondary" @click="startReplace(false)">Cancel</UiButton>
+                        <UiButton :disabled="!newFile" @click="uploadFile">Upload</UiButton>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <template #footer>
+            <div class="mt-4">
+                <UiButton v-if="fileItem" variant="primary" @click="complete">Complete Upload</UiButton>
+            </div>
+        </template>
+    </UiModal>
+
+    <UiModal v-model="showUndo" size="md">
+        <div class="space-y-4 -mt-2">
+            <div class="flex justify-center">
+                <div class="flex h-32 w-32 items-center justify-center rounded-full bg-amber-100">
+                    <ExclamationCircleIcon class="h-28 w-28 text-amber-600" />
+                </div>
+            </div>
+            <div class="mt-4 text-center">
+                <p class="mt-1 text-xl font-bold text-gray-500">Are you sure going to undo waiting list?</p>
+                <p class="mt-1 text-md text-gray-500">
+                    Once data processed, you can`t retrieve it again or recover the data! please do this action carefully!
+                </p>
+            </div>
+        </div>
+        <template #footer>
+            <div class="flex justify-end gap-3">
+                <UiButton variant="secondary" @click="showUndo = false">Cancel</UiButton>
+                <UiButton @click="undo">OK</UiButton>
+            </div>
+        </template>
+    </UiModal>
+</template>
+
+<script setup>
+import { exportToPdf } from '@/utils/pdfExporter';
+import { exportToExcel } from "@/utils/excelExporter";
+import { getCurrentDateTime } from '@/utils/date';
+import { encrypt } from "@/utils/crypto";
+
+import { ref, shallowRef, onMounted, computed, defineComponent, h } from "vue";
+import { useRouter } from "vue-router";
+import { useLoadingStore } from "@/stores/loading";
+import { ArrowUturnLeftIcon, DocumentArrowUpIcon, ExclamationCircleIcon, InformationCircleIcon, MagnifyingGlassIcon } from "@heroicons/vue/24/outline";
+
+import { customSwal } from "@/composable/customSwal";
+import UiButton from "@/components/ui/UiButton.vue";
+import UiInput from "@/components/ui/UiInput.vue";
+import UiModal from "@/components/ui/UiModal.vue";
+import UiTitle from "@/components/ui/UiTitle.vue";
+import UiMultiSelect from "@/components/ui/UiMultiSelect.vue";
+import UiAgGrid from '@/components/ui/UiAgGrid.vue';
+import UiTooltip from '@/components/ui/UiTooltip.vue';
+import api from "@/services/api";
+
+defineOptions({ name: 'Allocation' });
+
+const { success, warning, error } = customSwal;
+const { datetime } = getCurrentDateTime('-', '-');
+const loading = useLoadingStore();
+const router = useRouter();
+
+const BASE = "/api/v1/order-artwork";
+const MAX_SIZE = 2 * 1024 * 1024;
+const EXTS = ["pdf", "xls", "xlsx"];
+
+const rows = shallowRef([]);
+const buyers = ref([]);
+const kps = ref([]);
+const pos = ref([]);
+const searchKeyword = ref("");
+const gridApi = ref(null);
+const query = ref("");
+
+const filters = [{ value: "po", label: "PO" }, { value: "kp", label: "KP" }];
+const form = ref({ filter: "", buyer: "", kpno: "", po: "" });
+
+const showModal = ref(false);
+const showUndo = ref(false);
+const selected = ref(null);
+const undoRow = ref(null);
+const kkOptions = ref([]);
+const selectedKk = ref("");
+const newFile = ref(null);
+const fileItem = ref(null);
+const replacing = ref(false);
+const dropKey = ref(0);
+
+const fileName = computed(() => fileItem.value?.filename ?? fileItem.value?.name ?? fileItem.value?.file_name ?? "KK BC File");
+
+const run = async (fn, msg = "Something went wrong") => {
+    try {
+        loading.show();
+        await fn();
+    } catch (err) {
+        if (err?.response?.status === 401) router.push("/login");
+        else error(err?.response?.data?.message ?? msg);
+    } finally {
+        loading.hide();
     }
-    return "";
 };
 
-const openUploadModal = async (row) => {
-    resetUploadState();
-    selectedUploadData.value = row;
+const toOptions = (list, value, label = value) => (list ?? []).map((i) => ({ value: i[value], label: i[label] }));
 
-    const currentKk = pickFirst(row, ["kk", "kkno", "no_kk", "kk_no"]);
-    selectedKk.value = currentKk;
+const fetchGrid = (q = "") => run(async () => {
+    query.value = q;
+    const { data } = await api.get(`${BASE}/getdata${q}`);
+    rows.value = (data?.data ?? []).map((item, i) => ({ ...item, no: i + 1 }));
+});
 
-    const rawFile = row?.data?.file ?? row?.file ?? row?.kkbc ?? row?.kk_bc;
-    kkbcFileName.value = resolveFileName(rawFile);
+const exportOptions = {
+    headers: ["NO", "PO", "KP", "Order Number", "Style", "CM Factory", "PO CMT", "Status"],
+    fields: ["no", "po", "kpno", "ordernumber", "style", "factory", "po_sap", "status"],
+};
+
+const doExport = (fn, extra) => {
+    if (!gridApi.value) return alert("Please Wait!");
+    fn({
+        title: `Orders Artwork Allocation Report ${datetime}`,
+        fileName: `orders-artwork-${datetime.replace(' ', '_')}${extra.ext ?? ""}`,
+        gridData: gridApi,
+        ...exportOptions,
+        ...extra.opts,
+    });
+};
+
+const onExportExcel = () => doExport(exportToExcel, { ext: ".xlsx", opts: { sheetName: "Orders Artwork" } });
+const onExportPdf = () => doExport(exportToPdf, { opts: { orientation: "l" } });
+
+const onFilterChange = (val) => {
+    form.value = { filter: val ?? "", buyer: "", kpno: "", po: "" };
+    kps.value = [];
+    fetchGrid();
+    if (val === "po" && !pos.value.length) {
+        run(async () => {
+            const { data } = await api.get(`${BASE}/pos`);
+            pos.value = toOptions(data?.data, "po");
+        });
+    }
+};
+
+const onBuyerChange = (idbuyer) => {
+    form.value.kpno = "";
+    kps.value = [];
+    if (!idbuyer) return fetchGrid();
+    run(async () => {
+        const { data } = await api.get(`${BASE}/kps?idbuyer=${idbuyer}`);
+        kps.value = toOptions(data?.data, "kpno");
+    });
+};
+
+const resetModal = () => {
+    newFile.value = null;
+    replacing.value = false;
+    dropKey.value++;
+};
+
+const startReplace = (val) => {
+    resetModal();
+    replacing.value = val;
+};
+
+const syncFromGrid = () => {
+    const fresh = rows.value.find((r) => r.id === selected.value?.id);
+    if (!fresh) return;
+    selected.value = fresh;
+    fileItem.value = Array.isArray(fresh.file) ? (fresh.file[0] ?? null) : (fresh.file || null);
+};
+
+const openUpload = async (row) => {
+    resetModal();
+    selected.value = row;
+    selectedKk.value = row.kk ?? "";
+    kkOptions.value = [];
+    syncFromGrid();
     showModal.value = true;
 
-    loading.show();
-    await loadKkOptions(row?.kpno, currentKk);
-    loading.hide();
+    run(async () => {
+        const { data } = await api.get(`${BASE}/selectkk`, { params: { kpno: row.kpno } });
+        const list = toOptions(data?.data, "kk");
+        if (row.kk && !list.some((o) => o.value === row.kk)) list.unshift({ value: row.kk, label: row.kk });
+        kkOptions.value = list;
+    });
 };
 
-const newName = resolveFileName(data?.data?.file ?? data?.data?.filename) || kkbcFile.value.name;
+const saveKk = () => run(async () => {
+    const { data } = await api.put(`${BASE}/update-kk/${selected.value.id}`, { kk: selectedKk.value });
+    success(data?.message ?? "KK saved");
+    selected.value.kk = selectedKk.value;
+}, "Failed to save KK");
+
+const onFileChange = (e) => {
+    const file = e?.target?.files?.[0] ?? e?.[0] ?? (e instanceof File ? e : null);
+    newFile.value = null;
+    if (!file) return;
+
+    if (!EXTS.includes(file.name.split(".").pop().toLowerCase())) {
+        warning("Only PDF, XLS, or XLSX formats are allowed");
+        return dropKey.value++;
+    }
+    if (file.size > MAX_SIZE) {
+        warning("File size must not exceed 2MB");
+        return dropKey.value++;
+    }
+    newFile.value = file;
+};
+
+const uploadFile = () => run(async () => {
+    const fd = new FormData();
+    fd.append("file", newFile.value);
+    const { data } = await api.post(`${BASE}/upload-kkbc/${selected.value.id}`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+    });
+    success(data?.message ?? "File uploaded");
+    resetModal();
+    await fetchGrid(query.value);
+    syncFromGrid();
+}, "Failed to upload file");
+
+const downloadFile = () => run(async () => {
+    const id = fileItem.value?.id ?? selected.value.id;
+    const res = await api.get(`${BASE}/showfille/${id}`, { responseType: "blob" });
+    const url = URL.createObjectURL(res.data);
+    const a = Object.assign(document.createElement("a"), { href: url, download: fileName.value });
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+}, "Failed to download file");
+
+const deleteFile = () => {
+    if (!window.confirm("Delete this KK BC file?")) return;
+    run(async () => {
+        const id = fileItem.value?.id ?? selected.value.id;
+        const { data } = await api.delete(`${BASE}/delete/${id}`);
+        success(data?.message ?? "File deleted");
+        fileItem.value = null;
+        resetModal();
+        await fetchGrid(query.value);
+        syncFromGrid();
+    }, "Failed to delete file");
+};
+
+const complete = () => run(async () => {
+    const { data } = await api.post(`${BASE}/complete/${selected.value.id}`);
+    success(data?.message ?? "Upload completed");
+    showModal.value = false;
+    await fetchGrid(query.value);
+}, "Failed to complete upload");
+
+const undo = () => run(async () => {
+    const { data } = await api.post(`${BASE}/cancel-complete/${undoRow.value.id}`);
+    success(data?.message ?? "Waiting list has been undone");
+    showUndo.value = false;
+    await fetchGrid(query.value);
+}, "Failed to undo");
+
+const ActionRenderer = defineComponent({
+    props: { params: { type: Object, required: true } },
+    setup(props) {
+        const row = () => props.params.data;
+
+        const btn = (title, color, icon, onClick) =>
+            h("button", {
+                type: "button",
+                title,
+                class: `cursor-pointer text-${color}-500 transition hover:text-${color}-700`,
+                onClick,
+            }, [h(icon, { class: "h-5 w-5" })]);
+
+        const detail = () => router.push({
+            name: "order-artwork-allocation-detail",
+            params: { id: encodeURIComponent(encrypt(row().id)) },
+        });
+
+        const openUndo = () => {
+            undoRow.value = row();
+            showUndo.value = true;
+        };
+
+        return () => h("div", { class: "flex h-full gap-2" }, [
+            btn("Detail", "amber", InformationCircleIcon, detail),
+            row()?.status === "New" && btn("Upload KK", "sky", DocumentArrowUpIcon, () => openUpload(row())),
+            row()?.status === "Waiting" && btn("Undo Waiting List", "red", ArrowUturnLeftIcon, openUndo),
+        ]);
+    },
+});
+
+const col = (field, headerName, extra = {}) => ({ field, headerName, minWidth: 125, flex: 1, ...extra });
+
+const columnDefs = [
+    { headerName: "No", field: "no", width: 80, filter: false, resizable: false },
+    col("po", "PO"),
+    col("kpno", "KP"),
+    col("ordernumber", "Order Number"),
+    col("style", "Style"),
+    col("factory", "CM Factory", { minWidth: 150, valueGetter: (p) => p.data?.factory ?? "-" }),
+    col("po_sap", "PO CMT"),
+    col("status", "Status"),
+    { headerName: "Action", maxWidth: 150, sortable: false, filter: false, resizable: false, cellRenderer: ActionRenderer },
+];
+
+onMounted(() => {
+    fetchGrid();
+    run(async () => {
+        const { data } = await api.get(`${BASE}/buyers`);
+        buyers.value = toOptions(data?.data, "idbuyer", "namabuyer");
+    });
+});
+</script>
