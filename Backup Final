@@ -1,3 +1,8 @@
+post http://192.168.91.178:8000/api/v1/order-artwork/upload-kkbc/3010001199 {kk}
+body {
+kkbc   file
+}
+
 <template>
     <div class="px-6">
         <UiTitle align="center" title="Order Artwork Allocation"/>
@@ -50,7 +55,7 @@
         </div>
 
         <UiAgGrid :rowData="rows" :columnDefs="columnDefs" class="mb-10 my-zebra-grid"
-            :quickFilterText="searchKeyword" @grid-ready="(p) => (gridApi = p.api)"></UiAgGrid>
+            :quickFilterText="searchKeyword"></UiAgGrid>
     </div>
 
     <UiModal v-model="showModal" title="Upload KK" size="2xl">
@@ -72,26 +77,30 @@
                 </div>
                 <UiButton :disabled="!selectedKk" @click="saveKk">Save KK</UiButton>
             </div>
+            
+            <div class="space-y-2 pt-1">
+                <div class="space-y-3" >
+                    <UiInput :key="dropKey" type="file" variant="dropzone" label="KK BC" placeholder="Choose File" accept=".pdf,.xls,.xlsx" dropzone-hint="only PDF, XLS, or XLSX Formats, up to 2MB" @change="onFileChange"></UiInput>
 
-            <div class="space-y-2 pt-4">
+                    <div class="text-end">
+                        <UiButton :disabled="!selectedKk" @click="saveKk">Upload</UiButton>
+                    </div>
+
+                </div>
                 <div v-if="fileItem && !replacing"
                     class="flex items-center justify-between gap-3 rounded-lg border border-gray-200 p-3">
-                    <div class="min-w-0">
-                        <p class="text-xs text-gray-500">KK BC File</p>
-                        <p class="truncate font-medium text-gray-900">{{ fileName }}</p>
+                    <div class="min-w-0 cursor-pointer flex items-center" @click="downloadFile" >
+                        <DocumentIcon class="w-7 h-7 mr-3" />
+                        <p class="truncate font-medium text-blue-600">{{ fileName }}.{{ extension }}</p>
                     </div>
-                    <div class="flex shrink-0 gap-2">
-                        <UiButton variant="secondary" @click="downloadFile">Download</UiButton>
-                        <UiButton variant="secondary" @click="startReplace(true)">Change</UiButton>
-                        <UiButton variant="secondary" @click="deleteFile">Delete</UiButton>
+                    <div class="flex shrink-0 gap-2 items-center">
+                        <div @click="deleteFile" class="cursor-pointer">
+                            <TrashIcon class="h-6 w-6 text-red-600" />
+                        </div>
                     </div>
                 </div>
 
                 <template v-else>
-                    <UiInput :key="dropKey" type="file" variant="dropzone" label="KK BC"
-                        placeholder="Choose File" accept=".pdf,.xls,.xlsx"
-                        dropzone-hint="only PDF, XLS, or XLSX Formats, up to 2MB"
-                        @change="onFileChange"></UiInput>
                     <div class="flex justify-center gap-2">
                         <UiButton v-if="replacing" variant="secondary" @click="startReplace(false)">Cancel</UiButton>
                         <UiButton :disabled="!newFile" @click="uploadFile">Upload</UiButton>
@@ -139,7 +148,7 @@ import { encrypt } from "@/utils/crypto";
 import { ref, shallowRef, onMounted, computed, defineComponent, h } from "vue";
 import { useRouter } from "vue-router";
 import { useLoadingStore } from "@/stores/loading";
-import { ArrowUturnLeftIcon, DocumentArrowUpIcon, ExclamationCircleIcon, InformationCircleIcon, MagnifyingGlassIcon } from "@heroicons/vue/24/outline";
+import { ArrowUturnLeftIcon, DocumentArrowUpIcon, ExclamationCircleIcon, InformationCircleIcon, MagnifyingGlassIcon, PlusCircleIcon } from "@heroicons/vue/24/outline";
 
 import { customSwal } from "@/composable/customSwal";
 import UiButton from "@/components/ui/UiButton.vue";
@@ -150,16 +159,18 @@ import UiMultiSelect from "@/components/ui/UiMultiSelect.vue";
 import UiAgGrid from '@/components/ui/UiAgGrid.vue';
 import UiTooltip from '@/components/ui/UiTooltip.vue';
 import api from "@/services/api";
+import {  TrashIcon } from '@heroicons/vue/24/solid';
+import { DocumentIcon } from '@heroicons/vue/24/outline';
 
 defineOptions({ name: 'Allocation' });
 
-const { success, warning, error } = customSwal;
+const { confirmDelete,success, warning, error } = customSwal;
 const { datetime } = getCurrentDateTime('-', '-');
 const loading = useLoadingStore();
 const router = useRouter();
 
 const BASE = "/api/v1/order-artwork";
-const MAX_SIZE = 2 * 1024 * 1024;
+// const MAX_SIZE = 10 * 1024 * 1024;
 const EXTS = ["pdf", "xls", "xlsx"];
 
 const rows = shallowRef([]);
@@ -184,7 +195,8 @@ const fileItem = ref(null);
 const replacing = ref(false);
 const dropKey = ref(0);
 
-const fileName = computed(() => fileItem.value?.filename ?? fileItem.value?.name ?? fileItem.value?.file_name ?? "KK BC File");
+const fileName = computed(() => fileItem.value?.filename);
+const extension = computed(() => fileItem.value?.extension);
 
 const run = async (fn, msg = "Something went wrong") => {
     try {
@@ -204,6 +216,8 @@ const fetchGrid = (q = "") => run(async () => {
     query.value = q;
     const { data } = await api.get(`${BASE}/getdata${q}`);
     rows.value = (data?.data ?? []).map((item, i) => ({ ...item, no: i + 1 }));
+
+    console.log(rows.value);
 });
 
 const exportOptions = {
@@ -296,17 +310,17 @@ const onFileChange = (e) => {
         warning("Only PDF, XLS, or XLSX formats are allowed");
         return dropKey.value++;
     }
-    if (file.size > MAX_SIZE) {
-        warning("File size must not exceed 2MB");
-        return dropKey.value++;
-    }
+    // if (file.size > MAX_SIZE) {
+    //     warning("File size must not exceed 2MB");
+    //     return dropKey.value++;
+    // }
     newFile.value = file;
 };
 
 const uploadFile = () => run(async () => {
     const fd = new FormData();
-    fd.append("file", newFile.value);
-    const { data } = await api.post(`${BASE}/upload-kkbc/${selected.value.id}`, fd, {
+    fd.append("kkbc", newFile.value);
+    const { data } = await api.post(`${BASE}/upload-kkbc/${selected.value.kk}`, fd, {
         headers: { "Content-Type": "multipart/form-data" },
     });
     success(data?.message ?? "File uploaded");
@@ -315,9 +329,10 @@ const uploadFile = () => run(async () => {
     syncFromGrid();
 }, "Failed to upload file");
 
+
 const downloadFile = () => run(async () => {
     const id = fileItem.value?.id ?? selected.value.id;
-    const res = await api.get(`${BASE}/showfille/${id}`, { responseType: "blob" });
+    const res = await api.get(`${BASE}/showfile/${id}`, { responseType: "blob" });
     const url = URL.createObjectURL(res.data);
     const a = Object.assign(document.createElement("a"), { href: url, download: fileName.value });
     document.body.appendChild(a);
@@ -326,17 +341,45 @@ const downloadFile = () => run(async () => {
     URL.revokeObjectURL(url);
 }, "Failed to download file");
 
-const deleteFile = () => {
-    if (!window.confirm("Delete this KK BC file?")) return;
-    run(async () => {
+const deleteFile = async () => {
+    const result = await confirmDelete();
+    if (!result.isConfirmed) {
+        return
+    }
+
+    try {
+        loading.show()
+
         const id = fileItem.value?.id ?? selected.value.id;
         const { data } = await api.delete(`${BASE}/delete/${id}`);
-        success(data?.message ?? "File deleted");
+
+        loading.hide()
+
+        await success({
+            title: "Success",
+            text: data?.message || "Data has been deleted successfully.",
+        });
+        await loadData()
+
         fileItem.value = null;
         resetModal();
         await fetchGrid(query.value);
         syncFromGrid();
-    }, "Failed to delete file");
+    } catch (error) {
+        if (err?.response?.status === 401) {
+            router.push("/login")
+            return
+        }
+
+        loading.hide()
+        await error({
+            title: "Delete Failed",
+            text:
+                err?.response?.data?.message ||
+                err?.message ||
+                "Failed to delete the data. Please try again.",
+        });
+    }
 };
 
 const complete = () => run(async () => {
@@ -367,8 +410,8 @@ const ActionRenderer = defineComponent({
             }, [h(icon, { class: "h-5 w-5" })]);
 
         const detail = () => router.push({
-            name: "order-artwork-allocation-detail",
-            params: { id: encodeURIComponent(encrypt(row().id)) },
+            name: "order-artwork-allocation-detail-kk",
+            params: { kk: encodeURIComponent(encrypt(row().kk)) },
         });
 
         const openUndo = () => {
