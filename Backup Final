@@ -1,8 +1,3 @@
-post http://192.168.91.178:8000/api/v1/order-artwork/upload-kkbc/3010001199 {kk}
-body {
-kkbc   file
-}
-
 <template>
     <div class="px-6">
         <UiTitle align="center" title="Order Artwork Allocation"/>
@@ -77,41 +72,35 @@ kkbc   file
                 </div>
                 <UiButton :disabled="!selectedKk" @click="saveKk">Save KK</UiButton>
             </div>
-            
-            <div class="space-y-2 pt-1">
-                <div class="space-y-3" >
-                    <UiInput :key="dropKey" type="file" variant="dropzone" label="KK BC" placeholder="Choose File" accept=".pdf,.xls,.xlsx" dropzone-hint="only PDF, XLS, or XLSX Formats, up to 2MB" @change="onFileChange"></UiInput>
 
-                    <div class="text-end">
-                        <UiButton :disabled="!selectedKk" @click="saveKk">Upload</UiButton>
-                    </div>
+            <div class="space-y-3 pt-1">
+                <UiInput :key="dropKey" type="file" variant="dropzone" label="KK BC"
+                    placeholder="Choose File" accept=".pdf,.xls,.xlsx"
+                    dropzone-hint="only PDF, XLS, or XLSX Formats, up to 2MB"
+                    @change="onFileChange" />
 
+                <div class="text-end">
+                    <UiButton :disabled="!selectedKk || !newFile" @click="uploadFile">Upload</UiButton>
                 </div>
-                <div v-if="fileItem && !replacing"
-                    class="flex items-center justify-between gap-3 rounded-lg border border-gray-200 p-3">
-                    <div class="min-w-0 cursor-pointer flex items-center" @click="downloadFile" >
-                        <DocumentIcon class="w-7 h-7 mr-3" />
-                        <p class="truncate font-medium text-blue-600">{{ fileName }}.{{ extension }}</p>
-                    </div>
-                    <div class="flex shrink-0 gap-2 items-center">
-                        <div @click="deleteFile" class="cursor-pointer">
+
+                <div v-if="files.length" class="space-y-2">
+                    <div v-for="f in files" :key="f.id"
+                        class="flex items-center justify-between gap-3 rounded-lg border border-gray-200 p-3">
+                        <div class="flex min-w-0 cursor-pointer items-center" @click="downloadFile(f)">
+                            <DocumentIcon class="mr-3 h-7 w-7" />
+                            <p class="truncate font-medium text-blue-600">{{ f.filename }}.{{ f.extension }}</p>
+                        </div>
+                        <div class="cursor-pointer" @click="deleteFile(f)">
                             <TrashIcon class="h-6 w-6 text-red-600" />
                         </div>
                     </div>
                 </div>
-
-                <template v-else>
-                    <div class="flex justify-center gap-2">
-                        <UiButton v-if="replacing" variant="secondary" @click="startReplace(false)">Cancel</UiButton>
-                        <UiButton :disabled="!newFile" @click="uploadFile">Upload</UiButton>
-                    </div>
-                </template>
             </div>
         </div>
 
         <template #footer>
             <div class="mt-4">
-                <UiButton v-if="fileItem" variant="primary" @click="complete">Complete Upload</UiButton>
+                <UiButton v-if="files.length" variant="primary" @click="complete">Complete Upload</UiButton>
             </div>
         </template>
     </UiModal>
@@ -145,10 +134,10 @@ import { exportToExcel } from "@/utils/excelExporter";
 import { getCurrentDateTime } from '@/utils/date';
 import { encrypt } from "@/utils/crypto";
 
-import { ref, shallowRef, onMounted, computed, defineComponent, h } from "vue";
+import { ref, shallowRef, onMounted, defineComponent, h } from "vue";
 import { useRouter } from "vue-router";
 import { useLoadingStore } from "@/stores/loading";
-import { ArrowUturnLeftIcon, DocumentArrowUpIcon, ExclamationCircleIcon, InformationCircleIcon, MagnifyingGlassIcon, PlusCircleIcon } from "@heroicons/vue/24/outline";
+import { ArrowUturnLeftIcon, DocumentArrowUpIcon, ExclamationCircleIcon, InformationCircleIcon, MagnifyingGlassIcon } from "@heroicons/vue/24/outline";
 
 import { customSwal } from "@/composable/customSwal";
 import UiButton from "@/components/ui/UiButton.vue";
@@ -159,18 +148,17 @@ import UiMultiSelect from "@/components/ui/UiMultiSelect.vue";
 import UiAgGrid from '@/components/ui/UiAgGrid.vue';
 import UiTooltip from '@/components/ui/UiTooltip.vue';
 import api from "@/services/api";
-import {  TrashIcon } from '@heroicons/vue/24/solid';
+import { TrashIcon } from '@heroicons/vue/24/solid';
 import { DocumentIcon } from '@heroicons/vue/24/outline';
 
 defineOptions({ name: 'Allocation' });
 
-const { confirmDelete,success, warning, error } = customSwal;
+const { confirmDelete, success, warning, error } = customSwal;
 const { datetime } = getCurrentDateTime('-', '-');
 const loading = useLoadingStore();
 const router = useRouter();
 
 const BASE = "/api/v1/order-artwork";
-// const MAX_SIZE = 10 * 1024 * 1024;
 const EXTS = ["pdf", "xls", "xlsx"];
 
 const rows = shallowRef([]);
@@ -191,12 +179,8 @@ const undoRow = ref(null);
 const kkOptions = ref([]);
 const selectedKk = ref("");
 const newFile = ref(null);
-const fileItem = ref(null);
-const replacing = ref(false);
+const files = ref([]);
 const dropKey = ref(0);
-
-const fileName = computed(() => fileItem.value?.filename);
-const extension = computed(() => fileItem.value?.extension);
 
 const run = async (fn, msg = "Something went wrong") => {
     try {
@@ -216,8 +200,6 @@ const fetchGrid = (q = "") => run(async () => {
     query.value = q;
     const { data } = await api.get(`${BASE}/getdata${q}`);
     rows.value = (data?.data ?? []).map((item, i) => ({ ...item, no: i + 1 }));
-
-    console.log(rows.value);
 });
 
 const exportOptions = {
@@ -263,20 +245,15 @@ const onBuyerChange = (idbuyer) => {
 
 const resetModal = () => {
     newFile.value = null;
-    replacing.value = false;
     dropKey.value++;
 };
 
-const startReplace = (val) => {
-    resetModal();
-    replacing.value = val;
-};
-
+// Ambil ulang daftar file dari data grid terbaru (mendukung array / objek tunggal)
 const syncFromGrid = () => {
     const fresh = rows.value.find((r) => r.id === selected.value?.id);
     if (!fresh) return;
     selected.value = fresh;
-    fileItem.value = Array.isArray(fresh.file) ? (fresh.file[0] ?? null) : (fresh.file || null);
+    files.value = Array.isArray(fresh.file) ? fresh.file : (fresh.file ? [fresh.file] : []);
 };
 
 const openUpload = async (row) => {
@@ -284,6 +261,7 @@ const openUpload = async (row) => {
     selected.value = row;
     selectedKk.value = row.kk ?? "";
     kkOptions.value = [];
+    files.value = [];
     syncFromGrid();
     showModal.value = true;
 
@@ -310,17 +288,14 @@ const onFileChange = (e) => {
         warning("Only PDF, XLS, or XLSX formats are allowed");
         return dropKey.value++;
     }
-    // if (file.size > MAX_SIZE) {
-    //     warning("File size must not exceed 2MB");
-    //     return dropKey.value++;
-    // }
     newFile.value = file;
 };
 
+// POST /upload-kkbc/{kk}  body: kkbc (file)
 const uploadFile = () => run(async () => {
     const fd = new FormData();
     fd.append("kkbc", newFile.value);
-    const { data } = await api.post(`${BASE}/upload-kkbc/${selected.value.kk}`, fd, {
+    const { data } = await api.post(`${BASE}/upload-kkbc/${selectedKk.value}`, fd, {
         headers: { "Content-Type": "multipart/form-data" },
     });
     success(data?.message ?? "File uploaded");
@@ -329,55 +304,36 @@ const uploadFile = () => run(async () => {
     syncFromGrid();
 }, "Failed to upload file");
 
-
-const downloadFile = () => run(async () => {
-    const id = fileItem.value?.id ?? selected.value.id;
-    const res = await api.get(`${BASE}/showfile/${id}`, { responseType: "blob" });
+const downloadFile = (f) => run(async () => {
+    const res = await api.get(`${BASE}/showfile/${f.id}`, { responseType: "blob" });
     const url = URL.createObjectURL(res.data);
-    const a = Object.assign(document.createElement("a"), { href: url, download: fileName.value });
+    const a = Object.assign(document.createElement("a"), {
+        href: url,
+        download: `${f.filename}.${f.extension}`,
+    });
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
 }, "Failed to download file");
 
-const deleteFile = async () => {
+const deleteFile = async (f) => {
     const result = await confirmDelete();
-    if (!result.isConfirmed) {
-        return
-    }
+    if (!result.isConfirmed) return;
 
     try {
-        loading.show()
-
-        const id = fileItem.value?.id ?? selected.value.id;
-        const { data } = await api.delete(`${BASE}/delete/${id}`);
-
-        loading.hide()
-
-        await success({
-            title: "Success",
-            text: data?.message || "Data has been deleted successfully.",
-        });
-        await loadData()
-
-        fileItem.value = null;
-        resetModal();
+        loading.show();
+        const { data } = await api.delete(`${BASE}/delete/${f.id}`);
+        loading.hide();
+        await success({ title: "Success", text: data?.message || "Data has been deleted successfully." });
         await fetchGrid(query.value);
         syncFromGrid();
-    } catch (error) {
-        if (err?.response?.status === 401) {
-            router.push("/login")
-            return
-        }
-
-        loading.hide()
+    } catch (err) {
+        loading.hide();
+        if (err?.response?.status === 401) return router.push("/login");
         await error({
             title: "Delete Failed",
-            text:
-                err?.response?.data?.message ||
-                err?.message ||
-                "Failed to delete the data. Please try again.",
+            text: err?.response?.data?.message || err?.message || "Failed to delete the data. Please try again.",
         });
     }
 };
