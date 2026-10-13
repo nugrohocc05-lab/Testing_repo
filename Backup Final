@@ -1,17 +1,11 @@
-const doExport = (fn, extra) => {
-    const api = gridRef.value?.gridApi;   // sudah di-unwrap otomatis oleh expose
-    if (!api) return warning("Please wait, grid is not ready");
-    fn({
-        title: `Orders Artwork Allocation Report ${datetime}`,
-        fileName: `orders-artwork-${datetime.replace(' ', '_')}${extra.ext ?? ""}`,
-        gridData: { value: api },   // lihat catatan di bawah
-        ...exportOptions,
-        ...extra.opts,
-    });
+<UiAgGrid ref="gridRef" :rowData="rows" :columnDefs="columnDefs" class="mb-10 my-zebra-grid"
+    :quickFilterText="searchKeyword" @grid-ready="onGridReady"></UiAgGrid>
+
+import { ref, shallowRef, onMounted, defineComponent, h } from "vue";
+
+const gridApi = shallowRef(null);   // ganti dari ref(null)
+
+const onGridReady = (e) => {
+    gridApi.value = e.api;
 };
 
-const gridRef = ref(null);
-// hapus: const gridApi = ref(null);
-
-<UiAgGrid ref="gridRef" :rowData="rows" :columnDefs="columnDefs"
-    class="mb-10 my-zebra-grid" :quickFilterText="searchKeyword" />
