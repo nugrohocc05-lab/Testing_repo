@@ -1,105 +1,140 @@
-import { utils, writeFile } from "xlsx";
+<script setup>
+import { ref, shallowRef, watch } from 'vue'
+import { AgGridVue } from 'ag-grid-vue3'
+import { ModuleRegistry, ClientSideRowModelModule, ValidationModule } from 'ag-grid-community'
 
-const getNestedValue = (obj, path) => {
-    return path.split('.').reduce((acc, part) => acc && acc[part], obj);
-};
+ModuleRegistry.registerModules([
+  ClientSideRowModelModule,
+  ValidationModule
+])
 
-export const exportToExcel = ({ title, fileName, sheetName = "Sheet1", headers, fields, gridData }) => {
-        const xlsxPdf = [];
-    gridData.value.forEachNodeAfterFilterAndSort((rowNode) => {
-        if (rowNode.data) xlsxPdf.push({ ...rowNode.data });
-    });
+defineOptions({
+  inheritAttrs: false
+})
 
+// PERUBAHAN: deklarasi emit grid-ready
+const emit = defineEmits(['grid-ready'])
 
-    let safeData = xlsxPdf && xlsxPdf.value ? xlsxPdf.value : xlsxPdf;
-    if (!Array.isArray(safeData)) {
-        console.error("exportToExcel Error: gridData must be an array");
-        return;
-    }
+const props = defineProps({
+  rowData: { type: Array, default: () => [] },
+  columnDefs: { type: Array, default: () => [] },
+  defaultColDef: {
+    type: Object,
+    default: () => ({
+      sortable: true,
+      filter: false,
+      resizable: true,
+    })
+  },
+  localeText: {
+    type: Object,
+    default: () => ({})
+  },
+  quickFilterText: { type: String, default: '' },
+  pagination: { type: Boolean, default: true },
+  paginationPageSize: { type: Number, default: 10 },
+  paginationPageSizeSelector: {
+    type: Array,
+    default: () => [5, 10, 20, 50, 100]
+  },
+  domLayout: { type: String, default: 'normal' },
+  allowCopy: { type: Boolean, default: false },
+  disableDrag: { type: Boolean, default: true },
 
-    const formattedData = safeData.map(item => {
-        const row = {};
-        headers.forEach((header, index) => {
-            const fieldKey = fields[index];
-            row[header] = getNestedValue(item, fieldKey) ?? "-";
-        });
-        return row;
-    });
+  maxHeight: { type: String, default: 'calc(100vh - 315px)' },
+  pagingHeight: { type: Number, default: 43 }
+})
 
-    const titleHeaderStructure = [
-        [title],
-        [] 
-    ];
+const gridApi = shallowRef(null)
+const gridHeight = ref(null)
 
-    const worksheet = utils.aoa_to_sheet(titleHeaderStructure);
+const updateHeight = () => {
+  const api = gridApi.value
+  if (!api || props.domLayout === 'autoHeight') return
 
-    utils.sheet_add_json(worksheet, formattedData, {
-        origin: "A3",
-        skipHeader: false
-    });
+  const sizes = api.getSizesForCurrentTheme?.() ?? {}
+  const rowH = sizes.rowHeight ?? 42
+  const headerH = sizes.headerHeight ?? 48
 
-    const workbook = utils.book_new();
-    utils.book_append_sheet(workbook, worksheet, sheetName);
+  let rows = 0
+  if (props.pagination) {
+    const pageSize = api.paginationGetPageSize()
+    const page = api.paginationGetCurrentPage()
+    const total = api.paginationGetRowCount()
+    rows = Math.max(0, Math.min(pageSize, total - page * pageSize))
+  } else {
+    rows = api.getDisplayedRowCount()
+  }
 
-    const finalFileName = fileName.endsWith('.xlsx') ? fileName : `${fileName}.xlsx`;
-    writeFile(workbook, finalFileName);
-};
+  const bodyH = Math.max(rows, 1) * rowH
+  const pagingH = props.pagination ? props.pagingHeight : 0
 
+  gridHeight.value = headerH + bodyH + pagingH + 2
+}
 
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+const onGridReady = (e) => {
+  gridApi.value = e.api
+  updateHeight()
+  emit('grid-ready', e) // PERUBAHAN: teruskan ke parent
+}
 
-const getNestedValue = (obj, path) => {
-    return path.split('.').reduce((acc, part) => acc && acc[part], obj);
-};
+defineExpose({
+  gridApi
+})
 
-export const exportToPdf = ({
-    title,
-    fileName,
-    headers,
-    fields,
-    gridData,
-    orientation = 'p',
-    format = 'a4'
-}) => {
+watch(
+  () => [props.rowData, props.paginationPageSize, props.quickFilterText],
+  () => updateHeight(),
+  { deep: false }
+)
+</script>
 
-    const dataPDF = [];
-    gridData.value.forEachNodeAfterFilterAndSort((rowNode) => {
-        if (rowNode.data) {
-            dataPDF.push({ ...rowNode.data });
-        }
-    });
+<template>
+  <div
+    class="ui-grid"
+    :style="props.domLayout === 'autoHeight'
+      ? {}
+      : { height: gridHeight ? gridHeight + 'px' : '400px', maxHeight: props.maxHeight }"
+  >
+    <AgGridVue
+      v-bind="$attrs"
+      class="ui-grid-table"
 
-    let safeData = dataPDF && dataPDF.value ? dataPDF.value : dataPDF;
+      :rowData="props.rowData"
+      :columnDefs="props.columnDefs"
+      :defaultColDef="props.defaultColDef"
+      :quickFilterText="props.quickFilterText"
+      :localeText="props.localeText"
+      :pagination="props.pagination"
+      :paginationPageSize="props.paginationPageSize"
+      :paginationPageSizeSelector="props.paginationPageSizeSelector"
+      :domLayout="props.domLayout"
+      :suppressMovableColumns="props.disableDrag"
+      :enableCellTextSelection="props.allowCopy"
+      :ensureDomOrder="props.allowCopy"
 
-    if (!Array.isArray(safeData)) {
-        console.error("exportToPdf Error: gridData must be an array, received:", safeData);
-        alert("Failed to export: Invalid data format.");
-        return;
-    }
+      style="width: 100%; height: 100%"
+      @grid-ready="onGridReady"
+      @pagination-changed="updateHeight"
+      @model-updated="updateHeight"
+    />
+  </div>
+</template>
 
-    const bodyData = safeData.map(item =>
-        fields.map(field => getNestedValue(item, field) ?? "-")
-    );
+<style scoped>
+:deep(.ag-cell) {
+    display: flex !important;
+    align-items: center !important;
+}
 
-    const doc = new jsPDF(orientation, 'pt', format);
+:deep(.ag-cell-wrapper) {
+    display: flex !important;
+    align-items: center !important;
+    height: 100%;
+}
+</style>
 
-    doc.setFontSize(16);
-    doc.text(title, 40, 40);
+<UiAgGrid ... @grid-ready="onGridReady"></UiAgGrid>
 
-    autoTable(doc, {
-        head: [headers],
-        body: bodyData,
-        startY: 70,
-        theme: 'striped',
-        styles: {
-            fontSize: 7,
-            cellPadding: 6,
-            cellWidth: 'wrap'
-        },
-        headStyles: { fillColor: [41, 128, 185] }
-    });
-
-    const finalFileName = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
-    doc.save(finalFileName);
-};
+const gridApi = shallowRef(null);
+const onGridReady = (e) => { gridApi.value = e.api; };
