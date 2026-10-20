@@ -10,10 +10,8 @@
         </UiTitle>
 
         <UiCard class="mt-10 text-xs md:text-lg">
-            <!-- Tinggi satu layar, ubah 16rem jika perlu -->
-            <div class="flex h-[calc(100vh-16rem)] flex-col text-sm md:text-base">
-
-                <!-- Bagian atas (tetap) -->
+            <!-- <div class="flex h-[calc(100vh-18rem)] flex-col text-sm md:text-base"> -->
+            <div class="flex flex-col text-sm md:text-base">
                 <div class="shrink-0 divide-y divide-gray-200">
                     <div class="grid grid-cols-1 gap-1 py-4 md:grid-cols-[140px_1fr] md:gap-4">
                         <span class="font-bold">KP Number</span>
@@ -38,7 +36,6 @@
                     </div>
                 </div>
 
-                <!-- Daftar file (scroll di sini saja) -->
                 <div class="min-h-0 flex-1 space-y-2 overflow-y-auto">
                     <div
                         v-for="f in files"
@@ -48,9 +45,9 @@
                         <div
                             class="flex min-w-0 flex-1 cursor-pointer items-center gap-3"
                             @click="downloadFile(f)"
-                        >
-                            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                                <DocumentIcon class="h-5 w-5" />
+                        >   
+                            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ">
+                                <FileIcon :extension="f.extension" />
                             </div>
 
                             <div class="min-w-0 flex-1">
@@ -75,7 +72,6 @@
                     </div>
                 </div>
 
-                <!-- Tombol Complete (selalu terlihat) -->
                 <div class="shrink-0 pt-4 text-end">
                     <UiButton variant="primary" :disabled="!selectedKk" @click="complete">Complete</UiButton>
                 </div>
@@ -99,6 +95,7 @@ import UiMultiSelect from "@/components/ui/UiMultiSelect.vue";
 import UiCard from "@/components/ui/UiCard.vue";
 
 import api from "@/services/api";
+import FileIcon from "@/components/ui/FileIcon.vue";
 
 defineOptions({ name: "UploadKk" });
 
@@ -134,7 +131,6 @@ const toOptions = (list, value, label = value) => (list ?? []).map((i) => ({ val
 
 const goBack = () => router.push({ name: LIST_ROUTE });
 
-// Kosongkan dropzone
 const resetDropzone = () => dropKey.value++;
 
 // Ambil data row dari API
@@ -157,12 +153,10 @@ const fetchKkOptions = async (row) => {
     kkOptions.value = list;
 };
 
-// Dipanggil dari complete()
 const saveKk = async () => {
     await api.put(`${BASE}/update-kk/${selectedKk.value}`, { kk: selected.value.kk });
 };
 
-// Upload file langsung setelah dipilih
 const uploadFile = (file) => run(async () => {
     const fd = new FormData();
     fd.append("kkbc", file);
@@ -185,8 +179,13 @@ const onFileChange = async (e) => {
     }
 
     if (file.size > MAX_SIZE) {
-        warning("File size must not exceed 2MB");
-        return resetDropzone();
+        warning({
+                title: "File Too Large",
+                text: "File size must not exceed 2MB",
+        });
+
+        resetDropzone();
+        return; 
     }
 
     if (!selectedKk.value) {
