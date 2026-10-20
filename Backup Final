@@ -84,7 +84,7 @@
 import { ref, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useLoadingStore } from "@/stores/loading";
-import { ArrowLeftStartOnRectangleIcon, DocumentIcon } from "@heroicons/vue/24/outline";
+import { ArrowLeftStartOnRectangleIcon } from "@heroicons/vue/24/outline";
 import { TrashIcon } from "@heroicons/vue/24/solid";
 import { customSwal } from "@/composable/customSwal";
 
@@ -93,9 +93,9 @@ import UiInput from "@/components/ui/UiInput.vue";
 import UiTitle from "@/components/ui/UiTitle.vue";
 import UiMultiSelect from "@/components/ui/UiMultiSelect.vue";
 import UiCard from "@/components/ui/UiCard.vue";
+import FileIcon from "@/components/ui/FileIcon.vue";
 
 import api from "@/services/api";
-import FileIcon from "@/components/ui/FileIcon.vue";
 
 defineOptions({ name: "UploadKk" });
 
@@ -114,18 +114,6 @@ const kkOptions = ref([]);
 const selectedKk = ref("");
 const files = ref([]);
 const dropKey = ref(0);
-
-const run = async (fn, msg = "Something went wrong") => {
-    try {
-        loading.show();
-        await fn();
-    } catch (err) {
-        if (err?.response?.status === 401) router.push("/login");
-        else error(err?.response?.data?.message ?? msg);
-    } finally {
-        loading.hide();
-    }
-};
 
 const toOptions = (list, value, label = value) => (list ?? []).map((i) => ({ value: i[value], label: i[label] }));
 
@@ -157,14 +145,24 @@ const saveKk = async () => {
     await api.put(`${BASE}/update-kk/${selectedKk.value}`, { kk: selected.value.kk });
 };
 
-const uploadFile = (file) => run(async () => {
-    const fd = new FormData();
-    fd.append("kkbc", file);
-    await api.post(`${BASE}/upload-kkbc/${selectedKk.value}`, fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-    });
-    await fetchRow();
-}, "Failed to upload file");
+const uploadFile = async (file) => {
+    try {
+        loading.show();
+
+        const fd = new FormData();
+        fd.append("kkbc", file);
+        await api.post(`${BASE}/upload-kkbc/${selectedKk.value}`, fd, {
+            headers: { "Content-Type": "multipart/form-data" },
+        });
+
+        await fetchRow();
+    } catch (err) {
+        if (err?.response?.status === 401) router.push("/login");
+        else error(err?.response?.data?.message ?? "Failed to upload file");
+    } finally {
+        loading.hide();
+    }
+};
 
 // Validasi file, lalu upload
 const onFileChange = async (e) => {
@@ -197,18 +195,27 @@ const onFileChange = async (e) => {
     resetDropzone();
 };
 
-const downloadFile = (f) => run(async () => {
-    const res = await api.get(`${BASE}/showfile/${f.id}`, { responseType: "blob" });
-    const url = URL.createObjectURL(res.data);
-    const a = Object.assign(document.createElement("a"), {
-        href: url,
-        download: `${f.filename}.${f.extension}`,
-    });
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-}, "Failed to download file");
+const downloadFile = async (f) => {
+    try {
+        loading.show();
+
+        const res = await api.get(`${BASE}/showfile/${f.id}`, { responseType: "blob" });
+        const url = URL.createObjectURL(res.data);
+        const a = Object.assign(document.createElement("a"), {
+            href: url,
+            download: `${f.filename}.${f.extension}`,
+        });
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    } catch (err) {
+        if (err?.response?.status === 401) router.push("/login");
+        else error(err?.response?.data?.message ?? "Failed to download file");
+    } finally {
+        loading.hide();
+    }
+};
 
 const deleteFile = async (f) => {
     const result = await confirmDelete();
@@ -216,41 +223,61 @@ const deleteFile = async (f) => {
 
     try {
         loading.show();
+
         const { data } = await api.delete(`${BASE}/delete/${f.id}`);
+        await fetchRow();
+
         loading.hide();
         await success({ title: "Success", text: data?.message || "Data has been deleted successfully." });
-        loading.show();
-        await fetchRow();
-        loading.hide();
     } catch (err) {
-        loading.hide();
         if (err?.response?.status === 401) return router.push("/login");
         await error({
             title: "Delete Failed",
             text: err?.response?.data?.message || err?.message || "Failed to delete the data. Please try again.",
         });
+    } finally {
+        loading.hide();
     }
 };
 
 // Simpan KK lalu complete
-const complete = () => run(async () => {
-    await saveKk();
+const complete = async () => {
+    try {
+        loading.show();
 
-    const { data } = await api.post(`${BASE}/complete/${selected.value.id}`);
+        await saveKk();
+        const { data } = await api.post(`${BASE}/complete/${selected.value.id}`);
 
-    await success({
-        title: "Success",
-        text: data?.message ?? "Upload completed successfully!",
-        confirmButtonText: "OK",
-    });
+        loading.hide();
+        await success({
+            title: "Success",
+            text: data?.message ?? "Upload completed successfully!",
+            confirmButtonText: "OK",
+        });
 
-    goBack();
-}, "Failed to complete upload");
+        goBack();
+    } catch (err) {
+        if (err?.response?.status === 401) router.push("/login");
+        else error(err?.response?.data?.message ?? "Failed to complete upload");
+    } finally {
+        loading.hide();
+    }
+};
 
-onMounted(() => run(async () => {
-    const row = await fetchRow();
-    if (!row) return;
-    selectedKk.value = row.kk ?? "";
-    await fetchKkOptions(row);
-}));
+onMounted(async () => {
+    try {
+        loading.show();
+
+        const row = await fetchRow();
+        if (!row) return;
+
+        selectedKk.value = row.kk ?? "";
+        await fetchKkOptions(row);
+    } catch (err) {
+        if (err?.response?.status === 401) router.push("/login");
+        else error(err?.response?.data?.message ?? "Failed to load data");
+    } finally {
+        loading.hide();
+    }
+});
 </script>
