@@ -1,89 +1,94 @@
 <template>
-        <div class="px-6">
-            <UiTitle :is-back="true" align="center" title="Upload KK">
-                <template #action-left>
-                    <UiButton variant="teritary" @click="router.back()">
-                        <ArrowLeftStartOnRectangleIcon class="h-5 w-5" />
-                        <span class="text-xl ml-1">Back</span>
-                    </UiButton>
-                </template>
-            </UiTitle>
+    <div class="px-6">
+        <UiTitle :is-back="true" align="center" title="Upload KK">
+            <template #action-left>
+                <UiButton variant="teritary" @click="router.back()">
+                    <ArrowLeftStartOnRectangleIcon class="h-5 w-5" />
+                    <span class="text-xl ml-1">Back</span>
+                </UiButton>
+            </template>
+        </UiTitle>
 
-            <UiCard class="mt-10 text-xs md:text-lg">
-                <div class="divide-y divide-gray-200 rounded-xl  text-sm md:text-base">
+        <UiCard class="mt-10 text-xs md:text-lg">
+            <!-- Tinggi satu layar, ubah 16rem jika perlu -->
+            <div class="flex h-[calc(100vh-16rem)] flex-col text-sm md:text-base">
+
+                <!-- Bagian atas (tetap) -->
+                <div class="shrink-0 divide-y divide-gray-200">
                     <div class="grid grid-cols-1 gap-1 py-4 md:grid-cols-[140px_1fr] md:gap-4">
                         <span class="font-bold">KP Number</span>
                         <span class="text-gray-900">{{ selected?.kpno ?? '-' }}</span>
                     </div>
-    
+
                     <div class="grid grid-cols-1 gap-1 py-4 md:grid-cols-[140px_1fr] md:gap-4">
                         <span class="font-bold">Factory</span>
                         <span class="text-gray-900">{{ selected?.factory ?? '-' }}</span>
                     </div>
-    
-                    <div class="flex items-end gap-3 py-4">
-                        <div class="flex-1">
-                            <UiMultiSelect v-model="selectedKk" label="KK" :options="kkOptions"
-                                placeholder="-- Select KK --"/>
-                        </div>
+
+                    <div class="py-4">
+                        <UiMultiSelect v-model="selectedKk" label="KK" :options="kkOptions"
+                            placeholder="-- Select KK --"/>
                     </div>
-    
-                    <div class="space-y-3 py-4">
+
+                    <div class="py-4">
                         <UiInput :key="dropKey" type="file" variant="dropzone" label="KK BC"
                             placeholder="Choose File" accept=".pdf,.xls,.xlsx"
                             dropzone-hint="only PDF, XLS, or XLSX Formats, up to 2MB"
                             @change="onFileChange" />
-    
-                        <div v-if="files.length" class="space-y-2">
-                            <div
-                                v-for="f in files"
-                                :key="f.id"
-                                class="group flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-3 transition hover:border-gray-300 hover:bg-gray-50"
-                            >
-                                <div
-                                    class="flex min-w-0 flex-1 cursor-pointer items-center gap-3"
-                                    @click="downloadFile(f)"
-                                >
-                                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                                        <DocumentIcon class="h-5 w-5" />
-                                    </div>
-    
-                                    <div class="min-w-0 flex-1">
-                                        <p class="truncate text-sm font-medium text-gray-800">
-                                            {{ f.filename }}.{{ f.extension }}
-                                        </p>
-                                        <p class="mt-0.5 text-xs text-gray-400">
-                                            Click to download the file
-                                        </p>
-                                    </div>
-                                </div>
-    
-                                <button
-                                    type="button"
-                                    class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition bg-red-50 text-red-600"
-                                    @click.stop="deleteFile(f)"
-                                    title="Delete file"
-                                    aria-label="Delete file"
-                                >
-                                    <TrashIcon class="h-5 w-5" />
-                                </button>
-                            </div>
-                        </div>
                     </div>
                 </div>
-    
-                <div class="mt-4 text-end">
+
+                <!-- Daftar file (scroll di sini saja) -->
+                <div class="min-h-0 flex-1 space-y-2 overflow-y-auto">
+                    <div
+                        v-for="f in files"
+                        :key="f.id"
+                        class="group flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-3 transition hover:border-gray-300 hover:bg-gray-50"
+                    >
+                        <div
+                            class="flex min-w-0 flex-1 cursor-pointer items-center gap-3"
+                            @click="downloadFile(f)"
+                        >
+                            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                                <DocumentIcon class="h-5 w-5" />
+                            </div>
+
+                            <div class="min-w-0 flex-1">
+                                <p class="truncate text-sm font-medium text-gray-800">
+                                    {{ f.filename }}.{{ f.extension }}
+                                </p>
+                                <p class="mt-0.5 text-xs text-gray-400">
+                                    Click to download the file
+                                </p>
+                            </div>
+                        </div>
+
+                        <button
+                            type="button"
+                            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition bg-red-50 text-red-600"
+                            @click.stop="deleteFile(f)"
+                            title="Delete file"
+                            aria-label="Delete file"
+                        >
+                            <TrashIcon class="h-5 w-5" />
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tombol Complete (selalu terlihat) -->
+                <div class="shrink-0 pt-4 text-end">
                     <UiButton variant="primary" :disabled="!selectedKk" @click="complete">Complete</UiButton>
                 </div>
-            </UiCard>
-        </div>
+            </div>
+        </UiCard>
+    </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useLoadingStore } from "@/stores/loading";
-import { ArrowLeftIcon, ArrowLeftStartOnRectangleIcon, DocumentIcon } from "@heroicons/vue/24/outline";
+import { ArrowLeftStartOnRectangleIcon, DocumentIcon } from "@heroicons/vue/24/outline";
 import { TrashIcon } from "@heroicons/vue/24/solid";
 import { customSwal } from "@/composable/customSwal";
 
@@ -91,9 +96,9 @@ import UiButton from "@/components/ui/UiButton.vue";
 import UiInput from "@/components/ui/UiInput.vue";
 import UiTitle from "@/components/ui/UiTitle.vue";
 import UiMultiSelect from "@/components/ui/UiMultiSelect.vue";
+import UiCard from "@/components/ui/UiCard.vue";
 
 import api from "@/services/api";
-import UiCard from "@/components/ui/UiCard.vue";
 
 defineOptions({ name: "UploadKk" });
 
@@ -104,12 +109,12 @@ const router = useRouter();
 
 const BASE = "/api/v1/order-artwork";
 const EXTS = ["pdf", "xls", "xlsx"];
+const MAX_SIZE = 2 * 1024 * 1024;
 const LIST_ROUTE = "order-artwork-allocation";
 
 const selected = ref(null);
 const kkOptions = ref([]);
 const selectedKk = ref("");
-const newFile = ref(null);
 const files = ref([]);
 const dropKey = ref(0);
 
@@ -129,17 +134,10 @@ const toOptions = (list, value, label = value) => (list ?? []).map((i) => ({ val
 
 const goBack = () => router.push({ name: LIST_ROUTE });
 
-const resetDropzone = () => {
-    newFile.value = null;
-    dropKey.value++;
-};
+// Kosongkan dropzone
+const resetDropzone = () => dropKey.value++;
 
-const applyRow = (row) => {
-    selected.value = row;
-    files.value = Array.isArray(row.file) ? row.file : (row.file ? [row.file] : []);
-};
-
-// Ambil ulang data row dari API (pengganti syncFromGrid di versi modal)
+// Ambil data row dari API
 const fetchRow = async () => {
     const { data } = await api.get(`${BASE}/getdata`, { params: { kpno: route.query.kpno } });
     const row = (data?.data ?? []).find((r) => String(r.id) === String(route.params.id));
@@ -147,7 +145,8 @@ const fetchRow = async () => {
         error("Data not found");
         return goBack();
     }
-    applyRow(row);
+    selected.value = row;
+    files.value = Array.isArray(row.file) ? row.file : (row.file ? [row.file] : []);
     return row;
 };
 
@@ -158,70 +157,44 @@ const fetchKkOptions = async (row) => {
     kkOptions.value = list;
 };
 
-// Tidak lagi dipanggil dari tombol, tapi dari complete()
-// (tanpa run, karena loading & error sudah ditangani oleh complete)
+// Dipanggil dari complete()
 const saveKk = async () => {
-    await api.put(
-        `${BASE}/update-kk/${selectedKk.value}`,
-        { kk: selected.value.kk }
-    );
-    selected.value.kk = selected.value.kk;
+    await api.put(`${BASE}/update-kk/${selectedKk.value}`, { kk: selected.value.kk });
 };
 
-const onFileChange = async (e) => {
-    const file =
-        e?.target?.files?.[0] ??
-        e?.[0] ??
-        (e instanceof File ? e : null);
+// Upload file langsung setelah dipilih
+const uploadFile = (file) => run(async () => {
+    const fd = new FormData();
+    fd.append("kkbc", file);
+    await api.post(`${BASE}/upload-kkbc/${selectedKk.value}`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+    });
+    await fetchRow();
+}, "Failed to upload file");
 
+// Validasi file, lalu upload
+const onFileChange = async (e) => {
+    const file = e?.target?.files?.[0] ?? e?.[0] ?? (e instanceof File ? e : null);
     if (!file) return;
 
     const ext = file.name.split(".").pop().toLowerCase();
 
     if (!EXTS.includes(ext)) {
         warning("Only PDF, XLS, or XLSX formats are allowed");
-        resetDropzone();
-        return;
+        return resetDropzone();
     }
 
-    if (file.size > 2 * 1024 * 1024) {
+    if (file.size > MAX_SIZE) {
         warning("File size must not exceed 2MB");
-        resetDropzone();
-        return;
+        return resetDropzone();
     }
 
     if (!selectedKk.value) {
         warning("Please select KK first");
-        resetDropzone();
-        return;
+        return resetDropzone();
     }
 
-    newFile.value = file;
-
-    await run(async () => {
-        const fd = new FormData();
-        fd.append("kkbc", file);
-
-        const { data } = await api.post(
-            `${BASE}/upload-kkbc/${selectedKk.value}`,
-            fd
-        );
-
-        await fetchRow();
-
-    }, "Failed to upload file");
-
-    resetDropzone();
-
-};
-
-// Sama seperti sebelumnya, hanya dipanggil dari complete()
-const uploadFile = async () => {
-    const fd = new FormData();
-    fd.append("kkbc", newFile.value);
-    await api.post(`${BASE}/upload-kkbc/${selectedKk.value}`, fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-    });
+    await uploadFile(file);
     resetDropzone();
 };
 
@@ -260,13 +233,11 @@ const deleteFile = async (f) => {
     }
 };
 
-// Satu tombol: simpan KK -> upload file (jika ada file baru) -> complete
+// Simpan KK lalu complete
 const complete = () => run(async () => {
     await saveKk();
 
-    const { data } = await api.post(
-        `${BASE}/complete/${selected.value.id}`
-    );
+    const { data } = await api.post(`${BASE}/complete/${selected.value.id}`);
 
     await success({
         title: "Success",
