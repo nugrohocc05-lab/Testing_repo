@@ -97,8 +97,6 @@ import FileIcon from "@/components/ui/FileIcon.vue";
 
 import api from "@/services/api";
 
-defineOptions({ name: "UploadKk" });
-
 const { confirmDelete, success, warning, error } = customSwal;
 const loading = useLoadingStore();
 const route = useRoute();
@@ -140,6 +138,11 @@ const fetchKkOptions = async (row) => {
     if (row.kk && !list.some((o) => o.value === row.kk)) list.unshift({ value: row.kk, label: row.kk });
     kkOptions.value = list;
 };
+
+// put http://192.168.91.178:8000/api/v1/order-artwork/update-kk/3010001199 {kk}
+// body{
+// kk
+// }
 
 const saveKk = async () => {
     await api.put(`${BASE}/update-kk/${selectedKk.value}`, { kk: selected.value.kk });
@@ -251,11 +254,12 @@ const complete = async () => {
         loading.hide();
         await success({
             title: "Success",
-            text: data?.message ?? "Upload completed successfully!",
+            text: "KK Successfully Uploaded",
             confirmButtonText: "OK",
         });
 
-        goBack();
+        await goBack();
+        window.location.reload();
     } catch (err) {
         if (err?.response?.status === 401) router.push("/login");
         else error(err?.response?.data?.message ?? "Failed to complete upload");
