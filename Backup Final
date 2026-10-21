@@ -1,3 +1,4 @@
+```vue
 <template>
     <div class="px-6">
         <UiTitle :is-back="true" align="center" title="Upload KK">
@@ -81,7 +82,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useLoadingStore } from "@/stores/loading";
 import { ArrowLeftStartOnRectangleIcon } from "@heroicons/vue/24/outline";
@@ -110,8 +111,12 @@ const LIST_ROUTE = "order-artwork-allocation";
 const selected = ref(null);
 const kkOptions = ref([]);
 const selectedKk = ref("");
+const initialKk = ref(""); // KK awal saat halaman dibuka (tidak ikut berubah saat fetchRow)
 const files = ref([]);
 const dropKey = ref(0);
+
+// true kalau user mengganti KK di dropdown
+const isKkChanged = computed(() => selectedKk.value !== initialKk.value);
 
 const toOptions = (list, value, label = value) => (list ?? []).map((i) => ({ value: i[value], label: i[label] }));
 
@@ -144,8 +149,11 @@ const fetchKkOptions = async (row) => {
 // kk
 // }
 
+// URL = KK baru (yang dipilih), body kk = KK lama kalau diganti, null kalau tidak diganti
 const saveKk = async () => {
-    await api.put(`${BASE}/update-kk/${selectedKk.value}`, { kk: selected.value.kk });
+    await api.put(`${BASE}/update-kk/${selectedKk.value}`, {
+        kk: isKkChanged.value ? initialKk.value : null,
+    });
 };
 
 const uploadFile = async (file) => {
@@ -276,6 +284,7 @@ onMounted(async () => {
         if (!row) return;
 
         selectedKk.value = row.kk ?? "";
+        initialKk.value = row.kk ?? "";
         await fetchKkOptions(row);
     } catch (err) {
         if (err?.response?.status === 401) router.push("/login");
@@ -285,3 +294,4 @@ onMounted(async () => {
     }
 });
 </script>
+```
