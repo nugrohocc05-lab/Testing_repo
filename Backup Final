@@ -1,192 +1,3 @@
-1. membatasi receive qty bisa diedit tapi tidak bisa melebihi balance
-2. Date filter nya belum bisa 
-3. Receive nya belum bisa 
-	- http://192.168.91.178:8000/api/v1/receivematerial/receive/{id}
-	- Path: id; Body: tanggal, inputqty[], deliveryorders[]
-4. Contoh response : 
-{success: true,…}
-data
-: 
-{kpno: "TN40001501", combine_pro: "130000001501", kk: "3100001501", mdate: "total",…}
-combine_pro
-: 
-"130000001501"
-dates
-: 
-[{date: "2026-10-23 10:57:59"}, {date: "2026-10-23 10:38:28"}]
-0
-: 
-{date: "2026-10-23 10:57:59"}
-1
-: 
-{date: "2026-10-23 10:38:28"}
-deliverymaterial
-: 
-{iddelivery: "0000000815", mattype: null, kpno: "TN40001501", combine_pro: "130000001501",…}
-active
-: 
-"True"
-bppb_number
-: 
-"23234324"
-combine_pro
-: 
-"130000001501"
-date
-: 
-"2026-10-26 10:37:41"
-description
-: 
-"Testinggg"
-do_number
-: 
-"324234"
-do_sap
-: 
-""
-iddelivery
-: 
-"0000000815"
-kk
-: 
-"3100001501"
-kk_item
-: 
-"00001"
-kpno
-: 
-"TN40001501"
-mattype
-: 
-null
-modified
-: 
-"2026-10-26T03:37:41.000000Z"
-receivedate
-: 
-null
-recievedate
-: 
-null
-return
-: 
-"0"
-returndate
-: 
-null
-sap_mat_doc
-: 
-null
-status
-: 
-"Sent"
-userid
-: 
-"062600432"
-files
-: 
-[]
-kk
-: 
-"3100001501"
-kpno
-: 
-"TN40001501"
-materials
-: 
-[{idmaterial: "0000210717", idmaster: "20500000000001501", kpno: "TN40001501",…},…]
-0
-: 
-{idmaterial: "0000210717", idmaster: "20500000000001501", kpno: "TN40001501",…}
-active
-: 
-"True"
-allowance
-: 
-"0.00"
-colorcode
-: 
-"GENERAL"
-colorgmt
-: 
-"ROSE"
-combine_pro
-: 
-"130000001501"
-cons
-: 
-"0.0000"
-deliverydetail
-: 
-[,…]
-idmaster
-: 
-"20500000000001501"
-idmaterial
-: 
-"0000210717"
-is_erp
-: 
-0
-itemdesc
-: 
-"SNAPBUTTON"
-kk
-: 
-"3100001501"
-kk_item
-: 
-"00001"
-kpno
-: 
-"TN40001501"
-matcontents
-: 
-"LYER-LAYERA1.0001"
-mattype
-: 
-"F"
-modified
-: 
-"2026-10-22T07:35:32.000000Z"
-ordernumber
-: 
-null
-po
-: 
-null
-po_item
-: 
-"000010"
-po_sap
-: 
-"20000101501"
-qtyadd
-: 
-0
-qtyfinal
-: 
-18
-qtyori
-: 
-2
-qtythread
-: 
-0
-size
-: 
-"THRD-01-EPEV-T024-5K0"
-sizegmt
-: 
-"XL"
-unit
-: 
-"PC"
-userid
-: 
-null
-
-
 <template>
     <div class="px-6">
         <UiTitle :is-back="true" align="center" title="Delivery Material">
@@ -202,7 +13,7 @@ null
             <div class="xl:col-span-2">
                 <UiMultiSelect
                     v-model="selectedDates"
-                    label="Date"    
+                    label="Date"
                     placeholder="-- Select Date --"
                     class="w-full"
                     :options="dateOptions"
@@ -210,15 +21,11 @@ null
             </div>
 
             <div class="flex w-full gap-2 xl:col-span-3 items-end">
-
-                <UiButton
-                    variant="warning"
-                    @click="resetDateFilter"
-                >
+                <UiButton variant="warning" @click="resetDateFilter">
                     Reset
                 </UiButton>
             </div>
-            
+
             <div class="flex w-full items-end justify-end gap-2 xl:col-span-4 xl:col-start-9">
                 <div class="min-w-0 w-50">
                     <UiInput
@@ -234,14 +41,21 @@ null
             </div>
         </div>
 
-         <UiCard class="my-4 text-xs md:text-lg">
+        <UiCard class="my-4 text-xs md:text-lg">
             <UiGrid cols="8" gap="sm">
-                <div><span class="label">Description</span> : {{description}} </div>
+                <div><span class="label">Description</span> : {{ description }}</div>
             </UiGrid>
-            <UiAgGrid class="my-zebra-grid mt-3" :rowData="rawData" :columnDefs="columnDefs" :quickFilterText="searchKeyword" :defaultColDef="defaultColDef"/>
+            <UiAgGrid
+                class="my-zebra-grid mt-3"
+                :rowData="rawData"
+                :columnDefs="columnDefs"
+                :quickFilterText="searchKeyword"
+                :defaultColDef="defaultColDef"
+            />
         </UiCard>
+
         <div class="mt-4 flex justify-end">
-            <UiButton @click="showSendModal = true">
+            <UiButton @click="openReceiveModal">
                 Receive
             </UiButton>
         </div>
@@ -264,10 +78,7 @@ null
             />
 
             <div class="flex justify-end gap-2 pt-3">
-                <UiButton
-                    variant="teritary"
-                    @click="showSendModal = false"
-                >
+                <UiButton variant="teritary" @click="showSendModal = false">
                     Cancel
                 </UiButton>
 
@@ -280,96 +91,87 @@ null
 </template>
 
 <script setup>
-import { decrypt } from "@/utils/crypto";
 import { ref, onMounted, watch } from "vue";
 import { useRouter, useRoute } from "vue-router";
-import { useLoadingStore } from "@/stores/loading";
 import { MagnifyingGlassIcon, ArrowLeftStartOnRectangleIcon } from "@heroicons/vue/24/outline";
-const { confirm, success, warning, error } = customSwal;
 
-import UiButton from "@/components/ui/UiButton.vue"
-import UiInput from "@/components/ui/UiInput.vue"
-import UiTitle from "@/components/ui/UiTitle.vue"
-import UiAgGrid from "@/components/ui/UiAgGrid.vue";
-
-import api from "@/services/api";
-import UiModal from "@/components/ui/UiModal.vue";
+import { decrypt } from "@/utils/crypto";
+import { useLoadingStore } from "@/stores/loading";
 import { customSwal } from "@/composable/customSwal";
-import UiDatePicker from "@/components/ui/UiDatePicker.vue";
+import api from "@/services/api";
+
+import UiButton from "@/components/ui/UiButton.vue";
+import UiInput from "@/components/ui/UiInput.vue";
+import UiTitle from "@/components/ui/UiTitle.vue";
+import UiAgGrid from "@/components/ui/UiAgGrid.vue";
+import UiModal from "@/components/ui/UiModal.vue";
 import UiCard from "@/components/ui/UiCard.vue";
 import UiMultiSelect from "@/components/ui/UiMultiSelect.vue";
 import UiGrid from "@/components/ui/UiGrid.vue";
 
+const { success, warning, error } = customSwal;
+
 const loading = useLoadingStore();
 const router = useRouter();
 const route = useRoute();
-const rawData = ref([]);
-const searchKeyword = ref('');
+
 const id = route.params.id;
+const kk = decrypt(decodeURIComponent(route.params.kk));
+const kpno = decrypt(decodeURIComponent(route.params.kpno));
+const pro = decrypt(decodeURIComponent(route.params.pro));
 
-const encryptedKK = route.params.kk;
-const decodedKK = decodeURIComponent(encryptedKK);
-const kk = decrypt(decodedKK);
+const rawData = ref([]);
+const searchKeyword = ref("");
+const description = ref("");
+const showSendModal = ref(false);
+const deliveryOrderFile = ref(null);
 
-const encryptedKP = route.params.kpno;
-const decodedKP = decodeURIComponent(encryptedKP);
-const kpno = decrypt(decodedKP);
-
-const encryptedPRO = route.params.pro;
-const decodedPRO = decodeURIComponent(encryptedPRO);
-const pro = decrypt(decodedPRO);
-
-const showSendModal = ref(false);  
-
-
-const dates = ref([]);
+// ---------------------------------------------------------------------------
+// Date filter
+// ---------------------------------------------------------------------------
 const dateOptions = ref([]);
 const selectedDates = ref([]);
-const appliedDates = ref([]);
 
-const applyDateFilter = () => {
-    appliedDates.value = [...selectedDates.value];
-    loadData();
-};
+// Opsi tanggal hanya diisi sekali (dari load pertama tanpa filter),
+// supaya tidak hilang saat backend mengembalikan data yang sudah terfilter.
+let dateOptionsLoaded = false;
 
 const resetDateFilter = () => {
+    // Jika sudah kosong, watch tidak terpicu, jadi load manual.
+    if (selectedDates.value.length === 0) {
+        loadData();
+        return;
+    }
     selectedDates.value = [];
-    appliedDates.value = [];
-    loadData();
 };
 
 watch(
     selectedDates,
-    async (newDates) => {
-        appliedDates.value = [...(newDates ?? [])];
-        await loadData();
+    () => {
+        loadData();
     },
     { deep: true }
 );
 
-
+// ---------------------------------------------------------------------------
+// Grid helpers
+// ---------------------------------------------------------------------------
 const defaultColDef = {
     sortable: true,
     filter: false,
     resizable: true,
 };
 
-const description = ref("");
-const bppbNumber = ref("");
-const doNumber = ref("");
-const deliveryOrderFile = ref(null);
+const getBalance = (data) => Number(data?.balanceQty ?? 0);
 
 const handleFile = (event) => {
-    const file = event?.target?.files?.[0] 
-        ?? event?.files?.[0]
-        ?? event?.[0]
-        ?? null;
+    const file =
+        event?.target?.files?.[0] ??
+        event?.files?.[0] ??
+        event?.[0] ??
+        (event instanceof File ? event : null);
 
     deliveryOrderFile.value = file;
-};
-
-const confirmSend = async () => {
-    await sendData();
 };
 
 class SelectAllHeader {
@@ -389,19 +191,16 @@ class SelectAllHeader {
         this.onChange = (event) => {
             const checked = event.target.checked;
 
+            // Ubah data di tempat, lalu refresh sel agar tampilan sinkron.
             this.params.api.forEachNode((node) => {
-                node.setDataValue("selected", checked);
-                node.setDataValue(
-                    "sendQty",
-                    checked ? Number(node.data.balanceQty ?? 0) : 0
-                );
+                node.data.selected = checked;
+                node.data.sendQty = checked ? getBalance(node.data) : 0;
             });
 
-            rawData.value = rawData.value.map((item) => ({
-                ...item,
-                selected: checked,
-                sendQty: checked ? Number(item.balanceQty ?? 0) : 0,
-            }));
+            this.params.api.refreshCells({
+                columns: ["sendQty", "selected"],
+                force: true,
+            });
         };
 
         this.checkbox.addEventListener("change", this.onChange);
@@ -420,7 +219,6 @@ class SelectAllHeader {
         this.checkbox.removeEventListener("change", this.onChange);
     }
 }
-
 
 const columnDefs = [
     {
@@ -459,25 +257,39 @@ const columnDefs = [
         headerName: "Sent Quantity",
         minWidth: 120,
         flex: 1,
-        valueGetter: (params) => {
-            return (params.data?.deliverydetail ?? []).reduce(
+        valueGetter: (params) =>
+            (params.data?.deliverydetail ?? []).reduce(
                 (total, item) => total + Number(item.qty ?? 0),
                 0
-            );
-        },
+            ),
+    },
+    {
+        headerName: "Balance",
+        field: "balanceQty",
+        minWidth: 100,
+        flex: 1,
     },
     {
         field: "sendQty",
         headerName: "Receive Qty",
         minWidth: 120,
-        editable: true,
         flex: 1,
+        editable: true,
+        cellEditor: "agNumberCellEditor",
+        // Batas input di editor: 0 .. balance
+        cellEditorParams: (params) => ({
+            min: 0,
+            max: getBalance(params.data),
+            precision: 0,
+        }),
+        // Validasi akhir: tolak nilai di luar 0 .. balance
         valueSetter: (params) => {
             const value = Number(params.newValue);
-            const balance = Number(params.data.balanceQty ?? 0);
+            const balance = getBalance(params.data);
 
             if (
                 params.newValue === "" ||
+                params.newValue === null ||
                 !Number.isFinite(value) ||
                 value < 0 ||
                 value > balance
@@ -486,6 +298,15 @@ const columnDefs = [
             }
 
             params.data.sendQty = value;
+            // Centang otomatis jika qty > 0
+            params.data.selected = value > 0;
+
+            params.api.refreshCells({
+                rowNodes: [params.node],
+                columns: ["selected"],
+                force: true,
+            });
+
             return true;
         },
     },
@@ -506,27 +327,19 @@ const columnDefs = [
         cellRenderer: (params) => {
             const checkbox = document.createElement("input");
             checkbox.type = "checkbox";
-            checkbox.checked = params.value ?? false;
+            checkbox.checked = params.data?.selected ?? false;
 
             checkbox.addEventListener("change", (event) => {
                 const checked = event.target.checked;
-                const balance = Number(params.data.balanceQty ?? 0);
 
-                params.node.setDataValue("selected", checked);
-                params.node.setDataValue(
-                    "sendQty",
-                    checked ? balance : 0
-                );
+                params.data.selected = checked;
+                params.data.sendQty = checked ? getBalance(params.data) : 0;
 
-                rawData.value = rawData.value.map((item) =>
-                    item.idmaterial === params.data.idmaterial
-                        ? {
-                            ...item,
-                            selected: checked,
-                            sendQty: checked ? balance : 0,
-                        }
-                        : item
-                );
+                params.api.refreshCells({
+                    rowNodes: [params.node],
+                    columns: ["sendQty", "selected"],
+                    force: true,
+                });
             });
 
             return checkbox;
@@ -534,13 +347,31 @@ const columnDefs = [
     },
 ];
 
+// ---------------------------------------------------------------------------
+// Receive
+// ---------------------------------------------------------------------------
+const openReceiveModal = async () => {
+    const hasQty = rawData.value.some(
+        (item) => item.selected && Number(item.sendQty) > 0
+    );
+
+    if (!hasQty) {
+        await warning({
+            title: "Incomplete Data",
+            text: "Select at least one material with Receive Qty above 0.",
+        });
+        return;
+    }
+
+    showSendModal.value = true;
+};
+
+const confirmSend = async () => {
+    await sendData();
+};
 
 const sendData = async () => {
     try {
-        const selectedRows = rawData.value.filter(
-            (item) => item.selected
-        );
-
         if (!id) {
             await warning({
                 title: "Invalid Data",
@@ -549,10 +380,14 @@ const sendData = async () => {
             return;
         }
 
+        const selectedRows = rawData.value.filter(
+            (item) => item.selected && Number(item.sendQty) > 0
+        );
+
         if (selectedRows.length === 0) {
             await warning({
                 title: "Incomplete Data",
-                text: "Select at least one material first.",
+                text: "Select at least one material with Receive Qty above 0.",
             });
             return;
         }
@@ -566,42 +401,23 @@ const sendData = async () => {
             return;
         }
 
-        // Validasi kuantitas penerimaan.
         const invalidQty = selectedRows.some((item) => {
             const qty = Number(item.sendQty);
-            const balance = Number(item.balanceQty ?? 0);
-
-            return (
-                !Number.isFinite(qty) ||
-                qty <= 0 ||
-                qty > balance
-            );
+            return !Number.isFinite(qty) || qty <= 0 || qty > getBalance(item);
         });
 
         if (invalidQty) {
             await warning({
                 title: "Invalid Quantity",
-                text:
-                    "Receive Qty harus lebih besar dari 0 dan tidak boleh melebihi Balance.",
+                text: "Receive Qty harus lebih besar dari 0 dan tidak boleh melebihi Balance.",
             });
             return;
         }
 
-        // Validasi delivery order.
-        const deliveryOrderIds = [
-            ...new Set(
-                selectedRows.flatMap((item) =>
-                    (item.balance ?? [])
-                        .filter((delivery) => delivery.iddelivery != null)
-                        .map((delivery) => delivery.iddelivery)
-                )
-            ),
-        ];
-
-        if (deliveryOrderIds.length === 0) {
+        if (!deliveryOrderFile.value) {
             await warning({
-                title: "Invalid Data",
-                text: "Delivery Order tidak ditemukan.",
+                title: "Incomplete Data",
+                text: "Upload file Delivery Order terlebih dahulu.",
             });
             return;
         }
@@ -610,23 +426,20 @@ const sendData = async () => {
 
         const formData = new FormData();
 
-        // Path parameter: /receive/{id}
-        // Body sesuai kontrak API.
+        // Path param: /receive/{id}
         formData.append("tanggal", selectedDates.value[0]);
 
-        selectedRows.forEach((item) => {
-            formData.append(
-                "inputqty[]",
-                String(item.sendQty)
-            );
+        // Kirim SEMUA baris sesuai urutan material, 0 untuk yang tidak dipilih,
+        // supaya index inputqty[] cocok dengan urutan material di backend.
+        rawData.value.forEach((item) => {
+            const qty = item.selected ? Number(item.sendQty) || 0 : 0;
+            formData.append("inputqty[]", String(qty));
         });
 
-        deliveryOrderIds.forEach((deliveryOrderId) => {
-            formData.append(
-                "deliveryorders[]",
-                String(deliveryOrderId)
-            );
-        });
+        // Asumsi: deliveryorders[] adalah file delivery order.
+        // Jika backend ternyata meminta ID delivery, ganti dengan:
+        // item.balance.map(d => d.iddelivery) (unik) dan append sebagai string.
+        formData.append("deliveryorders[]", deliveryOrderFile.value);
 
         const { data } = await api.post(
             `/api/v1/receivematerial/receive/${encodeURIComponent(id)}`,
@@ -634,15 +447,20 @@ const sendData = async () => {
         );
 
         showSendModal.value = false;
+        deliveryOrderFile.value = null;
 
         await success({
             title: "Success",
             text: data?.message ?? "Material received successfully.",
         });
 
-        await loadData();
+        // Reset filter tanggal. Jika filter berubah, watch akan memuat ulang data.
+        if (selectedDates.value.length > 0) {
+            selectedDates.value = [];
+        } else {
+            await loadData();
+        }
     } catch (err) {
-        loading.hide();
         if (err?.response?.status === 401) {
             router.push("/login");
             return;
@@ -660,6 +478,9 @@ const sendData = async () => {
     }
 };
 
+// ---------------------------------------------------------------------------
+// Load data
+// ---------------------------------------------------------------------------
 const loadData = async () => {
     try {
         loading.show();
@@ -670,14 +491,13 @@ const loadData = async () => {
             kk,
         });
 
-        appliedDates.value.forEach((date) => {
+        selectedDates.value.forEach((date) => {
             params.append("dates[]", date);
         });
 
-        const endpoint =
-            `/api/v1/receivematerial/input?${params.toString()}`;
-
-        const { data } = await api.get(endpoint);
+        const { data } = await api.get(
+            `/api/v1/receivematerial/input?${params.toString()}`
+        );
 
         if (!data?.success) {
             rawData.value = [];
@@ -685,40 +505,41 @@ const loadData = async () => {
         }
 
         description.value = data?.data?.deliverymaterial?.description ?? "";
-        dates.value = data?.data?.dates ?? [];
 
-        dateOptions.value = dates.value.map((item) => ({
-            label: item.date,
-            value: item.date,
-        }));
-        
-        rawData.value = (data?.data?.materials ?? []).map(
-            (item, index) => {
-                const deliveryDetails = item.deliverydetail ?? [];
+        if (!dateOptionsLoaded) {
+            const dates = data?.data?.dates ?? [];
+            dateOptions.value = dates.map((item) => ({
+                label: item.date,
+                value: item.date,
+            }));
+            dateOptionsLoaded = dates.length > 0;
+        }
 
-                const balanceQty = deliveryDetails.reduce(
-                    (total, delivery) =>
-                        total + Number(
-                            delivery.balanceQty ??
+        rawData.value = (data?.data?.materials ?? []).map((item, index) => {
+            const deliveryDetails = item.deliverydetail ?? [];
+
+            const balanceQty = deliveryDetails.reduce(
+                (total, delivery) =>
+                    total +
+                    Number(
+                        delivery.balanceQty ??
                             delivery.balance_qty ??
                             delivery.qty ??
                             0
-                        ),
-                    0
-                );
+                    ),
+                0
+            );
 
-                return {
-                    ...item,
-                    no: index + 1,
-                    balance: deliveryDetails,
-                    balanceQty,
-                    sendQty: 0,
-                    selected: false,
-                };
-            }
-        );
+            return {
+                ...item,
+                no: index + 1,
+                balance: deliveryDetails,
+                balanceQty,
+                sendQty: 0,
+                selected: false,
+            };
+        });
     } catch (err) {
-        loading.hide();
         if (err?.response?.status === 401) {
             router.push("/login");
             return;
@@ -735,8 +556,6 @@ const loadData = async () => {
         loading.hide();
     }
 };
-
-
 
 onMounted(() => {
     loadData();
