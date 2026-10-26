@@ -13,10 +13,11 @@
             <div class="xl:col-span-2">
                 <UiMultiSelect
                     v-model="selectedDates"
+                    :options="all_date"
                     label="Date"
                     placeholder="-- Select Date --"
                     class="w-full"
-                    :options="dateOptions"
+                    @change="loadData"
                 />
             </div>
 
@@ -42,6 +43,35 @@
         </div>
 
         <UiCard class="my-4 text-xs md:text-lg">
+            <div class="flex min-w-0 flex-col gap-2 my-2">
+                <div class="group flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-3 transition hover:border-gray-300 hover:bg-gray-50">
+                        <div
+                            class="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
+                                <div
+                                    class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-50"
+                                >
+                                    <!-- <FileIcon :extension="f.extension" /> -->
+                                    <FileIcon />
+                                </div>
+
+                                <div class="min-w-0 flex-1">
+                                    <p class="truncate text-sm font-medium text-gray-800">
+                                        Testing.txt
+                                    </p>
+                                    <p class="mt-0.5 text-xs text-gray-400">
+                                        Click to download the file
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+<!-- 
+                        <p
+                            v-if="!rawDataArtwork.file?.length"
+                            class="text-sm italic text-gray-400"
+                        >
+                            No files available.
+                        </p> -->
+                    </div>
             <UiGrid cols="8" gap="sm">
                 <div><span class="label">Description</span> : {{ description }}</div>
             </UiGrid>
@@ -108,6 +138,7 @@ import UiModal from "@/components/ui/UiModal.vue";
 import UiCard from "@/components/ui/UiCard.vue";
 import UiMultiSelect from "@/components/ui/UiMultiSelect.vue";
 import UiGrid from "@/components/ui/UiGrid.vue";
+import FileIcon from "@/components/ui/FileIcon.vue";
 
 const { success, warning, error } = customSwal;
 
@@ -124,19 +155,18 @@ const searchKeyword = ref("");
 const description = ref("");
 const showSendModal = ref(false);
 const deliveryOrderFile = ref(null);
-const id = route.params.id;
 
 const dateOptions = ref([]);
 const selectedDates = ref([]);
+const all_date = ref([]);
+
 
 let dateOptionsLoaded = false;
 
-const resetDateFilter = () => {
-    if (selectedDates.value.length === 0) {
-        loadData();
-        return;
-    }
+
+const resetDateFilter = async () => {
     selectedDates.value = [];
+    await loadData();
 };
 
 watch(
@@ -169,6 +199,21 @@ const handleFile = (event) => {
     deliveryOrderFile.value = file;
 };
 
+const syncRowData = (api) => {
+    api.forEachNode((node) => {
+        if (!node.data) return;
+
+        const index = rawData.value.findIndex(
+            (item) => item.idmaterial === node.data.idmaterial
+        );
+
+        if (index !== -1) {
+            rawData.value[index].selected = node.data.selected;
+            rawData.value[index].qty = node.data.qty;
+        }
+    });
+};
+
 class SelectAllHeader {
     init(params) {
         this.params = params;
@@ -187,12 +232,22 @@ class SelectAllHeader {
             const checked = event.target.checked;
 
             this.params.api.forEachNode((node) => {
+                if (!node.data) return;
+
+                const balance = getBalance(node.data);
+
+                node.data.selected = checked;
+                node.data.qty = checked ? balance : 0;
+
                 node.setDataValue("selected", checked);
-                node.setDataValue(
-                    "qty",
-                    checked ? getBalance(node.data) : 0
-                );
+                node.setDataValue("qty", node.data.qty);
             });
+
+            syncRowData(this.params.api);
+
+            this.params.api.refreshCells({ force: true });
+
+            console.log("Raw Data setelah Select All:", rawData.value);
         };
 
         this.checkbox.addEventListener("change", this.onChange);
@@ -211,6 +266,7 @@ class SelectAllHeader {
         this.checkbox.removeEventListener("change", this.onChange);
     }
 }
+
 
 const columnDefs = [
     {
@@ -283,32 +339,30 @@ const columnDefs = [
         sortable: false,
         filter: false,
         resizable: false,
-
         headerComponent: SelectAllHeader,
 
         cellRenderer: (params) => {
             const checkbox = document.createElement("input");
+
             checkbox.type = "checkbox";
-            checkbox.checked = Boolean(params.data?.selected);
+            checkbox.checked = Boolean(params.value);
+            checkbox.style.cursor = "pointer";
+
+            checkbox.addEventListener("click", (event) => {
+                event.stopPropagation();
+            });
 
             checkbox.addEventListener("change", (event) => {
                 const checked = event.target.checked;
+                const balance = getBalance(params.data);
+
+                params.data.selected = checked;
+                params.data.qty = checked ? balance : 0;
 
                 params.node.setDataValue("selected", checked);
+                params.node.setDataValue("qty", params.data.qty);
 
-                const balance = getBalance(params.data);
-                const qty = checked ? balance : 0;
-
-                params.node.setDataValue("qty", qty);
-
-                // CEK HASIL CHECKBOX
-                console.log("=== CHECKBOX MATERIAL ===");
-                console.log("ID Material:", params.data.idmaterial);
-                console.log("Checked:", checked);
-                console.log("Selected:", params.data.selected);
-                console.log("Balance:", balance);
-                console.log("Qty:", params.data.qty);
-                console.log("Data Row:", params.data);
+                syncRowData(params.api);
             });
 
             return checkbox;
@@ -317,19 +371,6 @@ const columnDefs = [
 ];
 
 const openReceiveModal = async () => {
-    console.log("=== DATA SEBELUM RECEIVE ===");
-
-    console.table(
-        rawData.value.map((item) => ({
-            idmaterial: item.idmaterial,
-            itemdesc: item.itemdesc,
-            selected: item.selected,
-            qty: item.qty,
-            sendQty: item.sendQty,
-            balance: getBalance(item),
-        }))
-    );
-
     const selectedRows = rawData.value.filter(
         (item) => item.selected === true
     );
@@ -337,7 +378,11 @@ const openReceiveModal = async () => {
     console.log("Selected Rows:", selectedRows);
 
     if (selectedRows.length === 0) {
-        console.warn("Belum ada material yang dipilih.");
+        await warning({
+            title: "Incomplete Data",
+            text: "Select at least one material first.",
+        });
+        return;
     }
 
     showSendModal.value = true;
@@ -350,29 +395,21 @@ const confirmSend = async () => {
 const sendData = async () => {
     try {
         const selectedRows = rawData.value.filter(
-    (item) => item.selected === true
-);
-
-console.log(
-    "Selected Rows:",
-    selectedRows.map((item) => ({
-        idmaterial: item.idmaterial,
-        selected: item.selected,
-        qty: item.qty,
-        sendQty: item.sendQty,
-    }))
-);
+            (item) => item.selected === true
+        );
 
         if (selectedRows.length === 0) {
             await warning({
                 title: "Incomplete Data",
                 text: "Pilih material dengan Qty lebih besar dari 0.",
             });
+
+            console.log('ini data selected: ', selectedRows);
             return;
         }
 
         const invalidQty = selectedRows.some((item) => {
-            const qty = Number(item.sendQty);
+            const qty = Number(item.qty);
             return !Number.isFinite(qty) || qty <= 0 || qty > getBalance(item);
         });
 
@@ -403,18 +440,19 @@ console.log(
         selectedRows.forEach((item) => {
             formData.append(
                 `inputqty[${item.idmaterial}]`,
-                String(item.sendQty)
+                String(item.qty)
             );
         });
 
-        formData.append("deliveryorders[]", deliveryOrderFile.value);
+        // formData.append("deliveryorders[]", deliveryOrderFile.value);
+        formData.append("deliveryorders", deliveryOrderFile.value);
+
 
         const { data } = await api.post(
             `/api/v1/receivematerial/receive`,
             formData
         );
 
-        console.log("Payload:", [...formData.entries()]);
         showSendModal.value = false;
         deliveryOrderFile.value = null;
 
@@ -447,11 +485,43 @@ console.log(
     }
 };
 
+const loadDataFilter = async () => {
+    try {
+        loading.show();
+
+        const params = new URLSearchParams();
+       
+        if (form.value.status) {
+            params.append("status", form.value.status);
+        }
+
+        const season = form.value.season ?? "";
+
+        if (season) {
+            params.append("season", season);
+        }
+
+        const endpoint = `/api/v1/receivematerial/getdata?${params.toString()}`;
+        const { data } = await api.get(endpoint);
+
+        rawData.value = (data?.data ?? []).map((item, index) => ({
+            ...item,
+            no: index + 1,
+        }));
+    } catch (err) {
+        if (err?.response?.status === 401) {
+            router.push("/login");
+        }
+    } finally {
+        loading.hide();
+    }
+};
+
 const loadData = async () => {
     try {
         loading.show();
 
-        const params = new URLSearchParams({    
+        const params = new URLSearchParams({
             kpno,
             combine_pro: pro,
             kk,
@@ -476,34 +546,28 @@ const loadData = async () => {
             return;
         }
 
-        description.value = data?.data?.deliverymaterial?.description ?? "";
+        description.value =
+            data?.data?.deliverymaterial?.description ?? "";
 
-        if (!dateOptionsLoaded) {
-            const dates = data?.data?.dates ?? [];
-            dateOptions.value = dates.map((item) => ({
-                label: item.date,
-                value: item.date,
-            }));
-            dateOptionsLoaded = dates.length > 0;
-        }
+        rawData.value = (data?.data?.materials ?? []).map(
+            (item, index) => {
+                const deliveryDetails = item.deliverydetail ?? [];
 
-        rawData.value = (data?.data?.materials ?? []).map((item, index) => {
-            const deliveryDetails = item.deliverydetail ?? [];
+                const qty = deliveryDetails.reduce(
+                    (total, detail) =>
+                        total + Number(detail.qty ?? 0),
+                    0
+                );
 
-            const qty = deliveryDetails.reduce(
-                (total, detail) => total + Number(detail.qty ?? 0),
-                0
-            );
-
-            return {
-                ...item,
-                no: index + 1,
-                qty,
-                selected: false,
-            };
-        });
+                return {
+                    ...item,
+                    no: index + 1,
+                    qty,
+                    selected: false,
+                };
+            }
+        );
     } catch (err) {
-        loading.hide();
         if (err?.response?.status === 401) {
             router.push("/login");
             return;
@@ -521,8 +585,42 @@ const loadData = async () => {
     }
 };
 
+const loadDataDate = async () => {
+    try {
+        loading.show();
+
+        const endpoint =
+            `/api/v1/receivematerial/selectdate?kpno=${encodeURIComponent(kpno)}` +
+            `&kk=${encodeURIComponent(kk)}` +
+            `&combine_pro=${encodeURIComponent(pro)}`;
+
+        const { data } = await api.get(endpoint);
+
+        all_date.value = (data?.data?.dates ?? []).map((item) => ({
+            value: item.date,
+            label: item.date,
+        }));
+
+        console.log("Date Options:", all_date.value);
+    } catch (err) {
+        if (err?.response?.status === 401) {
+            router.push("/login");
+            return;
+        }
+
+        await error({
+            title: "Failed to Load Dates",
+            text: err?.response?.data?.message || err?.message ||
+                "Failed to load date options.",
+        });
+    } finally {
+        loading.hide();
+    }
+};
+
 onMounted(() => {
     loadData();
+    loadDataDate();
 });
 </script>
 
