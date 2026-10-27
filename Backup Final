@@ -1,3 +1,4 @@
+```vue
 <template>
     <div class="px-6">
         <UiTitle :is-back="true" align="center" title="Confirm Material Receive">
@@ -12,16 +13,16 @@
         <div class="mb-4 grid w-full grid-cols-1 items-end gap-3 sm:grid-cols-2 xl:grid-cols-12">
             <div class="xl:col-span-2">
                 <UiMultiSelect
-                    v-model="selectedDates"
-                    :options="all_date"
-                    label="Date"
-                    placeholder="-- Select Date --"
+                    v-model="selectedDos"
+                    :options="all_do"
+                    label="DO Number"
+                    placeholder="-- Select DO --"
                     class="w-full"
                 />
             </div>
 
             <div class="flex w-full gap-2 xl:col-span-3 items-end">
-                <UiButton variant="warning" @click="resetDateFilter">
+                <UiButton variant="warning" @click="resetDoFilter">
                     Reset
                 </UiButton>
             </div>
@@ -81,7 +82,7 @@
                             </p>
 
                             <div class="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
-                               
+
                                 <p class="text-xs text-gray-400">
                                     <span class="font-medium text-gray-500">Uploaded:</span>
                                     {{ formatDate(f.modified) }}
@@ -92,10 +93,6 @@
                                     {{ f.userid || '-' }}
                                 </p>
                             </div>
-
-                            <!-- <p class="mt-1 text-xs text-gray-400">
-                                Click to download the file
-                            </p> -->
                         </div>
                     </div>
                 </div>
@@ -176,23 +173,23 @@ const description = ref("");
 const showSendModal = ref(false);
 const deliveryOrderFile = ref(null);
 
-const dateOptions = ref([]);
-const selectedDates = ref([]);
-const all_date = ref([]);
-const defaultDate = ref("");
+const selectedDos = ref([]);
+const all_do = ref([]);
+const defaultDo = ref("");
 
-const normalizedDates = computed(() => {
-    const v = selectedDates.value;
+const normalizedDos = computed(() => {
+    const v = selectedDos.value;
     const arr = Array.isArray(v) ? v : v ? [v] : [];
     return arr
         .map((d) => (typeof d === "object" && d !== null ? d.value : d))
         .filter(Boolean);
 });
 
-const resetDateFilter = () => {
-    selectedDates.value = [];
+const resetDoFilter = () => {
+    selectedDos.value = [];
 };
 
+// Dipakai untuk tanggal upload file (bukan filter)
 const formatDate = (date) => {
     if (!date) return '-';
 
@@ -217,12 +214,13 @@ const formatDate = (date) => {
 };
 
 watch(
-    selectedDates,
+    selectedDos,
     () => {
         loadData();
     },
     { deep: true }
 );
+
 const defaultColDef = {
     sortable: true,
     filter: false,
@@ -311,7 +309,6 @@ class SelectAllHeader {
         this.checkbox.removeEventListener("change", this.onChange);
     }
 }
-
 
 const columnDefs = [
     {
@@ -471,6 +468,16 @@ const sendData = async () => {
             return;
         }
 
+        const doToSend = normalizedDos.value[0] || defaultDo.value;
+
+        if (!doToSend) {
+            await warning({
+                title: "DO Required",
+                text: "No DO number is available for receiving.",
+            });
+            return;
+        }
+
         loading.show();
 
         const formData = new FormData();
@@ -478,19 +485,7 @@ const sendData = async () => {
         formData.append("kpno", kpno);
         formData.append("combine_pro", pro);
         formData.append("kk", kk);
-
-        const dateToSend =
-        normalizedDates.value[0] || defaultDate.value;
-
-        if (!dateToSend) {
-            await warning({
-                title: "Date Required",
-                text: "No delivery date is available for receiving.",
-            });
-            return;
-        }
-
-        formData.append("date", dateToSend);
+        formData.append("do", doToSend);
 
         selectedRows.forEach((item) => {
             formData.append(
@@ -514,8 +509,8 @@ const sendData = async () => {
             text: data?.message ?? "Material received successfully.",
         });
 
-        if (selectedDates.value.length > 0) {
-            selectedDates.value = [];
+        if (selectedDos.value.length > 0) {
+            selectedDos.value = [];
         } else {
             await loadData();
         }
@@ -552,14 +547,13 @@ const loadData = async () => {
             kk,
         });
 
-        if (normalizedDates.value.length > 0) {
-            normalizedDates.value.forEach((date) => {
-                params.append("dates[]", date);
+        if (normalizedDos.value.length > 0) {
+            normalizedDos.value.forEach((doNumber) => {
+                params.append("do[]", doNumber);
             });
 
-            params.set("date", normalizedDates.value[0]);
+            params.set("do", normalizedDos.value[0]);
         }
-
 
         const { data } = await api.get(
             `/api/v1/receivematerial/input?${params.toString()}`
@@ -620,7 +614,7 @@ const loadData = async () => {
     }
 };
 
-const loadDataDate = async () => {
+const loadDataDo = async () => {
     try {
         loading.show();
 
@@ -631,13 +625,13 @@ const loadDataDate = async () => {
 
         const { data } = await api.get(endpoint);
 
-        all_date.value = (data?.data?.do_numbers ?? []).map((item) => ({
+        all_do.value = (data?.data?.do_numbers ?? []).map((item) => ({
             value: item.do_number,
             label: item.do_number,
         }));
 
-        defaultDate.value = all_date.value[0]?.value ?? "";
-        selectedDates.value = [];
+        defaultDo.value = all_do.value[0]?.value ?? "";
+        selectedDos.value = [];
     } catch (err) {
         if (err?.response?.status === 401) {
             router.push("/login");
@@ -645,7 +639,7 @@ const loadDataDate = async () => {
         }
 
         await error({
-            title: "Failed to Load Dates",
+            title: "Failed to Load DO",
             text:
                 err?.response?.data?.message ||
                 err?.message ||
@@ -725,7 +719,7 @@ const downloadFile = async (nmfile) => {
 };
 
 onMounted(async () => {
-    await loadDataDate();
+    await loadDataDo();
     await loadData();
 });
 </script>
@@ -738,3 +732,4 @@ onMounted(async () => {
     font-weight: 600;
 }
 </style>
+```
