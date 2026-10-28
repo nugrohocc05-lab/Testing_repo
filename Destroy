@@ -1,251 +1,504 @@
 <template>
     <div class="px-6">
-        <UiTitle align="center" title="Order Artwork Allocation"/>
-
-        <div class="mb-4 flex w-full flex-col gap-3 lg:flex-row lg:items-end">
-            <div class="flex-col flex gap-3 md:flex-row mb-2 md:mb-0">
-                <div class="w-full md:w-60">
-                    <UiMultiSelect v-model="form.filter" label="Filter" :options="filters"
-                        placeholder="-- Select Filter --" @change="onFilterChange"/>
-                </div>
-
-                <div v-if="form.filter === 'po'" class="w-full md:w-60">
-                    <UiMultiSelect v-model="form.po" label="PO" :options="pos"
-                        placeholder="-- Select PO --" @change="(v) => fetchGrid(v ? `?po=${v}` : '')"/>
-                </div>
-
-                <template v-if="form.filter === 'kp'">
-                    <div class="w-full md:w-60">
-                        <UiMultiSelect v-model="form.buyer" label="Buyer" :options="buyers"
-                            placeholder="-- Select Buyer --" @change="onBuyerChange"/>
-                    </div>
-                    <div v-if="form.buyer" class="w-full md:w-60">
-                        <UiMultiSelect v-model="form.kpno" label="KP" :options="kps"
-                            placeholder="-- Select KP --" @change="(v) => fetchGrid(v ? `?kpno=${v}` : '')"/>
-                    </div>
-                </template>
-            </div>
-
-            <div class="flex w-full justify-between gap-3 lg:ml-auto lg:w-auto lg:flex-row lg:items-end">
-                <div class="flex items-center justify-start gap-1">
-                    <UiTooltip content="PDF" position="bottom">
-                        <UiButton variant="teritary" class="shrink-0" @click="onExportPdf">
-                            <i class="fa-regular text-2xl fa-file-pdf"></i>
-                        </UiButton>
-                    </UiTooltip>
-                    <UiTooltip content="Excel" position="bottom">
-                        <UiButton variant="teritary" class="shrink-0" @click="onExportExcel">
-                            <i class="fa-regular text-2xl fa-file-excel"></i>
-                        </UiButton>
-                    </UiTooltip>
-                </div>
-                <div class="w-full sm:w-50">
-                    <UiInput v-model="searchKeyword" placeholder="Search" class="w-full rounded-lg">
-                        <template #prefix>
-                            <MagnifyingGlassIcon class="h-5 w-5 text-gray-400" />
-                        </template>
-                    </UiInput>
-                </div>
-            </div>
-        </div>
-
-        <UiAgGrid ref="gridRef" :rowData="rows" :columnDefs="columnDefs" class="mb-10 my-zebra-grid" :quickFilterText="searchKeyword" @grid-ready="onGridReady"/>
+        <UiTitle :is-back="true" align="center" title="Input Cutting Roll Detail" subtitle="OD0000000438 - E0000000000423">
+            <template #action-left>
+                <UiButton variant="teritary" @click="router.back()">
+                    <ArrowLeftStartOnRectangleIcon class="h-5 w-5" />
+                    <span class="text-xl ml-1">Back</span>
+                </UiButton>
+            </template>
+        </UiTitle>
     </div>
 
-    <UiModal v-model="showUndo" size="md">
-        <div class="space-y-4 -mt-2">
-            <div class="flex justify-center">
-                <div class="flex h-32 w-32 items-center justify-center rounded-full bg-amber-100">
-                    <ExclamationCircleIcon class="h-28 w-28 text-amber-600" />
+    <UiCard class="mt-5">
+        <div class="space-y-8 py-4">
+            <!-- 1. Order Info (read-only) -->
+            <section>
+                <h3 class="section-title">Order Info</h3>
+                <div class="grid grid-cols-1 gap-3 rounded-xl bg-gray-50 p-4 sm:grid-cols-2">
+                    <div>
+                        <p class="text-xs text-gray-500">Order Number</p>
+                        <p class="font-semibold text-gray-800">OD0000000438</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-500">PRO</p>
+                        <p class="font-semibold text-gray-800">E0000000000423</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2. Marker Details -->
+            <section>
+                <h3 class="section-title">Marker Details</h3>
+                <UiGrid cols="2" class="gap-4">
+                    <div>
+                        <UiInput v-model="form.marker" label="Marker *" placeholder="Ex: M2" />
+                        <p v-if="err.marker" class="err">{{ err.marker }}</p>
+                    </div>
+                    <div>
+                        <UiInput v-model="form.ratio" label="Ratio *" placeholder="Ex: 6-L" />
+                        <p v-if="err.ratio" class="err">{{ err.ratio }}</p>
+                    </div>
+                    <div>
+                        <UiInput v-model="form.part" label="Part *" placeholder="Ex: Shell A" />
+                        <p v-if="err.part" class="err">{{ err.part }}</p>
+                    </div>
+                    <div>
+                        <UiInput v-model="form.endLoss" label="End Loss (inch)" placeholder="0" inputmode="decimal" />
+                        <p v-if="err.endLoss" class="err">{{ err.endLoss }}</p>
+                    </div>
+                </UiGrid>
+            </section>
+
+            <!-- 3. Dimensions -->
+            <section>
+                <h3 class="section-title">Dimensions</h3>
+                <UiGrid cols="2" class="gap-4">
+                    <UiYardInch
+                        label="Width"
+                        required
+                        v-model:yard="form.widthYard"
+                        v-model:inch="form.widthInch"
+                        :error="err.width"
+                    />
+                    <UiYardInch
+                        label="Length"
+                        required
+                        v-model:yard="form.lengthYard"
+                        v-model:inch="form.lengthInch"
+                        :error="err.length"
+                    />
+                </UiGrid>
+            </section>
+
+            <!-- 4. Rolls -->
+            <section>
+                <div class="mb-3 flex items-center justify-between">
+                    <h3 class="section-title !mb-0">Rolls</h3>
+                    <span class="text-sm text-gray-500">{{ rolls.length }} roll · {{ totalPlies }} plies</span>
+                </div>
+
+                <div class="space-y-3">
+                    <div
+                        v-for="(roll, index) in rolls"
+                        :key="roll.id"
+                        class="overflow-hidden rounded-xl border"
+                        :class="submitted && hasRollError(roll) ? 'border-red-300' : 'border-gray-200'"
+                    >
+                        <!-- Roll header -->
+                        <div
+                            class="flex cursor-pointer items-center justify-between gap-3 bg-gray-50 px-4 py-3"
+                            @click="roll.open = !roll.open"
+                        >
+                            <div class="min-w-0">
+                                <p class="font-semibold text-gray-800">
+                                    Roll {{ index + 1 }}
+                                    <span v-if="roll.value" class="font-normal text-gray-500">· {{ roll.value }}</span>
+                                </p>
+                                <p class="truncate text-xs text-gray-500">
+                                    Shade {{ roll.shade || "-" }} · {{ roll.actualPlies || 0 }} plies ·
+                                    {{ roll.endBits.length }} end bit
+                                </p>
+                            </div>
+
+                            <div class="flex items-center gap-2" @click.stop>
+                                <span
+                                    v-if="submitted && hasRollError(roll)"
+                                    class="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-600"
+                                >
+                                    Incomplete
+                                </span>
+                                <button type="button" class="icon-btn" title="Duplicate roll" @click="duplicateRoll(roll)">
+                                    ⧉
+                                </button>
+                                <button
+                                    type="button"
+                                    class="icon-btn text-red-500"
+                                    title="Delete roll"
+                                    :disabled="rolls.length <= 1"
+                                    @click="removeRoll(roll)"
+                                >
+                                    🗑
+                                </button>
+                                <span class="w-4 text-center text-gray-400" @click="roll.open = !roll.open">
+                                    {{ roll.open ? "▲" : "▼" }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Roll body -->
+                        <div v-show="roll.open" class="space-y-6 p-4">
+                            <UiGrid cols="2" class="gap-4">
+                                <div>
+                                    <UiInput v-model="roll.value" label="Roll *" :placeholder="`Input Roll ${index + 1}`" />
+                                    <p v-if="rollErr(roll).value" class="err">{{ rollErr(roll).value }}</p>
+                                </div>
+                                <div>
+                                    <UiInput v-model="roll.shade" label="Shade *" placeholder="Ex: A" />
+                                    <p v-if="rollErr(roll).shade" class="err">{{ rollErr(roll).shade }}</p>
+                                </div>
+                                <div>
+                                    <UiInput
+                                        v-model="roll.actualPlies"
+                                        label="Actual Plies *"
+                                        placeholder="Ex: 10"
+                                        inputmode="numeric"
+                                    />
+                                    <p v-if="rollErr(roll).actualPlies" class="err">{{ rollErr(roll).actualPlies }}</p>
+                                </div>
+                                <div>
+                                    <UiInput
+                                        v-model="roll.splice"
+                                        label="Splice (inch)"
+                                        placeholder="0"
+                                        inputmode="decimal"
+                                    />
+                                    <p v-if="rollErr(roll).splice" class="err">{{ rollErr(roll).splice }}</p>
+                                </div>
+                            </UiGrid>
+
+                            <UiYardInch
+                                label="Damages"
+                                v-model:yard="roll.damageYard"
+                                v-model:inch="roll.damageInch"
+                                :error="rollErr(roll).damage"
+                            />
+
+                            <!-- End Bits -->
+                            <div class="rounded-xl bg-gray-50 p-4">
+                                <div class="mb-3 flex items-center justify-between">
+                                    <h5 class="text-sm font-semibold text-gray-700">
+                                        End Bits
+                                        <span class="font-normal text-gray-400">({{ roll.endBits.length }})</span>
+                                    </h5>
+                                    <button type="button" class="text-sm font-medium text-green-600 hover:text-green-700" @click="addEndBit(roll)">
+                                        + Add End Bit
+                                    </button>
+                                </div>
+
+                                <div class="space-y-3">
+                                    <div
+                                        v-for="(endBit, bitIndex) in roll.endBits"
+                                        :key="endBit.id"
+                                        class="flex items-start gap-2"
+                                    >
+                                        <span class="mt-8 w-5 text-xs text-gray-400">{{ bitIndex + 1 }}.</span>
+                                        <div class="flex-1">
+                                            <UiYardInch
+                                                :label="bitIndex === 0 ? 'Length' : ''"
+                                                v-model:yard="endBit.yard"
+                                                v-model:inch="endBit.inch"
+                                                :error="rollErr(roll).endBits[bitIndex]"
+                                            />
+                                        </div>
+                                        <button
+                                            type="button"
+                                            class="icon-btn text-red-500"
+                                            :class="bitIndex === 0 ? 'mt-6' : 'mt-0'"
+                                            title="Remove end bit"
+                                            :disabled="roll.endBits.length <= 1"
+                                            @click="removeEndBit(roll, endBit.id)"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button
+                    type="button"
+                    class="mt-3 w-full rounded-xl border-2 border-dashed border-gray-300 py-3 text-sm font-medium text-gray-600 transition hover:border-green-500 hover:text-green-600"
+                    @click="addRoll"
+                >
+                    + Add Roll
+                </button>
+            </section>
+
+            <!-- Actions -->
+            <div class="sticky bottom-0 -mx-4 flex items-center justify-between gap-2 border-t bg-white px-4 py-3">
+                <p class="text-sm text-gray-500">{{ rolls.length }} roll · {{ totalPlies }} plies</p>
+                <div class="flex gap-2">
+                    <UiButton variant="teritary" @click="router.back()">Cancel</UiButton>
+                    <UiButton @click="handleSave">Save</UiButton>
                 </div>
             </div>
-            <div class="mt-4 text-center">
-                <p class="mt-1 text-xl font-bold text-gray-500">Are you sure going to undo waiting list?</p>
-                <p class="mt-1 text-md text-gray-500">
-                    Once data processed, you can`t retrieve it again or recover the data! please do this action carefully!
-                </p>
+        </div>
+
+        <!-- Search -->
+        <div class="mb-2 mt-5 flex justify-end">
+            <div class="w-full sm:w-64">
+                <UiInput v-model="searchKeyword" placeholder="Search" class="w-full rounded-lg">
+                    <template #prefix>
+                        <MagnifyingGlassIcon class="h-5 w-5 text-gray-400" />
+                    </template>
+                </UiInput>
             </div>
         </div>
-        <template #footer>
-            <div class="flex justify-end gap-3">
-                <UiButton variant="secondary" @click="showUndo = false">Cancel</UiButton>
-                <UiButton @click="undo">OK</UiButton>
-            </div>
-        </template>
-    </UiModal>
+
+        <!-- Data Table -->
+        <UiAgGrid
+            class="my-zebra-grid"
+            :rowData="rawDataBreakdown"
+            :columnDefs="columnDefs"
+            :quickFilterText="searchKeyword"
+            :defaultColDef="defaultColDef"
+        />
+    </UiCard>
 </template>
 
 <script setup>
-import { exportToPdf } from '@/utils/pdfExporter';
-import { exportToExcel } from "@/utils/excelExporter";
-import { getCurrentDateTime } from '@/utils/date';
-import { encrypt } from "@/utils/crypto";
-import { ref, shallowRef, onMounted, defineComponent, h } from "vue";
-import { useRouter } from "vue-router";
+import { decrypt } from "@/utils/crypto";
+import { ref, reactive, computed, onMounted } from "vue";
+import { useRouter, useRoute } from "vue-router";
 import { useLoadingStore } from "@/stores/loading";
-import { ArrowUturnLeftIcon, DocumentArrowUpIcon, ExclamationCircleIcon, InformationCircleIcon, MagnifyingGlassIcon } from "@heroicons/vue/24/outline";
-import { customSwal } from "@/composable/customSwal";
+import { MagnifyingGlassIcon, ArrowLeftStartOnRectangleIcon } from "@heroicons/vue/24/outline";
 
 import UiButton from "@/components/ui/UiButton.vue";
 import UiInput from "@/components/ui/UiInput.vue";
-import UiModal from "@/components/ui/UiModal.vue";
+import UiCard from "@/components/ui/UiCard.vue";
 import UiTitle from "@/components/ui/UiTitle.vue";
-import UiMultiSelect from "@/components/ui/UiMultiSelect.vue";
-import UiAgGrid from '@/components/ui/UiAgGrid.vue';
-import UiTooltip from '@/components/ui/UiTooltip.vue';
+import UiGrid from "@/components/ui/UiGrid.vue";
+import UiAgGrid from "@/components/ui/UiAgGrid.vue";
+import UiYardInch from "@/components/ui/UiYardInch.vue";
 
 import api from "@/services/api";
 
-defineOptions({ name: 'Allocation' });
-
-const { success, error } = customSwal;
-const { datetime } = getCurrentDateTime('-', '-');
 const loading = useLoadingStore();
 const router = useRouter();
-
-const BASE = "/api/v1/order-artwork";
-const rows = shallowRef([]);
-const buyers = ref([]);
-const kps = ref([]);
-const pos = ref([]);
+const route = useRoute();
+const rawDataBreakdown = ref([]);
+const rawDataOrder = ref([]);
+const rawDataFiles = ref([]);
+const rawDataOrderAllocation = ref([]);
 const searchKeyword = ref("");
-const gridApi = shallowRef(null); 
-const query = ref("");
-const filters = [{ value: "po", label: "PO" }, { value: "kp", label: "KP" }];
-const form = ref({ filter: "", buyer: "", kpno: "", po: "" });
-const showUndo = ref(false);
-const undoRow = ref(null);
 
-const run = async (fn, msg = "Something went wrong") => {
+const kk = decrypt(decodeURIComponent(route.params.kk));
+const kpno = decrypt(decodeURIComponent(route.params.kpno));
+const pro = decrypt(decodeURIComponent(route.params.pro));
+
+const defaultColDef = { sortable: true, filter: false, resizable: true };
+
+/* ---------------- Form state ---------------- */
+let nextRollId = 1;
+let nextEndBitId = 1;
+
+const createEndBit = (data = {}) => ({
+    id: nextEndBitId++,
+    yard: data.yard ?? "",
+    inch: data.inch ?? "",
+});
+
+const createRoll = (data = {}) => ({
+    id: nextRollId++,
+    open: true,
+    value: "",
+    shade: data.shade ?? "",
+    actualPlies: data.actualPlies ?? "",
+    splice: data.splice ?? "",
+    damageYard: data.damageYard ?? "",
+    damageInch: data.damageInch ?? "",
+    endBits: data.endBits?.length
+        ? data.endBits.map((b) => createEndBit(b))
+        : [createEndBit()],
+});
+
+const form = reactive({
+    marker: "",
+    ratio: "",
+    part: "",
+    endLoss: "",
+    widthYard: "",
+    widthInch: "",
+    lengthYard: "",
+    lengthInch: "",
+});
+
+const rolls = ref([createRoll()]);
+const submitted = ref(false);
+
+const totalPlies = computed(() =>
+    rolls.value.reduce((sum, r) => sum + (Number(r.actualPlies) || 0), 0)
+);
+
+/* ---------------- Roll actions ---------------- */
+const addRoll = () => {
+    rolls.value.forEach((r) => (r.open = false));
+    rolls.value.push(createRoll());
+};
+
+const duplicateRoll = (roll) => {
+    rolls.value.push(createRoll(roll)); // copy shade, plies, splice, damage, end bits; roll number kosong
+};
+
+const removeRoll = (roll) => {
+    if (rolls.value.length <= 1) return;
+    const filled = roll.value || roll.shade || roll.actualPlies;
+    if (filled && !window.confirm("Delete this roll?")) return;
+    rolls.value = rolls.value.filter((r) => r.id !== roll.id);
+};
+
+const addEndBit = (roll) => roll.endBits.push(createEndBit());
+
+const removeEndBit = (roll, endBitId) => {
+    if (roll.endBits.length <= 1) return;
+    roll.endBits = roll.endBits.filter((b) => b.id !== endBitId);
+};
+
+/* ---------------- Validation ---------------- */
+const unitError = (yard, inch, required = false) => {
+    const hasYard = yard !== "" && yard !== null;
+    const hasInch = inch !== "" && inch !== null;
+    if (required && !hasYard && !hasInch) return "Required";
+    if (hasInch) {
+        const n = Number(inch);
+        if (Number.isNaN(n)) return "Invalid number";
+        if (n >= 36) return "Inch must be below 36";
+    }
+    return "";
+};
+
+const inchError = (val) => {
+    if (val === "" || val === null) return "";
+    const n = Number(val);
+    if (Number.isNaN(n)) return "Invalid number";
+    return "";
+};
+
+const required = (v) => (String(v ?? "").trim() === "" ? "Required" : "");
+
+const err = computed(() => {
+    if (!submitted.value) return {};
+    return {
+        marker: required(form.marker),
+        ratio: required(form.ratio),
+        part: required(form.part),
+        endLoss: inchError(form.endLoss),
+        width: unitError(form.widthYard, form.widthInch, true),
+        length: unitError(form.lengthYard, form.lengthInch, true),
+    };
+});
+
+const rollErr = (roll) => {
+    if (!submitted.value) {
+        return { endBits: roll.endBits.map(() => "") };
+    }
+    const plies = Number(roll.actualPlies);
+    return {
+        value: required(roll.value),
+        shade: required(roll.shade),
+        actualPlies:
+            required(roll.actualPlies) ||
+            (!Number.isInteger(plies) || plies <= 0 ? "Must be a whole number > 0" : ""),
+        splice: inchError(roll.splice),
+        damage: unitError(roll.damageYard, roll.damageInch),
+        endBits: roll.endBits.map((b) => unitError(b.yard, b.inch)),
+    };
+};
+
+const hasRollError = (roll) => {
+    const e = rollErr(roll);
+    return !!(e.value || e.shade || e.actualPlies || e.splice || e.damage || e.endBits.some(Boolean));
+};
+
+const isFormValid = () =>
+    Object.values(err.value).every((v) => !v) && rolls.value.every((r) => !hasRollError(r));
+
+/* ---------------- Save ---------------- */
+const handleSave = async () => {
+    submitted.value = true;
+
+    if (!isFormValid()) {
+        rolls.value.forEach((r) => (r.open = hasRollError(r))); // buka hanya roll yang bermasalah
+        return;
+    }
+
+    const payload = {
+        kk,
+        kpno,
+        pro,
+        ...form,
+        rolls: rolls.value.map(({ id, open, ...r }) => ({
+            ...r,
+            endBits: r.endBits.map(({ id, ...b }) => b),
+        })),
+    };
+
     try {
         loading.show();
-        await fn();
-    } catch (err) {
-        if (err?.response?.status === 401) router.push("/login");
-        else error(err?.response?.data?.message ?? msg);
+        console.log("payload", payload);
+        // await api.post("/api/v1/....", payload);
     } finally {
         loading.hide();
     }
 };
 
-const onGridReady = (e) => {
-    gridApi.value = e.api;
-};
+/* ---------------- Table ---------------- */
+const columnDefs = [
+    { headerName: "No", field: "no", width: 80, filter: false, resizable: false },
+    { field: "item_number", headerName: "Order Number", minWidth: 100, sortable: false, flex: 1 },
+    { field: "item_desc", headerName: "Part", minWidth: 100, flex: 1 },
+    { field: "color_code", headerName: "Marker", minWidth: 100, flex: 1 },
+    { field: "size", headerName: "Ratio", minWidth: 100, flex: 1 },
+];
 
-const toOptions = (list, value, label = value) => (list ?? []).map((i) => ({ value: i[value], label: i[label] }));
+const loadData = async () => {
+    try {
+        loading.show();
+        const endpoint = `/api/v1/receivematerial/detailmaterial?kk=${kk}&combine_pro=${pro}`;
+        const { data } = await api.get(endpoint);
 
-const fetchGrid = (q = "") => run(async () => {
-    query.value = q;
-    const { data } = await api.get(`${BASE}/getdata${q}`);
-    rows.value = (data?.data ?? []).map((item, i) => ({ ...item, no: i + 1 }));
-});
+        rawDataBreakdown.value = (data?.data ?? []).map((item, index) => ({
+            ...item,
+            no: index + 1,
+        }));
 
-const exportOptions = {
-    headers: ["NO", "PO", "KP", "Order Number", "Style", "CM Factory", "PO CMT", "Status"],
-    fields: ["no", "po", "kpno", "ordernumber", "style", "factory", "po_sap", "status"],
-};
+        rawDataOrder.value = data ?? [];
+        rawDataOrderAllocation.value = data ?? [];
 
-const doExport = (fn, extra) => {
-    if (!gridApi.value) return alert("Please Wait!");
-    fn({
-        title: `Orders Artwork Allocation Report ${datetime}`,
-        fileName: `orders-artwork-${datetime.replace(' ', '_')}${extra.ext ?? ""}`,
-        gridData: gridApi,
-        ...exportOptions,
-        ...extra.opts,
-    });
-};
-
-const onExportExcel = () => doExport(exportToExcel, { ext: ".xlsx", opts: { sheetName: "Orders Artwork" } });
-const onExportPdf = () => doExport(exportToPdf, { opts: { orientation: "l" } });
-
-const onFilterChange = (val) => {
-    form.value = { filter: val ?? "", buyer: "", kpno: "", po: "" };
-    kps.value = [];
-    fetchGrid();
-    if (val === "po" && !pos.value.length) {
-        run(async () => {
-            const { data } = await api.get(`${BASE}/pos`);
-            pos.value = toOptions(data?.data, "po");
-        });
+        rawDataFiles.value = (data?.receivefiles ?? []).map((item, index) => ({
+            ...item,
+            no: index + 1,
+        }));
+    } catch (err) {
+        if (err?.response?.status === 401) router.push("/login");
+    } finally {
+        loading.hide();
     }
 };
 
-const onBuyerChange = (idbuyer) => {
-    form.value.kpno = "";
-    kps.value = [];
-    if (!idbuyer) return fetchGrid();
-    run(async () => {
-        const { data } = await api.get(`${BASE}/kps?idbuyer=${idbuyer}`);
-        kps.value = toOptions(data?.data, "kpno");
-    });
-};
-
-// Pindah ke halaman Upload KK
-// SESUAIKAN nama route & cara kirim parameter dengan route yang sudah kamu buat
-const openUpload = (row) => router.push({
-    name: "order-artwork-allocation-upload-kk",
-    params: { id: row.id },
-    query: { kpno: row.kpno },
-});
-
-const undo = () => run(async () => {
-    const { data } = await api.post(`${BASE}/cancel-complete/${undoRow.value.id}`);
-    success(data?.message ?? "Waiting list has been undone");
-    showUndo.value = false;
-    await fetchGrid(query.value);
-}, "Failed to undo");
-
-const ActionRenderer = defineComponent({
-    props: { params: { type: Object, required: true } },
-    setup(props) {
-        const row = () => props.params.data;
-
-        const btn = (title, color, icon, onClick) =>
-            h("button", {
-                type: "button",
-                title,
-                class: `cursor-pointer text-${color}-500 transition hover:text-${color}-700`,
-                onClick,
-            }, [h(icon, { class: "h-5 w-5" })]);
-
-        const detail = () => router.push({
-            name: "order-artwork-allocation-detail-kk",
-            params: { kk: encodeURIComponent(encrypt(row().kk)) },
-        });
-
-        const openUndo = () => {
-            undoRow.value = row();
-            showUndo.value = true;
-        };
-
-        return () => h("div", { class: "flex h-full gap-2" }, [
-            btn("Detail", "amber", InformationCircleIcon, detail),
-            row()?.status === "New" && btn("Upload KK", "cyan", DocumentArrowUpIcon, () => openUpload(row())),
-            row()?.status === "Waiting" && btn("Undo Waiting List", "red", ArrowUturnLeftIcon, openUndo),
-        ]);
-    },
-});
-
-const col = (field, headerName, extra = {}) => ({ field, headerName, minWidth: 125, flex: 1, ...extra });
-
-const columnDefs = [
-    { headerName: "No", field: "no", width: 80, filter: false, resizable: false },
-    col("po", "PO"),
-    col("kpno", "KP"),
-    col("ordernumber", "Order Number"),
-    col("style", "Style"),
-    col("factory", "CM Factory", { minWidth: 150, valueGetter: (p) => p.data?.factory ?? "-" }),
-    col("po_sap", "PO CMT"),
-    col("status", "Status"),
-    { headerName: "Action", maxWidth: 150, sortable: false, filter: false, resizable: false, cellRenderer: ActionRenderer },
-];
-
-onMounted(() => {
-    fetchGrid();
-    run(async () => {
-        const { data } = await api.get(`${BASE}/buyers`);
-        buyers.value = toOptions(data?.data, "idbuyer", "namabuyer");
-    });
-});
+onMounted(loadData);
 </script>
+
+<style scoped>
+.section-title {
+    margin-bottom: 0.75rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #1f2937;
+}
+.err {
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    color: #ef4444;
+}
+.icon-btn {
+    display: flex;
+    height: 2rem;
+    width: 2rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+    font-size: 0.95rem;
+    transition: background 0.15s;
+}
+.icon-btn:hover:not(:disabled) {
+    background: #f3f4f6;
+}
+.icon-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+</style>
