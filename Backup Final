@@ -1,38 +1,32 @@
 <template>
     <div class="px-6">
-        <UiTitle align="center" title="Cutting Instruction"/>
+        <UiTitle :is-back="true" align="center" title="Confirm Material Receive">
+            <template #action-left>
+                <UiButton variant="teritary" @click="router.back()">
+                    <ArrowLeftStartOnRectangleIcon class="h-5 w-5" />
+                    <span class="text-xl ml-1">Back</span>
+                </UiButton>
+            </template>
+        </UiTitle>
+
         <div class="mb-4 grid w-full grid-cols-1 items-end gap-3 sm:grid-cols-2 xl:grid-cols-12">
             <div class="xl:col-span-2">
-                <UiMultiSelect v-model="form.status" :options="all_status" label="Status" placeholder="-- Select Status --"
-                    class="w-full" @change="loadFilter" />
-            </div>
-            
-            <div class="xl:col-span-2">
-                <UiMultiSelect v-model="form.factory" :options="factories" label="Factory"
-                    placeholder="-- Select Factory --" class="w-full" @change="loadFilter" />
+                <UiMultiSelect
+                    v-model="selectedDo"
+                    :options="all_do"
+                    label="Delivery Order"
+                    placeholder="-- Select DO --"
+                    class="w-full"
+                />
             </div>
 
-            <div class="flex items-end xl:col-span-1">
-                <UiButton variant="warning" class="w-full sm:w-auto" @click="resetFilter">
+            <div class="flex w-full gap-2 xl:col-span-3 items-end">
+                <UiButton variant="warning" @click="resetDateFilter">
                     Reset
                 </UiButton>
             </div>
-            
-            <div class="flex w-full items-end justify-end gap-2 xl:col-span-4 xl:col-start-9">
-                <div class="flex shrink-0 items-center gap-1">
-                    <UiTooltip content="PDF" position="bottom">
-                        <UiButton variant="teritary" class="shrink-0" @click="onBtnExportPdf">
-                            <i class="fa-regular fa-file-pdf text-2xl"></i>
-                        </UiButton>
-                    </UiTooltip>
 
-                    <UiTooltip content="Excel" position="bottom">
-                        <UiButton variant="teritary" class="shrink-0" @click="onBtnExport">
-                            <i class="fa-regular fa-file-excel text-2xl"></i>
-                        </UiButton>
-                    </UiTooltip>
-                </div>
-                
+            <div class="flex w-full items-end justify-end gap-2 xl:col-span-4 xl:col-start-9">
                 <div class="min-w-0 w-50">
                     <UiInput
                         v-model="searchKeyword"
@@ -47,1092 +41,888 @@
             </div>
         </div>
 
-        <UiAgGrid :rowData="rawData" :columnDefs="columnDefs" :defaultColDef="defaultColDef" class="mb-10 my-zebra-grid"
-            :quickFilterText="searchKeyword" @grid-ready="onGridReady"></UiAgGrid>
+        <UiCard class="my-4 text-xs md:text-lg">
+            <!-- Material Table -->
+            <UiAgGrid
+                class="my-zebra-grid mt-3"
+                :rowData="rawData"
+                :columnDefs="columnDefs"
+                :quickFilterText="searchKeyword"
+                :defaultColDef="defaultColDef"
+                :paginationPageSize="100"
+                :paginationPageSizeSelector="[10, 20, 50, 100]"
+            />
+            <div class="mt-4 flex justify-end">
+                <!-- <UiButton @click="openReceiveModal">
+                    Receive
+                </UiButton> -->
+                <UiButton
+                    :disabled="!rawData.some(item => !item.isReceived)"
+                    @click="openReceiveModal"
+                >
+                    Receive
+                </UiButton>
+            </div>
+        </UiCard>
+        <UiCard>
+            <div class="flex min-w-0 flex-col gap-2">
+                <span class="text-xl font-bold">Receive Files</span>
+                    <template v-if="rawDataFiles.length">
+                        <div
+                            v-for="f in rawDataFiles"
+                            :key="`${f.iddelivery}-${f.filename}`"
+                            class="group flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-3 transition hover:border-gray-300 hover:bg-gray-50"
+                        >
+                            <div
+                                class="flex min-w-0 flex-1 cursor-pointer items-center gap-3"
+                                @click="downloadFile(f.filename)"
+                            >
+                                <div
+                                    class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-50"
+                                >
+                                    <FileIcon :extension="f.extension" />
+                                </div>
+        
+                                <div class="min-w-0 flex-1">
+                                    <p class="truncate text-sm font-medium text-gray-800">
+                                        {{ f.filename }}.{{ f.extension }}
+                                    </p>
+        
+                                    <div class="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+                                       
+                                        <p class="text-xs text-gray-400">
+                                            <span class="font-medium text-gray-500">Uploaded:</span>
+                                            {{ formatDate(f.modified) }}
+                                        </p>
+        
+                                        <p class="text-xs text-gray-400">
+                                            <span class="font-medium text-gray-500">Upload By:</span>
+                                            {{ f.userid || '-' }}
+                                        </p>
+                                    </div>
+        
+                                    <!-- <p class="mt-1 text-xs text-gray-400">
+                                        Click to download the file
+                                    </p> -->
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                    <div v-else class="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3">
+                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-50">
+                                <FileIcon />
+                        </div>
+
+                        <div class="min-w-0 flex-1">
+                            <p class="truncate text-sm font-medium text-gray-800">
+                                No files available
+                            </p>
+
+                            <p class="mt-0.5 text-xs text-gray-400">
+                                No files have been uploaded yet
+                            </p>
+                        </div>
+                    </div>
+            </div>
+        </UiCard>
+        <UiCard class="mt-4">
+            <div class="flex min-w-0 flex-col gap-2">
+                <span class="text-xl font-bold">Delivery Files</span>
+                    <template v-if="rawDataFilesDelivery.length">
+                        <div
+                            v-for="f in rawDataFilesDelivery"
+                            :key="`${f.iddelivery}-${f.filename}`"
+                            class="group flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-3 transition hover:border-gray-300 hover:bg-gray-50"
+                        >
+                            <div
+                                class="flex min-w-0 flex-1 cursor-pointer items-center gap-3"
+                                @click="downloadFile(f.filename)"
+                            >
+                                <div
+                                    class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-50"
+                                >
+                                    <FileIcon :extension="f.extension" />
+                                </div>
+        
+                                <div class="min-w-0 flex-1">
+                                    <p class="truncate text-sm font-medium text-gray-800">
+                                        {{ f.filename }}.{{ f.extension }}
+                                    </p>
+        
+                                    <div class="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+                                       
+                                        <p class="text-xs text-gray-400">
+                                            <span class="font-medium text-gray-500">Uploaded:</span>
+                                            {{ formatDate(f.modified) }}
+                                        </p>
+        
+                                        <p class="text-xs text-gray-400">
+                                            <span class="font-medium text-gray-500">Upload By:</span>
+                                            {{ f.userid || '-' }}
+                                        </p>
+                                    </div>
+        
+                                    <!-- <p class="mt-1 text-xs text-gray-400">
+                                        Click to download the file
+                                    </p> -->
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                    <div v-else class="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3">
+                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-50">
+                                <FileIcon />
+                        </div>
+
+                        <div class="min-w-0 flex-1">
+                            <p class="truncate text-sm font-medium text-gray-800">
+                                No files available
+                            </p>
+
+                            <p class="mt-0.5 text-xs text-gray-400">
+                                No files have been uploaded yet
+                            </p>
+                        </div>
+                    </div>
+            </div>
+        </UiCard>
     </div>
 
-
     <UiModal
-        v-model="showModal"
-        :title="
-            isBreakdown
-                ? 'Breakdown Size'
-                : isDetailFile
-                    ? 'Cutting Instruction'
-                    : isUpload
-                        ? 'File Cutting Instruction'
-                        : 'Cutting Instruction'
-        "
-        size="5xl"
+        v-model="showSendModal"
+        title="Receiving Confirmation"
+        size="2xl"
     >
-        <!-- Breakdown Size -->
-        <div class="space-y-3 -mt-3" v-if="isBreakdown">
-            <div class="divide-y divide-gray-200 text-sm md:text-base">
-                <div class="grid grid-cols-1 gap-1 py-4 md:grid-cols-[140px_1fr] md:gap-4">
-                    <span class="font-semibold text-gray-700">Order Number</span>
-                    <span class="text-gray-900">{{ detailSelected?.ordernumber ?? '-' }}</span>
-                </div>
+        <div class="space-y-4 -mt-3">
+            <UiInput
+                type="file"
+                variant="dropzone"
+                label="File Delivery Orders"
+                placeholder="Choose File"
+                dropzone-hint="Only PDF, XLS, or XLSX formats, up to 8MB"
+                accept=".pdf,.xls,.xlsx"
+                @change="handleFile"
+            />
 
-                <div class="grid grid-cols-1 gap-1 py-4 md:grid-cols-[140px_1fr] md:gap-4">
-                    <span class="font-semibold text-gray-700">Combine PRO</span>
-                    <span class="text-gray-900">{{ detailSelected?.combine_pro ?? '-' }}</span>
-                </div>
-
-                <div class="grid grid-cols-1 gap-1 py-4 md:grid-cols-[140px_1fr] md:gap-4">
-                    <span class="font-semibold text-gray-700">Style</span>
-                    <span class="text-gray-900">{{ detailSelected?.style ?? '-' }}</span>
-                </div>
-                
-                <div class="mt-3">
-                    <UiAgGrid :rowData="detailData" :columnDefs="columnDetails" :defaultColDef="defaultColDef" class="mb-10 my-zebra-grid"
-                    ></UiAgGrid>
-                </div>
-
-            </div>
-        </div>
-
-        <!-- Detail File -->
-        <div v-if="isDetailFile" class="space-y-4 -mt-3">
-            <!-- Title -->
-            <div class="py-2 text-center">
-                <h3 class="text-base font-semibold text-gray-800">
-                    File Cutting Instruction (CI)
-                </h3>
-                <p class="mt-1 text-sm text-gray-500">
-                    Click the file to download
-                </p>
-            </div>
-
-            <!-- File List -->
-            <div
-                v-for="(file, index) in cuttingData"
-                :key="file.id ?? index"
-                @click="downloadCuttingFile(file)"
-                class="group flex cursor-pointer items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 transition hover:border-blue-300 hover:bg-blue-50"
-            >
-                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ">
-                    <FileIcon :extension="file.extension" />
-                </div>
-
-                <div class="min-w-0 flex-1">
-                    <p class="truncate text-sm font-medium text-gray-800">
-                        {{ file.filename }}.{{ file.extension }}
-                    </p>
-                    <!-- <p class="mt-1 text-xs text-gray-400">
-                        Click the file to download.
-                    </p> -->
-                </div>
-
-                <i
-                    class="fa-solid fa-download shrink-0 transition text-blue-700"
-                ></i>
-            </div>
-
-            <!-- Empty State -->
-            <div
-                v-if="cuttingData.length === 0"
-                class="rounded-xl border border-dashed border-gray-300 px-4 py-8 text-center"
-            >
-                <DocumentIcon class="mx-auto h-8 w-8 text-gray-400" />
-                <p class="mt-2 text-sm text-gray-500">
-                    There is no Cutting Instruction file yet.
-                </p>
-            </div>
-        </div>
-
-        <!-- Upload -->
-        <div class="space-y-3 -mt-3" v-if="isUpload">
-            <div class="space-y-3 pt-1">
-                <UiInput
-                    :key="dropKey"
-                    type="file"
-                    variant="dropzone"
-                    label="Upload File Cutting Instruction"
-                    placeholder="Choose File"
-                    accept=".pdf,.xls,.xlsx"
-                    dropzone-hint="only PDF, XLS, or XLSX Formats, up to 8MB"
-                    @change="onFileChange"
-                />
-            </div>
-            <div
-                class="grid grid-cols-1 sm:grid-cols-2 items-start gap-3 rounded-xl p-3 transition max-h-100 overflow-auto"
-            >
-                <div
-                    v-for="(file, index) in cuttingData"
-                    :key="file.id ?? index"
-                    class="group flex w-full min-w-0 items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 transition hover:border-blue-300 hover:bg-blue-50"
-                >
-                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ">
-                    <FileIcon :extension="file.extension" />
-                </div>
-
-                    <div class="min-w-0 flex-1">
-                        <p class="truncate text-sm font-medium text-gray-800">
-                            {{ file.filename }}.{{ file.extension }}
-                        </p>
-                    </div>
-
-                    <i
-                        class="fa-solid fa-download shrink-0 transition text-blue-700" @click="downloadCuttingFile(file)"
-                    ></i>
-                    <button
-                            type="button"
-                            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition bg-red-50 text-red-600"
-                            title="Delete file"
-                            @click.stop="deleteCuttingFile(file)" aria-label="Delete file"
-                        >
-                            <TrashIcon class="h-5 w-5" />
-                    </button>
-                </div>
-
-                <!-- Empty State -->
-                <div
-                    v-if="cuttingData.length === 0"
-                    class="col-span-full rounded-xl border border-dashed border-gray-300 px-4 py-8 text-center"
-                >
-                    <DocumentIcon class="mx-auto h-8 w-8 text-gray-400" />
-                    <p class="mt-2 text-sm text-gray-500">
-                        There is no Cutting Instruction file yet.
-                    </p>
-                </div>
-            </div>
-        </div>
-
-        <template #footer>
-            <div class="flex justify-end gap-3">
-                <!-- Breakdown Size -->
-                <UiButton
-                    v-if="isBreakdown"
-                    variant="secondary"
-                    @click="closeModal"
-                >
-                    Close
+            <div class="flex justify-end gap-2 pt-3">
+                <UiButton variant="teritary" @click="showSendModal = false">
+                    Cancel
                 </UiButton>
 
-                <!-- Cutting Instruction / Upload MOM -->
-                <template v-if="isDetailFile">
-                    <UiButton
-                        variant="secondary"
-                        @click="closeModal"
-                    >
-                        Cancel
-                    </UiButton>
-                </template>
-
-                <!-- File Cutting Instruction -->
-                <UiButton
-                    v-if="isUpload"
-                    variant="secondary"
-                    @click="closeModal"
-                >
-                    Close
-                </UiButton>
-
-                <UiButton
-                    v-if="isUpload" 
-                    variant="primary"
-                     @click="uploadFile"
-                >
+                <UiButton @click="confirmSend">
                     Confirm
                 </UiButton>
             </div>
-        </template>
-
+        </div>
     </UiModal>
 </template>
 
 <script setup>
-import { exportToPdf } from '@/utils/pdfExporter';
-import { exportToExcel } from "@/utils/excelExporter";
-import { getCurrentDateTime } from '@/utils/date';
-import { encrypt } from "@/utils/crypto";
+import { ref, computed, onMounted, watch } from "vue";
+import { useRouter, useRoute } from "vue-router";
+import { MagnifyingGlassIcon, ArrowLeftStartOnRectangleIcon } from "@heroicons/vue/24/outline";
 
-import { ref, onMounted, computed, defineComponent, h, watch, nextTick } from "vue";
-import { useRouter } from "vue-router";
+import { decrypt } from "@/utils/crypto";
 import { useLoadingStore } from "@/stores/loading";
-import { InformationCircleIcon, TrashIcon, MagnifyingGlassIcon, CheckCircleIcon, DocumentArrowUpIcon, DocumentIcon, FolderIcon } from "@heroicons/vue/24/outline";
-
 import { customSwal } from "@/composable/customSwal";
-const { confirm, success, warning, error, confirmDelete } = customSwal;
-const { datetime } = getCurrentDateTime('-', '-');
-
-import UiButton from "@/components/ui/UiButton.vue"
-import UiInput from "@/components/ui/UiInput.vue"
-import UiModal from "@/components/ui/UiModal.vue"
-import UiTitle from "@/components/ui/UiTitle.vue"
-import UiMultiSelect from "@/components/ui/UiMultiSelect.vue"
-import UiDatePicker from '@/components/ui/UiDatePicker.vue';
-import UiAgGrid from '@/components/ui/UiAgGrid.vue';
-
 import api from "@/services/api";
-import UiTooltip from '@/components/ui/UiTooltip.vue';
-import FileIcon from '@/components/ui/FileIcon.vue';
+
+import UiButton from "@/components/ui/UiButton.vue";
+import UiInput from "@/components/ui/UiInput.vue";
+import UiTitle from "@/components/ui/UiTitle.vue";
+import UiAgGrid from "@/components/ui/UiAgGrid.vue";
+import UiModal from "@/components/ui/UiModal.vue";
+import UiCard from "@/components/ui/UiCard.vue";
+import UiMultiSelect from "@/components/ui/UiMultiSelect.vue";
+import UiGrid from "@/components/ui/UiGrid.vue";
+import FileIcon from "@/components/ui/FileIcon.vue";
+
+const { success, warning, error } = customSwal;
 
 const loading = useLoadingStore();
 const router = useRouter();
-const rawData = ref([]);
-const detailData = ref([]);
-const cuttingData = ref([]);
-const factories = ref([]);
-const all_status = ref([]);
-const dataSelected = ref([]);
-const ListKK = ref([]);
-const action = ref("");
-const isPlan = ref(false)
-const isCompleted = ref(false)
-const isConfirmPlan = ref(false)
-const showModal = ref(false)
-const searchKeyword = ref('')
-const originalForm = ref(null)
-const gridApi = ref(null);
-const fileUpload = ref(null);
-const isBreakdown = ref(false)
-const isDetailFile = ref(false)
-const isUpload = ref(false);
-const detailSelected = ref([]);
-const dropKey = ref(0);
+const route = useRoute();
 
-const detailPpm = ref({
-    plandate: "",
-    place: "",
-    description: "",
-    status: "",
-    file_mom: "",
-    file_extension: "",
+const kk = decrypt(decodeURIComponent(route.params.kk));
+const kpno = decrypt(decodeURIComponent(route.params.kpno));
+const pro = decrypt(decodeURIComponent(route.params.pro));
+
+const rawData = ref([]);
+const rawDataFiles = ref([]);
+const rawDataFilesDelivery = ref([]);
+
+const searchKeyword = ref("");
+const description = ref("");
+const showSendModal = ref(false);
+const deliveryOrderFile = ref(null);
+
+const dateOptions = ref([]);
+const selectedDo = ref([]);
+const all_do = ref([]);
+const defaultDo = ref("");
+
+const normalizedDates = computed(() => {
+    const v = selectedDo.value;
+    const arr = Array.isArray(v) ? v : v ? [v] : [];
+    return arr
+        .map((d) => (typeof d === "object" && d !== null ? d.value : d))
+        .filter(Boolean);
 });
 
+const resetDateFilter = () => {
+    selectedDo.value = [];
+};
+
+const formatDate = (date) => {
+    if (!date) return '-';
+
+    const d = new Date(date);
+
+    const isDate = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Jakarta',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+    }).format(d).replace(/\//g, '-');
+
+    const time = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Jakarta',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+    }).format(d);
+
+    return `${isDate} | ${time}`;
+};
+
+watch(
+    selectedDo,
+    () => {
+        loadData();
+    },
+    { deep: true }
+);
 const defaultColDef = {
     sortable: true,
     filter: false,
     resizable: true,
 };
 
-const confimForm = ref({
-    auth_pass: "",
-    description: "",
-});
-
-const form = ref({
-    factory: "",
-    status: "",
-    date_filter: null,
-    date_start: "",
-    date_end: "",
-    plandate: "",
-    place: "",
-    description: "",
-});
-
-const onGridReady = (params) => {
-    gridApi.value = params.api;
+const getBalance = (data) => {
+    return (data?.deliverydetail ?? []).reduce(
+        (total, detail) => total + Number(detail.sendqty ?? 0),
+        0
+    );
 };
 
-const formatModified = (value) => {
-    if (!value) return "-";
+const handleFile = (event) => {
+    const file =
+        event?.target?.files?.[0] ??
+        event?.files?.[0] ??
+        event?.[0] ??
+        (event instanceof File ? event : null);
 
-    const date = new Date(value);
-
-    if (isNaN(date.getTime())) return "-";
-
-    const formattedDate = date.toLocaleDateString("id-ID", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-        timeZone: "Asia/Jakarta",
-    });
-
-    const formattedTime = date.toLocaleTimeString("id-ID", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-        timeZone: "Asia/Jakarta",
-    });
-
-    return `${formattedDate} - ${formattedTime}`;
+    deliveryOrderFile.value = file;
 };
 
-const onBtnExport = () => {
-    if (!gridApi.value) {
-        alert("Please Wait!");
-        return;
-    }
+const syncRowData = (api) => {
+    api.forEachNode((node) => {
+        if (!node.data) return;
 
-    const fileName = `cutting-instruction-${datetime.replace(' ', '_')}.xlsx`;
-    exportToExcel({
-        title: `Cutting Instruction Report ${datetime}`,
-        fileName: fileName,
-        sheetName: "Cutting Instruction",
-        headers: ["NO","KK","KP", "PRO", "Order Number","PO", "Style", "CM Factory", "Modified", "Status"],
-        fields: ["no","kk","purchase_order.kpno", "purchase_order.combine_pro", "ordernumber", "purchase_order.po", "style", "factory.namafactory", "factory.modified", "status"],
-        gridData: gridApi
-    });
-};
+        const index = rawData.value.findIndex(
+            (item) => item.idmaterial === node.data.idmaterial
+        );
 
-const onBtnExportPdf = () => {
-    if (!gridApi.value) {
-        alert("Please Wait!");
-        return;
-    }
-
-    const nameFile = `cutting-instruction-${datetime.replace(' ', '_')}`;
-    exportToPdf({
-        title: `Cutting Instruction Report ${datetime}`,
-        fileName: `${nameFile}`,
-        headers: ["NO","KK","KP", "PRO", "Order Number","PO", "Style", "CM Factory", "Modified", "Status"],
-        fields: ["no","kk","purchase_order.kpno", "purchase_order.combine_pro", "ordernumber", "purchase_order.po", "style", "factory.namafactory", "factory.modified", "status"],
-        gridData: gridApi,
-        orientation: 'l'
-    });
-};
-
-const closeModal = () => {
-    showModal.value = false;
-    isPlan.value = false;
-};
-
-const triggerDownload = (url, filename) => {
-    const link = document.createElement("a");
-
-    link.href = url;
-    link.download = filename || "File-MOM";
-    document.body.appendChild(link);
-
-    link.click();
-    document.body.removeChild(link);
-};
-
-const ActionRenderer = defineComponent({
-    props: {
-        params: {
-            type: Object,
-            required: true,
-        },
-    },
-
-    setup(props) {
-        const detailSize = async () => {
-            dataSelected.value = props.params.data
-            detailSelected.value = props.params.data
-
-            isBreakdown.value = true
-            isDetailFile.value = false
-            isUpload.value = false
-
-            isPlan.value = false
-            isConfirmPlan.value = false
-            isCompleted.value = false
-
-            detailData.value = []
-
-            showModal.value = true
-
-            await loadDataDetail()
+        if (index !== -1) {
+            rawData.value[index].selected = node.data.selected;
+            rawData.value[index].qty = node.data.qty;
         }
+    });
+};
 
-        const uploadData = async () => {
-            dataSelected.value = props.params.data
+class SelectAllHeader {
+    init(params) {
+        this.params = params;
 
-            isBreakdown.value = false
-            isDetailFile.value = false
-            isUpload.value = true
+        this.eGui = document.createElement("div");
+        this.eGui.style.display = "flex";
+        this.eGui.style.alignItems = "center";
+        this.eGui.style.justifyContent = "center";
+        this.eGui.style.height = "100%";
 
-            isPlan.value = false
-            isConfirmPlan.value = false
-            isCompleted.value = false
+        this.checkbox = document.createElement("input");
+        this.checkbox.type = "checkbox";
+        this.checkbox.title = "Select All";
 
-            detailPpm.value = {
-                plandate: "",
-                place: "",
-                description: "",
-                status: "",
-                file_mom: "",
-                file_extension: "",
-            }
+        // this.onChange = (event) => {
+        //     const checked = event.target.checked;
 
-            showModal.value = true;
+        //     this.params.api.forEachNode((node) => {
+        //         if (!node.data) return;
 
-             await loadDataCutting();
-        }
+        //         const balance = getBalance(node.data);
 
-        const detailCutting = async () => {
-            dataSelected.value = props.params.data
-            detailSelected.value = props.params.data
+        //         node.data.selected = checked;
+        //         node.data.qty = checked ? balance : 0;
 
-            isBreakdown.value = false
-            isDetailFile.value = true
-            isUpload.value = false
+        //         node.setDataValue("selected", checked);
+        //         node.setDataValue("qty", node.data.qty);
+        //     });
 
-            showModal.value = true
+        //     syncRowData(this.params.api);
 
-            await loadDataCutting();
-        }
+        //     this.params.api.refreshCells({ force: true });
+        // };
 
-        return () => {
-            const data = props.params.data;
-            const status = data.status;
+        this.onChange = (event) => {
+            const checked = event.target.checked;
 
-            const buttonClass = (color) => {
-                const colors = {
-                    amber: "text-amber-500 hover:text-amber-700",
-                    cyan: "text-cyan-500 hover:text-cyan-700",
-                    green: "text-green-500 hover:text-green-700",
-                };
+            this.params.api.forEachNode((node) => {
+                if (!node.data) return;
 
-                return `cursor-pointer transition ${colors[color] ?? "text-gray-500 hover:text-gray-700"}`;
-            };
-            const renderButton = (
-                title,
-                Icon,
-                color,
-                onClick
-            ) =>
-                h(
-                    "button",
-                    {
-                        type: "button",
-                        title,
-                        class: buttonClass(color),
-                        onClick,
-                    },
-                    [
-                        h(Icon, {
-                            class: "h-5 w-5",
-                        }),
-                    ]
-                );
+                const receiveQty = checked ? getBalance(node.data) : 0;
 
-            // 1. Waiting: Info PPM + Plan PPM
-            if (status === "Waiting") {
-                return h(
-                    "div",
-                    {
-                        class: "flex h-full px-3 gap-2",
-                    },
-                    [
-                        renderButton(
-                            "Size Detail",
-                            InformationCircleIcon,
-                            "amber",
-                            detailSize
-                        ),
+                node.setDataValue("selected", checked);
+                node.setDataValue("qty", receiveQty);
+            });
 
-                        ...(Number(data.first_data) === 1
-                            ? [
-                            renderButton(
-                                "Upload Cutting Instruction",
-                                DocumentArrowUpIcon,
-                                "cyan",
-                                uploadData
-                            ),
-                            ]
-                            : []),
-
-                        
-                    ]
-                );
-            }
-
-            // 2. Setelah Plan PPM: konfirmasi upload MOM
-            if (status === "Ready") {
-                return h(
-                    "div",
-                    {
-                        class: "flex h-full px-3 gap-2",
-                    },
-                    [
-                        renderButton(
-                            "Size Detail",
-                            InformationCircleIcon,
-                            "amber",
-                            detailSize
-                        ),
-                        ...(Number(data.first_data) === 1
-                            ? [
-                            renderButton(
-                                "Upload Cutting Instruction",
-                                DocumentArrowUpIcon,
-                                "cyan",
-                                uploadData
-                            ),
-                            ]
-                            : []),
-                    ]
-                );
-            }
-
-            if (status === "Completed") {
-                return h(
-                    "div",
-                    {
-                        class: "flex h-full px-3 gap-2",
-                    },
-                    [
-                        renderButton(
-                            "Size Detail",
-                            InformationCircleIcon,
-                            "amber",
-                            detailSize
-                        ),
-                        renderButton(
-                            "Size Detail",
-                            CheckCircleIcon,
-                            "green",
-                            detailCutting
-                        ),
-                    ]
-                );
-            }
+            syncRowData(this.params.api);
+            this.params.api.refreshCells({ force: true });
         };
-    },
-});
+
+        this.checkbox.addEventListener("change", this.onChange);
+        this.eGui.appendChild(this.checkbox);
+    }
+
+    getGui() {
+        return this.eGui;
+    }
+
+    refresh() {
+        return false;
+    }
+
+    destroy() {
+        this.checkbox.removeEventListener("change", this.onChange);
+    }
+}
 
 
 const columnDefs = [
     {
-        field: "no",
         headerName: "No",
-        width: 70,
+        field: "no",
+        width: 80,
         sortable: false,
         filter: false,
         resizable: false,
     },
     {
-        field: "kk",
-        headerName: "KK",
-        minWidth: 100,
+        field: "itemdesc",
+        headerName: "Item Number",
+        minWidth: 120,
         flex: 1,
     },
     {
-        field: "kpno",
-        headerName: "KP",
-        minWidth: 100,
+        field: "matcontents",
+        headerName: "Item Desc",
+        minWidth: 160,
         flex: 1,
     },
     {
-        field: "combine_pro",
-        headerName: "PRO",
-        minWidth: 100,
+        field: "colorcode",
+        headerName: "Color Code",
+        minWidth: 120,
         flex: 1,
     },
     {
-        field: "ordernumber",
-        headerName: "Order Number",
-        minWidth: 100,
-        flex: 1,
-    },
-    {
-        field: "purchase_order.po",
-        headerName: "PO",
-        minWidth: 100,
-        flex: 1,
-    },
-    {
-        field: "style",
-        headerName: "Style",
-        minWidth: 125,
-        flex: 1,
-    },
-    {
-        field: "factory.namafactory",
-        headerName: "CM Factory",
-        minWidth: 110,
-        flex: 1,
-    },
-    {
-        field: "purchase_order.modified",
-        headerName: "Modified",
+        field: "size",
+        headerName: "Size",
         minWidth: 180,
         flex: 1,
-        valueFormatter: (params) => {
-            if (!params.value) return "-";
+    },
+    {
+        headerName: "Sent Quantity",
+        minWidth: 120,
+        flex: 1,
+        valueGetter: (params) =>
+            (params.data?.deliverydetail ?? []).reduce(
+                (total, item) => total + Number(item.sendqty ?? 0),
+                0
+            ),
+    },
 
-            const date = new Date(params.value);
+    // Percobaan
+    {
+        field: "qty",
+        headerName: "Receive Qty",
+        minWidth: 120,
+        flex: 1,
 
-            const formattedDate = date.toLocaleDateString("id-ID", {
-                day: "2-digit",
-                month: "short",
-                year: "numeric",
-                timeZone: "Asia/Jakarta",
-            });
+        editable: (params) => !params.data?.isReceived,
 
-            const formattedTime = date.toLocaleTimeString("id-ID", {
-                hour: "2-digit",
-                minute: "2-digit",
-                hour12: false,
-                timeZone: "Asia/Jakarta",
-            });
+        cellEditor: "agNumberCellEditor",
 
-            return `${formattedDate} - ${formattedTime}`;
+        valueGetter: (params) => Number(params.data?.qty ?? 0),
+
+        valueSetter: (params) => {
+            const value = Number(params.newValue);
+            const sentQty = getBalance(params.data);
+
+            if (
+                !Number.isFinite(value) ||
+                value < 0 ||
+                value > sentQty
+            ) {
+                warning({
+                    title: "Invalid Quantity",
+                    text: `Receive Qty must be between 0 and ${sentQty}.`,
+                });
+
+                return false;
+            }
+
+            params.data.qty = value;
+            return true;
         },
     },
     {
-        field: "status",
-        headerName: "Status",
-        minWidth: 70,
-        maxWidth: 90,
+        field: "unit",
+        headerName: "Unit",
+        minWidth: 90,
         flex: 1,
     },
     {
-        headerName: "Action",
-        minWidth: 80,
-        maxWidth: 120,
+        headerName: "",
+        field: "selected",
+        width: 80,
         sortable: false,
         filter: false,
         resizable: false,
-        cellRenderer: ActionRenderer,
+        headerComponent: SelectAllHeader,
+
+        // Percobaan
+        cellRenderer: (params) => {
+            // Hilangkan checkbox jika material sudah Received
+            if (params.data?.isReceived) {
+                return "";
+            }
+
+            const checkbox = document.createElement("input");
+
+            checkbox.type = "checkbox";
+            checkbox.checked = Boolean(params.value);
+            checkbox.style.cursor = "pointer";
+
+            checkbox.addEventListener("click", (event) => {
+                event.stopPropagation();
+            });
+
+            checkbox.addEventListener("change", (event) => {
+                const checked = event.target.checked;
+                const receiveQty = checked ? getBalance(params.data) : 0;
+
+                params.node.setDataValue("selected", checked);
+                params.node.setDataValue("qty", receiveQty);
+
+                syncRowData(params.api);
+            });
+
+            return checkbox;
+        },
     },
 ];
 
-const columnDetails = ref([
-    {
-        field: "color",
-        headerName: "Color\\Size",
-        minWidth: 130,
-        pinned: "left",
-    },
-]);
+// Ini yang bisa
+// const openReceiveModal = async () => {
+//     const selectedRows = rawData.value.filter(
+//         (item) => item.selected === true
+//     );
 
+//     if (selectedRows.length === 0) {
+//         await warning({
+//             title: "Incomplete Data",
+//             text: "Select at least one material first.",
+//         });
+//         return;
+//     }
 
-const loadFilter = async () => {
-  await nextTick()
-  loadDataFilter()
-}
+//     showSendModal.value = true;
+// };
 
-const loadDataFilter = async () => {
-    try {
-        const status = (form.value?.status ?? '').toLowerCase();
+// Percobaan
+const openReceiveModal = async () => {
+    const selectedRows = rawData.value.filter(
+        (item) => item.selected === true && !item.isReceived
+    );
 
-        loading.show();
-        const endpoint = `/api/v1/ci/getdata?factory=${form.value.factory}&status=${status}`;
-        const { data } = await api.get(endpoint);
-
-        rawData.value = data?.data ?? [];
-        rawData.value = (data?.data ?? []).map((item, index) => ({
-            ...item,
-            no: index + 1,
-        }));
-    } catch (err) {
-        if (err?.response?.status === 401) {
-            router.push("/login");
-        }
-    } finally {
-        loading.hide();
-    }
-};
-
-const buildParams = () => {
-    const toStr = (v) => Array.isArray(v) ? v.join(",") : v;
-    const p = {};
-    if (form.value.factory?.length) p.factory = toStr(form.value.factory);
-    if (form.value.status?.length) p.status = toStr(form.value.status);
-    if (form.value.date_start) p.date_start = form.value.date_start;
-    if (form.value.date_end) p.date_end = form.value.date_end;
-    return p;
-};
-
-const loadData = async () => {
-    try {
-        loading.show();
-        const { data } = await api.get("/api/v1/ci/getdata", { params: buildParams() });
-        const list = Array.isArray(data?.data) ? data.data : Object.values(data?.data ?? {}).flat();
-        ListKK.value = [];
-        rawData.value = list.map((item, i) => ({ ...item, no: i + 1 }));
-    } catch (err) {
-        console.error(err);
-        if (err?.response?.status === 401) router.push("/login");
-    } finally {
-        loading.hide();
-    }
-};
-
-
-const loadDataCutting = async () => {
-    const ordernumber = dataSelected.value?.ordernumber;
-
-    if (!ordernumber) {
-        console.error("Order number not found:", dataSelected.value);
+    if (selectedRows.length === 0) {
+        await warning({
+            title: "Incomplete Data",
+            text: "Select at least one material that has not been received.",
+        });
         return;
     }
 
-    try {
-        loading.show();
-
-        const { data } = await api.get(
-            `/api/v1/ci/info/${encodeURIComponent(ordernumber)}`
-        );
-
-        cuttingData.value = Array.isArray(data?.data)
-            ? data.data
-            : [];
-
-    } catch (err) {
-        console.error(
-            "Failed to retrieve cutting info:",
-            err?.response?.data || err.message
-        );
-
-        if (err?.response?.status === 401) {
-            router.push("/login");
-        }
-    } finally {
-        loading.hide();
-    }
+    showSendModal.value = true;
 };
 
-const downloadCuttingFile = async (file) => {
-    if (!file?.id) {
-        console.error("CI file ID not found:", file);
-        return;
-    }
+const confirmSend = async () => {
+    await sendData();
+};
 
+const sendData = async () => {
     try {
-        loading.show();
-
-        const response = await api.get(
-            `/api/v1/ci/showfile/${encodeURIComponent(file.id)}`,
-            {
-                responseType: "blob",
-            }
+        const selectedRows = rawData.value.filter(
+            (item) => item.selected === true && !item.isReceived
         );
 
-        const blob = new Blob([response.data], {
-            type: response.headers["content-type"] || "application/octet-stream",
+        if (selectedRows.length === 0) {
+            await warning({
+                title: "Incomplete Data",
+                text: "Select material with Qty greater than 0.",
+            });
+
+            return;
+        }
+
+        const invalidQty = selectedRows.some((item) => {
+            const qty = Number(item.qty);
+            return !Number.isFinite(qty) || qty <= 0 || qty > getBalance(item);
         });
 
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
+        if (invalidQty) {
+            await warning({
+                title: "Invalid Quantity",
+                text: "The Receive Qty must be greater than 0 and cannot exceed the Balance.",
+            });
+            return;
+        }
 
+        if (!deliveryOrderFile.value) {
+            await warning({
+                title: "Incomplete Data",
+                text: "Upload the Delivery Order file first.",
+            });
+            return;
+        }
+
+        loading.show();
+
+        const formData = new FormData();
+
+        formData.append("kpno", kpno);
+        formData.append("combine_pro", pro);
+        formData.append("kk", kk);
+
+        const doNumber =
+        normalizedDates.value[0] || defaultDo.value;
+
+        formData.append("do_number", doNumber);
+
+        selectedRows.forEach((item) => {
+            formData.append(
+                `inputqty[${item.idmaterial}]`,
+                String(item.qty)
+            );
+        });
+
+        formData.append("deliveryorders", deliveryOrderFile.value);
+
+        const { data } = await api.post(
+            `/api/v1/receivematerial/receive`,
+            formData
+        );
+
+        showSendModal.value = false;
+        deliveryOrderFile.value = null;
+
+        await success({
+            title: "Success",
+            text: data?.message ?? "Material received successfully.",
+        });
+
+        // if (selectedDo.value.length > 0) {
+        //     selectedDo.value = [];
+        // } else {
+        //     await loadData();
+        // }
+    } catch (err) {
+        loading.hide();
+        if (err?.response?.status === 401) {
+            router.push("/login");
+            return;
+        }
+
+        await error({
+            title: "Receive Failed",
+            text:
+                err?.response?.data?.message ||
+                err?.message ||
+                "Failed to receive materials.",
+        });
+    } finally {
+        loading.hide();
+    }
+};
+
+let loadSeq = 0;
+
+const loadData = async () => {
+    const seq = ++loadSeq;
+
+    try {
+        loading.show();
+
+        const params = new URLSearchParams({
+            kpno,
+            combine_pro: pro,
+            kk,
+        });
+
+        // const doNumber = normalizedDates.value.length > 0
+        //     ? normalizedDates.value
+        //     : all_do.value.map((item) => item.value);
+
+        // doNumber.forEach((doNumber) => {
+        //     params.append("do_number", doNumber);
+        // });
+
+        const doNumber = normalizedDates.value.length > 0
+            ? normalizedDates.value
+            : defaultDo.value
+                ? [defaultDo.value]
+                : [];
+
+        doNumber.forEach((doNumber) => {
+            params.append("do_number", doNumber);
+        });
+
+        const { data } = await api.get(
+            `/api/v1/receivematerial/input?${params.toString()}`
+        );
+
+        if (seq !== loadSeq) return;
+
+        if (!data?.success) {
+            rawData.value = [];
+            rawDataFiles.value = [];
+            description.value = "";
+            return;
+        }
+
+        description.value =
+            data?.data?.deliverymaterial?.description ?? "";
+
+        // Can
+        // rawData.value = (data?.data?.materials ?? []).map((item, index) => {
+        //     const isReceived = (item.deliverydetail ?? []).some(
+        //         (detail) => detail.status === "Received"
+        //     );
+
+        //     const receivedDetail = (item.deliverydetail ?? []).find(
+        //         (detail) => detail.status === "Received"
+        //     );
+
+        //     return {
+        //         ...item,
+        //         no: index + 1,
+        //         isReceived,
+        //         qty: isReceived
+        //             ? Number(receivedDetail?.receiveqty ?? 0)
+        //             : 0,
+        //         selected: false,
+        //     };
+        // });
+
+        // Hide nilai sent qty jika 0
+        rawData.value = (data?.data?.materials ?? [])
+            .filter((item) => {
+                const sentQty = (item.deliverydetail ?? []).reduce(
+                    (total, detail) => total + Number(detail.sendqty ?? 0),
+                    0
+                );
+
+                return sentQty > 0;
+            })
+            .map((item, index) => {
+                const isReceived = (item.deliverydetail ?? []).some(
+                    (detail) => detail.status === "Received"
+                );
+
+                const receivedDetail = (item.deliverydetail ?? []).find(
+                    (detail) => detail.status === "Received"
+                );
+
+                return {
+                    ...item,
+                    no: index + 1,
+                    isReceived,
+                    qty: isReceived
+                        ? Number(receivedDetail?.receiveqty ?? 0)
+                        : 0,
+                    selected: false,
+                };
+            });
+
+
+        // Data receive files
+        rawDataFiles.value = (data?.data?.receivefiles ?? []).map(
+            (item, index) => ({
+                ...item,
+                no: index + 1,
+            })
+        );
+
+        rawDataFilesDelivery.value = (data?.data?.files ?? []).map(
+            (item, index) => ({
+                ...item,
+                no: index + 1,
+            })
+        );
+    } catch (err) {
+        loading.hide();
+        if (err?.response?.status === 401) {
+            router.push("/login");
+            return;
+        }
+
+        await error({
+            title: "Failed to Load Data",
+            text:
+                err?.response?.data?.message ||
+                err?.message ||
+                "Failed to load material data.",
+        });
+    } finally {
+        loading.hide();
+    }
+};
+
+const loadDataDO = async () => {
+    try {
+        loading.show();
+
+        const endpoint =
+            `/api/v1/receivematerial/selectdo?kpno=${encodeURIComponent(kpno)}` +
+            `&kk=${encodeURIComponent(kk)}` +
+            `&combine_pro=${encodeURIComponent(pro)}`;
+
+        const { data } = await api.get(endpoint);
+
+        all_do.value = (data?.data?.do_numbers ?? []).map((item) => ({
+            value: item.do_number,
+            label: item.do_number,
+        }));
+
+        defaultDo.value = all_do.value[0]?.value ?? "";
+
+        selectedDo.value = [];
+
+        defaultDo.value = all_do.value[0]?.value ?? "";
+
+        selectedDo.value = defaultDo.value
+            ? [defaultDo.value]
+            : [];
+    } catch (err) {
+        loading.hide();
+        if (err?.response?.status === 401) {
+            router.push("/login");
+            return;
+        }
+
+        await error({
+            title: "Failed to Load DO",
+            text:
+                err?.response?.data?.message ||
+                err?.message ||
+                "Failed to load DO options.",
+        });
+    } finally {
+        loading.hide();
+    }
+};  
+
+const downloadFile = async (nmfile) => {
+    let url;
+
+    try {
+        loading.show();
+
+        const endpoint = `/api/v1/deliverymaterial/showfile/${encodeURIComponent(nmfile)}`;
+
+        const response = await api.get(endpoint, {
+            responseType: "blob",
+        });
+
+        const blob = new Blob([response.data]);
+        url = window.URL.createObjectURL(blob);
+
+        // Cari data file berdasarkan filename
+        const file = rawDataFiles.value.find(
+            (item) => item.filename === nmfile
+        );
+
+        const link = document.createElement("a");
         link.href = url;
-        link.download =
-            `${file.filename || "CuttingInstruction"}.${file.extension || "pdf"}`;
+        link.download = file
+            ? `${file.filename}.${file.extension}`
+            : nmfile;
 
         document.body.appendChild(link);
         link.click();
         link.remove();
-
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
-        console.error(
-            "Failed to download CI file:",
-            err?.response?.data || err.message
-        );
+        console.error("Download error:", err);
 
-        if (err?.response?.status === 401) {
-            router.push("/login");
-            return;
-        }
+        if (err.response?.data instanceof Blob) {
+            const text = await err.response.data.text();
 
-        await error({
-            title: "Download Failed",
-            text: "The Cutting Instruction file failed to download.",
-        });
-    } finally {
-        loading.hide();
-    }
-};
+            try {
+                const errorData = JSON.parse(text);
 
-const deleteCuttingFile = async (file) => {
-    if (!file?.id) {
-        console.error("CI file ID not found:", file);
-        return;
-    }
-
-    try {
-        // const confirmed = await confirmDelete({
-        //     title: "Delete File?",
-        //     text: `Are you sure you want to delete ${file.filename}.${file.extension}?`,
-        // });
-
-        // if (!confirmed) return;
-
-        const result = await confirmDelete({
-            title: "Delete File?",
-            text: `Are you sure you want to delete ${file.filename}.${file.extension}?`,
-        });
-
-        if (!result.isConfirmed) return;
-
-        loading.show();
-
-        const { data } = await api.delete(
-            `/api/v1/ci/deletefile/${encodeURIComponent(file.id)}`
-        );
-
-        if (data?.success) {
-            cuttingData.value = cuttingData.value.filter(
-                (item) => item.id !== file.id
-            );
-
-            loading.hide();
-
-            await success({
-                title: "Success",
-                text: data.message || "File successfully deleted.",
-            });
-
+                await customSwal.error({
+                    title: "Download Failed",
+                    text:
+                        errorData.message ||
+                        "An error occurred while downloading the file.",
+                });
+            } catch {
+                await customSwal.error({
+                    title: "Download Failed",
+                    text: "An error occurred while downloading the file.",
+                });
+            }
         } else {
-            await error({
-                title: "Delete Failed",
-                text: data?.message || "Failed to delete the file.",
+            await customSwal.error({
+                title: "Download Failed",
+                text:
+                    err.response?.data?.message ||
+                    err.message ||
+                    "An error occurred while downloading the file.",
             });
         }
-    } catch (err) {
-        console.error(
-            "Failed to delete CI file:",
-            err?.response?.data || err.message
-        );
-
-        if (err?.response?.status === 401) {
-            router.push("/login");
-            return;
+    } finally {
+        if (url) {
+            window.URL.revokeObjectURL(url);
         }
 
-        await error({
-            title: "Delete Failed",
-            text:
-                err?.response?.data?.message ||
-                "The Cutting Instruction file failed to delete.",
-        });
-    } finally {
         loading.hide();
     }
 };
 
-const resetFilter = async () => {
-    form.value = {
-        factory: "",
-        status: "",
-        date_filter: null,
-        date_start: "",
-        date_end: "",
-    };
-
-    searchKeyword.value = "";
-
-    if (gridApi.value) {
-        await gridApi.value.setColumnFilterModel("orderdate", null);
-        gridApi.value.onFilterChanged();
-    }
-
+onMounted(async () => {
+    await loadDataDO();
     await loadData();
-};
-
-const loadDataFactory = async () => {
-    try {
-        loading.show();
-        const endpoint = "/api/v1/ci/selectfactory";
-        const { data } = await api.get(endpoint);
-        factories.value = (data?.data ?? []).map((item) => ({
-            value: item.idfactory,
-            label: item.factory.namafactory,
-        }));
-    } catch (err) {
-        if (err?.response?.status === 401) {
-            router.push("/login");
-        }
-    } finally {
-        loading.hide();
-    }
-};
-
-const loadDataStatus = async () => {
-    try {
-        loading.show();
-        const endpoint = "/api/v1/ci/selectstatus";
-        const { data } = await api.get(endpoint);
-        all_status.value = (data?.data ?? []).map((item) => ({
-            value: item,
-            label: item,
-        }));
-    } catch (err) {
-        if (err?.response?.status === 401) {
-            router.push("/login");
-        }
-    } finally {
-        loading.hide();
-    }
-};
-
-const loadDataDetail = async () => {
-    try {
-        const id = dataSelected.value?.id;
-
-        if (!id) {
-            console.error("ID not found:", dataSelected.value);
-            return;
-        }
-
-        loading.show();
-
-        const { data } = await api.get(
-            `/api/v1/ci/sizecolor/${encodeURIComponent(id)}`
-        );
-
-        const result = data?.data ?? {};
-
-        const colors = result.colors ?? [];
-        const sizes = result.sizes ?? [];
-        const detail = result.detail ?? {};
-
-        columnDetails.value = [
-            {
-                field: "color",
-                headerName: "Color / Size",
-                minWidth: 130,
-                pinned: "left",
-                sortable: false,
-            },
-            ...sizes.map((item) => ({
-                field: item.size?.namasize,
-                headerName: item.size?.namasize,
-                minWidth: 80,
-                flex: 1,
-                sortable: false,
-                valueFormatter: (params) =>
-                    params.value == null || params.value === 0
-                        ? "-"
-                        : params.value,
-            })),
-        ];
-
-        detailData.value = colors.map((item) => {
-            const row = {
-                color: item.color?.namacolor ?? "-",
-            };
-
-            sizes.forEach((sizeItem) => {
-                const sizeId = sizeItem.idsize;
-                const colorId = item.idcolor;
-                const sizeName = sizeItem.size?.namasize;
-
-                const key = `${sizeId}${colorId}`;
-
-                row[sizeName] = detail[key] ?? 0;
-            });
-
-            return row;
-        });
-    } catch (err) {
-        console.error(
-            "Failed to retrieve size and color details:",
-            err?.response?.data || err.message
-        );
-
-        if (err?.response?.status === 401) {
-            router.push("/login");
-        }
-    } finally {
-        loading.hide();
-    }
-};
-
-const uploadFile = async () => {
-    const id = dataSelected.value?.id;
-    const file = fileUpload.value;
-    const kk = dataSelected.value?.kk;
-
-    if (!id) {
-        await warning({
-            title: "Invalid Data",
-            text: "ID not found.",
-        });
-        return;
-    }
-
-    if (!kk) {
-        console.log("Data selected:", dataSelected.value);
-        await warning({
-            title: "Invalid Data",
-            text: "KK not found.",
-        });
-        return;
-    }
-
-    if (!(file instanceof File)) {
-        await warning({
-            title: "No File Selected",
-            text: "Please select the Cutting Instruction file first.",
-        });
-        return;
-    }
-
-    const extension = file.name.split(".").pop()?.toLowerCase();
-    const allowedExtensions = ["pdf", "xls", "xlsx"];
-
-    if (!allowedExtensions.includes(extension)) {
-        await warning({
-            title: "Invalid File Format",
-            text: "The file must be in PDF, XLS, or XLSX format.",
-        });
-        return;
-    }
-
-    if (file.size > 8 * 1024 * 1024) {
-        await warning({
-            title: "File Too Large",
-            text: "Maximum file size is 8 MB.",
-        });
-        return;
-    }
-
-    try {
-        loading.show();
-
-        const formData = new FormData();
-        formData.append("fs[]", file);
-        formData.append("kk", String(kk));
-
-        const { data } = await api.post(
-            "/api/v1/ci/planning",
-            formData
-        );
-
-        fileUpload.value = null;
-        dropKey.value++;
-        showModal.value = false;
-
-        await loadData();
-
-        await success({
-            title: "Success",
-            text: data?.message || "Cutting Instruction uploaded successfully.",
-        });
-    } catch (err) {
-        console.error(
-            "Upload error:",
-            err?.response?.data || err.message
-        );
-
-        if (err?.response?.status === 401) {
-            router.push("/login");
-            return;
-        }
-
-        await error({
-            title: "Upload Failed",
-            text:
-                err?.response?.data?.message ||
-                "The CI file failed to upload. Please try again.",
-        });
-    } finally {
-        loading.hide();
-    }
-};
-const onFileChange = (value) => {
-    const file =
-        value?.target?.files?.[0] ??
-        value?.files?.[0] ??
-        value?.[0] ??
-        value;
-
-    fileUpload.value = file instanceof File ? file : null;
-
-    console.log("File selected:", fileUpload.value);
-};
-
-onMounted(() => {
-    loadData();
-    loadDataFactory();
-    loadDataStatus();
 });
 </script>
+
+<style scoped>
+.label {
+    white-space: nowrap;
+    display: inline-block;
+    width: 120px;
+    font-weight: 600;
+}
+</style>
