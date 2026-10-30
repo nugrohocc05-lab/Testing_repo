@@ -1,42 +1,14 @@
-{
-    headerName: "",
-    field: "selected",
-    width: 110, // dilebarkan supaya badge muat
-    sortable: false,
-    filter: false,
-    resizable: false,
-    headerComponent: SelectAllHeader,
+import { ref, shallowRef, computed, onMounted, watch } from "vue";
 
-    cellRenderer: (params) => {
-        // Tampilkan status Received jika material sudah diterima
-        if (params.data?.isReceived) {
-            const badge = document.createElement("span");
-            badge.textContent = "Received";
-            badge.className =
-                "inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700";
-            return badge;
-        }
+const rawData = shallowRef([]);
 
-        const checkbox = document.createElement("input");
-
-        checkbox.type = "checkbox";
-        checkbox.checked = Boolean(params.value);
-        checkbox.style.cursor = "pointer";
-
-        checkbox.addEventListener("click", (event) => {
-            event.stopPropagation();
-        });
-
-        checkbox.addEventListener("change", (event) => {
-            const checked = event.target.checked;
-            const receiveQty = checked ? getBalance(params.data) : 0;
-
-            params.node.setDataValue("selected", checked);
-            params.node.setDataValue("qty", receiveQty);
-
-            syncRowData(params.api);
-        });
-
-        return checkbox;
-    },
-},
+<UiAgGrid
+    class="my-zebra-grid mt-3"
+    :rowData="rawData"
+    :columnDefs="columnDefs"
+    :getRowId="(params) => String(params.data.idmaterial)"
+    :quickFilterText="searchKeyword"
+    :defaultColDef="defaultColDef"
+    :paginationPageSize="100"
+    :paginationPageSizeSelector="[10, 20, 50, 100]"
+/>
