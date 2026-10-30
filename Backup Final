@@ -1,76 +1,42 @@
-class SelectAllHeader {
-    init(params) {
-        this.params = params;
+{
+    headerName: "",
+    field: "selected",
+    width: 110, // dilebarkan supaya badge muat
+    sortable: false,
+    filter: false,
+    resizable: false,
+    headerComponent: SelectAllHeader,
 
-        this.eGui = document.createElement("div");
-        this.eGui.style.display = "flex";
-        this.eGui.style.alignItems = "center";
-        this.eGui.style.justifyContent = "center";
-        this.eGui.style.height = "100%";
+    cellRenderer: (params) => {
+        // Tampilkan status Received jika material sudah diterima
+        if (params.data?.isReceived) {
+            const badge = document.createElement("span");
+            badge.textContent = "Received";
+            badge.className =
+                "inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700";
+            return badge;
+        }
 
-        this.checkbox = document.createElement("input");
-        this.checkbox.type = "checkbox";
-        this.checkbox.title = "Select All";
-        this.checkbox.style.cursor = "pointer";
+        const checkbox = document.createElement("input");
 
-        this.onChange = (event) => {
-            const checked = event.target.checked;
+        checkbox.type = "checkbox";
+        checkbox.checked = Boolean(params.value);
+        checkbox.style.cursor = "pointer";
 
-            this.params.api.forEachNode((node) => {
-                if (!node.data) return;
-                if (node.data.isReceived) return; // skip yang sudah received
-
-                const receiveQty = checked ? getBalance(node.data) : 0;
-
-                node.setDataValue("selected", checked);
-                node.setDataValue("qty", receiveQty);
-            });
-
-            syncRowData(this.params.api);
-            this.params.api.refreshCells({ force: true });
-        };
-
-        this.checkbox.addEventListener("change", this.onChange);
-        this.eGui.appendChild(this.checkbox);
-
-        // Update tampilan saat data berubah
-        this.onModelUpdated = () => this.updateVisibility();
-        this.params.api.addEventListener("modelUpdated", this.onModelUpdated);
-        this.params.api.addEventListener("cellValueChanged", this.onModelUpdated);
-
-        this.updateVisibility();
-    }
-
-    updateVisibility() {
-        let hasUnreceived = false;
-        let allSelected = true;
-
-        this.params.api.forEachNode((node) => {
-            if (!node.data || node.data.isReceived) return;
-            hasUnreceived = true;
-            if (!node.data.selected) allSelected = false;
+        checkbox.addEventListener("click", (event) => {
+            event.stopPropagation();
         });
 
-        // Hide kalau semua sudah received
-        this.eGui.style.display = hasUnreceived ? "flex" : "none";
+        checkbox.addEventListener("change", (event) => {
+            const checked = event.target.checked;
+            const receiveQty = checked ? getBalance(params.data) : 0;
 
-        // Sinkronkan status checked header
-        this.checkbox.checked = hasUnreceived && allSelected;
-    }
+            params.node.setDataValue("selected", checked);
+            params.node.setDataValue("qty", receiveQty);
 
-    getGui() {
-        return this.eGui;
-    }
+            syncRowData(params.api);
+        });
 
-    refresh() {
-        return false;
-    }
-
-    destroy() {
-        this.params.api.removeEventListener("modelUpdated", this.onModelUpdated);
-        this.params.api.removeEventListener("cellValueChanged", this.onModelUpdated);
-        this.checkbox.removeEventListener("change", this.onChange);
-    }
-}
-
-
+        return checkbox;
+    },
+},
