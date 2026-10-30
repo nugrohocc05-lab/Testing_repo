@@ -1,7 +1,37 @@
-{
-    field: "qty",
-    headerName: "Receive Qty",
-    minWidth: 120,
-    flex: 1,
-    valueGetter: (params) => Number(params.data?.qty ?? 0),
-},
+const selectedCount = ref(0);
+
+const updateSelectedCount = () => {
+    selectedCount.value = rawData.value.filter(
+        (item) => item.selected === true && !item.isReceived
+    ).length;
+};
+
+checkbox.addEventListener("change", (event) => {
+    const checked = event.target.checked;
+    const receiveQty = checked ? getBalance(params.data) : 0;
+
+    params.node.setDataValue("selected", checked);
+    params.node.setDataValue("qty", receiveQty);
+
+    updateSelectedCount();
+});
+
+this.params.api.forEachNode((node) => {
+    if (!node.data || node.data.isReceived) return;
+
+    const receiveQty = checked ? getBalance(node.data) : 0;
+
+    node.setDataValue("selected", checked);
+    node.setDataValue("qty", receiveQty);
+});
+
+updateSelectedCount();
+
+updateSelectedCount();
+
+<UiButton
+    :disabled="selectedCount === 0"
+    @click="openReceiveModal"
+>
+    Receive
+</UiButton>
