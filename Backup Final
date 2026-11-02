@@ -1,37 +1,422 @@
-const selectedCount = ref(0);
+<template>
+    <div class="px-6">
+        <UiTitle :is-back="true" align="center" title="Input Daily Detail">
+            <template #action-left>
+                <UiButton variant="teritary" @click="router.back()">
+                    <ArrowLeftStartOnRectangleIcon class="h-5 w-5" />
+                    <span class="text-xl ml-1">Back</span>
+                </UiButton>
+            </template>
+        </UiTitle>
+        <UiCard class="mt-10 text-xs md:text-lg" title="Detail PO">
+            <UiGrid cols="2" gap="sm">
+               <div>
+                    <span class="label">Style</span> : {{ rawDataPo[0]?.bd?.style.namastyle }}
+                </div>
+                <div><span class="label">Color</span> : {{ rawDataPo[0]?.colors[0]?.color?.namacolor }}</div>
+                <div><span class="label">Total Qty </span> : {{ rawDataPo[0]?.order_number }}</div>
+                <div><span class="label">Size</span> : {{ rawDataPo[0]?.factory }}</div>
+            </UiGrid>
+        </UiCard>
+        <UiCard class="mt-5" title="Sewing in Summary Breakdown">
+            <div class="flex">
+                <div class="w-50 flex ml-auto mb-2">
+                    <UiInput v-model="searchKeyword" placeholder="Search" class="w-full rounded-lg">
+                        <template #prefix>
+                            <MagnifyingGlassIcon class="h-5 w-5 text-gray-400" />
+                        </template>
+                    </UiInput>
+                </div>
+            </div>
+            <UiAgGrid class="my-zebra-grid" :rowData="rawData" :columnDefs="columnDefs" :quickFilterText="searchKeyword" :defaultColDef="defaultColDef"/>
+        </UiCard>
+    </div>
+</template>
 
-const updateSelectedCount = () => {
-    selectedCount.value = rawData.value.filter(
-        (item) => item.selected === true && !item.isReceived
-    ).length;
+<script setup>
+import { decrypt } from "@/utils/crypto";
+import { ref, onMounted, defineComponent, h, computed} from "vue";
+import { useRouter, useRoute } from "vue-router";
+import { useLoadingStore } from "@/stores/loading";
+import { MagnifyingGlassIcon, ArrowLeftStartOnRectangleIcon, InformationCircleIcon, DocumentPlusIcon } from "@heroicons/vue/24/outline";
+
+import UiButton from "@/components/ui/UiButton.vue"
+import UiInput from "@/components/ui/UiInput.vue"
+import UiCard from "@/components/ui/UiCard.vue"
+import UiTitle from "@/components/ui/UiTitle.vue"
+import UiGrid from "@/components/ui/UiGrid.vue";
+import UiAgGrid from "@/components/ui/UiAgGrid.vue";
+
+import api from "@/services/api";
+import FileIcon from "@/components/ui/FileIcon.vue";
+import { customSwal } from "@/composable/customSwal";
+
+const loading = useLoadingStore();
+const router = useRouter();
+const route = useRoute();
+const rawData = ref([]);
+const rawDataPo = ref([]);
+const sizeData = ref([]);
+
+const searchKeyword = ref('')
+
+const idorder = decrypt(
+    decodeURIComponent(route.params.idorder)
+);
+
+const process = decrypt(
+    decodeURIComponent(route.params.process)
+);
+
+const defaultColDef = {
+    sortable: true,
+    filter: false,
+    resizable: true,
 };
 
-checkbox.addEventListener("change", (event) => {
-    const checked = event.target.checked;
-    const receiveQty = checked ? getBalance(params.data) : 0;
+const ActionRenderer = defineComponent({
+    props: {
+        params: {
+            type: Object,
+            required: true,
+        },
+    },
 
-    params.node.setDataValue("selected", checked);
-    params.node.setDataValue("qty", receiveQty);
+    setup(props) {
+        const detailData = () => {
+            const row = props.params.data;
 
-    updateSelectedCount();
+            router.push({
+                name: "input-daily-production-breakdown",
+                query: {
+                    idorder: encodeURIComponent(encrypt(idorder)),
+                    process: encodeURIComponent(encrypt(process)),
+                    mattype: row.mattype,
+                },
+            });
+        };
+
+        return () =>
+            h("div", { class: "flex h-full px-3 gap-2" }, [
+                h("button", {
+                    type: "button",
+                    title: "Detail",
+                    class: "cursor-pointer text-sky-500 transition hover:text-sky-700",
+                    onClick: detailData,
+                }, [
+                    h(DocumentPlusIcon, {
+                        class: "h-5 w-5",
+                    }),
+                ]),
+            ]);
+    },
 });
 
-this.params.api.forEachNode((node) => {
-    if (!node.data || node.data.isReceived) return;
+const columnDefs = computed(() => [
+    {
+        headerName: "Size",
+        children: [
+            {
+                headerName: "Color",
+                field: "color",
+                minWidth: 120,
+                flex: 1,
+            },
+        ],
+    },
 
-    const receiveQty = checked ? getBalance(node.data) : 0;
+    ...sizeData.value.map((item) => ({
+        headerName: item.size?.namasize ?? "-",
+        children: [
+            {
+                headerName: "Total",
+                field: `size_${item.idsize}_total`,
+                minWidth: 90,
+                flex: 1,
+            },
+            {
+                headerName: "WIP",
+                field: `size_${item.idsize}_wip`,
+                minWidth: 90,
+                flex: 1,
+            },
+        ],
+    })),
 
-    node.setDataValue("selected", checked);
-    node.setDataValue("qty", receiveQty);
+    {
+        headerName: "Action",
+        minWidth: 80,
+        maxWidth: 110,
+        sortable: false,
+        filter: false,
+        resizable: false,
+        cellRenderer: ActionRenderer,
+    },
+]);
+
+const loadData = async () => {
+    try {
+        loading.show();
+
+        const params = new URLSearchParams({
+            idorder: idorder,
+            process: process,
+        });
+
+        const endpoint = `/api/v1/inputproduction/detail?${params.toString()}`;
+
+        const { data } = await api.post(endpoint);
+
+        const response = data?.data;
+
+        // Ambil data size
+        sizeData.value = response?.sizes ?? [];
+
+        const colors = response?.colors ?? [];
+        const totalData = response?.total ?? [];
+        const wipData = response?.wip ?? [];
+
+        // Mapping data berdasarkan color dan size
+        rawData.value = colors.map((colorItem, index) => {
+
+            const row = {
+                no: index + 1,
+                idcolor: colorItem.idcolor,
+                color: colorItem.color?.namacolor ?? "-",
+            };
+
+            sizeData.value.forEach((size) => {
+
+                // Cari total berdasarkan idcolor dan idsize
+                const total = totalData.find((item) =>
+                    item.idcolor === colorItem.idcolor &&
+                    item.idsize === size.idsize
+                );
+
+                // Cari WIP berdasarkan idcolor dan idsize
+                const wip = wipData.find((item) =>
+                    item.idcolor === colorItem.idcolor &&
+                    item.idsize === size.idsize
+                );
+
+                row[`size_${size.idsize}_total`] = total
+                    ? total.qty
+                    : 0;
+
+                row[`size_${size.idsize}_wip`] = wip
+                    ? wip.qty
+                    : 0;
+            });
+
+            return row;
+        });
+
+        rawDataPo.value = response
+            ? [{ ...response, no: 1 }]
+            : [];
+
+
+        console.log("ColumnDefs:", columnDefs.value);
+console.log("RowData:", rawData.value);
+
+    } catch (err) {
+        console.error(err);
+
+        if (err?.response?.status === 401) {
+            router.push("/login");
+        }
+    } finally {
+        loading.hide();
+    }
+};
+
+onMounted(() => {
+    loadData();
 });
+</script>
 
-updateSelectedCount();
+<style scoped>
+.label {
+    white-space: nowrap;
+    display: inline-block;
+    width: 120px;
+    font-weight: 600;
+}
+</style>
 
-updateSelectedCount();
 
-<UiButton
-    :disabled="selectedCount === 0"
-    @click="openReceiveModal"
->
-    Receive
-</UiButton>
+{success: true, message: "Production detail retrieved successfully",…}
+data
+: 
+{idorder: "000014167", process: "02",…}
+bd
+: 
+{idorder: "000014167", idpo: "000016062", idstyle: "S00020", qty: 102,…}
+idorder
+: 
+"000014167"
+idpo
+: 
+"000016062"
+idstyle
+: 
+"S00020"
+qty
+: 
+102
+style
+: 
+{idstyle: "S00020", namastyle: "XM8175", modified: "2019-04-24T02:09:20.000000Z", userid: "091401334",…}
+active
+: 
+"True"
+idstyle
+: 
+"S00020"
+idtype
+: 
+"O00020"
+modified
+: 
+"2019-04-24T02:09:20.000000Z"
+namastyle
+: 
+"XM8175"
+userid
+: 
+"091401334"
+colors
+: 
+[{idcolor: "C02608",…}]
+0
+: 
+{idcolor: "C02608",…}
+color
+: 
+{idcolor: "C02608", namacolor: "57 OLIVE", modified: "2026-10-25T17:00:00.000000Z", userid: null,…}
+active
+: 
+"True"
+idcolor
+: 
+"C02608"
+modified
+: 
+"2026-10-25T17:00:00.000000Z"
+namacolor
+: 
+"57 OLIVE"
+userid
+: 
+null
+idcolor
+: 
+"C02608"
+idorder
+: 
+"000014167"
+order
+: 
+{idorder: "000014167", idpo: "000016062", combine_pro: "BL0000111108", ordernumber: "2050001111",…}
+process
+: 
+"02"
+sizes
+: 
+[{idsize: "U00001",…}, {idsize: "U00003",…}, {idsize: "U00004",…}, {idsize: "U00006",…}]
+0
+: 
+{idsize: "U00001",…}
+idsize
+: 
+"U00001"
+size
+: 
+{idsize: "U00001", namasize: "S", modified: "2019-02-12T01:45:26.000000Z", userid: null,…}
+active
+: 
+"True"
+idsize
+: 
+"U00001"
+modified
+: 
+"2019-02-12T01:45:26.000000Z"
+namasize
+: 
+"S"
+userid
+: 
+null
+1
+: 
+{idsize: "U00003",…}
+2
+: 
+{idsize: "U00004",…}
+3
+: 
+{idsize: "U00006",…}
+total
+: 
+[{iddetail: "000064578", idorder: "000014167", idpo: "000016062", combine_pro: "BL0000111108",…},…]
+0
+: 
+{iddetail: "000064578", idorder: "000014167", idpo: "000016062", combine_pro: "BL0000111108",…}
+active
+: 
+"True"
+combine_pro
+: 
+"BL0000111108"
+idcolor
+: 
+"C02608"
+iddetail
+: 
+"000064578"
+idorder
+: 
+"000014167"
+idpo
+: 
+"000016062"
+idsize
+: 
+"U00006"
+idstyle
+: 
+"S00020"
+idtype
+: 
+"O00020"
+modified
+: 
+"2026-10-30T09:45:12.000000Z"
+po_sap
+: 
+"2040001111"
+qty
+: 
+24
+userid
+: 
+"092500331"
+1
+: 
+{iddetail: "000064579", idorder: "000014167", idpo: "000016062", combine_pro: "BL0000111108",…}
+2
+: 
+{iddetail: "000064580", idorder: "000014167", idpo: "000016062", combine_pro: "BL0000111108",…}
+3
+: 
+{iddetail: "000064581", idorder: "000014167", idpo: "000016062", combine_pro: "BL0000111108",…}
+wip
+: 
+[]
+message
+: 
+"Production detail retrieved successfully"
+success
+: 
+true
