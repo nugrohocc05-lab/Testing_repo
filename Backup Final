@@ -1,6 +1,10 @@
 <template>
     <div class="px-6">
-        <UiTitle :is-back="true" align="center" title="Input Daily Detail">
+        <UiTitle
+            :is-back="true"
+            align="center"
+            title="Delivery Finish Goods Detail"
+        >
             <template #action-left>
                 <UiButton variant="teritary" @click="router.back()">
                     <ArrowLeftStartOnRectangleIcon class="h-5 w-5" />
@@ -8,37 +12,185 @@
                 </UiButton>
             </template>
         </UiTitle>
-        <UiCard class="mt-10 text-xs md:text-lg" title="Detail PO">
-            <UiGrid cols="2" gap="sm">
-               <div>
-                    <span class="label">Style</span> : {{ rawDataPo[0]?.bd?.style.namastyle }}
+        <UiCard class="mt-10 text-xs md:text-lg">
+            <UiGrid cols="3" gap="sm">
+                <div>
+                    <span class="label">Order Number</span> :
+                    {{ rawDataHeader.order?.ordernumber }}
                 </div>
-                <div><span class="label">Color</span> : {{ rawDataPo[0]?.colors[0]?.color?.namacolor }}</div>
-                <div><span class="label">Total Qty </span> : {{ rawDataPo[0]?.order_number }}</div>
-                <div><span class="label">Size</span> : {{ rawDataPo[0]?.factory }}</div>
+
+                <div>
+                    <span class="label">Delivery Date</span> :
+                    {{ rawDataHeader.order?.deliverydate }}
+                </div>
+
+                <div>
+                    <span class="label">Total Qty</span> :
+                    {{ rawDataHeader.totals }}
+                </div>
+
+                <div>
+                    <span class="label">PRO</span> :
+                    {{ rawDataHeader.order?.combine_pro }}
+                </div>
+
+                <div>
+                    <span class="label">Style</span> :
+                    {{ rawDataHeader.order?.style }}
+                </div>
+
+                <div>
+                    <span class="label">Color</span> :
+                    {{ rawDataHeader.order?.color }}
+                </div>
             </UiGrid>
         </UiCard>
-        <UiCard class="mt-5" title="Sewing in Summary Breakdown">
-            <div class="flex">
-                <div class="w-50 flex ml-auto mb-2">
-                    <UiInput v-model="searchKeyword" placeholder="Search" class="w-full rounded-lg">
+        <UiCard
+            class="mt-5"
+            title="Delivery Detail"
+        >
+            <!-- Filter Section -->
+            <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-end">
+                <div class="w-full md:w-60">
+                    <UiMultiSelect
+                        label="Date"
+                        placeholder="-- Select Date --"
+                        class="w-full"
+                        v-model="form.date" 
+                        :options="dates"
+                    />
+                </div>
+
+                <div class="w-full md:ml-auto md:w-60">
+                    <UiInput
+                        v-model="searchKeyword"
+                        placeholder="Search"
+                        class="w-full rounded-lg"
+                    >
                         <template #prefix>
                             <MagnifyingGlassIcon class="h-5 w-5 text-gray-400" />
                         </template>
                     </UiInput>
                 </div>
             </div>
-            <UiAgGrid class="my-zebra-grid" :rowData="rawData" :columnDefs="columnDefs" :quickFilterText="searchKeyword" :defaultColDef="defaultColDef"/>
+
+            <!-- Data Grid -->
+            <UiAgGrid
+                class="my-zebra-grid"
+                :rowData="rawData"
+                :columnDefs="columnDefs"
+                :quickFilterText="searchKeyword"
+                :defaultColDef="defaultColDef"
+            />       
+            <div class="mt-4 flex justify-end">
+                <UiButton @click="handleSendClick">
+                    Send
+                </UiButton>
+            </div>
+        </UiCard>
+        <UiCard class="mt-4">
+                <div class="flex min-w-0 flex-col gap-2">
+                    <span class="text-xl font-bold">Files</span>
+                        <template v-if="rawDataFiles.length > 0">
+                            <div
+                                v-for="f in rawDataFiles"
+                                :key="`${f.iddelivery}-${f.filename}`"
+                                class="group flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-3 transition hover:border-gray-300 hover:bg-gray-50"
+                            >
+                                <div
+                                    class="flex min-w-0 flex-1 cursor-pointer items-center gap-3"
+                                    @click="downloadFile(f)"
+                                >
+                                    <div
+                                        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-50"
+                                    >
+                                        <FileIcon :extension="f.extension" />
+                                    </div>
+            
+                                    <div class="min-w-0 flex-1">
+                                        <p class="truncate text-sm font-medium text-gray-800">
+                                            {{ f.filename }}.{{ f.extension }}
+                                        </p>
+            
+                                        <div class="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+                                        
+                                            <p class="text-xs text-gray-400">
+                                                <span class="font-medium text-gray-500">Uploaded:</span>
+                                                {{ formatDate(f.modified) }}
+                                            </p>
+            
+                                            <p class="text-xs text-gray-400">
+                                                <span class="font-medium text-gray-500">Upload By:</span>
+                                                {{ f.userid || '-' }}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                        <div v-else class="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3">
+                            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-50">
+                                    <FileIcon />
+                            </div>
+
+                            <div class="min-w-0 flex-1">
+                                <p class="truncate text-sm font-medium text-gray-800">
+                                    No files available
+                                </p>
+
+                                <p class="mt-0.5 text-xs text-gray-400">
+                                    No files have been uploaded yet
+                                </p>
+                            </div>
+                        </div>
+                </div>
         </UiCard>
     </div>
+    <UiModal
+        v-model="showSendModal"
+        title="Delivery Order"
+        size="2xl"
+    >
+        <div class="space-y-4 -mt-3">
+            <UiInput
+                type="file"
+                variant="dropzone"
+                label="File Delivery Orders"
+                placeholder="Choose File"
+                dropzone-hint="Only PDF, XLS, or XLSX formats, up to 2MB"
+                accept=".pdf,.xls,.xlsx"
+                @change="handleFile"
+            />
+
+            <UiInput
+                v-model="shipmentMode"
+                label="Shipment Mode"
+                placeholder="Shipment Mode"
+                class="w-full"
+                readonly
+            />
+
+            <div class="flex justify-end gap-2 pt-3">
+                <UiButton
+                    variant="teritary"
+                    @click="showSendModal = false"
+                >
+                    Cancel
+                </UiButton>
+
+                <UiButton @click="confirmSend">
+                    Confirm
+                </UiButton>
+            </div>
+        </div>
+    </UiModal>
 </template>
 
 <script setup>
-import { decrypt } from "@/utils/crypto";
-import { ref, onMounted, defineComponent, h, computed} from "vue";
+import { ref, onMounted, defineComponent, h, watch, computed } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { useLoadingStore } from "@/stores/loading";
-import { MagnifyingGlassIcon, ArrowLeftStartOnRectangleIcon, InformationCircleIcon, DocumentPlusIcon } from "@heroicons/vue/24/outline";
+import { MagnifyingGlassIcon, ArrowLeftStartOnRectangleIcon, InformationCircleIcon, DocumentPlusIcon, ArrowRightCircleIcon } from "@heroicons/vue/24/outline";
 
 import UiButton from "@/components/ui/UiButton.vue"
 import UiInput from "@/components/ui/UiInput.vue"
@@ -50,29 +202,229 @@ import UiAgGrid from "@/components/ui/UiAgGrid.vue";
 import api from "@/services/api";
 import FileIcon from "@/components/ui/FileIcon.vue";
 import { customSwal } from "@/composable/customSwal";
+const { confirmDelete, success, warning, error } = customSwal;
+
+import { decrypt } from "@/utils/crypto";
+import UiMultiSelect from "@/components/ui/UiMultiSelect.vue";
+import UiModal from "@/components/ui/UiModal.vue";
 
 const loading = useLoadingStore();
 const router = useRouter();
 const route = useRoute();
 const rawData = ref([]);
-const rawDataPo = ref([]);
-const sizeData = ref([]);
-
+const rawDataAll = ref([]);
+const rawDataHeader = ref([]);
 const searchKeyword = ref('')
+const dates = ref([]);
+const showSendModal = ref(false);
+const rawDataFiles = ref([]);
+
+const shipmentMode = ref("");
+const deliveryFile = ref(null);
 
 const idorder = decrypt(
     decodeURIComponent(route.params.idorder)
 );
 
-const process = decrypt(
-    decodeURIComponent(route.params.process)
+const idcolor = decrypt(
+    decodeURIComponent(route.params.idcolor)
 );
+
+const handleSendClick = async () => {
+    const hasSelected = rawData.value.some(
+        (item) => item.selected === true
+    );
+
+    const hasCartonQty = rawData.value.some(
+        (item) =>
+            item.cartonQty !== null &&
+            item.cartonQty !== undefined &&
+            item.cartonQty !== "" &&
+            Number(item.cartonQty) > 0
+    );
+
+    if (!hasSelected && !hasCartonQty) {
+        await warning({
+            title: "Warning",
+            text: "Please select at least one item or input Carton Qty.",
+        });
+        return;
+    }
+
+    showSendModal.value = true;
+};
+
+const form = ref({
+    date: "",
+});
 
 const defaultColDef = {
     sortable: true,
     filter: false,
     resizable: true,
 };
+
+const dataSelected = ref(null);
+
+const modalForm = ref({
+    order: "",
+    color: "",
+    size: "",
+    quantity: "",
+    iddetail: "",
+    idorder: "",
+    process: "",
+});
+
+watch(
+    () => form.value.date,
+    () => {
+        loadData();
+    }
+);
+
+const handleFile = (event) => {
+    const file = event.target.files?.[0] ?? null;
+
+    if (!file) {
+        deliveryFile.value = null;
+        return;
+    }
+
+    const allowedExtensions = ["pdf", "xls", "xlsx"];
+    const extension = file.name.split(".").pop().toLowerCase();
+
+    if (!allowedExtensions.includes(extension)) {
+        warning({
+            title: "Invalid File",
+            text: "Only PDF, XLS, or XLSX files are allowed.",
+        });
+        event.target.value = "";
+        return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+        warning({
+            title: "File Too Large",
+            text: "Maximum file size is 2MB.",
+        });
+        event.target.value = "";
+        return;
+    }
+
+    deliveryFile.value = file;
+};
+
+
+const confirmSend = async () => {
+    try {
+        const selectedData = rawData.value.filter(
+            (item) =>
+                Number(item.garmentQty) > 0 ||
+                Number(item.cartonQty) > 0
+        );
+
+        if (selectedData.length === 0) {
+            await warning({
+                title: "Warning",
+                text: "Please select at least one item.",
+            });
+            return;
+        }
+
+        if (!shipmentMode.value) {
+            await warning({
+                title: "Warning",
+                text: "Shipment Mode is required.",
+            });
+            return;
+        }
+
+        if (!deliveryFile.value) {
+            await warning({
+                title: "Warning",
+                text: "Please upload Delivery Order file.",
+            });
+            return;
+        }
+
+        // Validasi Carton Qty
+        const invalidCarton = selectedData.some(
+            (item) =>
+                item.cartonQty === null ||
+                item.cartonQty === undefined ||
+                item.cartonQty === "" ||
+                !Number.isFinite(Number(item.cartonQty)) ||
+                Number(item.cartonQty) <= 0
+        );
+
+        if (invalidCarton) {
+            await warning({
+                title: "Warning",
+                text: "Carton Qty must be greater than 0 for all selected items.",
+            });
+            return;
+        }
+
+        const formData = new FormData();
+
+        // Header
+        formData.append("idorder", idorder);
+        formData.append("idcolor", idcolor);
+        formData.append("shipment", shipmentMode.value);
+
+        // Detail
+        selectedData.forEach((item) => {
+            formData.append(
+                `inputqty[${item.iddetail}]`,
+                Number(item.garmentQty ?? 0)
+            );
+
+            formData.append(
+                `inputctn[${item.iddetail}]`,
+                Number(item.cartonQty ?? 0)
+            );
+        });
+
+        // Upload
+        formData.append("uploads[]", deliveryFile.value);
+
+        loading.show();
+
+        const { data } = await api.post(
+            "/api/v1/deliveryfinishgood/deliver",
+            formData
+        );
+
+        showSendModal.value = false;
+        deliveryFile.value = null;
+
+        await loadData();
+
+        await success({
+            title: "Success",
+            text: data?.message || "Delivery successfully sent.",
+        });
+
+    } catch (err) {
+        loading.hide();
+        if (err?.response?.status === 401) {
+            router.push("/login");
+            return;
+        }
+
+        await error({
+            title: "Send Failed",
+            text:
+                err?.response?.data?.message ||
+                err?.message ||
+                "Failed to send delivery.",
+        });
+    } finally {
+        loading.hide();
+    }
+};
+
 
 const ActionRenderer = defineComponent({
     props: {
@@ -84,16 +436,20 @@ const ActionRenderer = defineComponent({
 
     setup(props) {
         const detailData = () => {
-            const row = props.params.data;
+            dataSelected.value = props.params.data;
 
-            router.push({
-                name: "input-daily-production-breakdown",
-                query: {
-                    idorder: encodeURIComponent(encrypt(idorder)),
-                    process: encodeURIComponent(encrypt(process)),
-                    mattype: row.mattype,
-                },
-            });
+            modalForm.value = {
+                order: rawDataHeader.value[0]?.order_number ?? "",
+                color: rawDataHeader.value[0]?.color ?? "",
+                size: props.params.data?.namasize ?? "",
+                // quantity: props.params.data?.qty ?? 0,
+                quantity: '',
+                iddetail: props.params.data?.iddetail ?? "",
+                idorder: props.params.data?.idorder ?? "",
+                process: process,
+            };
+
+            showModal.value = true;
         };
 
         return () =>
@@ -104,7 +460,7 @@ const ActionRenderer = defineComponent({
                     class: "cursor-pointer text-sky-500 transition hover:text-sky-700",
                     onClick: detailData,
                 }, [
-                    h(DocumentPlusIcon, {
+                    h(ArrowRightCircleIcon, {
                         class: "h-5 w-5",
                     }),
                 ]),
@@ -112,112 +468,491 @@ const ActionRenderer = defineComponent({
     },
 });
 
-const columnDefs = computed(() => [
+const confirmInput = async () => {
+    if (
+        modalForm.value.quantity === "" ||
+        modalForm.value.quantity === null ||
+        modalForm.value.quantity === undefined
+    ) {
+        await warning({
+            title: "Warning",
+            text: "Please input quantity first.",
+        });
+        return;
+    }
+
+    if (
+        isNaN(Number(modalForm.value.quantity)) ||
+        Number(modalForm.value.quantity) <= 0
+    ) {
+        await warning({
+            title: "Warning",
+            text: "Quantity must be a number greater than 0.",
+        });
+        return;
+    }
+
+    try {
+        loading.show();
+
+        const payload = {
+            iddetail: modalForm.value.iddetail,
+            quantity: Number(modalForm.value.quantity),
+            proc: modalForm.value.process,
+        };
+
+        const { data } = await api.post(
+            `/api/v1/inputproduction/inputdaily/${idorder}`,
+            payload
+        );
+
+        loading.hide();
+
+        showModal.value = false;
+
+        await loadData();
+
+        await success({
+            title: "Success",
+            text: data?.message || "Data successfully saved.",
+        });
+
+    } catch (err) {
+        loading.hide();
+        if (err?.response?.status === 401) {
+            router.push("/login");
+            return;
+        }
+
+        await error({
+            title: "Confirm Failed",
+            text:
+                err?.response?.data?.message ||
+                err?.message ||
+                "Failed to confirm data.",
+        });
+    } finally {
+        loading.hide();
+    }
+};
+
+const downloadFile = async (file) => {
+    let url = null;
+
+    try {
+        loading.show();
+
+        const endpoint = `/api/v1/deliveryfinishgood/showfile/${encodeURIComponent(file.filename)}`;
+
+        const response = await api.get(endpoint, {
+            responseType: "blob",
+        });
+
+        if (!response.data || response.data.size === 0) {
+            throw new Error("File is empty or unavailable.");
+        }
+
+        const blob = new Blob([response.data], {
+            type: response.data.type || "application/octet-stream",
+        });
+
+        url = window.URL.createObjectURL(blob);
+
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${file.filename}.${file.extension}`;
+
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        setTimeout(() => {
+            window.URL.revokeObjectURL(url);
+        }, 1000);
+
+    } catch (err) {
+        console.error("Download error:", err);
+
+        let message = "An error occurred while downloading the file.";
+
+        if (err.response?.data instanceof Blob) {
+            try {
+                const text = await err.response.data.text();
+                const errorData = JSON.parse(text);
+                message = errorData.message || message;
+            } catch {
+                message = "Failed to download file.";
+            }
+        } else {
+            message =
+                err.response?.data?.message ||
+                err.message ||
+                message;
+        }
+
+        await customSwal.error({
+            title: "Download Failed",
+            text: message,
+        });
+
+    } finally {
+        loading.hide();
+    }
+};
+
+class SelectAllHeader {
+    init(params) {
+        this.params = params;
+
+        this.eGui = document.createElement("div");
+        this.eGui.style.display = "flex";
+        this.eGui.style.alignItems = "center";
+        this.eGui.style.justifyContent = "center";
+        this.eGui.style.height = "100%";
+
+        this.checkbox = document.createElement("input");
+        this.checkbox.type = "checkbox";
+        this.checkbox.title = "Select All";
+
+        this.onChange = (event) => {
+            const checked = event.target.checked;
+
+            this.params.api.forEachNode((node) => {
+                const maxQty = getMaxGarmentQty(node.data);
+
+                const garmentQty = checked ? maxQty : 0;
+
+                node.setDataValue("selected", checked);
+                node.setDataValue("garmentQty", garmentQty);
+
+                const row = rawData.value.find(
+                    (item) => item.iddetail === node.data.iddetail
+                );
+
+                if (row) {
+                    row.selected = checked;
+                    row.garmentQty = garmentQty;
+                }
+            });
+
+            this.params.api.refreshCells({
+                columns: ["garmentQty", "selected"],
+                force: true,
+            });
+        };
+
+        this.checkbox.addEventListener("change", this.onChange);
+        this.eGui.appendChild(this.checkbox);
+    }
+
+    getGui() {
+        return this.eGui;
+    }
+
+    refresh() {
+        return false;
+    }
+
+    destroy() {
+        this.checkbox.removeEventListener("change", this.onChange);
+    }
+}
+
+const getMaxGarmentQty = (data) => {
+    const totalOrder = Number(data.qty ?? 0);
+    const totalSent = Number(data.totalSent ?? 0);
+
+    return Math.max(0, totalOrder - totalSent);
+};
+
+const updateRow = (params, field, value) => {
+    params.node.setDataValue(field, value);
+
+    const row = rawData.value.find(
+        (item) => item.iddetail === params.data.iddetail
+    );
+
+    if (row) {
+        row[field] = value;
+    }
+};
+
+
+
+const columnDefs = [
     {
+        field: "size.namasize",
         headerName: "Size",
-        children: [
-            {
-                headerName: "Color",
-                field: "color",
-                minWidth: 120,
-                flex: 1,
-            },
-        ],
+        minWidth: 90,
+        maxWidth: 120,
+    },
+    {
+        field: "qty",
+        headerName: "Total Order",
+        minWidth: 110,
+        flex: 1,
+    },
+    {
+        field: "totalSent",
+        headerName: "Total Sent",
+        minWidth: 100,
+        flex: 1,
+    },
+    {
+        field: "totalReceive",
+        headerName: "Total Receive",
+        minWidth: 120,
+        flex: 1,
+    },
+    {
+        field: "totalCartonSent",
+        headerName: "Total Carton Sent",
+        minWidth: 150,
+        flex: 1,
+    },
+    {
+        field: "totalCartonReceive",
+        headerName: "Total Carton Receive",
+        minWidth: 180,
+        flex: 1,
     },
 
-    ...sizeData.value.map((item) => ({
-        headerName: item.size?.namasize ?? "-",
-        children: [
-            {
-                headerName: "Total",
-                field: `size_${item.idsize}_total`,
-                minWidth: 90,
-                flex: 1,
-            },
-            {
-                headerName: "WIP",
-                field: `size_${item.idsize}_wip`,
-                minWidth: 90,
-                flex: 1,
-            },
-        ],
-    })),
-
+    // Garment Qty
     {
-        headerName: "Action",
-        minWidth: 80,
-        maxWidth: 110,
+        field: "garmentQty",
+        headerName: "Garment Qty",
+        minWidth: 130,
+        editable: true,
+        flex: 1,
+
+        cellStyle: {
+            color: "#1D4ED8",
+            fontWeight: "600",
+            cursor: "text",
+        },
+
+        cellEditor: "agNumberCellEditor",
+
+        cellEditorParams: (params) => ({
+            min: 0,
+            max: getMaxGarmentQty(params.data),
+            precision: 0,
+        }),
+
+        valueParser: (params) => {
+            const value = Number(params.newValue);
+            return Number.isFinite(value) ? value : 0;
+        },
+
+        valueSetter: (params) => {
+            const maxQty = getMaxGarmentQty(params.data);
+            let value = Number(params.newValue);
+
+            if (!Number.isFinite(value) || value < 0) {
+                value = 0;
+            }
+
+            if (value > maxQty) {
+                value = maxQty;
+            }
+
+            params.data.garmentQty = value;
+            params.data.selected = value > 0;
+
+            const row = rawData.value.find(
+                (item) => item.iddetail === params.data.iddetail
+            );
+
+            if (row) {
+                row.garmentQty = value;
+                row.selected = value > 0;
+            }
+
+            return true;
+        },
+    },
+
+    // Carton Qty
+    {
+        field: "cartonQty",
+        headerName: "Carton Qty",
+        minWidth: 130,
+        editable: true,
+        flex: 1,
+
+        cellStyle: {
+            color: "#1D4ED8",
+            fontWeight: "600",
+            cursor: "text",
+        },
+
+        cellEditor: "agNumberCellEditor",
+
+        cellEditorParams: {
+            min: 0,
+            precision: 0,
+        },
+
+        valueParser: (params) => {
+            if (
+                params.newValue === "" ||
+                params.newValue === null ||
+                params.newValue === undefined
+            ) {
+                return null;
+            }
+
+            const value = Number(params.newValue);
+
+            return Number.isFinite(value) && value >= 0
+                ? value
+                : params.oldValue;
+        },
+
+        valueSetter: (params) => {
+            let value = params.newValue;
+
+            if (value === "" || value === undefined) {
+                value = null;
+            }
+
+            params.data.cartonQty = value;
+
+            const row = rawData.value.find(
+                (item) => item.iddetail === params.data.iddetail
+            );
+
+            if (row) {
+                row.cartonQty = value;
+            }
+
+            return true;
+        },
+    },
+
+    // Checkbox
+    {
+        headerName: "",
+        field: "selected",
+        width: 90,
         sortable: false,
         filter: false,
         resizable: false,
-        cellRenderer: ActionRenderer,
-    },
-]);
 
+        headerComponent: SelectAllHeader,
+
+        cellRenderer: (params) => {
+            const checkbox = document.createElement("input");
+
+            checkbox.type = "checkbox";
+            checkbox.checked = params.data.selected ?? false;
+
+            checkbox.addEventListener("change", (event) => {
+                const checked = event.target.checked;
+
+                const maxQty = getMaxGarmentQty(params.data);
+
+                // Jika dicentang, isi Garment Qty dengan maksimal balance
+                const garmentQty = checked ? maxQty : 0;
+
+                params.node.setDataValue("selected", checked);
+                params.node.setDataValue("garmentQty", garmentQty);
+
+                const row = rawData.value.find(
+                    (item) => item.iddetail === params.data.iddetail
+                );
+
+                if (row) {
+                    row.selected = checked;
+                    row.garmentQty = garmentQty;
+                }
+
+                // Refresh tampilan Garment Qty
+                params.api.refreshCells({
+                    rowNodes: [params.node],
+                    columns: ["garmentQty"],
+                    force: true,
+                });
+            });
+
+            return checkbox;
+        },
+    },
+];
 const loadData = async () => {
     try {
         loading.show();
 
         const params = new URLSearchParams({
             idorder: idorder,
-            process: process,
+            idcolor: idcolor,
         });
 
-        const endpoint = `/api/v1/inputproduction/detail?${params.toString()}`;
+        const endpoint = `/api/v1/deliveryfinishgood/input?${params.toString()}`;
 
-        const { data } = await api.post(endpoint);
+        const { data } = await api.get(endpoint);
 
-        const response = data?.data;
+        const detail = data?.data?.detail ?? [];
+        const total = data?.data?.total ?? [];
 
-        // Ambil data size
-        sizeData.value = response?.sizes ?? [];
+        rawDataFiles.value = data?.data?.files ?? [];
 
-        const colors = response?.colors ?? [];
-        const totalData = response?.total ?? [];
-        const wipData = response?.wip ?? [];
+        const totalSentMap = total.reduce((acc, item) => {
+            const id = item.iddetail;
 
-        // Mapping data berdasarkan color dan size
-        rawData.value = colors.map((colorItem, index) => {
+            acc[id] = (acc[id] || 0) + Number(item.qty ?? 0);
 
-            const row = {
-                no: index + 1,
-                idcolor: colorItem.idcolor,
-                color: colorItem.color?.namacolor ?? "-",
-            };
+            return acc;
+        }, {});
 
-            sizeData.value.forEach((size) => {
+        const totalReceiveMap = total.reduce((acc, item) => {
+            const id = item.iddetail;
 
-                // Cari total berdasarkan idcolor dan idsize
-                const total = totalData.find((item) =>
-                    item.idcolor === colorItem.idcolor &&
-                    item.idsize === size.idsize
-                );
+            acc[id] = (acc[id] || 0) + Number(item.receiveqty ?? 0);
 
-                // Cari WIP berdasarkan idcolor dan idsize
-                const wip = wipData.find((item) =>
-                    item.idcolor === colorItem.idcolor &&
-                    item.idsize === size.idsize
-                );
+            return acc;
+        }, {});
 
-                row[`size_${size.idsize}_total`] = total
-                    ? total.qty
-                    : 0;
+        const totalCartonSentMap = total.reduce((acc, item) => {
+            const id = item.iddetail;
 
-                row[`size_${size.idsize}_wip`] = wip
-                    ? wip.qty
-                    : 0;
-            });
+            acc[id] = (acc[id] || 0) + Number(item.qtyctn ?? 0);
 
-            return row;
-        });
+            return acc;
+        }, {});
 
-        rawDataPo.value = response
-            ? [{ ...response, no: 1 }]
+        const totalCartonReceiveMap = total.reduce((acc, item) => {
+            const id = item.iddetail;
+
+            acc[id] = (acc[id] || 0) + Number(item.receiveqtyctn ?? 0);
+
+            return acc;
+        }, {});
+
+        rawData.value = detail.map((item, index) => ({
+            ...item,
+            no: index + 1,
+
+            totalSent: totalSentMap[item.iddetail] ?? 0,
+            totalReceive: totalReceiveMap[item.iddetail] ?? 0,
+            totalCartonSent: totalCartonSentMap[item.iddetail] ?? 0,
+            totalCartonReceive: totalCartonReceiveMap[item.iddetail] ?? 0,
+
+            garmentQty: 0,
+            cartonQty: null,
+            selected: false,
+        }));
+
+        rawDataHeader.value = data?.data ?? {};
+
+        shipmentMode.value = data?.data?.order?.purchaseorder?.shipby ?? "";
+
+        rawDataAll.value = data
+            ? [{
+                ...data,
+                no: 1,
+            }]
             : [];
-
-
-        console.log("ColumnDefs:", columnDefs.value);
-console.log("RowData:", rawData.value);
 
     } catch (err) {
         console.error(err);
@@ -230,8 +965,29 @@ console.log("RowData:", rawData.value);
     }
 };
 
+const loadDataDate = async () => {
+    try {
+        const { data } = await api.get(
+            `/api/v1/inputproduction/selectdate?idorder=${idorder}&process=${process}`
+        );
+
+        dates.value = (data?.data ?? []).map((item) => ({
+            value: item.date,
+            label: item.date,
+        }));
+
+    } catch (err) {
+        console.error("Failed Load Dates:", err);
+
+        if (err?.response?.status === 401) {
+            router.push("/login");
+        }
+    }
+};
+
 onMounted(() => {
     loadData();
+    loadDataDate();
 });
 </script>
 
@@ -244,179 +1000,5 @@ onMounted(() => {
 }
 </style>
 
+carton qty bisa diedit, tapi untuk sekarang tidak ada tampilan pembeda untuk melihat bahwa itu bisa diedit, misal ada kaya habis select input nanti ada garis kedip kedip bahwa itu inputan, atau apa untuk membedakan 
 
-{success: true, message: "Production detail retrieved successfully",…}
-data
-: 
-{idorder: "000014167", process: "02",…}
-bd
-: 
-{idorder: "000014167", idpo: "000016062", idstyle: "S00020", qty: 102,…}
-idorder
-: 
-"000014167"
-idpo
-: 
-"000016062"
-idstyle
-: 
-"S00020"
-qty
-: 
-102
-style
-: 
-{idstyle: "S00020", namastyle: "XM8175", modified: "2019-04-24T02:09:20.000000Z", userid: "091401334",…}
-active
-: 
-"True"
-idstyle
-: 
-"S00020"
-idtype
-: 
-"O00020"
-modified
-: 
-"2019-04-24T02:09:20.000000Z"
-namastyle
-: 
-"XM8175"
-userid
-: 
-"091401334"
-colors
-: 
-[{idcolor: "C02608",…}]
-0
-: 
-{idcolor: "C02608",…}
-color
-: 
-{idcolor: "C02608", namacolor: "57 OLIVE", modified: "2026-10-25T17:00:00.000000Z", userid: null,…}
-active
-: 
-"True"
-idcolor
-: 
-"C02608"
-modified
-: 
-"2026-10-25T17:00:00.000000Z"
-namacolor
-: 
-"57 OLIVE"
-userid
-: 
-null
-idcolor
-: 
-"C02608"
-idorder
-: 
-"000014167"
-order
-: 
-{idorder: "000014167", idpo: "000016062", combine_pro: "BL0000111108", ordernumber: "2050001111",…}
-process
-: 
-"02"
-sizes
-: 
-[{idsize: "U00001",…}, {idsize: "U00003",…}, {idsize: "U00004",…}, {idsize: "U00006",…}]
-0
-: 
-{idsize: "U00001",…}
-idsize
-: 
-"U00001"
-size
-: 
-{idsize: "U00001", namasize: "S", modified: "2019-02-12T01:45:26.000000Z", userid: null,…}
-active
-: 
-"True"
-idsize
-: 
-"U00001"
-modified
-: 
-"2019-02-12T01:45:26.000000Z"
-namasize
-: 
-"S"
-userid
-: 
-null
-1
-: 
-{idsize: "U00003",…}
-2
-: 
-{idsize: "U00004",…}
-3
-: 
-{idsize: "U00006",…}
-total
-: 
-[{iddetail: "000064578", idorder: "000014167", idpo: "000016062", combine_pro: "BL0000111108",…},…]
-0
-: 
-{iddetail: "000064578", idorder: "000014167", idpo: "000016062", combine_pro: "BL0000111108",…}
-active
-: 
-"True"
-combine_pro
-: 
-"BL0000111108"
-idcolor
-: 
-"C02608"
-iddetail
-: 
-"000064578"
-idorder
-: 
-"000014167"
-idpo
-: 
-"000016062"
-idsize
-: 
-"U00006"
-idstyle
-: 
-"S00020"
-idtype
-: 
-"O00020"
-modified
-: 
-"2026-10-30T09:45:12.000000Z"
-po_sap
-: 
-"2040001111"
-qty
-: 
-24
-userid
-: 
-"092500331"
-1
-: 
-{iddetail: "000064579", idorder: "000014167", idpo: "000016062", combine_pro: "BL0000111108",…}
-2
-: 
-{iddetail: "000064580", idorder: "000014167", idpo: "000016062", combine_pro: "BL0000111108",…}
-3
-: 
-{iddetail: "000064581", idorder: "000014167", idpo: "000016062", combine_pro: "BL0000111108",…}
-wip
-: 
-[]
-message
-: 
-"Production detail retrieved successfully"
-success
-: 
-true
