@@ -1,13 +1,492 @@
-const isReceivable = (item) => {
-    const notReceived =
-        item.receive === 0 ||
-        item.receive === null ||
-        item.receive === undefined;
+<template>
+    <div class="px-6">
+        <UiTitle :is-back="true" align="center" title="Delivery Finish Goods Detail">
+            <template #action-left>
+                <UiButton variant="teritary" @click="router.back()">
+                    <ArrowLeftStartOnRectangleIcon class="h-5 w-5" />
+                    <span class="text-xl ml-1">Back</span>
+                </UiButton>
+            </template>
+        </UiTitle>
+        <UiCard class="mt-10 text-xs md:text-lg">
+            <UiGrid cols="3" gap="sm">
+                <div>
+                    <span class="label">Order Number</span> :
+                    {{ rawDataHeader.order?.ordernumber }}
+                </div>
 
-    return notReceived && Number(item.sent) > 0;
+                <div>
+                    <span class="label">Delivery Date</span> :
+                    {{ rawDataHeader.order?.deliverydate }}
+                </div>
+
+                <div>
+                    <span class="label">Total Qty</span> :
+                    {{ rawDataHeader.totalqty }}
+                </div>
+
+                <div>
+                    <span class="label">PRO</span> :
+                    {{ rawDataHeader.order?.combine_pro }}
+                </div>
+
+                <div>
+                    <span class="label">Style</span> :
+                    {{ rawDataHeader?.style }}
+                </div>
+
+                <div>
+                    <span class="label">Color</span> :
+                    {{ rawDataHeader?.color }}
+                </div>
+            </UiGrid>
+        </UiCard>
+        <UiCard class="mt-5">
+            <!-- Filter Section -->
+            <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-center">
+                 <!-- <div class="w-full md:w-60">
+                    <UiMultiSelect
+                        label="Date"
+                        placeholder="-- Select Date --"
+                        class="w-full"
+                        v-model="form.date" 
+                        :options="dates"
+                    />
+                </div> -->
+                <h2 class="truncate text-xl font-semibold text-gray-900">
+                    Delivery Detail
+                </h2>
+
+                <div class="w-full md:ml-auto md:w-60">
+                    <UiInput
+                        v-model="searchKeyword"
+                        placeholder="Search"
+                        class="w-full rounded-lg"
+                    >
+                        <template #prefix>
+                            <MagnifyingGlassIcon class="h-5 w-5 text-gray-400" />
+                        </template>
+                    </UiInput>
+                </div>
+            </div>
+
+            <!-- Data Grid -->
+            <UiAgGrid
+                class="my-zebra-grid"
+                :rowData="rawData"
+                :columnDefs="columnDefs"
+                :quickFilterText="searchKeyword"
+                :defaultColDef="defaultColDef"
+                :singleClickEdit="true"
+                :stopEditingWhenCellsLoseFocus="true"
+            />       
+            <div class="mt-4 flex justify-end">
+                <UiButton @click="handleSendClick">
+                    Send
+                </UiButton>
+            </div>
+        </UiCard>
+        <UiCard class="mt-4">
+                <div class="flex min-w-0 flex-col gap-2">
+                    <span class="text-xl font-bold">Files</span>
+                        <template v-if="rawDataFiles.length > 0">
+                            <div
+                                v-for="f in rawDataFiles"
+                                :key="`${f.iddelivery}-${f.filename}`"
+                                class="group flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-3 transition hover:border-gray-300 hover:bg-gray-50"
+                            >
+                                <div
+                                    class="flex min-w-0 flex-1 cursor-pointer items-center gap-3"
+                                    @click="downloadFile(f)"
+                                >
+                                    <div
+                                        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-50"
+                                    >
+                                        <FileIcon :extension="f.extension" />
+                                    </div>
+            
+                                    <div class="min-w-0 flex-1">
+                                        <p class="truncate text-sm font-medium text-gray-800">
+                                            {{ f.filename }}.{{ f.extension }}
+                                        </p>
+            
+                                        <div class="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+                                        
+                                            <p class="text-xs text-gray-400">
+                                                <span class="font-medium text-gray-500">Uploaded:</span>
+                                                {{ formatDate(f.modified) }}
+                                            </p>
+            
+                                            <p class="text-xs text-gray-400">
+                                                <span class="font-medium text-gray-500">Upload By:</span>
+                                                {{ f.userid || '-' }}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                        <div v-else class="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3">
+                            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-50">
+                                    <FileIcon />
+                            </div>
+
+                            <div class="min-w-0 flex-1">
+                                <p class="truncate text-sm font-medium text-gray-800">
+                                    No files available
+                                </p>
+
+                                <p class="mt-0.5 text-xs text-gray-400">
+                                    No files have been uploaded yet
+                                </p>
+                            </div>
+                        </div>
+                </div>
+        </UiCard>
+    </div>
+    <UiModal
+        v-model="showSendModal"
+        title="Delivery Order"
+        size="2xl"
+    >
+        <div class="space-y-4 -mt-3">
+            <UiInput
+                type="file"
+                variant="dropzone"
+                label="File Delivery Orders"
+                placeholder="Choose File"
+                dropzone-hint="Only PDF, XLS, or XLSX formats, up to 2MB"
+                accept=".pdf,.xls,.xlsx"
+                @change="handleFile"
+            />
+
+            <UiInput
+                v-model="shipmentMode"
+                label="Shipment Mode"
+                placeholder="Shipment Mode"
+                class="w-full"
+                readonly
+            />
+
+            <div class="flex justify-end gap-2 pt-3">
+                <UiButton
+                    variant="teritary"
+                    @click="showSendModal = false"
+                >
+                    Cancel
+                </UiButton>
+
+                <UiButton @click="confirmSend">
+                    Confirm
+                </UiButton>
+            </div>
+        </div>
+    </UiModal>
+</template>
+
+<script setup>
+import { ref, onMounted, defineComponent, h, watch, computed } from "vue";
+import { useRouter, useRoute } from "vue-router";
+import { useLoadingStore } from "@/stores/loading";
+import { MagnifyingGlassIcon, ArrowLeftStartOnRectangleIcon } from "@heroicons/vue/24/outline";
+
+import UiButton from "@/components/ui/UiButton.vue"
+import UiInput from "@/components/ui/UiInput.vue"
+import UiCard from "@/components/ui/UiCard.vue"
+import UiTitle from "@/components/ui/UiTitle.vue"
+import UiGrid from "@/components/ui/UiGrid.vue";
+import UiAgGrid from "@/components/ui/UiAgGrid.vue";
+
+import api from "@/services/api";
+import FileIcon from "@/components/ui/FileIcon.vue";
+import { customSwal } from "@/composable/customSwal";
+const { confirmDelete, success, warning, error } = customSwal;
+
+import { decrypt } from "@/utils/crypto";
+import UiMultiSelect from "@/components/ui/UiMultiSelect.vue";
+import UiModal from "@/components/ui/UiModal.vue";
+
+const loading = useLoadingStore();
+const router = useRouter();
+const route = useRoute();
+const rawData = ref([]);
+const rawDataAll = ref([]);
+const rawDataHeader = ref([]);
+const searchKeyword = ref('')
+const dates = ref([]);
+const showSendModal = ref(false);
+const rawDataFiles = ref([]);
+
+const shipmentMode = ref("");
+const deliveryFile = ref(null);
+
+const idorder = decrypt(
+    decodeURIComponent(route.params.idorder)
+);
+
+const idcolor = decrypt(
+    decodeURIComponent(route.params.idcolor)
+);
+
+const handleSendClick = async () => {
+    const selectedData = rawData.value.filter(
+        (item) =>
+            item.selected === true ||
+            Number(item.garmentQty) > 0
+    );
+
+    if (selectedData.length === 0) {
+        await warning({
+            title: "Warning",
+            text: "Please select at least one item or input Garment Qty.",
+        });
+        return;
+    }
+
+    // Validasi Carton Qty
+    const invalidCarton = selectedData.some(
+        (item) =>
+            item.cartonQty === null ||
+            item.cartonQty === undefined ||
+            item.cartonQty === "" ||
+            Number(item.cartonQty) <= 0
+    );
+
+    if (invalidCarton) {
+        await warning({
+            title: "Warning",
+            text: "Please input Carton Qty greater than 0 for all selected items before clicking Send.",
+        });
+        return;
+    }
+
+    showSendModal.value = true;
 };
 
-const canReceive = computed(() => rawData.value.some(isReceivable));
+const form = ref({
+    date: [],
+});
+
+const defaultColDef = {
+    sortable: true,
+    filter: false,
+    resizable: true,
+};
+
+watch(
+    () => form.value.date,
+    async (newValue) => {
+        console.log("Selected Date:", newValue);
+
+        await loadData();
+    },
+    { deep: true }
+);
+
+const handleFile = (event) => {
+    const file = event.target.files?.[0] ?? null;
+
+    if (!file) {
+        deliveryFile.value = null;
+        return;
+    }
+
+    const allowedExtensions = ["pdf", "xls", "xlsx"];
+    const extension = file.name.split(".").pop().toLowerCase();
+
+    if (!allowedExtensions.includes(extension)) {
+        warning({
+            title: "Invalid File",
+            text: "Only PDF, XLS, or XLSX files are allowed.",
+        });
+        event.target.value = "";
+        return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+        warning({
+            title: "File Too Large",
+            text: "Maximum file size is 2MB.",
+        });
+        event.target.value = "";
+        return;
+    }
+
+    deliveryFile.value = file;
+};
+
+const confirmSend = async () => {
+    try {
+        const selectedData = rawData.value.filter(
+            (item) =>
+                Number(item.garmentQty) > 0 ||
+                Number(item.cartonQty) > 0
+        );
+
+        if (selectedData.length === 0) {
+            await warning({
+                title: "Warning",
+                text: "Please select at least one item.",
+            });
+            return;
+        }
+
+        if (!shipmentMode.value) {
+            await warning({
+                title: "Warning",
+                text: "Shipment Mode is required.",
+            });
+            return;
+        }
+
+        if (!deliveryFile.value) {
+            await warning({
+                title: "Warning",
+                text: "Please upload Delivery Order file.",
+            });
+            return;
+        }
+
+        // Validasi Carton Qty
+        const invalidCarton = selectedData.some(
+            (item) =>
+                item.cartonQty === null ||
+                item.cartonQty === undefined ||
+                item.cartonQty === "" ||
+                !Number.isFinite(Number(item.cartonQty)) ||
+                Number(item.cartonQty) <= 0
+        );
+
+        if (invalidCarton) {
+            await warning({
+                title: "Warning",
+                text: "Carton Qty must be greater than 0 for all selected items.",
+            });
+            return;
+        }
+
+        const formData = new FormData();
+
+        // Header
+        formData.append("idorder", idorder);
+        formData.append("idcolor", idcolor);
+        formData.append("shipment", shipmentMode.value);
+
+        // Detail
+        selectedData.forEach((item) => {
+            formData.append(
+                `inputqty[${item.iddetail}]`,
+                Number(item.garmentQty ?? 0)
+            );
+
+            formData.append(
+                `inputctn[${item.iddetail}]`,
+                Number(item.cartonQty ?? 0)
+            );
+        });
+
+        // Upload
+        formData.append("uploads[]", deliveryFile.value);
+
+        loading.show();
+
+        const { data } = await api.post(
+            "/api/v1/deliveryfinishgood/deliver",
+            formData
+        );
+
+        showSendModal.value = false;
+        deliveryFile.value = null;
+
+        await loadData();
+
+        await success({
+            title: "Success",
+            text: data?.message || "Delivery is completed successfully",
+        });
+
+    } catch (err) {
+        loading.hide();
+        if (err?.response?.status === 401) {
+            router.push("/login");
+            return;
+        }
+
+        await error({
+            title: "Send Failed",
+            text:
+                err?.response?.data?.message ||
+                err?.message ||
+                "Failed to send delivery.",
+        });
+    } finally {
+        loading.hide();
+    }
+};
+
+const downloadFile = async (file) => {
+    let url = null;
+
+    try {
+        loading.show();
+
+        const endpoint = `/api/v1/deliveryfinishgood/showfile/${encodeURIComponent(file.filename)}`;
+
+        const response = await api.get(endpoint, {
+            responseType: "blob",
+        });
+
+        if (!response.data || response.data.size === 0) {
+            throw new Error("File is empty or unavailable.");
+        }
+
+        const blob = new Blob([response.data], {
+            type: response.data.type || "application/octet-stream",
+        });
+
+        url = window.URL.createObjectURL(blob);
+
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${file.filename}.${file.extension}`;
+
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        setTimeout(() => {
+            window.URL.revokeObjectURL(url);
+        }, 1000);
+
+    } catch (err) {
+        console.error("Download error:", err);
+
+        let message = "An error occurred while downloading the file.";
+
+        if (err.response?.data instanceof Blob) {
+            try {
+                const text = await err.response.data.text();
+                const errorData = JSON.parse(text);
+                message = errorData.message || message;
+            } catch {
+                message = "Failed to download file.";
+            }
+        } else {
+            message =
+                err.response?.data?.message ||
+                err.message ||
+                message;
+        }
+
+        await customSwal.error({
+            title: "Download Failed",
+            text: message,
+        });
+
+    } finally {
+        loading.hide();
+    }
+};
 
 class SelectAllHeader {
     init(params) {
@@ -23,35 +502,16 @@ class SelectAllHeader {
         this.checkbox.type = "checkbox";
         this.checkbox.title = "Select All";
 
-        this.updateVisibility = () => {
-            let hasReceivable = false;
-
-            this.params.api.forEachNode((node) => {
-                if (node.data && isReceivable(node.data)) {
-                    hasReceivable = true;
-                }
-            });
-
-            this.checkbox.style.display = hasReceivable ? "" : "none";
-
-            if (!hasReceivable) {
-                this.checkbox.checked = false;
-            }
-        };
-
         this.onChange = (event) => {
             const checked = event.target.checked;
 
             this.params.api.forEachNode((node) => {
-                // lewati baris yang sudah received
-                if (!node.data || !isReceivable(node.data)) return;
+                const maxQty = getMaxGarmentQty(node.data);
 
-                const garmentQty = checked ? getMaxGarmentQty(node.data) : 0;
-                const cartonQty = checked ? getMaxCartonQty(node.data) : 0;
+                const garmentQty = checked ? maxQty : 0;
 
                 node.setDataValue("selected", checked);
                 node.setDataValue("garmentQty", garmentQty);
-                node.setDataValue("cartonQty", cartonQty);
 
                 const row = rawData.value.find(
                     (item) => item.iddetail === node.data.iddetail
@@ -60,21 +520,17 @@ class SelectAllHeader {
                 if (row) {
                     row.selected = checked;
                     row.garmentQty = garmentQty;
-                    row.cartonQty = cartonQty;
                 }
             });
 
             this.params.api.refreshCells({
-                columns: ["garmentQty", "cartonQty", "selected"],
+                columns: ["garmentQty", "selected"],
                 force: true,
             });
         };
 
         this.checkbox.addEventListener("change", this.onChange);
-        this.params.api.addEventListener("modelUpdated", this.updateVisibility);
-
         this.eGui.appendChild(this.checkbox);
-        this.updateVisibility();
     }
 
     getGui() {
@@ -87,14 +543,362 @@ class SelectAllHeader {
 
     destroy() {
         this.checkbox.removeEventListener("change", this.onChange);
-        this.params.api.removeEventListener("modelUpdated", this.updateVisibility);
     }
 }
 
-cellRenderer: (params) => {
-    if (!isReceivable(params.data)) {
-        return "";
+const getMaxGarmentQty = (data) => {
+    const totalOrder = Number(data.qty ?? 0);
+    const totalSent = Number(data.totalSent ?? 0);
+
+    return Math.max(0, totalOrder - totalSent);
+};
+
+const columnDefs = [
+    {
+        field: "size.namasize",
+        headerName: "Size",
+        minWidth: 90,
+        maxWidth: 120,
+    },
+    {
+        field: "qty",
+        headerName: "Total Order",
+        minWidth: 110,
+        flex: 1,
+    },
+    {
+        field: "totalSent",
+        headerName: "Total Sent",
+        minWidth: 100,
+        flex: 1,
+    },
+    {
+        field: "totalReceive",
+        headerName: "Total Receive",
+        minWidth: 120,
+        flex: 1,
+    },
+    {
+        field: "totalCartonSent",
+        headerName: "Total Carton Sent",
+        minWidth: 150,
+        flex: 1,
+    },
+    {
+        field: "totalCartonReceive",
+        headerName: "Total Carton Receive",
+        minWidth: 180,
+        flex: 1,
+    },
+    {
+        field: "garmentQty",
+        headerName: "Garment Qty",
+        minWidth: 130,
+        editable: true,
+        flex: 1,
+        cellClass: "editable-cell",
+        headerClass: "custom-header",
+        cellStyle: {
+            color: "#1D4ED8",
+            fontWeight: "600",
+            cursor: "text",
+        },
+
+        cellEditor: "agNumberCellEditor",
+
+        cellEditorParams: (params) => ({
+            min: 0,
+            max: getMaxGarmentQty(params.data),
+            precision: 0,
+        }),
+
+        valueParser: (params) => {
+            const value = Number(params.newValue);
+            return Number.isFinite(value) ? value : 0;
+        },
+
+        valueSetter: (params) => {
+            const maxQty = getMaxGarmentQty(params.data);
+            let value = Number(params.newValue);
+
+            if (!Number.isFinite(value) || value < 0) {
+                value = 0;
+            }
+
+            if (value > maxQty) {
+                value = maxQty;
+            }
+
+            params.data.garmentQty = value;
+            params.data.selected = value > 0;
+
+            const row = rawData.value.find(
+                (item) => item.iddetail === params.data.iddetail
+            );
+
+            if (row) {
+                row.garmentQty = value;
+                row.selected = value > 0;
+            }
+
+            return true;
+        },
+    },
+    {
+        field: "cartonQty",
+        headerName: "Carton Qty",
+        minWidth: 130,
+        editable: true,
+        flex: 1,
+        headerClass: "custom-header",
+        cellStyle: {
+            color: "#1D4ED8",
+            fontWeight: "600",
+            cursor: "text",
+        },
+
+        cellEditor: "agNumberCellEditor",
+
+        cellEditorParams: {
+            min: 0,
+            precision: 0,
+        },
+
+        valueParser: (params) => {
+            if (
+                params.newValue === "" ||
+                params.newValue === null ||
+                params.newValue === undefined
+            ) {
+                return null;
+            }
+
+            const value = Number(params.newValue);
+
+            return Number.isFinite(value) && value >= 0
+                ? value
+                : params.oldValue;
+        },
+
+        valueSetter: (params) => {
+            let value = params.newValue;
+
+            if (value === "" || value === undefined) {
+                value = null;
+            }
+
+            params.data.cartonQty = value;
+
+            const row = rawData.value.find(
+                (item) => item.iddetail === params.data.iddetail
+            );
+
+            if (row) {
+                row.cartonQty = value;
+            }
+
+            return true;
+        },
+    },
+    {
+        headerName: "",
+        field: "selected",
+        width: 90,
+        sortable: false,
+        filter: false,
+        resizable: false,
+
+        headerComponent: SelectAllHeader,
+
+        cellRenderer: (params) => {
+            const checkbox = document.createElement("input");
+
+            checkbox.type = "checkbox";
+            checkbox.checked = params.data.selected ?? false;
+
+            checkbox.addEventListener("change", (event) => {
+                const checked = event.target.checked;
+
+                const maxQty = getMaxGarmentQty(params.data);
+
+                const garmentQty = checked ? maxQty : 0;
+
+                params.node.setDataValue("selected", checked);
+                params.node.setDataValue("garmentQty", garmentQty);
+
+                const row = rawData.value.find(
+                    (item) => item.iddetail === params.data.iddetail
+                );
+
+                if (row) {
+                    row.selected = checked;
+                    row.garmentQty = garmentQty;
+                }
+
+                // Refresh tampilan Garment Qty
+                params.api.refreshCells({
+                    rowNodes: [params.node],
+                    columns: ["garmentQty"],
+                    force: true,
+                });
+            });
+
+            return checkbox;
+        },
+    },
+];
+
+const formatDate = (date) => {
+    if (!date) return "-";
+
+    const parsedDate = new Date(date);
+
+    if (isNaN(parsedDate.getTime())) return "-";
+
+    return parsedDate.toLocaleString("id-ID", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+};
+
+const loadData = async () => {
+    try {
+        loading.show();
+
+        const params = new URLSearchParams({
+            idorder: idorder,
+            idcolor: idcolor,
+        });
+
+        if (form.value.date) {
+            if (Array.isArray(form.value.date)) {
+                form.value.date.forEach((date) => {
+                    params.append("date", date);
+                });
+            } else {
+                params.append("date", form.value.date);
+            }
+        }
+
+        const endpoint = `/api/v1/deliveryfinishgood/input?${params.toString()}`;
+
+        const { data } = await api.get(endpoint);
+
+        const detail = data?.data?.detail ?? [];
+        const total = data?.data?.total ?? [];
+
+        rawDataFiles.value = data?.data?.files ?? [];
+
+        const totalSentMap = total.reduce((acc, item) => {
+            const id = item.iddetail;
+            acc[id] = (acc[id] || 0) + Number(item.qty ?? 0);
+            return acc;
+        }, {});
+
+        const totalReceiveMap = total.reduce((acc, item) => {
+            const id = item.iddetail;
+            acc[id] = (acc[id] || 0) + Number(item.receiveqty ?? 0);
+            return acc;
+        }, {});
+
+        const totalCartonSentMap = total.reduce((acc, item) => {
+            const id = item.iddetail;
+            acc[id] = (acc[id] || 0) + Number(item.qtyctn ?? 0);
+            return acc;
+        }, {});
+
+        const totalCartonReceiveMap = total.reduce((acc, item) => {
+            const id = item.iddetail;
+            acc[id] = (acc[id] || 0) + Number(item.receiveqtyctn ?? 0);
+            return acc;
+        }, {});
+
+        rawData.value = detail.map((item, index) => ({
+            ...item,
+            no: index + 1,
+
+            totalSent: totalSentMap[item.iddetail] ?? 0,
+            totalReceive: totalReceiveMap[item.iddetail] ?? 0,
+            totalCartonSent: totalCartonSentMap[item.iddetail] ?? 0,
+            totalCartonReceive: totalCartonReceiveMap[item.iddetail] ?? 0,
+
+            garmentQty: 0,
+            cartonQty: 0,
+            selected: false,
+        }));
+
+        rawDataHeader.value = data?.data ?? {};
+
+        shipmentMode.value =
+            data?.data?.order?.purchaseorder?.shipby ?? "";
+
+        rawDataAll.value = data
+            ? [{
+                ...data,
+                no: 1,
+            }]
+            : [];
+
+    } catch (err) {
+        console.error(err);
+
+        if (err?.response?.status === 401) {
+            router.push("/login");
+        }
+    } finally {
+        loading.hide();
     }
+};
 
-    // ... sisanya tetap sama
+const loadDataDate = async () => {
+    try {
+        const params = new URLSearchParams({
+            idorder: idorder,
+            idcolor: idcolor,
+        });
 
+        const { data } = await api.get(
+            `/api/v1/deliveryfinishgood/selectdate?${params.toString()}`
+        );
+
+        dates.value = (data?.data?.dates ?? []).map((item) => ({
+            value: item.date,
+            label: item.date,
+        }));
+
+        // Set tanggal pertama sebagai default filter
+        if (dates.value.length > 0) {
+            form.value.date = [dates.value[0].value];
+        } else {
+            form.value.date = [];
+        }
+
+    } catch (err) {
+        console.error("Failed Load Dates:", err);
+
+        if (err?.response?.status === 401) {
+            router.push("/login");
+        }
+    }
+};
+
+onMounted(async () => {
+    await loadDataDate();
+    await loadData();
+});
+</script>
+
+<style scoped>
+.label {
+    white-space: nowrap;
+    display: inline-block;
+    width: 120px;
+    font-weight: 600;
+}
+:deep(.ag-header-cell.custom-header) {
+    background-color: #c5c5c9 !important;
+}
+</style>
