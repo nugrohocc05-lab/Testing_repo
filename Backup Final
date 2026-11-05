@@ -1,34 +1,1271 @@
-// Garment Qty
-{
-    field: "garmentQty",
-    headerName: "Garment Qty",
-    minWidth: 130,
-    editable: true,
-    flex: 1,
-    cellClass: "editable-cell",   // <-- ganti cellStyle jadi ini
-    // ...sisanya tetap
-},
+<template>
+    <div class="px-6">
+        <UiTitle
+            :is-back="true"
+            align="center"
+            title="Receiving Finish Goods Detail"
+        >
+            <template #action-left>
+                <UiButton variant="teritary" @click="router.back()">
+                    <ArrowLeftStartOnRectangleIcon class="h-5 w-5" />
+                    <span class="text-xl ml-1">Back</span>
+                </UiButton>
+            </template>
+        </UiTitle>
+        <UiCard class="mt-10 text-xs md:text-lg">
+            <UiGrid cols="3" gap="sm">
+                <div>
+                    <span class="label">Style</span> :
+                    {{ rawDataHeader.header?.style }}
+                </div>
+                <div>
+                    <span class="label">PRO</span> :
+                    {{ rawDataHeader.order?.combine_pro }}
+                </div>
+                <div>
+                    <span class="label">Order Date</span> :
+                    {{ rawDataHeader.order?.orderdate }}
+                </div>
 
-// Carton Qty
-{
-    field: "cartonQty",
-    headerName: "Carton Qty",
-    minWidth: 130,
-    editable: true,
-    flex: 1,
-    cellClass: "editable-cell",   // <-- ganti cellStyle jadi ini
-    valueFormatter: (params) =>
-        params.value === null || params.value === undefined || params.value === ""
-            ? "Input qty"
-            : params.value,
-    cellClassRules: {
-        "editable-cell-empty": (params) =>
-            params.value === null ||
-            params.value === undefined ||
-            params.value === "",
+                <div>
+                    <span class="label">KP</span> :
+                    {{ rawDataHeader?.header?.kp }}
+                </div>
+                <div>
+                    <span class="label">Order Number</span> :
+                    {{ rawDataHeader.order?.ordernumber }}
+                </div>
+                <div>
+                    <span class="label">Color</span> :
+                    {{ rawDataHeader.header?.namacolor }}
+                </div>
+                <div>
+                    <span class="label">PO</span> :
+                    {{ rawDataHeader.header?.po }}
+                </div>
+            </UiGrid>
+        </UiCard>
+        <UiCard
+            class="mt-5"
+            title="Delivery Detail"
+        >
+            <!-- Filter Section -->
+            <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-end">
+                <div class="w-full md:w-60">
+                    <UiMultiSelect
+                        label="Date"
+                        placeholder="-- Select Date --"
+                        class="w-full"
+                        v-model="form.date" 
+                        :options="dates"
+                    />
+                </div>
+
+                <div class="w-full md:ml-auto md:w-60">
+                    <UiInput
+                        v-model="searchKeyword"
+                        placeholder="Search"
+                        class="w-full rounded-lg"
+                    >
+                        <template #prefix>
+                            <MagnifyingGlassIcon class="h-5 w-5 text-gray-400" />
+                        </template>
+                    </UiInput>
+                </div>
+            </div>
+
+            <!-- Data Grid -->
+            <UiAgGrid
+                class="my-zebra-grid"
+                :rowData="rawData"
+                :columnDefs="columnDefs"
+                :quickFilterText="searchKeyword"
+                :defaultColDef="defaultColDef"
+                :singleClickEdit="true"
+                :stopEditingWhenCellsLoseFocus="true"
+            />       
+            <!-- <div class="mt-4 flex justify-end">
+                <UiButton @click="handleSendClick">
+                    Receive
+                </UiButton>
+            </div> -->
+            <div v-if="canReceive" class="mt-4 flex justify-end">
+                <UiButton @click="handleSendClick">
+                    Receive
+                </UiButton>
+            </div>
+        </UiCard>
+        <UiCard class="mt-4">
+            <div class="flex min-w-0 flex-col gap-2">
+                <span class="text-xl font-bold">Files</span>
+
+                <template v-if="rawDataFiles.length > 0">
+                    <div
+                        v-for="f in rawDataFiles"
+                        :key="`${f.iddelivery}-${f.filename}`"
+                        class="group flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-3 transition hover:border-gray-300 hover:bg-gray-50"
+                    >
+                        <div
+                            class="flex min-w-0 flex-1 cursor-pointer items-center gap-3"
+                            @click="downloadFile(f)"
+                        >
+                            <div
+                                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-50"
+                            >
+                                <FileIcon :extension="f.extension" />
+                            </div>
+
+                            <div class="min-w-0 flex-1">
+                                <p class="truncate text-sm font-medium text-gray-800">
+                                    {{ f.filename }}.{{ f.extension }}
+                                </p>
+
+                                <div class="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+                                    <p class="text-xs text-gray-400">
+                                        <span class="font-medium text-gray-500">
+                                            Uploaded:
+                                        </span>
+                                        {{ formatDate(f.modified) }}
+                                    </p>
+
+                                    <p class="text-xs text-gray-400">
+                                        <span class="font-medium text-gray-500">
+                                            Upload By:
+                                        </span>
+                                        {{ f.userid || '-' }}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <div
+                    v-else
+                    class="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3"
+                >
+                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-50">
+                        <FileIcon />
+                    </div>
+
+                    <div class="min-w-0 flex-1">
+                        <p class="truncate text-sm font-medium text-gray-800">
+                            No files available
+                        </p>
+
+                        <p class="mt-0.5 text-xs text-gray-400">
+                            No files have been uploaded yet
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </UiCard>
+    </div>
+    <UiModal
+        v-model="showSendModal"
+        title="Delivery Order"
+        size="2xl"
+    >
+        <div class="space-y-4 -mt-3">
+            <UiInput
+                v-model="invoice"
+                label="Invoice"
+                placeholder="Enter Invoice Number"
+                class="w-full"
+                maxLength="50"
+                filter="number-decimal"
+                required
+            />
+
+            <UiInput
+                v-model="remark"
+                label="Remark"
+                placeholder="Enter Remark"
+                class="w-full"
+                maxLength="50"
+                required
+            />
+
+            <!-- <UiMultiSelect
+                v-model="grade"
+                label="Grade"
+                placeholder="-- Select Grade --"
+                :options="[
+                    { value: 'A', label: 'A' },
+                    { value: 'B', label: 'B' },
+                    { value: 'C', label: 'C' }
+                ]"
+                mode="single"
+                :searchable="false"
+                :clearable="true"
+                class="w-full"
+                required
+            /> -->
+
+            <div class="space-y-3">
+                <div>
+                    <label class="text-sm font-semibold text-gray-700">
+                        Grade <span class="text-red-500">*</span>
+                    </label>
+                    <p class="mt-1 text-xs text-gray-500">
+                        Select a grade for this delivery.
+                    </p>
+                </div>
+
+                <div class="space-y-2">
+                    <button
+                        v-for="item in [
+                            { value: 'A', label: 'Grade A' },
+                            { value: 'B', label: 'Grade B' },
+                            { value: 'C', label: 'Grade C' }
+                        ]"
+                        :key="item.value"
+                        type="button"
+                        @click="grade = item.value"
+                        class="flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all duration-150"
+                        :class="grade === item.value
+                            ? 'border-[#1FBCC3] bg-[#1FBCC3]/5 ring-1 ring-[#1FBCC3]/30'
+                            : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'"
+                    >
+                        <!-- Radio indicator -->
+                        <span
+                            class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2"
+                            :class="grade === item.value
+                                ? 'border-[#1FBCC3]'
+                                : 'border-gray-300'"
+                        >
+                            <span
+                                v-if="grade === item.value"
+                                class="h-2.5 w-2.5 rounded-full bg-[#1FBCC3]"
+                            />
+                        </span>
+
+                        <!-- Grade name -->
+                        <span
+                            class="min-w-0 flex-1 text-sm font-medium"
+                            :class="grade === item.value
+                                ? 'text-[#147F84]'
+                                : 'text-gray-700'"
+                        >
+                            {{ item.label }}
+                        </span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-3">
+                <UiButton
+                    variant="teritary"
+                    @click="showSendModal = false"
+                >
+                    Cancel
+                </UiButton>
+
+                <UiButton @click="confirmSend">
+                    Confirm
+                </UiButton>
+            </div>
+        </div>
+    </UiModal>
+</template>
+
+<script setup>
+import { ref, onMounted, defineComponent, h, watch, computed } from "vue";
+import { useRouter, useRoute } from "vue-router";
+import { useLoadingStore } from "@/stores/loading";
+import { MagnifyingGlassIcon, ArrowLeftStartOnRectangleIcon, InformationCircleIcon, DocumentPlusIcon, ArrowRightCircleIcon } from "@heroicons/vue/24/outline";
+
+import UiButton from "@/components/ui/UiButton.vue"
+import UiInput from "@/components/ui/UiInput.vue"
+import UiCard from "@/components/ui/UiCard.vue"
+import UiTitle from "@/components/ui/UiTitle.vue"
+import UiGrid from "@/components/ui/UiGrid.vue";
+import UiAgGrid from "@/components/ui/UiAgGrid.vue";
+
+import api from "@/services/api";
+import FileIcon from "@/components/ui/FileIcon.vue";
+import { customSwal } from "@/composable/customSwal";
+const { confirmDelete, success, warning, error } = customSwal;
+
+import { decrypt } from "@/utils/crypto";
+import UiMultiSelect from "@/components/ui/UiMultiSelect.vue";
+import UiModal from "@/components/ui/UiModal.vue";
+
+const loading = useLoadingStore();
+const router = useRouter();
+const route = useRoute();
+const rawData = ref([]);
+const rawDataAll = ref([]);
+const rawDataHeader = ref([]);
+const searchKeyword = ref('')
+const dates = ref([]);
+const showSendModal = ref(false);
+const rawDataFiles = ref([]);
+
+const shipmentMode = ref("");
+const deliveryFile = ref(null);
+const invoice = ref("");
+const remark = ref("");
+const grade = ref("");
+const tanggal = ref(
+    new Date().toISOString().slice(0, 10)
+);
+
+const idorder = decrypt(
+    decodeURIComponent(route.params.idorder)
+);
+
+const idcolor = decrypt(
+    decodeURIComponent(route.params.idcolor)
+);
+
+const handleSendClick = async () => {
+    const selectedData = rawData.value.filter(
+        (item) => Number(item.garmentQty) > 0
+    );
+
+    if (selectedData.length === 0) {
+        await warning({
+            title: "Warning",
+            text: "Please input Garment Qty for at least one item.",
+        });
+        return;
+    }
+
+    const invalidCarton = selectedData.some(
+        (item) =>
+            item.cartonQty === null ||
+            item.cartonQty === undefined ||
+            item.cartonQty === "" ||
+            !Number.isFinite(Number(item.cartonQty)) ||
+            Number(item.cartonQty) <= 0
+    );
+
+    if (invalidCarton) {
+        await warning({
+            title: "Warning",
+            text: "Please input Carton Qty greater than 0 for all selected items.",
+        });
+        return;
+    }
+
+    showSendModal.value = true;
+};
+
+const form = ref({
+    date: [],
+});
+
+const defaultColDef = {
+    sortable: true,
+    filter: false,
+    resizable: true,
+};
+
+const dataSelected = ref(null);
+
+const modalForm = ref({
+    order: "",
+    color: "",
+    size: "",
+    quantity: "",
+    iddetail: "",
+    idorder: "",
+    process: "",
+});
+
+watch(
+    () => form.value.date,
+    () => {
+        loadData();
     },
-    // ...sisanya tetap
-},
+    { deep: true }
+);
+
+const handleFile = (event) => {
+    const file = event.target.files?.[0] ?? null;
+
+    if (!file) {
+        deliveryFile.value = null;
+        return;
+    }
+
+    const allowedExtensions = ["pdf", "xls", "xlsx"];
+    const extension = file.name.split(".").pop().toLowerCase();
+
+    if (!allowedExtensions.includes(extension)) {
+        warning({
+            title: "Invalid File",
+            text: "Only PDF, XLS, or XLSX files are allowed.",
+        });
+        event.target.value = "";
+        return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+        warning({
+            title: "File Too Large",
+            text: "Maximum file size is 2MB.",
+        });
+        event.target.value = "";
+        return;
+    }
+
+    deliveryFile.value = file;
+};
+
+
+const confirmSend = async () => {
+    try {
+        const selectedData = rawData.value.filter(
+            (item) => Number(item.garmentQty) > 0
+        );
+
+        if (selectedData.length === 0) {
+            await warning({
+                title: "Warning",
+                text: "Please select at least one item.",
+            });
+            return;
+        }
+
+        if (!invoice.value.trim()) {
+            await warning({
+                title: "Warning",
+                text: "Invoice is required.",
+            });
+            return;
+        }
+
+        if (!remark.value.trim()) {
+            await warning({
+                title: "Warning",
+                text: "Remark is required.",
+            });
+            return;
+        }
+
+        if (!tanggal.value) {
+            await warning({
+                title: "Warning",
+                text: "Date is required.",
+            });
+            return;
+        }
+
+        if (!["A", "B", "C"].includes(grade.value)) {
+            await warning({
+                title: "Warning",
+                text: "Please select Grade A, B, or C.",
+            });
+            return;
+        }
+
+        const inputqty = {};
+        const inputctn = {};
+
+        selectedData.forEach((item) => {
+            inputqty[item.iddetail] = Number(item.garmentQty);
+            inputctn[item.iddetail] = Number(item.cartonQty);
+        });
+
+        const payload = {
+            idorder: idorder,
+            idcolor: idcolor,
+            tanggal: tanggal.value,
+            invoice: invoice.value.trim(),
+            remark: remark.value.trim(),
+            grade: grade.value,
+            inputqty,
+            inputctn,
+        };
+
+        loading.show();
+
+        const { data } = await api.post(
+            "/api/v1/receivefinishgood/deliver",
+            payload
+        );
+
+        loading.hide();
+
+        showSendModal.value = false;
+
+        invoice.value = "";
+        remark.value = "";
+        grade.value = "";
+        tanggal.value = new Date().toISOString().slice(0, 10);
+
+        await success({
+            title: "Success",
+            text: data?.message || "Receive successfully saved.",
+        });
+
+        await loadData();
+    } catch (err) {
+        loading.hide();
+        if (err?.response?.status === 401) {
+            router.push("/login");
+            return;
+        }
+
+        await error({
+            title: "Receive Failed",
+            text:
+                err?.response?.data?.message ||
+                err?.message ||
+                "Failed to receive finish goods.",
+        });
+    } finally {
+        loading.hide();
+    }
+};
+
+
+const ActionRenderer = defineComponent({
+    props: {
+        params: {
+            type: Object,
+            required: true,
+        },
+    },
+
+    setup(props) {
+        const detailData = () => {
+            dataSelected.value = props.params.data;
+
+            modalForm.value = {
+                order: rawDataHeader.value[0]?.order_number ?? "",
+                color: rawDataHeader.value[0]?.color ?? "",
+                size: props.params.data?.namasize ?? "",
+                // quantity: props.params.data?.qty ?? 0,
+                quantity: '',
+                iddetail: props.params.data?.iddetail ?? "",
+                idorder: props.params.data?.idorder ?? "",
+                process: process,
+            };
+
+            showModal.value = true;
+        };
+
+        return () =>
+            h("div", { class: "flex h-full px-3 gap-2" }, [
+                h("button", {
+                    type: "button",
+                    title: "Detail",
+                    class: "cursor-pointer text-sky-500 transition hover:text-sky-700",
+                    onClick: detailData,
+                }, [
+                    h(ArrowRightCircleIcon, {
+                        class: "h-5 w-5",
+                    }),
+                ]),
+            ]);
+    },
+});
+
+const confirmInput = async () => {
+    if (
+        modalForm.value.quantity === "" ||
+        modalForm.value.quantity === null ||
+        modalForm.value.quantity === undefined
+    ) {
+        await warning({
+            title: "Warning",
+            text: "Please input quantity first.",
+        });
+        return;
+    }
+
+    if (
+        isNaN(Number(modalForm.value.quantity)) ||
+        Number(modalForm.value.quantity) <= 0
+    ) {
+        await warning({
+            title: "Warning",
+            text: "Quantity must be a number greater than 0.",
+        });
+        return;
+    }
+
+    try {
+        loading.show();
+
+        const payload = {
+            iddetail: modalForm.value.iddetail,
+            quantity: Number(modalForm.value.quantity),
+            proc: modalForm.value.process,
+        };
+
+        const { data } = await api.post(
+            `/api/v1/inputproduction/inputdaily/${idorder}`,
+            payload
+        );
+
+        loading.hide();
+
+        showModal.value = false;
+
+        await loadData();
+
+        await success({
+            title: "Success",
+            text: data?.message || "Data successfully saved.",
+        });
+
+    } catch (err) {
+        loading.hide();
+        if (err?.response?.status === 401) {
+            router.push("/login");
+            return;
+        }
+
+        await error({
+            title: "Confirm Failed",
+            text:
+                err?.response?.data?.message ||
+                err?.message ||
+                "Failed to confirm data.",
+        });
+    } finally {
+        loading.hide();
+    }
+};
+
+const downloadFile = async (file) => {
+    let url = null;
+
+    try {
+        loading.show();
+
+        const endpoint = `/api/v1/deliveryfinishgood/showfile/${encodeURIComponent(file.filename)}`;
+
+        const response = await api.get(endpoint, {
+            responseType: "blob",
+        });
+
+        if (!response.data || response.data.size === 0) {
+            throw new Error("File is empty or unavailable.");
+        }
+
+        const blob = new Blob([response.data], {
+            type: response.data.type || "application/octet-stream",
+        });
+
+        url = window.URL.createObjectURL(blob);
+
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${file.filename}.${file.extension}`;
+
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        setTimeout(() => {
+            window.URL.revokeObjectURL(url);
+        }, 1000);
+
+    } catch (err) {
+        console.error("Download error:", err);
+
+        let message = "An error occurred while downloading the file.";
+
+        if (err.response?.data instanceof Blob) {
+            try {
+                const text = await err.response.data.text();
+                const errorData = JSON.parse(text);
+                message = errorData.message || message;
+            } catch {
+                message = "Failed to download file.";
+            }
+        } else {
+            message =
+                err.response?.data?.message ||
+                err.message ||
+                message;
+        }
+
+        await customSwal.error({
+            title: "Download Failed",
+            text: message,
+        });
+
+    } finally {
+        loading.hide();
+    }
+};
+
+class SelectAllHeader {
+    init(params) {
+        this.params = params;
+
+        this.eGui = document.createElement("div");
+        this.eGui.style.display = "flex";
+        this.eGui.style.alignItems = "center";
+        this.eGui.style.justifyContent = "center";
+        this.eGui.style.height = "100%";
+
+        this.checkbox = document.createElement("input");
+        this.checkbox.type = "checkbox";
+        this.checkbox.title = "Select All";
+
+        // this.onChange = (event) => {
+        //     const checked = event.target.checked;
+
+        //     this.params.api.forEachNode((node) => {
+        //         const maxQty = getMaxGarmentQty(node.data);
+
+        //         const garmentQty = checked ? maxQty : 0;
+
+        //         node.setDataValue("selected", checked);
+        //         node.setDataValue("garmentQty", garmentQty);
+
+        //         const row = rawData.value.find(
+        //             (item) => item.iddetail === node.data.iddetail
+        //         );
+
+        //         if (row) {
+        //             row.selected = checked;
+        //             row.garmentQty = garmentQty;
+        //         }
+        //     });
+
+        //     this.params.api.refreshCells({
+        //         columns: ["garmentQty", "selected"],
+        //         force: true,
+        //     });
+        // };
+
+        this.onChange = (event) => {
+            const checked = event.target.checked;
+
+            this.params.api.forEachNode((node) => {
+                const garmentQty = checked
+                    ? getMaxGarmentQty(node.data)
+                    : 0;
+
+                const cartonQty = checked
+                    ? getMaxCartonQty(node.data)
+                    : 0;
+
+                node.setDataValue("selected", checked);
+                node.setDataValue("garmentQty", garmentQty);
+                node.setDataValue("cartonQty", cartonQty);
+
+                const row = rawData.value.find(
+                    (item) => item.iddetail === node.data.iddetail
+                );
+
+                if (row) {
+                    row.selected = checked;
+                    row.garmentQty = garmentQty;
+                    row.cartonQty = cartonQty;
+                }
+            });
+
+            this.params.api.refreshCells({
+                columns: ["garmentQty", "cartonQty", "selected"],
+                force: true,
+            });
+        };
+
+        this.checkbox.addEventListener("change", this.onChange);
+        this.eGui.appendChild(this.checkbox);
+    }
+
+    getGui() {
+        return this.eGui;
+    }
+
+    refresh() {
+        return false;
+    }
+
+    destroy() {
+        this.checkbox.removeEventListener("change", this.onChange);
+    }
+}
+
+const canReceive = computed(() => {
+    return rawData.value.some((item) => {
+        return (
+            item.receive === 0 ||
+            item.receive === null ||
+            item.receive === undefined
+        ) && Number(item.sent) > 0;
+    });
+});
+
+const getMaxGarmentQty = (data) => {
+    return Math.max(0, Number(data.sent ?? 0));
+};
+
+const getMaxCartonQty = (data) => {
+    return Math.max(0, Number(data.totalCartonSent ?? 0));
+};
+
+const columnDefs = [
+    {
+        field: "size.namasize",
+        headerName: "Size",
+        minWidth: 90,
+        maxWidth: 120,
+    },
+    {
+        field: "qty",
+        headerName: "Total Order",
+        minWidth: 110,
+        flex: 1,
+    },
+    {
+        field: "totalSent",
+        headerName: "Total Sent",
+        minWidth: 100,
+        flex: 1,
+    },
+    {
+        field: "totalReceive",
+        headerName: "Total Receive",
+        minWidth: 120,
+        flex: 1,
+    },
+    {
+        field: "sent",
+        headerName: "Sent",
+        minWidth: 120,
+        flex: 1,
+    },
+    {
+        field: "receive",
+        headerName: "Receive",
+        minWidth: 120,
+        flex: 1,
+    },
+    {
+        field: "totalCartonSent",
+        headerName: "Total Carton Sent",
+        minWidth: 150,
+        flex: 1,
+    },
+    {
+        field: "totalCartonReceive",
+        headerName: "Total Carton Receive",
+        minWidth: 180,
+        flex: 1,
+    },
+
+    // Garment Qty
+    // {
+    //     field: "garmentQty",
+    //     headerName: "Garment Qty",
+    //     minWidth: 130,
+    //     editable: true,
+    //     flex: 1,
+
+    //     cellStyle: {
+    //         color: "#1D4ED8",
+    //         fontWeight: "600",
+    //         cursor: "text",
+    //     },
+
+    //     cellEditor: "agNumberCellEditor",
+
+    //     cellEditorParams: (params) => ({
+    //         min: 0,
+    //         max: getMaxGarmentQty(params.data),
+    //         precision: 0,
+    //     }),
+
+    //     valueParser: (params) => {
+    //         const value = Number(params.newValue);
+    //         return Number.isFinite(value) ? value : 0;
+    //     },
+
+    //     valueSetter: (params) => {
+    //         const maxQty = getMaxGarmentQty(params.data);
+    //         let value = Number(params.newValue);
+
+    //         if (!Number.isFinite(value) || value < 0) {
+    //             value = 0;
+    //         }
+
+    //         if (value > maxQty) {
+    //             value = maxQty;
+    //         }
+
+    //         params.data.garmentQty = value;
+    //         params.data.selected = value > 0;
+
+    //         const row = rawData.value.find(
+    //             (item) => item.iddetail === params.data.iddetail
+    //         );
+
+    //         if (row) {
+    //             row.garmentQty = value;
+    //             row.selected = value > 0;
+    //         }
+
+    //         return true;
+    //     },
+    // },
+
+    {
+        field: "garmentQty",
+        headerName: "Garment Qty",
+        minWidth: 130,
+        editable: false,
+        flex: 1,
+
+        cellStyle: {
+            color: "#1D4ED8",
+            fontWeight: "600",
+        },
+    },
+
+    // Carton Qty
+    // {
+    //     field: "cartonQty",
+    //     headerName: "Carton Qty",
+    //     minWidth: 130,
+    //     editable: true,
+    //     flex: 1,
+
+    //     cellStyle: {
+    //         color: "#1D4ED8",
+    //         fontWeight: "600",
+    //         cursor: "text",
+    //     },
+
+    //     cellEditor: "agNumberCellEditor",
+
+    //     cellEditorParams: {
+    //         min: 0,
+    //         precision: 0,
+    //     },
+
+    //     valueParser: (params) => {
+    //         if (
+    //             params.newValue === "" ||
+    //             params.newValue === null ||
+    //             params.newValue === undefined
+    //         ) {
+    //             return null;
+    //         }
+
+    //         const value = Number(params.newValue);
+
+    //         return Number.isFinite(value) && value >= 0
+    //             ? value
+    //             : params.oldValue;
+    //     },
+
+    //     valueSetter: (params) => {
+    //         let value = params.newValue;
+
+    //         if (value === "" || value === undefined) {
+    //             value = null;
+    //         }
+
+    //         params.data.cartonQty = value;
+
+    //         const row = rawData.value.find(
+    //             (item) => item.iddetail === params.data.iddetail
+    //         );
+
+    //         if (row) {
+    //             row.cartonQty = value;
+    //         }
+
+    //         return true;
+    //     },
+    // },
+
+    {
+        field: "cartonQty",
+        headerName: "Carton Qty",
+        minWidth: 130,
+        editable: false,
+        flex: 1,
+
+        cellStyle: {
+            color: "#1D4ED8",
+            fontWeight: "600",
+        },
+    },
+
+    // Checkbox
+    {
+        headerName: "",
+        field: "selected",
+        width: 90,
+        sortable: false,
+        filter: false,
+        resizable: false,
+
+        headerComponent: SelectAllHeader,
+
+        // cellRenderer: (params) => {
+        //     const checkbox = document.createElement("input");
+
+        //     checkbox.type = "checkbox";
+        //     checkbox.checked = params.data.selected ?? false;
+
+        //     checkbox.addEventListener("change", (event) => {
+        //         const checked = event.target.checked;
+
+        //         const garmentQty = checked
+        //             ? getMaxGarmentQty(params.data)
+        //             : 0;
+
+        //         const cartonQty = checked
+        //             ? getMaxCartonQty(params.data)
+        //             : 0;
+
+        //         params.node.setDataValue("selected", checked);
+        //         params.node.setDataValue("garmentQty", garmentQty);
+        //         params.node.setDataValue("cartonQty", cartonQty);
+
+        //         const row = rawData.value.find(
+        //             (item) => item.iddetail === params.data.iddetail
+        //         );
+
+        //         if (row) {
+        //             row.selected = checked;
+        //             row.garmentQty = garmentQty;
+        //             row.cartonQty = cartonQty;
+        //         }
+
+        //         params.api.refreshCells({
+        //             rowNodes: [params.node],
+        //             columns: ["garmentQty", "cartonQty"],
+        //             force: true,
+        //         });
+        //     });
+
+        //     return checkbox;
+        // },
+        cellRenderer: (params) => {
+            if (
+                params.data.receive !== null &&
+                params.data.receive !== undefined &&
+                Number(params.data.receive) !== 0
+            ) {
+                return "";
+            }
+
+            const checkbox = document.createElement("input");
+
+            checkbox.type = "checkbox";
+            checkbox.checked = params.data.selected ?? false;
+
+            checkbox.addEventListener("change", (event) => {
+                const checked = event.target.checked;
+
+                const garmentQty = checked
+                    ? getMaxGarmentQty(params.data)
+                    : 0;
+
+                const cartonQty = checked
+                    ? getMaxCartonQty(params.data)
+                    : 0;
+
+                params.node.setDataValue("selected", checked);
+                params.node.setDataValue("garmentQty", garmentQty);
+                params.node.setDataValue("cartonQty", cartonQty);
+
+                const row = rawData.value.find(
+                    (item) => item.iddetail === params.data.iddetail
+                );
+
+                if (row) {
+                    row.selected = checked;
+                    row.garmentQty = garmentQty;
+                    row.cartonQty = cartonQty;
+                }
+
+                params.api.refreshCells({
+                    rowNodes: [params.node],
+                    columns: ["garmentQty", "cartonQty"],
+                    force: true,
+                });
+            });
+
+            return checkbox;
+        },
+    },
+];
+
+const formatDate = (date) => {
+    if (!date) return "-";
+
+    const parsedDate = new Date(date);
+
+    if (isNaN(parsedDate.getTime())) return "-";
+
+    return parsedDate.toLocaleString("id-ID", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+};
+
+const loadData = async () => {
+    try {
+        loading.show();
+
+        const params = new URLSearchParams({
+            idorder: idorder,
+            idcolor: idcolor,
+        });
+
+        if (form.value.date) {
+            const selectedDates = Array.isArray(form.value.date)
+                ? form.value.date
+                : [form.value.date];
+
+            selectedDates.forEach((date) => {
+                params.append("date[]", date);
+            });
+        }
+
+        console.log("Selected Date:", form.value.date);
+        console.log("Request URL:", params.toString());
+
+
+        const endpoint = `/api/v1/receivefinishgood/input?${params.toString()}`;
+
+        const { data } = await api.get(endpoint);
+
+        const detail = data?.data?.detail ?? [];
+        const datas = data?.data?.data ?? [];
+        const total = data?.data?.total ?? [];
+
+        const totalSentMap = total.reduce((acc, item) => {
+            const id = item.iddetail;
+
+            acc[id] = (acc[id] || 0) + Number(item.qty ?? 0);
+
+            return acc;
+        }, {});
+
+        const totalReceiveMap = total.reduce((acc, item) => {
+            const id = item.iddetail;
+
+            acc[id] = (acc[id] || 0) + Number(item.receiveqty ?? 0);
+
+            return acc;
+        }, {});
+
+        const SentMap = datas.reduce((acc, item) => {
+            const id = item.iddetail;
+
+            acc[id] = (acc[id] || 0) + Number(item.qty ?? 0);
+
+            return acc;
+        }, {});
+
+        const ReceiveMap = datas.reduce((acc, item) => {
+            const id = item.iddetail;
+
+            acc[id] = (acc[id] || 0) + Number(item.receiveqty ?? 0);
+
+            return acc;
+        }, {});
+
+        const totalCartonSentMap = datas.reduce((acc, item) => {
+            const id = item.iddetail;
+
+            acc[id] = (acc[id] || 0) + Number(item.qtyctn ?? 0);
+
+            return acc;
+        }, {});
+
+        const totalCartonReceiveMap = datas.reduce((acc, item) => {
+            const id = item.iddetail;
+
+            acc[id] = (acc[id] || 0) + Number(item.receiveqtyctn ?? 0);
+
+            return acc;
+        }, {});
+
+        rawData.value = detail.map((item, index) => ({
+            ...item,
+            no: index + 1,
+
+            totalSent: totalSentMap[item.iddetail] ?? 0,
+            totalReceive: totalReceiveMap[item.iddetail] ?? 0,
+            totalCartonSent: totalCartonSentMap[item.iddetail] ?? 0,
+            totalCartonReceive: totalCartonReceiveMap[item.iddetail] ?? 0,
+            sent: SentMap[item.iddetail] ?? 0,
+            receive: ReceiveMap[item.iddetail] ?? 0,
+
+            garmentQty: 0,
+            cartonQty: 0,
+            selected: false,
+        }));
+
+        rawDataHeader.value = data?.data ?? {};
+        rawDataFiles.value = (data?.data?.files ?? []).map((file) => ({
+            ...file,
+            filename: file.filename ?? "",
+            extension: file.extension ?? "",
+            userid: file.userid ?? "-",
+        }));
+
+        console.log("Response Files:", data?.data?.files);
+        console.log("Raw Data Files:", rawDataFiles.value);
+
+        shipmentMode.value = data?.data?.order?.purchaseorder?.shipby ?? "";
+
+        rawDataAll.value = data
+            ? [{
+                ...data,
+                no: 1,
+            }]
+            : [];
+
+    } catch (err) {
+        console.error(err);
+
+        if (err?.response?.status === 401) {
+            router.push("/login");
+        }
+    } finally {
+        loading.hide();
+    }
+};
+
+const loadDataDate = async () => {
+    try {
+        const { data } = await api.get(
+            `/api/v1/receivefinishgood/selectdate?idorder=${idorder}&idcolor=${idcolor}`
+        );
+
+        dates.value = (data?.data ?? []).map((item) => ({
+            value: item.date,
+            label: item.date,
+        }));
+
+        if (dates.value.length > 0 && form.value.date.length === 0) {
+            form.value.date = [dates.value[0].value];
+        }
+
+    } catch (err) {
+        console.error("Failed Load Dates:", err);
+
+        if (err?.response?.status === 401) {
+            router.push("/login");
+        }
+    }
+};
+
+onMounted(async () => {
+    await loadDataDate();
+});
+</script>
 
 <style scoped>
 .label {
@@ -37,48 +1274,4 @@
     width: 120px;
     font-weight: 600;
 }
-
-/* Sel yang bisa diedit: tampil seperti input */
-:deep(.editable-cell) {
-    color: #1d4ed8;
-    font-weight: 600;
-    cursor: text;
-    background-color: #eff6ff;          /* biru muda */
-    border: 1px solid #bfdbfe !important;
-    border-radius: 6px;
-    transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
-}
-
-/* Hover: lebih menonjol */
-:deep(.editable-cell:hover) {
-    background-color: #dbeafe;
-    border-color: #60a5fa !important;
-}
-
-/* Placeholder saat kosong */
-:deep(.editable-cell-empty) {
-    color: #9ca3af;
-    font-weight: 400;
-    font-style: italic;
-}
-
-/* Saat sedang diedit (ada kursor kedip) */
-:deep(.ag-cell-inline-editing) {
-    border: 2px solid #2563eb !important;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
-    border-radius: 6px;
-    background: #fff;
-}
-
-:deep(.ag-cell-inline-editing input) {
-    color: #1d4ed8;
-    font-weight: 600;
-    caret-color: #2563eb;
-}
 </style>
-
-<UiAgGrid
-    ...
-    :singleClickEdit="true"
-    :stopEditingWhenCellsLoseFocus="true"
-/>
