@@ -1,97 +1,35 @@
-<div v-if="canSend" class="mt-4 flex justify-end">
-    <UiButton @click="handleSendClick">
-        Send
-    </UiButton>
-</div>
+headerClass: "editable-header",
+cellClass: (params) =>
+    isSendable(params.data) ? "editable-cell" : "readonly-cell",
 
-const isSendable = (data) => getMaxGarmentQty(data) > 0;
-
-const canSend = computed(() => rawData.value.some(isSendable));
-
-class SelectAllHeader {
-    init(params) {
-        this.params = params;
-
-        this.eGui = document.createElement("div");
-        this.eGui.style.display = "flex";
-        this.eGui.style.alignItems = "center";
-        this.eGui.style.justifyContent = "center";
-        this.eGui.style.height = "100%";
-
-        this.checkbox = document.createElement("input");
-        this.checkbox.type = "checkbox";
-        this.checkbox.title = "Select All";
-
-        this.updateVisibility = () => {
-            let hasSendable = false;
-
-            this.params.api.forEachNode((node) => {
-                if (node.data && isSendable(node.data)) {
-                    hasSendable = true;
-                }
-            });
-
-            this.checkbox.style.display = hasSendable ? "" : "none";
-
-            if (!hasSendable) {
-                this.checkbox.checked = false;
-            }
-        };
-
-        this.onChange = (event) => {
-            const checked = event.target.checked;
-
-            this.params.api.forEachNode((node) => {
-                // lewati baris yang sudah full sent
-                if (!node.data || !isSendable(node.data)) return;
-
-                const garmentQty = checked ? getMaxGarmentQty(node.data) : 0;
-
-                node.setDataValue("selected", checked);
-                node.setDataValue("garmentQty", garmentQty);
-
-                const row = rawData.value.find(
-                    (item) => item.iddetail === node.data.iddetail
-                );
-
-                if (row) {
-                    row.selected = checked;
-                    row.garmentQty = garmentQty;
-                }
-            });
-
-            this.params.api.refreshCells({
-                columns: ["garmentQty", "selected"],
-                force: true,
-            });
-        };
-
-        this.checkbox.addEventListener("change", this.onChange);
-        this.params.api.addEventListener("modelUpdated", this.updateVisibility);
-
-        this.eGui.appendChild(this.checkbox);
-        this.updateVisibility();
-    }
-
-    getGui() {
-        return this.eGui;
-    }
-
-    refresh() {
-        return false;
-    }
-
-    destroy() {
-        this.checkbox.removeEventListener("change", this.onChange);
-        this.params.api.removeEventListener("modelUpdated", this.updateVisibility);
-    }
+/* Header kolom editable: tint teal lembut + ikon pensil */
+:deep(.ag-header-cell.editable-header) {
+    background-color: #e6f8f9 !important;
+}
+:deep(.ag-header-cell.editable-header .ag-header-cell-text) {
+    color: #147f84;
+    font-weight: 600;
+}
+:deep(.ag-header-cell.editable-header .ag-header-cell-text)::after {
+    content: " ✎";
+    font-size: 0.85em;
 }
 
-cellRenderer: (params) => {
-    if (!isSendable(params.data)) {
-        return "";
-    }
+/* Sel editable: tampak seperti input */
+:deep(.ag-cell.editable-cell) {
+    background-color: #f0fbfc !important;
+    box-shadow: inset 0 0 0 1px #9ddfe2;
+    border-radius: 6px;
+    cursor: text;
+    transition: box-shadow 0.15s;
+}
+:deep(.ag-cell.editable-cell:hover) {
+    box-shadow: inset 0 0 0 1px #1fbcc3;
+}
 
-    // ... sisanya tetap sama
+/* Sel yang tidak bisa diedit */
+:deep(.ag-cell.readonly-cell) {
+    color: #9ca3af !important;
+    background-color: transparent;
+}
 
-editable: (params) => isSendable(params.data),
