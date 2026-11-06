@@ -1,26 +1,41 @@
-// 1. Hindari double load: onActivated hanya jalan setelah mount pertama
-let isFirstLoad = true;
+let controller = null;
 
-onMounted(async () => {
+const loadDataFilter = async () => {
+    controller?.abort();                    // batalkan request sebelumnya
+    const current = new AbortController();
+    controller = current;
+
+    loading.show();
+
     try {
-        await Promise.all([
-            loadDataFilter(),
-            loadDataSeason(),
-            loadDataFactory(),
-        ]);
+        const params = new URLSearchParams();
+        if (form.value.season) params.append("season", form.value.season);
+        if (form.value.factory) params.append("factory", form.value.factory);
+
+        const { data } = await api.get(
+            `/api/v1/deliverymaterial/getdata?${params.toString()}`,
+            { signal: current.signal }
+        );
+
+        rawData.value = (data?.data ?? []).map((item, index) => ({
+            ...item,
+            no: index + 1,
+        }));
+
+        await nextTick();
+    } catch (err) {
+        // request dibatalkan -> abaikan, request baru yang urus loading
+        if (err?.code === "ERR_CANCELED" || err?.name === "CanceledError") return;
+        if (err?.response?.status === 401) router.push("/login");
     } finally {
-        isFirstLoad = false;
+        // hide hanya kalau ini request terbaru
+        if (controller === current) loading.hide();
     }
-});
+};
 
-onActivated(async () => {
-    if (isFirstLoad) return;   // skip activation pertama
-    await loadDataFilter();
-});
+import { watch } from "vue";
 
-// 2. Hapus loading.show()/hide() di onMounted (sudah ditangani tiap fungsi)
-
-// 3. Perbaiki finally supaya loading selalu ditutup
-} finally {
-    loading.hide();   // selalu hide, bukan hanya kalau request terbaru
-}
+watch(
+    () => [form.value.season, form.value.factory],
+    () => loadDataFilter()
+);
