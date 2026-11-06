@@ -3,17 +3,51 @@ import { defineStore } from "pinia"
 export const useLoadingStore = defineStore("loading", {
   state: () => ({
     loading: false,
-    text: "Loading..."
+    text: "Loading...",
+    count: 0,
   }),
 
   actions: {
     show(text = "Loading...") {
+      this.count++
       this.text = text
       this.loading = true
     },
 
     hide() {
+      this.count = Math.max(0, this.count - 1)
+      if (this.count === 0) this.loading = false
+    },
+
+    reset() {
+      this.count = 0
       this.loading = false
-    }
-  }
+    },
+  },
 })
+
+let result = null;
+try {
+    // ...validasi...
+    loading.show();
+    const { data } = await api.post(`/api/v1/receivematerial/receive`, formData);
+    result = data;
+    showSendModal.value = false;
+    deliveryOrderFile.value = null;
+} catch (err) {
+    // tanpa loading.hide() di sini
+    ...
+    return;
+} finally {
+    loading.hide();
+}
+
+await success({ title: "Success", text: result?.message ?? "Material received successfully." });
+
+if (selectedDo.value.length > 0) selectedDo.value = [];
+else await loadData();
+
+onMounted(async () => {
+    await loadDataDO(); // watch memanggil loadData kalau ada DO
+    if (!selectedDo.value.length) await loadData();
+});
