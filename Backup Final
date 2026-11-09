@@ -1,157 +1,55 @@
-function get_data(Request $request)
-    {
-        try {
-            $payload = decrypt($request->en);
-        } catch (\Exception $e) {
-            $payload = null;
+$rows = [];
+$colTotals = [];
+foreach ($sizes as $s) {
+    $colTotals[$s->idsize] = ['order' => 0, 'in' => 0, 'out' => 0, 'wip' => 0];
+}
+$grand = ['order' => 0, 'in' => 0, 'out' => 0, 'wip' => 0];
+
+foreach ($pos as $p) {
+    $rowTotal = ['order' => 0, 'in' => 0, 'out' => 0, 'wip' => 0];
+    $cells = [];
+
+    foreach ($sizes as $s) {
+        $dt = $this->get_field_data($request->en, $request->kpno, $p->idpo, $s->idsize);
+        $cells[$s->idsize] = $dt;
+
+        if ($dt) {
+            $rowTotal['order'] += $dt->order_qty;
+            $rowTotal['in']    += $dt->in;
+            $rowTotal['out']   += $dt->out;
+            $rowTotal['wip']   += $dt->wip;
+
+            $colTotals[$s->idsize]['order'] += $dt->order_qty;
+            $colTotals[$s->idsize]['in']    += $dt->in;
+            $colTotals[$s->idsize]['out']   += $dt->out;
+            $colTotals[$s->idsize]['wip']   += $dt->wip;
         }
-
-        if (!$payload) {
-            return response()->json([
-                'wip' => '-',
-                'balance' => '-',
-            ]);
-        }
-
-        con_db($payload->factory);
-
-        if (!$request->kpno) {
-            return response()->json(null);
-        }
-
-        $so = (new SewingOutput())->getTable();
-        $od = (new OutputDetail())->getTable();
-        $sz = (new Size())->getTable();
-        $hdb = (new HistoryDataBreakdown())->getTable();
-
-        $idpos = OutputDetail::select('idpo')
-            ->join($so, "$so.barcode", '=', "$od.barcode")
-            ->where('line', $payload->line)
-            ->where('kpno', $request->kpno)
-            ->groupBy('idpo')
-            ->get();
-
-        $pos = HistoryPO::select('id', 'idpo', 'kpno', 'po')
-            ->whereHas('cuttingpo', function($q) use($request,$idpos){
-                $q->whereIn('idpo', $idpos->pluck('idpo'))
-                ->where('kpno', $request->kpno);
-            })
-            ->get();
-
-        $sizes = HistoryDataBreakdown::select("$hdb.idsize", "$sz.nmsize")
-            ->whereHas('cuttingdbreakdown')
-            ->join($sz, "$sz.idsize", '=', "$hdb.idsize")
-            ->whereIn('id', $pos->pluck('id'))
-            ->groupBy("$hdb.idsize")
-            ->get();
- 
-        $view = view('monitoring::loadingdashboard.table', [
-            'sizes' => $sizes,
-            'pos' => $pos,
-            'kpno' => $request->kpno,
-            'en' => $request->en,
-            'ctrl' => $this,
-        ]);
-
-        return response()->json($view->render());
     }
 
-dari kode ini 
-<div class="col-sm-12 col-md-12 data-table-holder">
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th class="po-col" rowspan="3">PO</th>
-                <th class="data-field" colspan="{{$sizes->count()}}">Size</th>
-            </tr>
-            <tr>
-                @foreach ($sizes as $s)
-                <th class="data-field">{{ $s->nmsize }}</th>
-                @endforeach
-                <th>Total</th>
-            </tr>
-            <tr>
-                @foreach ($sizes as $s)
-                <th class="data-field">
-                    <table class="qty-table" style="width: 100%">
-                        <tr>
-                            <td class="td-order hdr">Order</td>
-                            <td class="td-input hdr">Loading</td>
-                            <td class="td-output hdr">Output</td>
-                            <td class="td-wip hdr">WIP</td>
-                        </tr>
-                    </table>
-                </th>
-                @endforeach
-                <th class="data-field">
-                    <table class="qty-table" style="width: 100%">
-                        <tr>
-                            <td class="td-order hdr">Order</td>
-                            <td class="td-input hdr">Loading</td>
-                            <td class="td-output hdr">Output</td>
-                            <td class="td-wip hdr">WIP</td>
-                        </tr>
-                    </table>
-                </th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach ($pos as $p)
-            @php
-                $order = 0;
-                $loading = 0;
-                $output = 0;
-                $wip = 0;
-            @endphp
-            <tr>
-                <th class="po-col">
-                    {{ $p->po }}
-                </th>
-                @foreach ($sizes as $s)
-                @php
-                    $dt = $ctrl->get_field_data($en, $kpno, $p->idpo, $s->idsize);
-                @endphp
-                <td class="data-field">
-                    @if ($dt)
-                    @php
-                        $order += $dt->order_qty;
-                        $loading += $dt->in;
-                        $output += $dt->out;
-                        $wip += $dt->wip;
-                    @endphp
-                    <table class="qty-table" style="width: 100%">
-                        <tr>
-                            <td class="td-order">{{ $dt->order_qty }}</td>
-                            <td class="td-input">{{ $dt->in }}</td>
-                            <td class="td-output">{{ $dt->out }}</td>
-                            <td class="td-wip">{{ $dt->wip }}</td>
-                        </tr>
-                    </table>
-                    @endif
-                </td>
-                @endforeach
-                <th class="data-field">
-                    <table class="qty-table" style="width: 100%">
-                        <tr>
-                            <td class="td-order">{{ $order }}</td>
-                            <td class="td-input">{{ $loading }}</td>
-                            <td class="td-output">{{ $output }}</td>
-                            <td class="td-wip">{{ $wip }}</td>
-                        </tr>
-                    </table>
-                </th>
-            </tr>
-            @endforeach
-        </tbody>
-    </table>
-</div>
+    foreach ($grand as $k => $v) {
+        $grand[$k] += $rowTotal[$k];
+    }
 
+    $rows[] = ['po' => $p, 'cells' => $cells, 'total' => $rowTotal];
+}
 
+$view = view('monitoring::loadingdashboard.table', [
+    'sizes'     => $sizes,
+    'rows'      => $rows,
+    'colTotals' => $colTotals,
+    'grand'     => $grand,
+]);
 
-
-
-
-
-saya ingin tambah sebuah total ntuk menghitung perbari kolom nya, misal size 42 total order bera[a, loading berapa
-
-total nya dibawah masing masing kolom untuk header nya dibawah po
+@foreach ($rows as $r)
+<tr>
+    <th class="po-col">{{ $r['po']->po }}</th>
+    @foreach ($sizes as $s)
+    <td class="data-field">
+        @if ($dt = $r['cells'][$s->idsize])
+            ... tampilkan $dt->order_qty, $dt->in, dst
+        @endif
+    </td>
+    @endforeach
+    ... tampilkan $r['total']
+</tr>
+@endforeach
