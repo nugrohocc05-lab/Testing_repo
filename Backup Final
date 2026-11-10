@@ -1,279 +1,15 @@
-<template>
-    <div class="px-6">
-        <UiTitle :is-back="true" align="center" title="Delivery Finish Goods Detail">
-            <template #action-left>
-                <UiButton variant="teritary" @click="router.back()">
-                    <ArrowLeftStartOnRectangleIcon class="h-5 w-5" />
-                    <span class="text-xl ml-1">Back</span>
-                </UiButton>
-            </template>
-        </UiTitle>
-        <UiCard class="mt-10 text-xs md:text-lg">
-            <UiGrid cols="3" gap="sm">
-                <div>
-                    <span class="label">Order Number</span> :
-                    {{ rawDataHeader.order?.ordernumber }}
-                </div>
-                <div>
-                    <span class="label">Delivery Date</span> :
-                    {{ rawDataHeader.order?.deliverydate }}
-                </div>
-                <div>
-                    <span class="label">Total Qty</span> :
-                    {{ rawDataHeader.totalinspection }}
-                </div>
-                <div>
-                    <span class="label">PRO</span> :
-                    {{ rawDataHeader.order?.combine_pro }}
-                </div>
-                <div>
-                    <span class="label">Style</span> :
-                    {{ rawDataHeader?.style }}
-                </div>
-                <div>
-                    <span class="label">Color</span> :
-                    {{ rawDataHeader?.color }}
-                </div>
-            </UiGrid>
-        </UiCard>
-        <UiCard class="mt-5">
-            <!-- Filter Section -->
-            <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-center">
-                <h2 class="truncate text-xl font-semibold text-gray-900">
-                    Delivery Detail
-                </h2>
+<UiInput
+    v-model="deliveryFile"
+    type="file"
+    variant="dropzone"
+    label="File Delivery Orders"
+    placeholder="Choose File"
+    dropzone-hint="Only PDF, XLS, or XLSX formats, up to 2MB"
+    accept=".pdf,.xls,.xlsx"
+/>
 
-                <div class="w-full md:ml-auto md:w-60">
-                    <UiInput
-                        v-model="searchKeyword"
-                        placeholder="Search"
-                        class="w-full rounded-lg"
-                    >
-                        <template #prefix>
-                            <MagnifyingGlassIcon class="h-5 w-5 text-gray-400" />
-                        </template>
-                    </UiInput>
-                </div>
-            </div>
-
-            <!-- Data Grid -->
-            <UiAgGrid
-                class="my-zebra-grid"
-                :rowData="rawData"
-                :columnDefs="columnDefs"
-                :quickFilterText="searchKeyword"
-                :defaultColDef="defaultColDef"
-                :singleClickEdit="true"
-                :stopEditingWhenCellsLoseFocus="true"
-            />       
-            <div v-if="canSend" class="mt-4 flex justify-end">
-                <UiButton @click="handleSendClick">
-                    Send
-                </UiButton>
-            </div>
-        </UiCard>
-        <UiCard class="mt-4">
-                <div class="flex min-w-0 flex-col gap-2">
-                    <span class="text-xl font-bold">Files</span>
-                        <template v-if="rawDataFiles.length > 0">
-                            <div
-                                v-for="f in rawDataFiles"
-                                :key="`${f.iddelivery}-${f.filename}`"
-                                class="group flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-3 transition hover:border-gray-300 hover:bg-gray-50"
-                            >
-                                <div
-                                    class="flex min-w-0 flex-1 cursor-pointer items-center gap-3"
-                                    @click="downloadFile(f)"
-                                >
-                                    <div
-                                        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-50"
-                                    >
-                                        <FileIcon :extension="f.extension" />
-                                    </div>
-            
-                                    <div class="min-w-0 flex-1">
-                                        <p class="truncate text-sm font-medium text-gray-800">
-                                            {{ f.filename }}.{{ f.extension }}
-                                        </p>
-            
-                                        <div class="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
-                                        
-                                            <p class="text-xs text-gray-400">
-                                                <span class="font-medium text-gray-500">Uploaded:</span>
-                                                {{ formatDate(f.modified) }}
-                                            </p>
-            
-                                            <p class="text-xs text-gray-400">
-                                                <span class="font-medium text-gray-500">Upload By:</span>
-                                                {{ f.userid || '-' }}
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </template>
-                        <div v-else class="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3">
-                            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-50">
-                                    <FileIcon />
-                            </div>
-
-                            <div class="min-w-0 flex-1">
-                                <p class="truncate text-sm font-medium text-gray-800">
-                                    No files available
-                                </p>
-
-                                <p class="mt-0.5 text-xs text-gray-400">
-                                    No files have been uploaded yet
-                                </p>
-                            </div>
-                        </div>
-                </div>
-        </UiCard>
-    </div>
-    <UiModal
-        v-model="showSendModal"
-        title="Delivery Order"
-        size="2xl"
-    >
-        <div class="space-y-4 -mt-3">
-            <UiInput
-                type="file"
-                variant="dropzone"
-                label="File Delivery Orders"
-                placeholder="Choose File"
-                dropzone-hint="Only PDF, XLS, or XLSX formats, up to 2MB"
-                accept=".pdf,.xls,.xlsx"
-                @change="handleFile"
-            />
-
-            <UiInput
-                v-model="shipmentMode"
-                label="Shipment Mode"
-                placeholder="Shipment Mode"
-                class="w-full"
-                readonly
-            />
-
-            <div class="flex justify-end gap-2 pt-3">
-                <UiButton
-                    variant="teritary"
-                    @click="showSendModal = false"
-                >
-                    Cancel
-                </UiButton>
-
-                <UiButton @click="confirmSend">
-                    Confirm
-                </UiButton>
-            </div>
-        </div>
-    </UiModal>
-</template>
-
-<script setup>
-import { ref, onMounted, defineComponent, h, watch, computed } from "vue";
-import { useRouter, useRoute } from "vue-router";
-import { useLoadingStore } from "@/stores/loading";
-import { MagnifyingGlassIcon, ArrowLeftStartOnRectangleIcon, PencilSquareIcon } from "@heroicons/vue/24/outline";
-
-import UiButton from "@/components/ui/UiButton.vue"
-import UiInput from "@/components/ui/UiInput.vue"
-import UiCard from "@/components/ui/UiCard.vue"
-import UiTitle from "@/components/ui/UiTitle.vue"
-import UiGrid from "@/components/ui/UiGrid.vue";
-import UiAgGrid from "@/components/ui/UiAgGrid.vue";
-
-import api from "@/services/api";
-import FileIcon from "@/components/ui/FileIcon.vue";
-import { customSwal } from "@/composable/customSwal";
-const { confirmDelete, success, warning, error } = customSwal;
-
-import { decrypt } from "@/utils/crypto";
-import UiMultiSelect from "@/components/ui/UiMultiSelect.vue";
-import UiModal from "@/components/ui/UiModal.vue";
-
-const loading = useLoadingStore();
-const router = useRouter();
-const route = useRoute();
-const rawData = ref([]);
-const rawDataAll = ref([]);
-const rawDataHeader = ref([]);
-const searchKeyword = ref('')
-const dates = ref([]);
-const showSendModal = ref(false);
-const rawDataFiles = ref([]);
-
-const shipmentMode = ref("");
-const deliveryFile = ref(null);
-
-const idorder = decrypt(
-    decodeURIComponent(route.params.idorder)
-);
-
-const idcolor = decrypt(
-    decodeURIComponent(route.params.idcolor)
-);
-
-const handleSendClick = async () => {
-    const selectedData = rawData.value.filter(
-        (item) =>
-            item.selected === true ||
-            Number(item.garmentQty) > 0
-    );
-
-    if (selectedData.length === 0) {
-        await warning({
-            title: "Warning",
-            text: "Please select at least one item or input Garment Qty.",
-        });
-        return;
-    }
-
-    // Validasi Carton Qty
-    const invalidCarton = selectedData.some(
-        (item) =>
-            item.cartonQty === null ||
-            item.cartonQty === undefined ||
-            item.cartonQty === "" ||
-            Number(item.cartonQty) <= 0
-    );
-
-    if (invalidCarton) {
-        await warning({
-            title: "Warning",
-            text: "Please input Carton Qty greater than 0 for all selected items before clicking Send.",
-        });
-        return;
-    }
-
-    showSendModal.value = true;
-};
-
-const form = ref({
-    date: [],
-});
-
-const defaultColDef = {
-    sortable: true,
-    filter: false,
-    resizable: true,
-};
-
-watch(
-    () => form.value.date,
-    async (newValue) => {
-        await loadData();
-    },
-    { deep: true }
-);
-
-const handleFile = (event) => {
-    const file = event.target.files?.[0] ?? null;
-
-    if (!file) {
-        deliveryFile.value = null;
-        return;
-    }
+watch(deliveryFile, (file) => {
+    if (!file) return;
 
     const allowedExtensions = ["pdf", "xls", "xlsx"];
     const extension = file.name.split(".").pop().toLowerCase();
@@ -283,7 +19,7 @@ const handleFile = (event) => {
             title: "Invalid File",
             text: "Only PDF, XLS, or XLSX files are allowed.",
         });
-        event.target.value = "";
+        deliveryFile.value = null;   // ini yang mereset tampilan
         return;
     }
 
@@ -292,686 +28,33 @@ const handleFile = (event) => {
             title: "File Too Large",
             text: "Maximum file size is 2MB.",
         });
-        event.target.value = "";
-        return;
+        deliveryFile.value = null;   // ini yang mereset tampilan
     }
-
-    deliveryFile.value = file;
-};
-
-const confirmSend = async () => {
-    try {
-        const selectedData = rawData.value.filter(
-            (item) =>
-                Number(item.garmentQty) > 0 ||
-                Number(item.cartonQty) > 0
-        );
-
-        if (selectedData.length === 0) {
-            await warning({
-                title: "Warning",
-                text: "Please select at least one item.",
-            });
-            return;
-        }
-
-        if (!shipmentMode.value) {
-            await warning({
-                title: "Warning",
-                text: "Shipment Mode is required.",
-            });
-            return;
-        }
-
-        if (!deliveryFile.value) {
-            await warning({
-                title: "Warning",
-                text: "Please upload Delivery Order file.",
-            });
-            return;
-        }
-
-        // Validasi Carton Qty
-        const invalidCarton = selectedData.some(
-            (item) =>
-                item.cartonQty === null ||
-                item.cartonQty === undefined ||
-                item.cartonQty === "" ||
-                !Number.isFinite(Number(item.cartonQty)) ||
-                Number(item.cartonQty) <= 0
-        );
-
-        if (invalidCarton) {
-            await warning({
-                title: "Warning",
-                text: "Carton Qty must be greater than 0 for all selected items.",
-            });
-            return;
-        }
-
-        const formData = new FormData();
-
-        // Header
-        formData.append("idorder", idorder);
-        formData.append("idcolor", idcolor);
-        formData.append("shipment", shipmentMode.value);
-
-        // Detail
-        selectedData.forEach((item) => {
-            formData.append(
-                `inputqty[${item.iddetail}]`,
-                Number(item.garmentQty ?? 0)
-            );
-
-            formData.append(
-                `inputctn[${item.iddetail}]`,
-                Number(item.cartonQty ?? 0)
-            );
-        });
-
-        // Upload
-        formData.append("uploads[]", deliveryFile.value);
-
-        loading.show();
-
-        const { data } = await api.post(
-            "/api/v1/deliveryfinishgood/deliver",
-            formData
-        );
-
-        showSendModal.value = false;
-        deliveryFile.value = null;
-
-        await loadData();
-
-        await success({
-            title: "Success",
-            text: data?.message || "Delivery is completed successfully",
-        });
-
-    } catch (err) {
-        loading.hide();
-        if (err?.response?.status === 401) {
-            router.push("/login");
-            return;
-        }
-
-        await error({
-            title: "Send Failed",
-            text:
-                err?.response?.data?.message ||
-                err?.message ||
-                "Failed to send delivery.",
-        });
-    } finally {
-        loading.hide();
-    }
-};
-
-const downloadFile = async (file) => {
-    let url = null;
-
-    try {
-        loading.show();
-
-        const endpoint = `/api/v1/deliveryfinishgood/showfile/${encodeURIComponent(file.filename)}`;
-
-        const response = await api.get(endpoint, {
-            responseType: "blob",
-        });
-
-        if (!response.data || response.data.size === 0) {
-            throw new Error("File is empty or unavailable.");
-        }
-
-        const blob = new Blob([response.data], {
-            type: response.data.type || "application/octet-stream",
-        });
-
-        url = window.URL.createObjectURL(blob);
-
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `${file.filename}.${file.extension}`;
-
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-
-        setTimeout(() => {
-            window.URL.revokeObjectURL(url);
-        }, 1000);
-
-    } catch (err) {
-        console.error("Download error:", err);
-
-        let message = "An error occurred while downloading the file.";
-
-        if (err.response?.data instanceof Blob) {
-            try {
-                const text = await err.response.data.text();
-                const errorData = JSON.parse(text);
-                message = errorData.message || message;
-            } catch {
-                message = "Failed to download file.";
-            }
-        } else {
-            message =
-                err.response?.data?.message ||
-                err.message ||
-                message;
-        }
-
-        await customSwal.error({
-            title: "Download Failed",
-            text: message,
-        });
-
-    } finally {
-        loading.hide();
-    }
-};
-
-class SelectAllHeader {
-    init(params) {
-        this.params = params;
-
-        this.eGui = document.createElement("div");
-        this.eGui.style.display = "flex";
-        this.eGui.style.alignItems = "center";
-        this.eGui.style.justifyContent = "center";
-        this.eGui.style.height = "100%";
-
-        this.checkbox = document.createElement("input");
-        this.checkbox.type = "checkbox";
-        this.checkbox.title = "Select All";
-
-        this.updateVisibility = () => {
-            let hasSendable = false;
-
-            this.params.api.forEachNode((node) => {
-                if (node.data && isSendable(node.data)) {
-                    hasSendable = true;
-                }
-            });
-
-            this.checkbox.style.display = hasSendable ? "" : "none";
-
-            if (!hasSendable) {
-                this.checkbox.checked = false;
-            }
-        };
-
-        this.onChange = (event) => {
-            const checked = event.target.checked;
-
-            this.params.api.forEachNode((node) => {
-                // lewati baris yang sudah full sent
-                if (!node.data || !isSendable(node.data)) return;
-
-                const garmentQty = checked ? getMaxGarmentQty(node.data) : 0;
-
-                node.setDataValue("selected", checked);
-                node.setDataValue("garmentQty", garmentQty);
-
-                const row = rawData.value.find(
-                    (item) => item.iddetail === node.data.iddetail
-                );
-
-                if (row) {
-                    row.selected = checked;
-                    row.garmentQty = garmentQty;
-                }
-            });
-
-            this.params.api.refreshCells({
-                columns: ["garmentQty", "selected"],
-                force: true,
-            });
-        };
-
-        this.checkbox.addEventListener("change", this.onChange);
-        this.params.api.addEventListener("modelUpdated", this.updateVisibility);
-
-        this.eGui.appendChild(this.checkbox);
-        this.updateVisibility();
-    }
-
-    getGui() {
-        return this.eGui;
-    }
-
-    refresh() {
-        return false;
-    }
-
-    destroy() {
-        this.checkbox.removeEventListener("change", this.onChange);
-        this.params.api.removeEventListener("modelUpdated", this.updateVisibility);
-    }
-}
-
-const getMaxGarmentQty = (data) => {
-    const totalOrder = Number(data.totalOrder ?? 0);
-    const totalSent = Number(data.totalSent ?? 0);
-
-    return Math.max(0, totalOrder - totalSent);
-};
-
-const isSendable = (data) => getMaxGarmentQty(data) > 0;
-
-const canSend = computed(() => rawData.value.some(isSendable));
-
-const EditableHeader = defineComponent({
-    props: ["params"],
-    setup(props) {
-        return () =>
-            h(
-                "div",
-                {
-                    class: "flex items-center justify-center gap-2 w-full h-full",
-                },
-                [
-                    h("span", props.params.displayName),
-                    h(PencilSquareIcon, {
-                        class: "w-4 h-4 text-sky-600",
-                    }),
-                ]
-            );
-    },
 });
 
-const columnDefs = [
-    {
-        field: "size.namasize",
-        headerName: "Size",
-        minWidth: 90,
-        maxWidth: 120,
-    },
-    {
-        field: "totalOrder",
-        headerName: "Total Order",
-        minWidth: 110,
-        flex: 1,
-    },
-    {
-        field: "totalInspection",
-        headerName: "Total Inspection",
-        minWidth: 110,
-        flex: 1,
-    },
-    {
-        field: "totalSent",
-        headerName: "Total Sent",
-        minWidth: 100,
-        flex: 1,
-    },
-    {
-        field: "totalReceive",
-        headerName: "Total Receive",
-        minWidth: 120,
-        flex: 1,
-    },
-    {
-        field: "totalCartonSent",
-        headerName: "Total Carton Sent",
-        minWidth: 150,
-        flex: 1,
-    },
-    {
-        field: "totalCartonReceive",
-        headerName: "Total Carton Receive",
-        minWidth: 180,
-        flex: 1,
-    },
-    {
-        field: "garmentQty",
-        headerName: "Garment Qty",
-        minWidth: 130,
-        // editable: true,
-        editable: (params) => isSendable(params.data),
-        headerComponent: EditableHeader,
-        flex: 1,
-        cellClass: "editable-cell",
-        cellStyle: {
-            color: "#1D4ED8",
-            fontWeight: "600",  
-            cursor: "text",
-        },
+watch(
+    () => props.modelValue,
+    (newVal) => {
+        if (props.type !== "file") return;
 
-        cellEditor: "agNumberCellEditor",
-
-        cellEditorParams: (params) => ({
-            min: 0,
-            max: getMaxGarmentQty(params.data),
-            precision: 0,
-        }),
-
-        valueParser: (params) => {
-            const value = Number(params.newValue);
-            return Number.isFinite(value) ? value : 0;
-        },
-
-        valueSetter: (params) => {
-            const maxQty = getMaxGarmentQty(params.data);
-            let value = Number(params.newValue);
-
-            if (!Number.isFinite(value) || value < 0) {
-                value = 0;
-            }
-
-            if (value > maxQty) {
-                value = maxQty;
-            }
-
-            params.data.garmentQty = value;
-            params.data.selected = value > 0;
-
-            const row = rawData.value.find(
-                (item) => item.iddetail === params.data.iddetail
-            );
-
-            if (row) {
-                row.garmentQty = value;
-                row.selected = value > 0;
-            }
-
-            return true;
-        },
-    },
-    {
-        field: "cartonQty",
-        headerName: "Carton Qty",
-        minWidth: 130,
-        headerComponent: EditableHeader,
-        editable: (params) => isSendable(params.data),
-        flex: 1,
-        cellStyle: {
-            color: "#1D4ED8",
-            fontWeight: "600",
-            cursor: "text",
-        },
-
-        cellEditor: "agNumberCellEditor",
-
-        cellEditorParams: (params) => ({
-            min: 0,
-            max: Number(params.data.garmentQty ?? 0),
-            precision: 0,
-        }),
-
-        valueParser: (params) => {
-            if (
-                params.newValue === "" ||
-                params.newValue === null ||
-                params.newValue === undefined
-            ) {
-                return null;
-            }
-
-            const value = Number(params.newValue);
-            const maxQty = Number(params.data.garmentQty ?? 0);
-
-            if (!Number.isFinite(value) || value < 0) {
-                return params.oldValue;
-            }
-
-            return Math.min(value, maxQty);
-        },
-
-        valueSetter: (params) => {
-            let value = params.newValue;
-
-            if (value === "" || value === undefined) {
-                value = null;
-            }
-
-            if (value !== null) {
-                const maxQty = Number(params.data.garmentQty ?? 0);
-                value = Math.min(Math.max(0, Number(value)), maxQty);
-            }
-
-            params.data.cartonQty = value;
-
-            const row = rawData.value.find(
-                (item) => item.iddetail === params.data.iddetail
-            );
-
-            if (row) {
-                row.cartonQty = value;
-            }
-
-            return true;
-        },
-    },
-    {
-        headerName: "",
-        field: "selected",
-        width: 90,
-        sortable: false,
-        filter: false,
-        resizable: false,
-
-        headerComponent: SelectAllHeader,
-
-        cellRenderer: (params) => {
-               if (!isSendable(params.data)) {
-                    return "";
-                }
-            const checkbox = document.createElement("input");
-
-            checkbox.type = "checkbox";
-            checkbox.checked = params.data.selected ?? false;
-
-            checkbox.addEventListener("change", (event) => {
-                const checked = event.target.checked;
-
-                const maxQty = getMaxGarmentQty(params.data);
-
-                const garmentQty = checked ? maxQty : 0;
-
-                params.node.setDataValue("selected", checked);
-                params.node.setDataValue("garmentQty", garmentQty);
-
-                const row = rawData.value.find(
-                    (item) => item.iddetail === params.data.iddetail
-                );
-
-                if (row) {
-                    row.selected = checked;
-                    row.garmentQty = garmentQty;
-                }
-
-                // Refresh tampilan Garment Qty
-                params.api.refreshCells({
-                    rowNodes: [params.node],
-                    columns: ["garmentQty"],
-                    force: true,
-                });
-            });
-
-            return checkbox;
-        },
-    },
-];
-
-const formatDate = (date) => {
-    if (!date) return "-";
-
-    const parsedDate = new Date(date);
-
-    if (isNaN(parsedDate.getTime())) return "-";
-
-    return parsedDate.toLocaleString("id-ID", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-    });
-};
-
-const loadData = async () => {
-    try {
-        loading.show();
-
-        const params = new URLSearchParams({
-            idorder: idorder,
-            idcolor: idcolor,
-        });
-
-        if (form.value.date) {
-            if (Array.isArray(form.value.date)) {
-                form.value.date.forEach((date) => {
-                    params.append("date", date);
-                });
-            } else {
-                params.append("date", form.value.date);
-            }
+        if (!newVal || (Array.isArray(newVal) && newVal.length === 0)) {
+            selectedFiles.value = [];
+            if (fileInput.value) fileInput.value.value = "";
+            return;
         }
 
-        const endpoint = `/api/v1/deliveryfinishgood/input?${params.toString()}`;
-
-        const { data } = await api.get(endpoint);
-
-        const detail = data?.data?.detail ?? [];
-        const total = data?.data?.total ?? [];
-
-        rawDataFiles.value = data?.data?.files ?? [];
-
-        const totalOrderMap = detail.reduce((acc, item) => {
-            const id = item.iddetail;
-            acc[id] = (acc[id] || 0) + Number(item.qty ?? 0);
-            return acc;
-        }, {});
-
-        const totalInspectionMap = detail.reduce((acc, item) => {
-            const id = item.iddetail;
-            acc[id] = (acc[id] || 0) + Number(item.inspectioniddetail[0].quantity ?? 0);
-            return acc;
-        }, {});
-
-        const totalSentMap = total.reduce((acc, item) => {
-            const id = item.iddetail;
-            acc[id] = (acc[id] || 0) + Number(item.qty ?? 0);
-            return acc;
-        }, {});
-
-        const totalReceiveMap = total.reduce((acc, item) => {
-            const id = item.iddetail;
-            acc[id] = (acc[id] || 0) + Number(item.receiveqty ?? 0);
-            return acc;
-        }, {});
-
-        const totalCartonSentMap = total.reduce((acc, item) => {
-            const id = item.iddetail;
-            acc[id] = (acc[id] || 0) + Number(item.qtyctn ?? 0);
-            return acc;
-        }, {});
-
-        const totalCartonReceiveMap = total.reduce((acc, item) => {
-            const id = item.iddetail;
-            acc[id] = (acc[id] || 0) + Number(item.receiveqtyctn ?? 0);
-            return acc;
-        }, {});
-
-        rawData.value = detail.map((item, index) => ({
-            ...item,
-            no: index + 1,
-
-            totalOrder: totalOrderMap[item.iddetail] ?? 0,
-            totalInspection: totalInspectionMap[item.iddetail] ?? 0,
-            totalSent: totalSentMap[item.iddetail] ?? 0,
-            totalReceive: totalReceiveMap[item.iddetail] ?? 0,
-            totalCartonSent: totalCartonSentMap[item.iddetail] ?? 0,
-            totalCartonReceive: totalCartonReceiveMap[item.iddetail] ?? 0,
-
-            garmentQty: 0,
-            cartonQty: 0,
-            selected: false,
-        }));
-
-        rawDataHeader.value = data?.data ?? {};
-
-        shipmentMode.value =
-            data?.data?.order?.purchaseorder?.shipby ?? "";
-
-        rawDataAll.value = data
-            ? [{
-                ...data,
-                no: 1,
-            }]
-            : [];
-
-    } catch (err) {
-        console.error(err);
-
-        if (err?.response?.status === 401) {
-            router.push("/login");
-        }
-    } finally {
-        loading.hide();
-    }
-};
-
-const loadDataDate = async () => {
-    try {
-        const params = new URLSearchParams({
-            idorder: idorder,
-            idcolor: idcolor,
-        });
-
-        const { data } = await api.get(
-            `/api/v1/deliveryfinishgood/selectdate?${params.toString()}`
-        );
-
-        dates.value = (data?.data?.dates ?? []).map((item) => ({
-            value: item.date,
-            label: item.date,
-        }));
-
-        if (dates.value.length > 0) {
-            form.value.date = [dates.value[0].value];
-        } else {
-            form.value.date = [];
-        }
-
-    } catch (err) {
-        console.error("Failed Load Dates:", err);
-
-        if (err?.response?.status === 401) {
-            router.push("/login");
-        }
-    }
-};
-
-onMounted(async () => {
-    await loadDataDate();
-    await loadData();
-});
-</script>
-
-<style scoped>
-.label {
-    white-space: nowrap;
-    display: inline-block;
-    width: 120px;
-    font-weight: 600;
-}
-:deep(.ag-header-cell.custom-header) {
-    background-color: #c5c5c9 !important;
-}
-</style>
+        selectedFiles.value = Array.isArray(newVal) ? newVal : [newVal];
+    },
+    { immediate: true }
+);
 
 
 
 
+ui input 
 
-
-
-coba cek kodenya, ada masalah pada bagian upload, jadi kan disini ada pembatasan ukuran size, nah semisal  batasnya 2 mb dan upload untuk file yang diselect tmapilannya masih terselect, padahal saat klik send itu file udah gaada, saya inign misal gagal tampilan file yang keselect tidak ada juga 
 <script setup>
-import { useAttrs, ref, watch } from "vue";
+import { useAttrs, ref, watch, computed } from "vue";
 import { ArrowUpTrayIcon } from "@heroicons/vue/24/outline";
 
 defineOptions({
@@ -980,13 +63,10 @@ defineOptions({
 
 const props = defineProps({
     modelValue: {
-        type: [String, Number, Array, Object, null],
+        type: [String, Number, Array, Object, File, null],
         default: "",
     },
-    type: {
-        type: String,
-        default: "text",
-    },
+    type: { type: String, default: "text" },
 
     variant: {
         type: String,
@@ -1005,6 +85,7 @@ const props = defineProps({
                 "name-special",
                 "text",
                 "text-name",
+                "text-name-slash",
                 "text-symbol",
                 "free",
                 "text-symbol-limit",
@@ -1029,13 +110,14 @@ const props = defineProps({
     min: { type: [String, Number], default: undefined },
     max: { type: [String, Number], default: undefined },
     multiple: { type: Boolean, default: false },
-    dropzoneText: { type: String, default: "Choose a file or drag & drop here", },
-    dropzoneHint: { type: String, default: "", },
-    accept: { type: String, default: "",},
-    directory: {
-        type: Boolean,
-        default: false,
+    dropzoneText: {
+        type: String,
+        default: "Choose a file or drag & drop here",
     },
+    dropzoneHint: { type: String, default: "" },
+    accept: { type: String, default: "" },
+    maxSize: { type: Number, default: 0 }, // dalam MB, 0 = tanpa batas
+    directory: { type: Boolean, default: false },
 });
 
 const emit = defineEmits([
@@ -1044,6 +126,7 @@ const emit = defineEmits([
     "blur",
     "change",
     "keydown",
+    "reject",
 ]);
 
 const attrs = useAttrs();
@@ -1051,21 +134,23 @@ const fileInput = ref(null);
 const selectedFiles = ref([]);
 const isDragging = ref(false);
 
+const selectedFileNames = computed(() =>
+    selectedFiles.value.map((f) => f.name).join(", ")
+);
+
+// Sinkronisasi tampilan dengan modelValue dari parent
 watch(
     () => props.modelValue,
     (newVal) => {
         if (props.type !== "file") return;
 
-        if (!newVal) {
+        if (!newVal || (Array.isArray(newVal) && newVal.length === 0)) {
             selectedFiles.value = [];
+            if (fileInput.value) fileInput.value.value = "";
             return;
         }
 
-        if (Array.isArray(newVal)) {
-            selectedFiles.value = newVal;
-        } else if (newVal instanceof File) {
-            selectedFiles.value = [newVal];
-        }
+        selectedFiles.value = Array.isArray(newVal) ? newVal : [newVal];
     },
     { immediate: true }
 );
@@ -1139,7 +224,9 @@ const filterValue = (value) => {
     return result;
 };
 
-const allowedExtensions = [
+/* ===================== FILE HANDLING ===================== */
+
+const defaultExtensions = [
     "pdf",
     "xls",
     "xlsx",
@@ -1150,44 +237,64 @@ const allowedExtensions = [
     "gif",
 ];
 
+// Ekstensi diturunkan dari prop accept, fallback ke default
+const allowedExtensions = computed(() => {
+    const fromAccept = props.accept
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter((s) => s.startsWith("."))
+        .map((s) => s.slice(1));
 
-const handleFileChange = (event) => {
-    const files = Array.from(event.target.files || []);
+    return fromAccept.length ? fromAccept : defaultExtensions;
+});
 
-    const validFiles = files.filter((file) => {
-        const extension = file.name
-            .split(".")
-            .pop()
-            .toLowerCase();
+const getExt = (name) => name.split(".").pop().toLowerCase();
 
-        return allowedExtensions.includes(extension);
+const resetFiles = (event) => {
+    selectedFiles.value = [];
+    if (fileInput.value) fileInput.value.value = "";
+    if (event?.target && event.target.type === "file") {
+        event.target.value = "";
+    }
+};
+
+const processFiles = (rawFiles, event) => {
+    let files = Array.from(rawFiles || []);
+
+    if (!props.multiple) files = files.slice(0, 1);
+
+    const errors = [];
+
+    files.forEach((file) => {
+        if (!allowedExtensions.value.includes(getExt(file.name))) {
+            errors.push({ file, reason: "extension" });
+        } else if (
+            props.maxSize > 0 &&
+            file.size > props.maxSize * 1024 * 1024
+        ) {
+            errors.push({ file, reason: "size" });
+        }
     });
 
-    if (validFiles.length !== files.length) {
-        event.target.value = "";
-
-        selectedFiles.value = [];
-
-        emit(
-            "update:modelValue",
-            props.multiple ? [] : null
-        );
-
+    // Ada yang gagal: kosongkan semuanya
+    if (errors.length) {
+        resetFiles(event);
+        emit("update:modelValue", props.multiple ? [] : null);
+        emit("reject", errors);
         return;
     }
 
-    selectedFiles.value = props.multiple
-        ? validFiles
-        : validFiles.slice(0, 1);
+    selectedFiles.value = files;
 
     emit(
         "update:modelValue",
-        props.multiple
-            ? validFiles
-            : (validFiles[0] ?? null)
+        props.multiple ? files : files[0] ?? null
     );
-
     emit("change", event);
+};
+
+const handleFileChange = (event) => {
+    processFiles(event.target.files, event);
 };
 
 const handleDragOver = (event) => {
@@ -1229,43 +336,7 @@ const handleDrop = (event) => {
     event.preventDefault();
     isDragging.value = false;
 
-    const files = Array.from(event.dataTransfer?.files || []);
-
-    selectedFiles.value = props.multiple
-        ? files
-        : files.slice(0, 1);
-
-    const valueToEmit = props.multiple
-        ? files
-        : (files[0] ?? null);
-
-    emit("update:modelValue", valueToEmit);
-    emit("change", event);
-};
-
-
-const handleInput = (event) => {
-    if (props.type === "file") return;
-
-    let value = filterValue(event.target.value);
-
-    if (props.max !== undefined && value !== "") {
-        value = Math.min(
-            Number(value),
-            Number(props.max)
-        ).toString();
-    }
-
-    if (props.min !== undefined && value !== "") {
-        value = Math.max(
-            Number(value),
-            Number(props.min)
-        ).toString();
-    }
-
-    event.target.value = value;
-
-    emit("update:modelValue", value);
+    processFiles(event.dataTransfer?.files, event);
 };
 
 const removeFile = (index) => {
@@ -1277,137 +348,217 @@ const removeFile = (index) => {
 
     emit(
         "update:modelValue",
-        props.multiple
-            ? [...selectedFiles.value]
-            : null
+        props.multiple ? [...selectedFiles.value] : null
     );
 };
 
+/* ===================== TEXT INPUT ===================== */
 
+const handleInput = (event) => {
+    if (props.type === "file") return;
+
+    let value = filterValue(event.target.value);
+
+    if (props.max !== undefined && value !== "") {
+        value = Math.min(Number(value), Number(props.max)).toString();
+    }
+
+    if (props.min !== undefined && value !== "") {
+        value = Math.max(Number(value), Number(props.min)).toString();
+    }
+
+    event.target.value = value;
+
+    emit("update:modelValue", value);
+};
 </script>
 
 <template>
     <div :class="['w-full', attrs.class]">
-        <label v-if="label" :class="[
-            'mb-1.5 block font-medium text-gray-700',
-            labelClass,
-        ]">
+        <label
+            v-if="label"
+            :class="['mb-1.5 block font-medium text-gray-700', labelClass]"
+        >
             {{ label }}
 
-            <span v-if="required" class="ml-0.5 text-red-500">
-                *
-            </span>
+            <span v-if="required" class="ml-0.5 text-red-500">*</span>
         </label>
 
         <div class="relative">
             <!-- PREFIX -->
-            <div v-if="$slots.prefix" class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+            <div
+                v-if="$slots.prefix"
+                class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3"
+            >
                 <slot name="prefix" />
             </div>
 
-            <div v-if="type === 'file' && variant === 'default'" :class="[
-                'w-full rounded border bg-white py-2.5 text-sm flex items-center justify-between',
+            <!-- FILE: DEFAULT -->
+            <div
+                v-if="type === 'file' && variant === 'default'"
+                :class="[
+                    'relative w-full rounded border bg-white py-2.5 text-sm flex items-center justify-between',
 
-                $slots.prefix ? 'pl-10' : 'pl-3',
-                $slots.suffix ? 'pr-10' : 'pr-3',
+                    $slots.prefix ? 'pl-10' : 'pl-3',
+                    $slots.suffix ? 'pr-10' : 'pr-3',
 
-                error
-                    ? 'border-red-400 focus-within:ring-2 focus-within:ring-red-500/20'
-                    : 'border-gray-300 focus-within:border-[#1FBCC3] focus-within:ring-2 focus-within:ring-[#1FBCC3]/20',
+                    error
+                        ? 'border-red-400 focus-within:ring-2 focus-within:ring-red-500/20'
+                        : 'border-gray-300 focus-within:border-[#1FBCC3] focus-within:ring-2 focus-within:ring-[#1FBCC3]/20',
 
-                disabled
-                    ? 'cursor-not-allowed bg-gray-100 text-gray-400'
-                    : 'text-gray-900 cursor-pointer hover:bg-gray-50/50',
-            ]">
+                    disabled
+                        ? 'cursor-not-allowed bg-gray-100 text-gray-400'
+                        : 'text-gray-900 cursor-pointer hover:bg-gray-50/50',
+                ]"
+            >
                 <span class="truncate text-gray-600 pr-2">
                     {{ selectedFileNames || placeholder || "Select file..." }}
                 </span>
 
-                <span class="text-xs font-semibold text-[#1FBCC3] uppercase tracking-wider shrink-0">
+                <span
+                    class="text-xs font-semibold text-[#1FBCC3] uppercase tracking-wider shrink-0"
+                >
                     Browse
                 </span>
 
-                <input v-bind="attrs" type="file" :disabled="disabled" :required="required" :name="name"
-                    :multiple="multiple" :autocomplete="off"
+                <input
+                    v-bind="attrs"
+                    ref="fileInput"
+                    type="file"
+                    :disabled="disabled"
+                    :required="required"
+                    :name="name"
+                    :multiple="multiple"
+                    :accept="accept"
+                    autocomplete="off"
                     class="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
-                    @change="handleFileChange" @focus="emit('focus', $event)" @blur="emit('blur', $event)"
-                    @keydown="emit('keydown', $event)" />
+                    @change="handleFileChange"
+                    @focus="emit('focus', $event)"
+                    @blur="emit('blur', $event)"
+                    @keydown="emit('keydown', $event)"
+                />
             </div>
 
-            <div v-else-if="type === 'file' && variant === 'dropzone'" :class="[
-                'relative w-full rounded-lg border-2 border-dashed bg-white p-6 text-center transition-all duration-150',
+            <!-- FILE: DROPZONE -->
+            <div
+                v-else-if="type === 'file' && variant === 'dropzone'"
+                :class="[
+                    'relative w-full rounded-lg border-2 border-dashed bg-white p-6 text-center transition-all duration-150',
 
-                isDragging
-                    ? 'border-[#1FBCC3] bg-[#1FBCC3]/5 ring-2 ring-[#1FBCC3]/20'
-                    : error
-                        ? 'border-red-400 bg-red-50/30'
-                        : 'border-gray-300 hover:border-[#1FBCC3] hover:bg-gray-50/50',
+                    isDragging
+                        ? 'border-[#1FBCC3] bg-[#1FBCC3]/5 ring-2 ring-[#1FBCC3]/20'
+                        : error
+                          ? 'border-red-400 bg-red-50/30'
+                          : 'border-gray-300 hover:border-[#1FBCC3] hover:bg-gray-50/50',
 
-                disabled
-                    ? 'cursor-not-allowed bg-gray-100 opacity-60'
-                    : 'cursor-pointer',
-            ]" @dragover="handleDragOver" @dragleave="handleDragLeave" @drop="handleDrop">
-                <input v-bind="attrs" type="file" :disabled="disabled" :required="required" :name="name"
-                    :multiple="multiple" ref="fileInput" :accept="accept" :autocomplete="off"
+                    disabled
+                        ? 'cursor-not-allowed bg-gray-100 opacity-60'
+                        : 'cursor-pointer',
+                ]"
+                @dragover="handleDragOver"
+                @dragleave="handleDragLeave"
+                @drop="handleDrop"
+            >
+                <input
+                    v-bind="attrs"
+                    ref="fileInput"
+                    type="file"
+                    :disabled="disabled"
+                    :required="required"
+                    :name="name"
+                    :multiple="multiple"
+                    :accept="accept"
+                    autocomplete="off"
                     class="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
-                    @change="handleFileChange" @focus="emit('focus', $event)" @blur="emit('blur', $event)"
-                    @keydown="emit('keydown', $event)" />
+                    @change="handleFileChange"
+                    @focus="emit('focus', $event)"
+                    @blur="emit('blur', $event)"
+                    @keydown="emit('keydown', $event)"
+                />
 
                 <div class="flex flex-col items-center">
-                    <div v-if="!selectedFiles.length" class="flex flex-col items-center">
-                        <ArrowUpTrayIcon class="h-8 w-8 mb-2" :class="isDragging
-                            ? 'text-[#1FBCC3]'
-                            : 'text-gray-400'
-                            " />
+                    <div
+                        v-if="!selectedFiles.length"
+                        class="flex flex-col items-center"
+                    >
+                        <ArrowUpTrayIcon
+                            class="h-8 w-8 mb-2"
+                            :class="isDragging ? 'text-[#1FBCC3]' : 'text-gray-400'"
+                        />
 
-                        <p class="text-sm font-medium" :class="isDragging
-                            ? 'text-[#1FBCC3]'
-                            : 'text-gray-700'
-                            ">
-                            {{
-                                isDragging
-                                    ? "Drop file here"
-                                    : dropzoneText
-                            }}
+                        <p
+                            class="text-sm font-medium"
+                            :class="isDragging ? 'text-[#1FBCC3]' : 'text-gray-700'"
+                        >
+                            {{ isDragging ? "Drop file here" : dropzoneText }}
                         </p>
                     </div>
+
                     <p v-if="dropzoneHint" class="mt-2 text-xs text-gray-400">
                         {{ dropzoneHint }}
                     </p>
 
-                    <div v-if="selectedFiles.length" class="flex flex-col gap-2 mt-2 w-full">
-                        <div v-for="(file, index) in selectedFiles" :key="`${file.name}-${index}`"
-                            class="relative flex items-center p-2 border rounded-lg text-[#1FBCC3]">
-                            <img v-if="['xls', 'xlsx'].includes(
-                                file.name.split('.').pop().toLowerCase()
-                            )" src="/images/icons/file/xls.svg" class="h-10 w-10 shrink-0" />
+                    <div
+                        v-if="selectedFiles.length"
+                        class="flex flex-col gap-2 mt-2 w-full"
+                    >
+                        <div
+                            v-for="(file, index) in selectedFiles"
+                            :key="`${file.name}-${index}`"
+                            class="relative flex items-center p-2 border rounded-lg text-[#1FBCC3]"
+                        >
+                            <img
+                                v-if="['xls', 'xlsx'].includes(getExt(file.name))"
+                                src="/images/icons/file/xls.svg"
+                                class="h-10 w-10 shrink-0"
+                            />
 
-                            <img v-else-if="['png', 'jpg', 'svg', 'jpeg', 'gif', 'webp'].includes(
-                                file.name.split('.').pop().toLowerCase()
-                            )" src="/images/icons/file/img.svg" class="h-10 w-10 shrink-0" />
+                            <img
+                                v-else-if="
+                                    ['png', 'jpg', 'svg', 'jpeg', 'gif', 'webp'].includes(
+                                        getExt(file.name)
+                                    )
+                                "
+                                src="/images/icons/file/img.svg"
+                                class="h-10 w-10 shrink-0"
+                            />
 
-                            <img v-else-if="
-                                file.name.split('.').pop().toLowerCase() === 'pdf'
-                            " src="/images/icons/file/pdf.svg" class="h-10 w-10 shrink-0" />
+                            <img
+                                v-else-if="getExt(file.name) === 'pdf'"
+                                src="/images/icons/file/pdf.svg"
+                                class="h-10 w-10 shrink-0"
+                            />
 
-                            <span class="flex-1 truncate px-3 text-xs font-medium text-left">
+                            <span
+                                class="flex-1 truncate px-3 text-xs font-medium text-left"
+                            >
                                 {{ file.name }}
                             </span>
 
-                            <button type="button"
+                            <button
+                                type="button"
                                 class="relative z-10 ml-2 flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-full text-gray-400 hover:bg-red-50 hover:text-red-500"
-                                @click.stop="removeFile(index)">
+                                @click.stop="removeFile(index)"
+                            >
                                 <span class="text-lg leading-none">&times;</span>
                             </button>
                         </div>
                     </div>
-
-
                 </div>
             </div>
 
-            <input v-else v-bind="attrs" :type="type" :value="modelValue" :placeholder="placeholder"
-                :disabled="disabled" :readonly="readonly" :required="required" :name="name" :autocomplete="off"
+            <!-- TEXT / OTHER INPUT -->
+            <input
+                v-else
+                v-bind="attrs"
+                :type="type"
+                :value="modelValue"
+                :placeholder="placeholder"
+                :disabled="disabled"
+                :readonly="readonly"
+                :required="required"
+                :name="name"
+                :autocomplete="autocomplete"
                 :class="[
                     'w-full rounded border bg-white py-2.5 text-sm placeholder:text-gray-400 transition-colors duration-150 outline-none',
 
@@ -1423,11 +574,19 @@ const removeFile = (index) => {
                         : 'text-gray-900',
 
                     readonly ? 'bg-gray-50' : '',
-                ]" @input="handleInput" @focus="emit('focus', $event)" @blur="emit('blur', $event)"
-                @change="emit('change', $event)" @keydown="emit('keydown', $event)" />
+                ]"
+                @input="handleInput"
+                @focus="emit('focus', $event)"
+                @blur="emit('blur', $event)"
+                @change="emit('change', $event)"
+                @keydown="emit('keydown', $event)"
+            />
 
             <!-- SUFFIX -->
-            <div v-if="$slots.suffix" class="absolute inset-y-0 right-0 flex items-center pr-3">
+            <div
+                v-if="$slots.suffix"
+                class="absolute inset-y-0 right-0 flex items-center pr-3"
+            >
                 <slot name="suffix" />
             </div>
         </div>
