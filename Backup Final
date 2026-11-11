@@ -2,45 +2,39 @@
 
 @section('extracss')
 <style>
+    :root {
+        --offset-top: 220px; /* margin header + judul + jarak bawah. Naikkan kalau card mepet bawah */
+    }
+
     html, body {
         height: 100%;
         overflow: hidden; /* halaman dikunci, yang scroll hanya .card-scroll */
     }
 
-    /* ===== Layout utama: header + card mengisi sisa tinggi layar ===== */
     .page-wrap {
         height: 100vh;
-        height: 100dvh; /* akurat di mobile browser */
-        display: flex;
-        flex-direction: column;
+        height: 100dvh;
         box-sizing: border-box;
-        padding-bottom: 1rem;
     }
 
     .page-wrap .header {
-        flex: 0 0 auto;
         font-size: 14pt;
         margin-top: 7.8rem;
     }
 
     .page-body {
-        flex: 1 1 auto;
-        min-height: 0; /* penting agar child bisa scroll */
-        display: flex;
         float: none;
         width: 100%;
     }
 
+    /* ===== Card: tinggi = tinggi layar - offset ===== */
     .menu-card {
         position: relative;
-        flex: 1 1 auto;
-        min-height: 0;
-        display: flex;
-        flex-direction: column;
+        height: calc(100vh - var(--offset-top));
+        height: calc(100dvh - var(--offset-top));
         background-color: #fff;
         border-radius: 10px;
-        margin-top: 12px;
-        margin-bottom: 0;
+        margin: 12px 0 0 0;
         padding: 20px;
         overflow: hidden;
     }
@@ -49,8 +43,7 @@
     .card-scroll {
         position: relative;
         z-index: 1;
-        flex: 1 1 auto;
-        min-height: 0;
+        height: 100%;
         overflow-y: auto;
         overflow-x: hidden;
         -webkit-overflow-scrolling: touch;
@@ -159,6 +152,10 @@
 
     /* ===== Tablet / Mobile portrait ===== */
     @media screen and (max-width: 768px) {
+        :root {
+            --offset-top: 180px;
+        }
+
         .text-title {
             font-size: 16px;
         }
@@ -191,8 +188,8 @@
 
     /* ===== HP landscape (tinggi layar pendek) ===== */
     @media screen and (max-height: 500px) and (orientation: landscape) {
-        .page-wrap {
-            padding-bottom: 0.5rem;
+        :root {
+            --offset-top: 130px;
         }
 
         .page-wrap .header {
