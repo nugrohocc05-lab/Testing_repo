@@ -1,360 +1,182 @@
-@extends('layouts.masternomenu')
+@extends('monitoring::layouts.master')
 
 @section('extracss')
 <style>
-    :root {
-        --offset-top: 220px; /* margin header + judul + jarak bawah. Naikkan kalau card mepet bawah */
+    .datasummary tr {
+        height: 5vh;
     }
-
-    html, body {
-        height: 100%;
-        overflow: hidden; /* halaman dikunci, yang scroll hanya .card-scroll */
+    .datasummary td {
+        font-size: calc((3vh + 3vw)/4);
+        text-align: center;
+        border: 1px solid white;
     }
-
-    .page-wrap {
-        height: 100vh;
-        height: 100dvh;
-        box-sizing: border-box;
-    }
-
-    .page-wrap .header {
-        font-size: 14pt;
-        margin-top: 7.8rem;
-    }
-
-    .page-body {
-        float: none;
-        width: 100%;
-    }
-
-    /* ===== Card: tinggi = tinggi layar - offset ===== */
-    .menu-card {
-        position: relative;
-        height: calc(100vh - var(--offset-top));
-        height: calc(100dvh - var(--offset-top));
-        background-color: #fff;
-        border-radius: 10px;
-        margin: 12px 0 0 0;
-        padding: 20px;
-        overflow: hidden;
-    }
-
-    /* ===== Area yang scroll ===== */
-    .card-scroll {
-        position: relative;
-        z-index: 1;
-        height: 100%;
-        overflow-y: auto;
-        overflow-x: hidden;
-        -webkit-overflow-scrolling: touch;
-        overscroll-behavior: contain;
-    }
-
-    /* ===== Judul ===== */
-    .text-title {
-        font-size: 20px;
-        font-weight: 600;
-        text-transform: uppercase;
-    }
-
-    /* ===== Grid menu ===== */
-    .custom-box {
-        display: flex;
-        flex-wrap: wrap;
-        flex-direction: row;
-        justify-content: center;
-        align-items: flex-start;
-        width: 100%;
-        gap: 80px 70px;
-        padding: 60px;
-        box-sizing: border-box;
-    }
-
-    @media (min-width: 1367px) {
-        .custom-box {
-            gap: 100px 160px;
-        }
-    }
-
-    .custom-box-content {
-        position: relative;
-        z-index: 0;
-        width: 133px;
-        height: 136px;
-        cursor: pointer;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        text-decoration: none;
-        transition: transform 0.5s ease;
-    }
-
-    .custom-box-content:hover {
-        transform: scale(1.1);
-    }
-
-    .custom-box-content:hover .custom-shadow {
-        background: linear-gradient(to bottom, rgba(60, 141, 188, 0.1) 0%, rgba(60, 141, 188, 1) 100%);
-    }
-
-    .custom-shadow {
-        width: 133px;
-        height: 130px;
-        position: absolute;
-        top: -27px;
-        left: 0;
-        z-index: -1;
-        background: linear-gradient(to bottom, rgba(191, 191, 191, 0.1) 0%, rgba(191, 191, 191, 1) 100%);
-        border-radius: 10px;
-        transition: background 0.5s ease;
-    }
-
-    .image-box {
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-    }
-
-    .text-footer {
-        font-size: 11pt;
-        font-weight: bold;
-        color: #3c8dbc;
+    .datasummary th {
+        font-size: calc((2vh + 2vw)/3);
         text-align: center;
     }
-
-    /* ===== Background blur (diam di tengah card, tidak ikut scroll) ===== */
-    .bg-icon {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 70%;
-        height: 70%;
-        z-index: 0;
-        opacity: 0.15;
-        pointer-events: none;
-        display: flex;
-        justify-content: center;
-        align-items: center;
+    .font-small .datasummary td {
+        font-size: calc((3vh + 3vw)/6);
     }
 
-    .img-bg {
-        max-width: 900px;
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
+    .font-small .datasummary th {
+        font-size: calc((2vh + 2vw)/4);
     }
-
-    .navbar-toggle {
-        display: none;
+    h3 {
+        font-size: calc((3vh + 3vw)/2);
     }
-
-    /* ===== Tablet / Mobile portrait ===== */
-    @media screen and (max-width: 768px) {
-        :root {
-            --offset-top: 180px;
-        }
-
-        .text-title {
-            font-size: 16px;
-        }
-
-        .page-wrap .header {
-            margin-top: 6rem;
-        }
-
-        .menu-card {
-            padding: 10px;
-        }
-
-        .custom-box {
-            gap: 40px 40px;
-            padding: 30px 20px;
-        }
-
-        .custom-box-content {
-            transform: scale(0.95);
-        }
-
-        .custom-box-content:hover {
-            transform: scale(1.02);
-        }
-
-        .img-bg {
-            max-width: 500px;
-        }
+    .timedata .b-title {
+        font-size: calc((2vh + 2vw)/3);
     }
-
-    /* ===== HP landscape (tinggi layar pendek) ===== */
-    @media screen and (max-height: 500px) and (orientation: landscape) {
-        :root {
-            --offset-top: 130px;
+    .timedata .b-subtitle {
+        font-size: calc((2vh + 2vw)/2);
+    }
+    td.line {
+        font-size: calc((2vh + 2vw)/3);
+    }
+    .clickable:hover {
+        background-color: #242424;
+    }
+    .legend td {
+        text-align: center;
+        vertical-align: middle;
+    }
+    table.legend {
+        width: 80%;
+        margin: auto;
+    }
+    td.border-top-left {
+        border-left: 1px solid white;
+        border-top: 1px solid white;
+    }
+    td.border-top {
+        border-top: 1px solid white;
+    }
+    td.border-top-right {
+        border-right: 1px solid white;
+        border-top: 1px solid white;
+    }
+    tr.border-side {
+        border-left: 1px solid white;
+        border-right: 1px solid white;
+    }
+    tr.border-bottom-side {
+        border-left: 1px solid white;
+        border-right: 1px solid white;
+        border-bottom: 1px solid white;
+        min-height: 10px;
+    }
+    .border-bottom-side td {
+        height: 4vh;
+    }
+    .header-text {
+        font-size: calc((5vh+5vw)/2);
+    }
+    @media (min-width: 992px){
+        .col-md-2-5 {
+            width: 20% !important;
+        }
+        .col-md-1-5 {
+            width:14.28% !important;
         }
 
-        .page-wrap .header {
-            margin-top: 4rem;
-        }
-
-        .text-title {
-            font-size: 14px;
-        }
-
-        .menu-card {
-            margin-top: 6px;
-            padding: 8px;
-        }
-
-        .custom-box {
-            gap: 35px 30px;
-            padding: 30px 15px 15px;
+        .col-md-1 {
+            width:12.5% !important;
         }
     }
 </style>
 @endsection
 
 @section('content')
-    <div class="container-fluid page-wrap">
-        <div class="header">
-            <span class="text-title"><center>Chief Token Menu - {{ session('db')->keterangan ?? '-' }}</center></span>
+<div class="container-fluid" style="color: white">
+    <div class="row">
+        <div class="col-sm-2">
+            @if(!session('monitoring'))
+            <a href="{{ url('/mod-tokenmenu/chiefmenu') }}">
+                <i class="fas fa-caret-left fa-7x"></i>
+            </a>
+            @if(isset($nextlink))
+            <a href="{{$nextlink}}" class="sm-float-right"><i class="fas fa-caret-right fa-7x"></i></a>
+            @endif
+            @endif
         </div>
-
-        <div class="col-sm-12 page-body">
-            <div class="card menu-card">
-
-                <div class="bg-icon">
-                    <img src="{{ asset('img/imageslogin/mes-blur.png') }}" class="img-bg" alt="">
-                </div>
-
-                <div class="card-scroll">
-                    <div class="custom-box">
-
-                        <a class="custom-box-content" href="{{ route('chief_summarysentsewing') }}" onclick="return goShortcut(event, this)">
-                            <div style="width:133px;height:136px;">
-                                <img src="{{ _asset('img/iconsmenu/chief/summarysewing.png') }}" alt="Summary Sent Sewing" class="image-box">
-                            </div>
-                            <div class="custom-shadow"></div>
-                            <div style="margin-top:10px;display:flex;">
-                                <span class="text-footer">SUMMARY SENT SEWING</span>
-                            </div>
-                        </a>
-
-                        <a class="custom-box-content" href="{{ route('loadingsewingmenureportmps') }}" onclick="return goShortcut(event, this)">
-                            <div style="width:133px;height:136px;">
-                                <img src="{{ _asset('img/iconsmenu/chief/dailyinputoutput.png') }}" alt="Daily Input Output" class="image-box">
-                            </div>
-                            <div class="custom-shadow"></div>
-                            <div style="margin-top:10px;display:flex;">
-                                <span class="text-footer">DAILY INPUT OUTPUT</span>
-                            </div>
-                        </a>
-
-                        <a class="custom-box-content" href="{{ route('loadingsewingmenugarmentinfo') }}" onclick="return goShortcut(event, this)">
-                            <div style="width:133px;height:136px;">
-                                <img src="{{ _asset('img/iconsmenu/chief/inputaksesoris.png') }}" alt="Garment Info" class="image-box">
-                            </div>
-                            <div class="custom-shadow"></div>
-                            <div style="margin-top:10px;display:flex;">
-                                <span class="text-footer">INPUT ACCESSORIES</span>
-                            </div>
-                        </a>
-
-                        <a class="custom-box-content" href="{{ route('chief_monitoring_endline') }}" onclick="return goShortcut(event, this)">
-                            <div style="width:133px;height:136px;">
-                                <img src="{{ _asset('img/iconsmenu/chief/dashboardoutputline.png') }}" alt="Dashboard Output Line" class="image-box">
-                            </div>
-                            <div class="custom-shadow"></div>
-                            <div style="margin-top:10px;display:flex;">
-                                <span class="text-footer">DASHBOARD OUTPUT LINE</span>
-                            </div>
-                        </a>
-
-                        <a class="custom-box-content" href="{{ route('chief_sewing_summarysewing') }}" onclick="return goShortcut(event, this)">
-                            <div style="width:133px;height:136px;">
-                                <img src="{{ _asset('img/iconsmenu/chief/reportsewing.png') }}" alt="Report Sewing" class="image-box">
-                            </div>
-                            <div class="custom-shadow"></div>
-                            <div style="margin-top:10px;display:flex;">
-                                <span class="text-footer">REPORT SEWING</span>
-                            </div>
-                        </a>
-
-                        <a class="custom-box-content" href="{{ route('chief_dataorder_mpsreport') }}" onclick="return goShortcut(event, this)">
-                            <div style="width:133px;height:136px;">
-                                <img src="{{ _asset('img/iconsmenu/chief/mps.png') }}" alt="MPS" class="image-box">
-                            </div>
-                            <div class="custom-shadow"></div>
-                            <div style="margin-top:10px;display:flex;">
-                                <span class="text-footer">MPS</span>
-                            </div>
-                        </a>
-
-                        <a class="custom-box-content" href="{{ route('spl_loadingsewing') }}" target="_blank">
-                            <div style="width:133px;height:136px;">
-                                <img src="{{ _asset('img/iconsmenu/chief/dps.png') }}" alt="DPS" class="image-box">
-                            </div>
-                            <div class="custom-shadow"></div>
-                            <div style="margin-top:10px;display:flex;">
-                                <span class="text-footer">DPS</span>
-                            </div>
-                        </a>
-
-                        <a class="custom-box-content" href="{{ route('barcode_line') }}" onclick="return goShortcut(event, this)">
-                            <div style="width:133px;height:136px;">
-                                <img src="{{ _asset('img/iconsmenu/chief/dataorderkp.png') }}" alt="Data Order" class="image-box">
-                            </div>
-                            <div class="custom-shadow"></div>
-                            <div style="margin-top:10px;display:flex;">
-                                <span class="text-footer">DATA ORDER</span>
-                            </div>
-                        </a>
-
-                        <a class="custom-box-content" href="{{ route('maintenance_machine') }}" onclick="return goShortcut(event, this)">
-                            <div style="width:133px;height:136px;">
-                                <img src="{{ _asset('img/iconsmenu/chief/summarymappingline.png') }}" alt="Summary Mapping Line" class="image-box">
-                            </div>
-                            <div class="custom-shadow"></div>
-                            <div style="margin-top:10px;display:flex;">
-                                <span class="text-footer">SUMMARY MAPPING LINE</span>
-                            </div>
-                        </a>
-
-                    </div>
-                </div>
-
-            </div>
+        <div class="col-sm-7 text-center">
+            <h3>{{ $db ? $db->keterangan . " - Line Monitoring" : '-'}}</h3>
+        </div>
+        <div class="col-sm-3 text-center" style="margin-top: 1rem">
+            <table class="timedata" style="width: 100%">
+                <tr>
+                    <td>
+                        <b class="b-subtitle">
+                            @if(session('monitoring'))
+                            {{ Carbon\Carbon::now()->format('d F y') }}
+                            @else
+                            {{ Carbon\Carbon::parse(session('endline.date'))->format('d F y') }}
+                                @if(session('endline.shift'))
+                                {{'(Shift '.session('endline.shift').')'}}
+                                @endif
+                            @endif
+                        </b>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <b class="text-center b-title" id="hours">
+                            @if(session('monitoring'))
+                            {{ Carbon\Carbon::now()->format('H:i:s') }}
+                            @endif
+                        </b>
+                    </td>
+                </tr>
+            </table>
         </div>
     </div>
-
-    <div class="modal fade" id="modal-niksewing" role="dialog" data-backdrop="static" data-keyboard="false">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h4 class="modal-title">Scan NIK</h4>
-                </div>
-                <div class="modal-body">
-                    <div class="row">
-                        <div class="col-md-4 col-sm-4"></div>
-                        <div class="col-md-4 col-sm-4 text-center">
-                            <label>Scan NIK Sewing</label>
-                            <input type="text" name="niksewing" id="niksewing" class="form-control nospecialcharacter"
-                                required="required" minlength="10" maxlength="10" autocomplete="off">
-                        </div>
-                        <div class="col-md-4 col-sm-4"></div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-default close-modal" autofocus>Cancel</button>
-                </div>
-            </div>
-        </div>
+    <div class="row" id="data-container">
+        {!! $data !!}
     </div>
-
-    @include('layouts.loading')
+</div>
 @endsection
 
 @section('extrascript')
 <script type="text/javascript">
+    $(document).ready(() => {
+        function set(e) {
+            e = e < 10 ? '0' + e : e;
+            return e;
+        }
 
+        @if(session('monitoring'))
+        setInterval(function() {
+            d = new Date();
+            h = set(d.getHours());
+            m = set(d.getMinutes());
+            s = set(d.getSeconds());
+            $('#hours').text(h + ':' + m + ':' + s);
+        }, 1000);
+        @endif
+
+        function getdata() {
+            $.ajax({
+                type: "get",
+                url: "{!! route('chief_monitoring_endlinesummarydata') !!}",
+                dataType: "html",
+                success: (r) => {
+                    $('#data-container').html(r);
+                },
+                complete: () => {
+                    setTimeout(() => {
+                        getdata();
+                    }, 60000);
+                }
+            });
+        }
+
+        setTimeout(() => {
+            getdata();
+        }, 60000);
+
+        $('body').on('click', '.clickable', (e) => {
+            window.location = $(e.currentTarget).data('href');
+        });
+    });
 </script>
 @endsection
