@@ -2,38 +2,55 @@
 
 @section('extracss')
 <style>
-    .datasummary tr {
-        height: 5vh;
-    }
-    .datasummary td {
-        font-size: calc((3vh + 3vw)/4);
-        text-align: center;
-        border: 1px solid white;
-    }
-    .datasummary th {
-        font-size: calc((2vh + 2vw)/3);
-        text-align: center;
-    }
-    .font-small .datasummary td {
-        font-size: calc((3vh + 3vw)/6);
+    /* ============================================================
+       BASE
+       ============================================================ */
+    html {
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
     }
 
+    .datasummary {
+        max-width: 100%;
+    }
+    .datasummary tr {
+        height: clamp(30px, 5vh, 64px);
+    }
+    .datasummary td {
+        font-size: clamp(0.75rem, calc((3vh + 3vw)/4), 1.5rem);
+        text-align: center;
+        border: 1px solid white;
+        word-break: break-word;
+    }
+    .datasummary th {
+        font-size: clamp(0.72rem, calc((2vh + 2vw)/3), 1.3rem);
+        text-align: center;
+        word-break: break-word;
+    }
+    .font-small .datasummary td {
+        font-size: clamp(0.68rem, calc((3vh + 3vw)/6), 1.1rem);
+    }
     .font-small .datasummary th {
-        font-size: calc((2vh + 2vw)/4);
+        font-size: clamp(0.68rem, calc((2vh + 2vw)/4), 1.1rem);
     }
     h3 {
-        font-size: calc((3vh + 3vw)/2);
+        font-size: clamp(1.15rem, calc((3vh + 3vw)/2), 2.6rem);
     }
     .timedata .b-title {
-        font-size: calc((2vh + 2vw)/3);
+        font-size: clamp(0.85rem, calc((2vh + 2vw)/3), 1.5rem);
     }
     .timedata .b-subtitle {
-        font-size: calc((2vh + 2vw)/2);
+        font-size: clamp(0.9rem, calc((2vh + 2vw)/2), 1.8rem);
     }
     td.line {
-        font-size: calc((2vh + 2vw)/3);
+        font-size: clamp(0.75rem, calc((2vh + 2vw)/3), 1.4rem);
     }
-    .clickable:hover {
+    .clickable {
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+    }
+    .clickable:hover,
+    .clickable:active {
         background-color: #242424;
     }
     .legend td {
@@ -66,30 +83,165 @@
         min-height: 10px;
     }
     .border-bottom-side td {
-        height: 4vh;
+        height: clamp(24px, 4vh, 48px);
     }
     .header-text {
-        font-size: calc((5vh+5vw)/2);
+        /* sebelumnya calc((5vh+5vw)/2) tidak valid (kurang spasi), sekarang diperbaiki */
+        font-size: clamp(1.25rem, calc((5vh + 5vw)/2), 2.4rem);
     }
-    @media (min-width: 992px){
-        .col-md-2-5 {
-            width: 20% !important;
-        }
-        .col-md-1-5 {
-            width:14.28% !important;
-        }
 
-        .col-md-1 {
-            width:12.5% !important;
+    /* ============================================================
+       HEADER (judul, tombol panah, tanggal & jam)
+       Grid 3 kolom: [panah] [judul] [tanggal/jam]
+       ============================================================ */
+    .line-monitoring .header-row {
+        display: grid;
+        grid-template-columns: minmax(4rem, 1fr) minmax(0, 2.6fr) minmax(8rem, 1.2fr);
+        align-items: center;
+        column-gap: 8px;
+        margin-left: 0;
+        margin-right: 0;
+        margin-bottom: 0.5rem;
+    }
+    .line-monitoring .header-row::before,
+    .line-monitoring .header-row::after {
+        display: none !important;
+    }
+    .line-monitoring .header-row > [class*="col-"] {
+        float: none !important;
+        width: auto !important;
+        min-width: 0;
+        padding: 0 !important;
+        margin-top: 0 !important;
+    }
+    .line-monitoring .header-arrows {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .line-monitoring .header-arrows a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        float: none !important;
+        color: inherit;
+        padding: 2px 6px;
+        min-width: 44px;
+        min-height: 44px;
+    }
+    .line-monitoring .header-arrows .fa-7x {
+        font-size: clamp(2.25rem, 7vw, 4.5rem) !important;
+        line-height: 1;
+    }
+    .line-monitoring .header-title h3 {
+        margin: 0;
+        line-height: 1.2;
+        word-break: break-word;
+    }
+    .line-monitoring .timedata {
+        width: 100%;
+    }
+    .line-monitoring .timedata td {
+        white-space: nowrap;
+        line-height: 1.3;
+    }
+
+    /* ============================================================
+       TABLET (>= 600px)
+       Grid Bootstrap versi "md" diaktifkan mulai 600px, sehingga
+       layout tidak menumpuk (stack) di tablet kecil. Proporsi kolom
+       sama persis dengan desktop.
+       ============================================================ */
+    @media (min-width: 600px) {
+        .line-monitoring [class*="col-md-"] {
+            float: left;
+        }
+        .line-monitoring .col-md-1  { width: 12.5% !important; }
+        .line-monitoring .col-md-2  { width: 16.66666667%; }
+        .line-monitoring .col-md-3  { width: 25%; }
+        .line-monitoring .col-md-4  { width: 33.33333333%; }
+        .line-monitoring .col-md-5  { width: 41.66666667%; }
+        .line-monitoring .col-md-6  { width: 50%; }
+        .line-monitoring .col-md-7  { width: 58.33333333%; }
+        .line-monitoring .col-md-8  { width: 66.66666667%; }
+        .line-monitoring .col-md-9  { width: 75%; }
+        .line-monitoring .col-md-10 { width: 83.33333333%; }
+        .line-monitoring .col-md-11 { width: 91.66666667%; }
+        .line-monitoring .col-md-12 { width: 100%; }
+        .line-monitoring .col-md-2-5 { width: 20% !important; }
+        .line-monitoring .col-md-1-5 { width: 14.28% !important; }
+    }
+
+    /* Tablet kecil & sedang (600px - 991px) */
+    @media (min-width: 600px) and (max-width: 991px) {
+        .datasummary td,
+        .datasummary th {
+            padding: 3px 2px;
+        }
+        table.legend {
+            width: 100%;
+        }
+        .line-monitoring .header-row {
+            grid-template-columns: minmax(3.5rem, 1fr) minmax(0, 2.4fr) minmax(7.5rem, 1.2fr);
+        }
+        .line-monitoring .header-arrows .fa-7x {
+            font-size: clamp(2rem, 6vw, 3.5rem) !important;
+        }
+    }
+
+    /* Tablet portrait: layar tinggi, lebar terbatas */
+    @media (min-width: 600px) and (orientation: portrait) {
+        .datasummary tr {
+            height: clamp(30px, 4.2vh, 56px);
+        }
+        .border-bottom-side td {
+            height: clamp(22px, 3.2vh, 40px);
+        }
+        .line-monitoring .header-row {
+            margin-bottom: 1rem;
+        }
+    }
+
+    /* Tablet landscape: layar lebar, tinggi terbatas */
+    @media (min-width: 600px) and (orientation: landscape) {
+        .datasummary tr {
+            height: clamp(28px, 5.5vh, 64px);
+        }
+        .line-monitoring .header-row {
+            margin-bottom: 0.25rem;
+        }
+    }
+
+    /* Tablet besar (iPad Pro / 12" ke atas) */
+    @media (min-width: 1200px) {
+        .line-monitoring .header-row {
+            grid-template-columns: minmax(6rem, 1fr) minmax(0, 3fr) minmax(10rem, 1.2fr);
+        }
+        .datasummary td,
+        .datasummary th {
+            padding: 6px 4px;
+        }
+    }
+
+    /* Di bawah 600px (ponsel): header menumpuk rapi */
+    @media (max-width: 599px) {
+        .line-monitoring .header-row {
+            grid-template-columns: 1fr auto;
+            row-gap: 6px;
+        }
+        .line-monitoring .header-title {
+            grid-column: 1 / -1;
+            grid-row: 2;
+            text-align: center;
         }
     }
 </style>
 @endsection
 
 @section('content')
-<div class="container-fluid" style="color: white">
-    <div class="row">
-        <div class="col-sm-2">
+<div class="container-fluid line-monitoring" style="color: white">
+    <div class="row header-row">
+        <div class="col-sm-2 header-arrows">
             @if(!session('monitoring'))
             <a href="{{ url('/mod-tokenmenu/chiefmenu') }}">
                 <i class="fas fa-caret-left fa-7x"></i>
@@ -99,10 +251,10 @@
             @endif
             @endif
         </div>
-        <div class="col-sm-7 text-center">
+        <div class="col-sm-7 text-center header-title">
             <h3>{{ $db ? $db->keterangan . " - Line Monitoring" : '-'}}</h3>
         </div>
-        <div class="col-sm-3 text-center" style="margin-top: 1rem">
+        <div class="col-sm-3 text-center header-time" style="margin-top: 1rem">
             <table class="timedata" style="width: 100%">
                 <tr>
                     <td>
