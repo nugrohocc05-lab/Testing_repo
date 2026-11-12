@@ -1,602 +1,525 @@
-@php
-    $count = $lines->count();
-    $chunk_lines = $lines->chunk($count > 40 ? 11 : 10);
+@extends('monitoring::layouts.master')
 
-    $output_green = ($par = $parameters->where('key', 'line_outputgreen')->first()) ? $par->value * 1 : 0;
-    $output_orange = ($par = $parameters->where('key', 'line_outputorange')->first()) ? $par->value * 1 : 0;
-
-    $eff_green = ($par = $parameters->where('key', 'line_effgreen')->first()) ? $par->value * 1 : 0;
-    $eff_orange = ($par = $parameters->where('key', 'line_efforange')->first()) ? $par->value * 1 : 0;
-    $eff_hanger_green = ($par = $parameters->where('key', 'line_hanger_effgreen')->first()) ? $par->value * 1 : 0;
-    $eff_hanger_orange = ($par = $parameters->where('key', 'line_hanger_efforange')->first()) ? $par->value * 1 : 0;
-
-    $rft_green = ($par = $parameters->where('key', 'line_rftgreen')->first()) ? $par->value * 1 : 0;
-    $rft_orange = ($par = $parameters->where('key', 'line_rftorange')->first()) ? $par->value * 1 : 0;
-
-    $green_color = ($par = $parameters->where('key', 'line_green')->first()) ? $par->value : '#299442';
-    $orange_color = ($par = $parameters->where('key', 'line_orange')->first()) ? $par->value : '#f08e0e';
-    $red_color = ($par = $parameters->where('key', 'line_red')->first()) ? $par->value : '#f0370e';
-@endphp
-
-<div class="row summary-metrics" style="margin-bottom: 1rem">
-    <div class="col-sm-12 col-md-3 header-text">
-        <div class="summary-info">
-            <div class="summary-icon">
-                <svg width="12mm" height="12mm" viewBox="0 0 18 18">
-                    <g transform="matrix(0.66666665,0,0,0.66666665,-71.563485,-99.821429)">
-                        <circle style="fill:#2e90c9" cx="116.34523" cy="158.73215" r="9" />
-                    </g>
-                </svg>
-            </div>
-            <div class="summary-label">Tot Output</div>
-            <div class="summary-value" id="totaloutputtxt">
-                : {{ $totaloutput }}
-            </div>
-        </div>
-    </div>
-
-    <div class="col-sm-12 col-md-3 header-text">
-        <div class="summary-info">
-            <div class="summary-icon">
-                <svg viewBox="0 0 18 18" height="12mm" width="12mm">
-                    <g transform="matrix(0.66666663,0,0,0.66666663,-39.233692,-112.49646)">
-                        <rect
-                            transform="rotate(44.999998)"
-                            y="71.342949"
-                            x="167.2981"
-                            height="12.727922"
-                            width="12.727922"
-                            style="fill:#2e90c9;stroke:none" />
-                    </g>
-                </svg>
-            </div>
-            <div class="summary-label">Avg Eff</div>
-            <div class="summary-value" id="averageefficiencytxt">
-                : {{ $averageeff }}%
-            </div>
-        </div>
-    </div>
-
-    <div class="col-sm-12 col-md-3 header-text">
-        <div class="summary-info">
-            <div class="summary-icon">
-                <svg width="12mm" height="12mm" viewBox="0 0 18 18">
-                    <g transform="matrix(0.25000001,0,0,0.25000001,-17.197917,-32.200895)">
-                        <rect
-                            width="48"
-                            height="48"
-                            x="68.791664"
-                            y="128.80357"
-                            style="fill:#2e90c9;stroke:none" />
-                    </g>
-                </svg>
-            </div>
-            <div class="summary-label">Avg RFT</div>
-            <div class="summary-value" id="averagerfttxt">
-                : {{ $averagerft }}%
-            </div>
-        </div>
-    </div>
-
-    <div class="col-sm-12 col-md-3 header-text">
-        <div class="summary-info">
-            <div class="summary-icon">
-                <svg
-                    viewBox="0 0 27.536569995 55"
-                    width="22.707323"
-                    height="45.354332">
-                    <g
-                        transform="matrix(0.49293899,0,0,0.49293899,-11.323194,0)"
-                        style="fill:#2e90c9">
-                        <path d="m 46.031,21.672 c 5.975,0 10.836,-4.861 10.836,-10.836 C 56.867,4.861 52.006,0 46.031,0 40.056,0 35.195,4.861 35.195,10.836 c 0,5.975 4.861,10.836 10.836,10.836 z" />
-                        <path d="M 68.311,38.201 59.737,26.256 c -0.835,-1.164 -2.546,-2.042 -3.979,-2.042 h -1.313 -0.937 -15.01 -0.884 -1.366 c -1.433,0 -3.143,0.878 -3.979,2.042 l -8.574,11.945 c -0.862,1.202 -0.969,3.153 -0.243,4.441 l 6.942,12.324 c 0.711,1.263 2.404,2.252 3.853,2.252 h 0.367 v 0.12 0.503 29.166 c 0,2.757 2.243,5 5,5 h 0.353 c 2.757,0 5,-2.243 5,-5 V 60.842 h 2.126 v 26.166 c 0,2.757 2.243,5 5,5 h 0.352 c 2.757,0 5,-2.243 5,-5 v -29.166 -0.503 -0.12 h 0.314 c 1.449,0 3.141,-0.989 3.853,-2.252 l 6.942,-12.324 c 0.727,-1.289 0.62,-3.24 -0.243,-4.442 z" />
-                    </g>
-                </svg>
-            </div>
-            <div class="summary-label">Tot MP</div>
-            <div class="summary-value" id="totalmptxt">
-                : {{ $totalmp }}
-            </div>
-        </div>
-    </div>
-
-</div>
-
-<div class="row">
-    <div class="col-sm-12" style="background-color: white"></div>
-</div>
-@php
-    if($count <= 10 ){
-        $column = '12';
+@section('extracss')
+<style>
+    /* ============================================================
+       VARIABEL TINGGI LAYAR
+       --u = 1% tinggi layar yang benar-benar terlihat (dvh),
+       supaya tidak terpotong address bar di browser tablet.
+       ============================================================ */
+    :root {
+        --u: 1vh;
     }
-    elseif($count > 10 && $count <= 20){
-        $column = '6';
+    @supports (height: 1dvh) {
+        :root {
+            --u: 1dvh;
+        }
     }
-    elseif($count > 20 && $count <= 30){
-        $column = '4';
-    }
-    elseif($count > 30 && $count <= 44){
-        $column = '3';
-    }
-    elseif($count > 44 && $count <= 55){
-        $column = '2-5';
-    }elseif($count > 55 && $count <= 66){
-        $column = '2';
-    }elseif($count > 66 && $count <= 77){
-        $column = '1-5';
-    }elseif($count > 77){
-        $column = '1 font-small';
-    }
-@endphp
-@foreach ($chunk_lines as $chl)
-<div class="col-sm-12 col-md-{{$column}}">
-    <table class="datasummary" style="width: 100%">
-        <thead>
-            <tr>
-                <th rowspan="2">Line</th>
-                <th>Output</th>
-                <th>RFT</th>
-                <th>EFF</th>
-                <th>MP</th>
-            </tr>
-            <tr>
-                <th>
-                    <svg
-                    width="12mm"
-                    height="12mm"
-                    viewBox="0 0 18 18"
-                    version="1.1"
-                    id="svg861">
-                    <g
-                        id="layer1"
-                        transform="matrix(0.66666665,0,0,0.66666665,-71.563485,-99.821429)">
-                        <circle
-                        style="fill:#2e90c9;fill-opacity:1;stroke:none;stroke-width:4.37825203;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.98823529;paint-order:markers stroke fill"
-                        id="path1406"
-                        cx="116.34523"
-                        cy="158.73215"
-                        r="9" />
-                    </g>
-                    </svg>
-                </th>
-                <th>
-                    <svg
-                    width="12mm"
-                    height="12mm"
-                    viewBox="0 0 18 18"
-                    version="1.1"
-                    id="svg8">
-                    <g
-                        id="layer1"
-                        transform="matrix(0.25000001,0,0,0.25000001,-17.197917,-32.200895)">
-                        <rect
-                        style="fill:#2e90c9;fill-opacity:1;stroke:none;stroke-width:5.83766937;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.98823529;paint-order:markers stroke fill"
-                        id="rect815"
-                        width="48"
-                        height="48"
-                        x="68.791664"
-                        y="128.80357" />
-                    </g>
-                    </svg>
-                </th>
-                <th>
-                    <svg
-                    id="svg8"
-                    version="1.1"
-                    viewBox="0 0 18 18"
-                    height="12mm"
-                    width="12mm">
-                    <g
-                        transform="matrix(0.66666663,0,0,0.66666663,-39.233692,-112.49646)"
-                        id="layer1">
-                        <rect
-                        transform="rotate(44.999998)"
-                        y="71.342949"
-                        x="167.2981"
-                        height="12.727922"
-                        width="12.727922"
-                        id="rect815"
-                        style="fill:#2e90c9;fill-opacity:1;stroke:none;stroke-width:1.54794586;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.98823529;paint-order:markers stroke fill" />
-                    </g>
-                    </svg>
-                </th>
-                <th>
-                    <svg
-                    id="Capa_1"
-                    x="0px"
-                    y="0px"
-                    viewBox="0 0 27.536569995 55"
-                    width="22.707323"
-                    height="45.354332">
-                    <g
-                    id="g920"
-                    transform="matrix(0.49293899,0,0,0.49293899,-11.323194,0)"
-                    style="fill:#2e90c9ff">
-                            <path
-                    d="m 46.031,21.672 c 5.975,0 10.836,-4.861 10.836,-10.836 C 56.867,4.861 52.006,0 46.031,0 40.056,0 35.195,4.861 35.195,10.836 c 0,5.975 4.861,10.836 10.836,10.836 z"
-                    id="path916"
-                    style="fill:#2e90c9ff" />
-                            <path
-                    d="M 68.311,38.201 59.737,26.256 c -0.835,-1.164 -2.546,-2.042 -3.979,-2.042 h -1.313 -0.937 -15.01 -0.884 -1.366 c -1.433,0 -3.143,0.878 -3.979,2.042 l -8.574,11.945 c -0.862,1.202 -0.969,3.153 -0.243,4.441 l 6.942,12.324 c 0.711,1.263 2.404,2.252 3.853,2.252 h 0.367 v 0.12 0.503 29.166 c 0,2.757 2.243,5 5,5 h 0.353 c 2.757,0 5,-2.243 5,-5 V 60.842 h 2.126 v 26.166 c 0,2.757 2.243,5 5,5 h 0.352 c 2.757,0 5,-2.243 5,-5 v -29.166 -0.503 -0.12 h 0.314 c 1.449,0 3.141,-0.989 3.853,-2.252 l 6.942,-12.324 c 0.727,-1.289 0.62,-3.24 -0.243,-4.442 z m -33.696,9.78 -3.399,-5.538 c -0.369,-0.601 -0.337,-1.673 0.065,-2.251 l 3.334,-4.785 z m 22.831,-12.498 3.281,4.708 c 0.402,0.578 0.434,1.65 0.065,2.251 l -3.346,5.451 z"
-                    id="path918"
-                    style="fill:#2e90c9ff" />
-                    </g>
-                    <g
-                    id="g922"
-                    transform="translate(-22.970781,-46.65367)">
-                    </g>
-                    <g
-                    id="g924"
-                    transform="translate(-22.970781,-46.65367)">
-                    </g>
-                    <g
-                    id="g926"
-                    transform="translate(-22.970781,-46.65367)">
-                    </g>
-                    <g
-                    id="g928"
-                    transform="translate(-22.970781,-46.65367)">
-                    </g>
-                    <g
-                    id="g930"
-                    transform="translate(-22.970781,-46.65367)">
-                    </g>
-                    <g
-                    id="g932"
-                    transform="translate(-22.970781,-46.65367)">
-                    </g>
-                    <g
-                    id="g934"
-                    transform="translate(-22.970781,-46.65367)">
-                    </g>
-                    <g
-                    id="g936"
-                    transform="translate(-22.970781,-46.65367)">
-                    </g>
-                    <g
-                    id="g938"
-                    transform="translate(-22.970781,-46.65367)">
-                    </g>
-                    <g
-                    id="g940"
-                    transform="translate(-22.970781,-46.65367)">
-                    </g>
-                    <g
-                    id="g942"
-                    transform="translate(-22.970781,-46.65367)">
-                    </g>
-                    <g
-                    id="g944"
-                    transform="translate(-22.970781,-46.65367)">
-                    </g>
-                    <g
-                    id="g946"
-                    transform="translate(-22.970781,-46.65367)">
-                    </g>
-                    <g
-                    id="g948"
-                    transform="translate(-22.970781,-46.65367)">
-                    </g>
-                    <g
-                    id="g950"
-                    transform="translate(-22.970781,-46.65367)">
-                    </g>
-                    </svg>
-                </th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach ($chl as $line)
-            @php
-                $m_output = $output[$line->kodegroup];
-                $m_outputpercent = $outputpercent[$line->kodegroup];
-                $m_rft = $rft[$line->kodegroup];
-                $m_eff = $eff[$line->kodegroup];
-                $m_mp = $mp[$line->kodegroup];
-                $m_mptarget = $mptarget[$line->kodegroup];
-                $m_target = $target[$line->kodegroup] ?? 0;
-                $m_hanger = $hanger[$line->kodegroup];
 
-                $m_output_color = ($m_outputpercent >= $output_green) ? $green_color
-                        : (($m_outputpercent >= $output_orange) ? $orange_color : $red_color);
-                $m_rft_color = ($m_rft >= $rft_green) ? $green_color
-                        : (($m_rft >= $rft_orange) ? $orange_color : $red_color);
-                if($m_hanger){
-                    $m_eff_color = ($m_eff >= $eff_hanger_green) ? $green_color
-                            : (($m_eff >= $eff_hanger_orange) ? $orange_color : $red_color);
-                }else{
-                    $m_eff_color = ($m_eff >= $eff_green) ? $green_color
-                            : (($m_eff >= $eff_orange) ? $orange_color : $red_color);
-                }
-                $m_mp_color = $m_mp > $m_mptarget ?
-                            (abs($m_mp - $m_mptarget) > $mptargetparam ? $red_color : $orange_color)
-                            : ($m_mp < $m_mptarget ?
-                                (abs($m_mp - $m_mptarget) > $mptargetparam ? $red_color : $orange_color)
-                                : $green_color);
-            @endphp
+    /* ============================================================
+       BASE
+       ============================================================ */
+    html {
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+    }
 
-            @if(isset($summarymes))
-                @if($m_output > 0 || $m_rft > 0 || $m_eff > 0 || $m_mp > 0)
-                    <tr class="clickable {{$summarymes}}"  data-href="{{route('dc_summarymesdashboardlinedetail', ['db' => $db, 'line' => $line->kodegroup])}}">
-                @else
-                    <tr>
-                @endif
-            @else
-                @if(!session('monitoring') && ($m_target > 0) && ($m_output > 0
-                || $m_rft > 0 || $m_eff > 0 || $m_mp > 0))
-                    <tr class="clickable" data-href="{{route('monitoring_dashboard', ['line' => $line->kodegroup])}}">
-                @else
-                    <tr>
-                @endif
+    .datasummary {
+        max-width: 100%;
+    }
+    .datasummary tr {
+        height: clamp(30px, 5vh, 64px);
+    }
+    .datasummary td {
+        font-size: clamp(0.75rem, calc((3vh + 3vw)/4), 1.5rem);
+        text-align: center;
+        border: 1px solid white;
+        word-break: break-word;
+    }
+    .datasummary th {
+        font-size: clamp(0.72rem, calc((2vh + 2vw)/3), 1.3rem);
+        text-align: center;
+        word-break: break-word;
+    }
+    .font-small .datasummary td {
+        font-size: clamp(0.68rem, calc((3vh + 3vw)/6), 1.1rem);
+    }
+    .font-small .datasummary th {
+        font-size: clamp(0.68rem, calc((2vh + 2vw)/4), 1.1rem);
+    }
+    h3 {
+        font-size: clamp(1.15rem, calc((3vh + 3vw)/2), 2.6rem);
+    }
+    .timedata .b-title {
+        font-size: clamp(0.85rem, calc((2vh + 2vw)/3), 1.5rem);
+    }
+    .timedata .b-subtitle {
+        font-size: clamp(0.9rem, calc((2vh + 2vw)/2), 1.8rem);
+    }
+    td.line {
+        font-size: clamp(0.75rem, calc((2vh + 2vw)/3), 1.4rem);
+    }
+    .clickable {
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+    }
+    .clickable:hover,
+    .clickable:active {
+        background-color: #242424;
+    }
+    .legend td {
+        text-align: center;
+        vertical-align: middle;
+    }
+    table.legend {
+        width: 80%;
+        margin: auto;
+    }
+    td.border-top-left {
+        border-left: 1px solid white;
+        border-top: 1px solid white;
+    }
+    td.border-top {
+        border-top: 1px solid white;
+    }
+    td.border-top-right {
+        border-right: 1px solid white;
+        border-top: 1px solid white;
+    }
+    tr.border-side {
+        border-left: 1px solid white;
+        border-right: 1px solid white;
+    }
+    tr.border-bottom-side {
+        border-left: 1px solid white;
+        border-right: 1px solid white;
+        border-bottom: 1px solid white;
+        min-height: 10px;
+    }
+    .border-bottom-side td {
+        height: clamp(24px, 4vh, 48px);
+    }
+    .header-text {
+        font-size: clamp(1.25rem, calc((5vh + 5vw)/2), 2.4rem);
+    }
+
+    /* ============================================================
+       HEADER (judul, tombol panah, tanggal & jam)
+       ============================================================ */
+    .line-monitoring .header-row {
+        display: grid;
+        grid-template-columns: minmax(4rem, 1fr) minmax(0, 2.6fr) minmax(8rem, 1.2fr);
+        align-items: center;
+        column-gap: 8px;
+        margin-left: 0;
+        margin-right: 0;
+        margin-bottom: 0.5rem;
+    }
+    .line-monitoring .header-row::before,
+    .line-monitoring .header-row::after {
+        display: none !important;
+    }
+    .line-monitoring .header-row > [class*="col-"] {
+        float: none !important;
+        width: auto !important;
+        min-width: 0;
+        padding: 0 !important;
+        margin-top: 0 !important;
+    }
+    .line-monitoring .header-arrows {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .line-monitoring .header-arrows a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        float: none !important;
+        color: inherit;
+        padding: 2px 6px;
+        min-width: 44px;
+        min-height: 44px;
+    }
+    .line-monitoring .header-arrows .fa-7x {
+        font-size: clamp(2.25rem, 7vw, 4.5rem) !important;
+        line-height: 1;
+    }
+    .line-monitoring .header-title h3 {
+        margin: 0;
+        line-height: 1.2;
+        word-break: break-word;
+    }
+    .line-monitoring .timedata {
+        width: 100%;
+    }
+    .line-monitoring .timedata td {
+        white-space: nowrap;
+        line-height: 1.3;
+    }
+
+    /* ============================================================
+       TABLET (>= 600px)
+       Grid "md" diaktifkan mulai 600px agar kolom tidak menumpuk.
+       ============================================================ */
+    @media (min-width: 600px) {
+        .line-monitoring [class*="col-md-"] {
+            float: left;
+        }
+        .line-monitoring .col-md-1  { width: 12.5% !important; }
+        .line-monitoring .col-md-2  { width: 16.66666667%; }
+        .line-monitoring .col-md-3  { width: 25%; }
+        .line-monitoring .col-md-4  { width: 33.33333333%; }
+        .line-monitoring .col-md-5  { width: 41.66666667%; }
+        .line-monitoring .col-md-6  { width: 50%; }
+        .line-monitoring .col-md-7  { width: 58.33333333%; }
+        .line-monitoring .col-md-8  { width: 66.66666667%; }
+        .line-monitoring .col-md-9  { width: 75%; }
+        .line-monitoring .col-md-10 { width: 83.33333333%; }
+        .line-monitoring .col-md-11 { width: 91.66666667%; }
+        .line-monitoring .col-md-12 { width: 100%; }
+        .line-monitoring .col-md-2-5 { width: 20% !important; }
+        .line-monitoring .col-md-1-5 { width: 14.28% !important; }
+
+        /* ---------- RINGKASAN (Tot Output / Avg Eff / Avg RFT / Tot MP) ---------- */
+        .line-monitoring .summary-info {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4em;
+            white-space: nowrap;
+        }
+        .line-monitoring .summary-icon {
+            display: flex;
+            align-items: center;
+            flex: 0 0 auto;
+        }
+        .line-monitoring .summary-icon svg {
+            height: 1.5em;
+            width: auto;
+        }
+
+        /* ---------- LEGEND: tiga tabel dirapatkan, tanpa jarak lebar ---------- */
+        .line-monitoring #data-container > .col-sm-12:last-child {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 10px 14px;
+            float: none !important;
+            clear: both;
+            width: 100% !important;
+            margin-top: 1rem !important;
+            padding: 0 5px;
+        }
+        .line-monitoring #data-container > .col-sm-12:last-child > [class*="col-sm-"] {
+            float: none !important;
+            width: auto !important;
+            flex: 1 1 auto;
+            min-width: 0;
+            padding: 0 !important;
+        }
+        .line-monitoring #data-container > .col-sm-12:last-child table.legend {
+            width: 100%;
+            margin: 0;
+        }
+        .line-monitoring .legend td {
+            padding: 2px 4px;
+            line-height: 1.2;
+            white-space: normal;
+        }
+    }
+
+    /* Tablet kecil & sedang (600px - 991px) */
+    @media (min-width: 600px) and (max-width: 991px) {
+        .datasummary td,
+        .datasummary th {
+            padding: 3px 2px;
+        }
+        .line-monitoring .header-row {
+            grid-template-columns: minmax(3.5rem, 1fr) minmax(0, 2.4fr) minmax(7.5rem, 1.2fr);
+        }
+        .line-monitoring .header-arrows .fa-7x {
+            font-size: clamp(2rem, 6vw, 3.5rem) !important;
+        }
+    }
+
+    /* Tablet kecil/portrait: legend boleh turun baris */
+    @media (min-width: 600px) and (max-width: 899px) {
+        .line-monitoring #data-container > .col-sm-12:last-child > [class*="col-sm-"] {
+            flex: 1 1 260px;
+        }
+    }
+
+    /* Tablet portrait */
+    @media (min-width: 600px) and (orientation: portrait) {
+        .datasummary tr {
+            height: clamp(30px, 4.2vh, 56px);
+        }
+        .border-bottom-side td {
+            height: clamp(22px, 3.2vh, 40px);
+        }
+        .line-monitoring .header-row {
+            margin-bottom: 1rem;
+        }
+    }
+
+    /* Tablet landscape (umum) */
+    @media (min-width: 600px) and (orientation: landscape) {
+        .datasummary tr {
+            height: clamp(28px, 5.5vh, 64px);
+        }
+        .line-monitoring .header-row {
+            margin-bottom: 0.25rem;
+        }
+    }
+
+    /* Tablet besar */
+    @media (min-width: 1200px) {
+        .line-monitoring .header-row {
+            grid-template-columns: minmax(6rem, 1fr) minmax(0, 3fr) minmax(10rem, 1.2fr);
+        }
+        .datasummary td,
+        .datasummary th {
+            padding: 6px 4px;
+        }
+    }
+
+    /* Ponsel (< 600px) */
+    @media (max-width: 599px) {
+        .line-monitoring .header-row {
+            grid-template-columns: 1fr auto;
+            row-gap: 6px;
+        }
+        .line-monitoring .header-title {
+            grid-column: 1 / -1;
+            grid-row: 2;
+            text-align: center;
+        }
+    }
+
+    /* ============================================================
+       MODE PAS SATU LAYAR: TABLET 11" LANDSCAPE
+       (iPad Pro 11" 1194x834, Galaxy Tab S 11" ~1280x800, dll.)
+       Semua ukuran memakai tinggi layar (--u) sehingga header,
+       ringkasan, tabel (maks 11 baris) dan legend muat tanpa scroll.
+
+       Anggaran tinggi (dalam % tinggi layar):
+         padding ......... 1.2
+         header .......... 8.8
+         ringkasan ....... 6.0
+         tabel ........... 6.6 (header) + 11 x 4.9 = 60.5
+         legend .......... 1 + 12.2
+         total ........... ~ 90  (sisa ~10 sebagai cadangan)
+       ============================================================ */
+    @media (min-width: 900px) and (max-width: 1440px) and (orientation: landscape) {
+        body {
+            margin: 0;
+            overflow-x: hidden;
+        }
+        .line-monitoring {
+            padding: calc(var(--u) * 0.6) 10px;
+        }
+
+        /* Header */
+        .line-monitoring .header-row {
+            grid-template-columns: minmax(5rem, 1fr) minmax(0, 2.6fr) minmax(9rem, 1.2fr);
+            height: calc(var(--u) * 8);
+            margin-bottom: calc(var(--u) * 0.8);
+        }
+        .line-monitoring .header-arrows .fa-7x {
+            font-size: calc(var(--u) * 6.5) !important;
+        }
+        .line-monitoring .header-title h3 {
+            font-size: min(calc(var(--u) * 3.6), 2.6vw);
+        }
+        .line-monitoring .timedata .b-subtitle {
+            font-size: min(calc(var(--u) * 2.6), 1.8vw);
+        }
+        .line-monitoring .timedata .b-title {
+            font-size: min(calc(var(--u) * 2.4), 1.7vw);
+        }
+
+        /* Rapatkan gutter kolom data */
+        .line-monitoring #data-container {
+            margin-left: -5px;
+            margin-right: -5px;
+        }
+        .line-monitoring #data-container [class*="col-md-"] {
+            padding-left: 5px;
+            padding-right: 5px;
+        }
+
+        /* Ringkasan */
+        .line-monitoring .summary-metrics {
+            margin-bottom: calc(var(--u) * 0.8) !important;
+        }
+        .line-monitoring .summary-metrics .header-text {
+            font-size: min(calc(var(--u) * 2.8), 1.8vw);
+            line-height: 1.15;
+        }
+        .line-monitoring .summary-icon svg {
+            height: calc(var(--u) * 4.2);
+            width: auto;
+        }
+
+        /* Tabel: ukuran font mengikuti jumlah kolom per baris */
+        .line-monitoring #data-container {
+            --fs: min(calc(var(--u) * 2.3), 1.9vw);
+        }
+        .line-monitoring #data-container .col-md-3   { --fs: min(calc(var(--u) * 2.0), 1.3vw); }
+        .line-monitoring #data-container .col-md-2-5 { --fs: min(calc(var(--u) * 1.9), 1.05vw); }
+        .line-monitoring #data-container .col-md-2   { --fs: min(calc(var(--u) * 1.8), 0.9vw); }
+        .line-monitoring #data-container .col-md-1-5 { --fs: min(calc(var(--u) * 1.7), 0.78vw); }
+        .line-monitoring #data-container .col-md-1   { --fs: min(calc(var(--u) * 1.6), 0.68vw); }
+
+        .line-monitoring .datasummary td,
+        .line-monitoring .datasummary td.line {
+            font-size: max(0.58rem, var(--fs));
+            padding: 0 2px;
+            line-height: 1.1;
+        }
+        .line-monitoring .datasummary th {
+            font-size: max(0.55rem, calc(var(--fs) * 0.85));
+            padding: 0 2px;
+            line-height: 1.1;
+        }
+        .line-monitoring .datasummary thead tr {
+            height: calc(var(--u) * 3.3);
+        }
+        .line-monitoring .datasummary tbody tr {
+            height: calc(var(--u) * 4.9);
+        }
+        .line-monitoring .datasummary th svg {
+            height: calc(var(--u) * 2.8);
+            width: auto;
+            display: inline-block;
+            vertical-align: middle;
+        }
+
+        /* Legend */
+        .line-monitoring #data-container > .col-sm-12:last-child {
+            flex-wrap: nowrap;
+            gap: 0 1.2vw;
+            margin-top: calc(var(--u) * 1) !important;
+        }
+        .line-monitoring #data-container > .col-sm-12:last-child > [class*="col-sm-"] {
+            flex: 1 1 auto;
+        }
+        .line-monitoring .legend td {
+            font-size: min(calc(var(--u) * 1.6), 1.05vw);
+            padding: 0 3px;
+            line-height: 1.15;
+        }
+        .line-monitoring .legend svg {
+            width: calc(var(--u) * 2.6);
+            height: calc(var(--u) * 2.6);
+            display: block;
+            margin: 0 auto;
+        }
+        .line-monitoring .legend tr {
+            height: auto;
+        }
+        .line-monitoring .legend .border-bottom-side td {
+            height: auto;
+            padding-top: calc(var(--u) * 0.3);
+            padding-bottom: calc(var(--u) * 0.3);
+        }
+    }
+</style>
+@endsection
+
+@section('content')
+<div class="container-fluid line-monitoring" style="color: white">
+    <div class="row header-row">
+        <div class="col-sm-2 header-arrows">
+            @if(!session('monitoring'))
+            <a href="{{ url('/mod-tokenmenu/chiefmenu') }}">
+                <i class="fas fa-caret-left fa-7x"></i>
+            </a>
+            @if(isset($nextlink))
+            <a href="{{$nextlink}}" class="sm-float-right"><i class="fas fa-caret-right fa-7x"></i></a>
             @endif
-                <td class="line">{{str_replace('Line ', '', $line->namagroup)}}</td>
-                @if($magicbtn)
-                    @if (($m_target > 0) && ($m_output > 0 || $m_rft > 0 || $m_eff > 0 || $m_mp > 0))
-                    <td style="background-color: {{$m_output_color}}">{{$m_output}}</td>
-                    <td style="background-color: {{$m_rft_color}}">
-                        {{ number_format($m_rft, 2, '.', '') }}
+            @endif
+        </div>
+        <div class="col-sm-7 text-center header-title">
+            <h3>{{ $db ? $db->keterangan . " - Line Monitoring" : '-'}}</h3>
+        </div>
+        <div class="col-sm-3 text-center header-time" style="margin-top: 1rem">
+            <table class="timedata" style="width: 100%">
+                <tr>
+                    <td>
+                        <b class="b-subtitle">
+                            @if(session('monitoring'))
+                            {{ Carbon\Carbon::now()->format('d F y') }}
+                            @else
+                            {{ Carbon\Carbon::parse(session('endline.date'))->format('d F y') }}
+                                @if(session('endline.shift'))
+                                {{'(Shift '.session('endline.shift').')'}}
+                                @endif
+                            @endif
+                        </b>
                     </td>
-
-                    <td style="background-color: {{$m_eff_color}}">
-                        {{ number_format($m_eff, 2, '.', '') }}
+                </tr>
+                <tr>
+                    <td>
+                        <b class="text-center b-title" id="hours">
+                            @if(session('monitoring'))
+                            {{ Carbon\Carbon::now()->format('H:i:s') }}
+                            @endif
+                        </b>
                     </td>
-                    <td style="background-color: {{$m_mp_color}}">{{$m_mp}}</td>
-                    @else
-                    <td colspan="4"> Line Off</td>
-                    @endif
-                @else
-                    @if ($m_target > 0)
-                    <td style="background-color: {{$m_output_color}}">{{$m_output}}</td>
-                    <td style="background-color: {{$m_rft_color}}">
-                        {{ number_format($m_rft, 2, '.', '') }}
-                    </td>
-
-                    <td style="background-color: {{$m_eff_color}}">
-                        {{ number_format($m_eff, 2, '.', '') }}
-                    </td>
-                    <td style="background-color: {{$m_mp_color}}">{{$m_mp}}</td>
-                    @else
-                        @if($m_mp>0)
-                        <td colspan="3"> MPS Off</td>
-                        <td>{{$m_mp}}</td>
-                        @else
-                        <td colspan="4"> Line Off</td>
-                        @endif
-                    @endif
-                @endif
-            </tr>
-            @endforeach
-        </tbody>
-    </table>
-</div>
-@endforeach
-
-<div class="col-sm-12" style="margin-top: 1rem">
-    <div class="col-sm-4">
-        <table class="legend">
-            <tr><td>&nbsp;</td><td rowspan="2">Output</td><td>&nbsp;</td></tr>
-            <tr><td class="border-top-left">&nbsp;</td><td class="border-top-right">&nbsp;</td></tr>
-            <tr class="border-side">
-                <td>
-                    <svg
-                    id="svg861"
-                    version="1.1"
-                    viewBox="0 0 6 6"
-                    height="6mm"
-                    width="6mm">
-                    <g
-                        transform="matrix(0.33333332,0,0,0.33333332,-35.781742,-49.910714)"
-                        id="layer1">
-                        <circle
-                        r="9"
-                        cy="158.73215"
-                        cx="116.34523"
-                        id="path1406"
-                        style="fill:{{$green_color}};fill-opacity:1;stroke:none;stroke-width:4.37825203;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.98823529;paint-order:markers stroke fill" />
-                    </g>
-                    </svg>
-                </td>
-                <td>
-                    <svg
-                    id="svg861"
-                    version="1.1"
-                    viewBox="0 0 6 6"
-                    height="6mm"
-                    width="6mm">
-                    <g
-                        transform="matrix(0.33333332,0,0,0.33333332,-35.781742,-49.910714)"
-                        id="layer1">
-                        <circle
-                        r="9"
-                        cy="158.73215"
-                        cx="116.34523"
-                        id="path1406"
-                        style="fill:{{$orange_color}};fill-opacity:1;stroke:none;stroke-width:4.37825203;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.98823529;paint-order:markers stroke fill" />
-                    </g>
-                    </svg>
-                </td>
-                <td>
-                    <svg
-                    id="svg861"
-                    version="1.1"
-                    viewBox="0 0 6 6"
-                    height="6mm"
-                    width="6mm">
-                    <g
-                        transform="matrix(0.33333332,0,0,0.33333332,-35.781742,-49.910714)"
-                        id="layer1">
-                        <circle
-                        r="9"
-                        cy="158.73215"
-                        cx="116.34523"
-                        id="path1406"
-                        style="fill:{{$red_color}};fill-opacity:1;stroke:none;stroke-width:4.37825203;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.98823529;paint-order:markers stroke fill" />
-                    </g>
-                    </svg>
-                </td>
-            </tr>
-            <tr class="border-bottom-side">
-                <td>Output > {{$output_green}}</td>
-                <td>{{$output_green}} ≥ Output > {{$output_orange}}</td>
-                <td>Output < {{$output_orange}}</td>
-            </tr>
-        </table>
+                </tr>
+            </table>
+        </div>
     </div>
-    <div class="col-sm-4">
-        <table class="legend">
-            <tr><td>&nbsp;</td><td rowspan="2">RFT</td><td>&nbsp;</td></tr>
-            <tr><td class="border-top-left">&nbsp;</td><td class="border-top-right">&nbsp;</td></tr>
-            <tr class="border-side">
-                <td>
-                    <svg
-                    width="6mm"
-                    height="6mm"
-                    viewBox="0 0 6 6"
-                    version="1.1"
-                    id="svg8">
-                    <g
-                        id="layer1"
-                        transform="matrix(0.25000001,0,0,0.25000001,-17.197917,-32.200895)">
-                        <rect
-                        style="fill: {{$green_color}};fill-opacity:1;stroke:none;stroke-width:5.83766937;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.98823529;paint-order:markers stroke fill"
-                        id="rect815"
-                        width="48"
-                        height="48"
-                        x="68.791664"
-                        y="128.80357" />
-                    </g>
-                    </svg>
-                </td>
-                <td>
-                    <svg
-                    width="6mm"
-                    height="6mm"
-                    viewBox="0 0 6 6"
-                    version="1.1"
-                    id="svg8">
-                    <g
-                        id="layer1"
-                        transform="matrix(0.25000001,0,0,0.25000001,-17.197917,-32.200895)">
-                        <rect
-                        style="fill: {{$orange_color}};fill-opacity:1;stroke:none;stroke-width:5.83766937;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.98823529;paint-order:markers stroke fill"
-                        id="rect815"
-                        width="48"
-                        height="48"
-                        x="68.791664"
-                        y="128.80357" />
-                    </g>
-                    </svg>
-                </td>
-                <td>
-                    <svg
-                    width="6mm"
-                    height="6mm"
-                    viewBox="0 0 6 6"
-                    version="1.1"
-                    id="svg8">
-                    <g
-                        id="layer1"
-                        transform="matrix(0.25000001,0,0,0.25000001,-17.197917,-32.200895)">
-                        <rect
-                        style="fill: {{$red_color}};fill-opacity:1;stroke:none;stroke-width:5.83766937;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.98823529;paint-order:markers stroke fill"
-                        id="rect815"
-                        width="48"
-                        height="48"
-                        x="68.791664"
-                        y="128.80357" />
-                    </g>
-                    </svg>
-                </td>
-            </tr>
-            <tr class="border-bottom-side">
-                <td>RFT > {{$rft_green}}</td>
-                <td>{{$rft_green}} ≥ RFT > {{$rft_orange}}</td>
-                <td>RFT < {{$rft_orange}}</td>
-            </tr>
-        </table>
-    </div>
-    <div class="col-sm-4">
-        <table class="legend">
-            <tr><td>&nbsp;</td><td>&nbsp;</td><td rowspan="2">Efficiency</td><td>&nbsp;</td></tr>
-            <tr><td class="border-top-left">&nbsp;</td><td class="border-top">&nbsp;</td><td class="border-top-right">&nbsp;</td></tr>
-            <tr class="border-side">
-                <td></td>
-                <td>
-                    <svg
-                    width="6mm"
-                    height="6mm"
-                    viewBox="0 0 6 6"
-                    version="1.1"
-                    id="svg8">
-                    <g
-                        id="layer1"
-                        transform="matrix(0.33333331,0,0,0.33333331,-19.616846,-56.248229)">
-                        <rect
-                        style="fill:{{$green_color}};fill-opacity:1;stroke:none;stroke-width:1.54794586;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.98823529;paint-order:markers stroke fill"
-                        id="rect815"
-                        width="12.727922"
-                        height="12.727922"
-                        x="167.2981"
-                        y="71.342949"
-                        transform="rotate(44.999998)" />
-                    </g>
-                    </svg>
-                </td>
-                <td>
-                    <svg
-                    width="6mm"
-                    height="6mm"
-                    viewBox="0 0 6 6"
-                    version="1.1"
-                    id="svg8">
-                    <g
-                        id="layer1"
-                        transform="matrix(0.33333331,0,0,0.33333331,-19.616846,-56.248229)">
-                        <rect
-                        style="fill:{{$orange_color}};fill-opacity:1;stroke:none;stroke-width:1.54794586;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.98823529;paint-order:markers stroke fill"
-                        id="rect815"
-                        width="12.727922"
-                        height="12.727922"
-                        x="167.2981"
-                        y="71.342949"
-                        transform="rotate(44.999998)" />
-                    </g>
-                    </svg>
-                </td>
-                <td>
-                    <svg
-                    width="6mm"
-                    height="6mm"
-                    viewBox="0 0 6 6"
-                    version="1.1"
-                    id="svg8">
-                    <g
-                        id="layer1"
-                        transform="matrix(0.33333331,0,0,0.33333331,-19.616846,-56.248229)">
-                        <rect
-                        style="fill:{{$red_color}};fill-opacity:1;stroke:none;stroke-width:1.54794586;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.98823529;paint-order:markers stroke fill"
-                        id="rect815"
-                        width="12.727922"
-                        height="12.727922"
-                        x="167.2981"
-                        y="71.342949"
-                        transform="rotate(44.999998)" />
-                    </g>
-                    </svg>
-                </td>
-            </tr>
-            <tr class="border-bottom-side">
-                <td>Conventional</td>
-                <td>Efficiency > {{$eff_green}}</td>
-                <td>{{$eff_green}} ≥ Efficiency > {{$eff_orange}}</td>
-                <td>Efficiency < {{$eff_orange}}</td>
-            </tr>
-            <tr class="border-bottom-side">
-                <td>Hanger Line</td>
-                <td>Efficiency > {{$eff_hanger_green}}</td>
-                <td>{{$eff_hanger_green}} ≥ Efficiency > {{$eff_hanger_orange}}</td>
-                <td>Efficiency < {{$eff_hanger_orange}}</td>
-            </tr>
-        </table>
+    <div class="row" id="data-container">
+        {!! $data !!}
     </div>
 </div>
+@endsection
+
+@section('extrascript')
+<script type="text/javascript">
+    $(document).ready(() => {
+        function set(e) {
+            e = e < 10 ? '0' + e : e;
+            return e;
+        }
+
+        @if(session('monitoring'))
+        setInterval(function() {
+            d = new Date();
+            h = set(d.getHours());
+            m = set(d.getMinutes());
+            s = set(d.getSeconds());
+            $('#hours').text(h + ':' + m + ':' + s);
+        }, 1000);
+        @endif
+
+        function getdata() {
+            $.ajax({
+                type: "get",
+                url: "{!! route('chief_monitoring_endlinesummarydata') !!}",
+                dataType: "html",
+                success: (r) => {
+                    $('#data-container').html(r);
+                },
+                complete: () => {
+                    setTimeout(() => {
+                        getdata();
+                    }, 60000);
+                }
+            });
+        }
+
+        setTimeout(() => {
+            getdata();
+        }, 60000);
+
+        $('body').on('click', '.clickable', (e) => {
+            window.location = $(e.currentTarget).data('href');
+        });
+    });
+</script>
+@endsection
