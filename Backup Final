@@ -1,525 +1,828 @@
-@extends('monitoring::layouts.master')
-
-@section('extracss')
-<style>
-    /* ============================================================
-       VARIABEL TINGGI LAYAR
-       --u = 1% tinggi layar yang benar-benar terlihat (dvh),
-       supaya tidak terpotong address bar di browser tablet.
-       ============================================================ */
-    :root {
-        --u: 1vh;
-    }
-    @supports (height: 1dvh) {
-        :root {
-            --u: 1dvh;
-        }
-    }
-
-    /* ============================================================
-       BASE
-       ============================================================ */
-    html {
-        -webkit-text-size-adjust: 100%;
-        text-size-adjust: 100%;
-    }
-
-    .datasummary {
-        max-width: 100%;
-    }
-    .datasummary tr {
-        height: clamp(30px, 5vh, 64px);
-    }
-    .datasummary td {
-        font-size: clamp(0.75rem, calc((3vh + 3vw)/4), 1.5rem);
-        text-align: center;
-        border: 1px solid white;
-        word-break: break-word;
-    }
-    .datasummary th {
-        font-size: clamp(0.72rem, calc((2vh + 2vw)/3), 1.3rem);
-        text-align: center;
-        word-break: break-word;
-    }
-    .font-small .datasummary td {
-        font-size: clamp(0.68rem, calc((3vh + 3vw)/6), 1.1rem);
-    }
-    .font-small .datasummary th {
-        font-size: clamp(0.68rem, calc((2vh + 2vw)/4), 1.1rem);
-    }
-    h3 {
-        font-size: clamp(1.15rem, calc((3vh + 3vw)/2), 2.6rem);
-    }
-    .timedata .b-title {
-        font-size: clamp(0.85rem, calc((2vh + 2vw)/3), 1.5rem);
-    }
-    .timedata .b-subtitle {
-        font-size: clamp(0.9rem, calc((2vh + 2vw)/2), 1.8rem);
-    }
-    td.line {
-        font-size: clamp(0.75rem, calc((2vh + 2vw)/3), 1.4rem);
-    }
-    .clickable {
-        cursor: pointer;
-        -webkit-tap-highlight-color: transparent;
-    }
-    .clickable:hover,
-    .clickable:active {
-        background-color: #242424;
-    }
-    .legend td {
-        text-align: center;
-        vertical-align: middle;
-    }
-    table.legend {
-        width: 80%;
-        margin: auto;
-    }
-    td.border-top-left {
-        border-left: 1px solid white;
-        border-top: 1px solid white;
-    }
-    td.border-top {
-        border-top: 1px solid white;
-    }
-    td.border-top-right {
-        border-right: 1px solid white;
-        border-top: 1px solid white;
-    }
-    tr.border-side {
-        border-left: 1px solid white;
-        border-right: 1px solid white;
-    }
-    tr.border-bottom-side {
-        border-left: 1px solid white;
-        border-right: 1px solid white;
-        border-bottom: 1px solid white;
-        min-height: 10px;
-    }
-    .border-bottom-side td {
-        height: clamp(24px, 4vh, 48px);
-    }
-    .header-text {
-        font-size: clamp(1.25rem, calc((5vh + 5vw)/2), 2.4rem);
-    }
-
-    /* ============================================================
-       HEADER (judul, tombol panah, tanggal & jam)
-       ============================================================ */
-    .line-monitoring .header-row {
-        display: grid;
-        grid-template-columns: minmax(4rem, 1fr) minmax(0, 2.6fr) minmax(8rem, 1.2fr);
-        align-items: center;
-        column-gap: 8px;
-        margin-left: 0;
-        margin-right: 0;
-        margin-bottom: 0.5rem;
-    }
-    .line-monitoring .header-row::before,
-    .line-monitoring .header-row::after {
-        display: none !important;
-    }
-    .line-monitoring .header-row > [class*="col-"] {
-        float: none !important;
-        width: auto !important;
-        min-width: 0;
-        padding: 0 !important;
-        margin-top: 0 !important;
-    }
-    .line-monitoring .header-arrows {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-    .line-monitoring .header-arrows a {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        float: none !important;
-        color: inherit;
-        padding: 2px 6px;
-        min-width: 44px;
-        min-height: 44px;
-    }
-    .line-monitoring .header-arrows .fa-7x {
-        font-size: clamp(2.25rem, 7vw, 4.5rem) !important;
-        line-height: 1;
-    }
-    .line-monitoring .header-title h3 {
-        margin: 0;
-        line-height: 1.2;
-        word-break: break-word;
-    }
-    .line-monitoring .timedata {
-        width: 100%;
-    }
-    .line-monitoring .timedata td {
-        white-space: nowrap;
-        line-height: 1.3;
-    }
-
-    /* ============================================================
-       TABLET (>= 600px)
-       Grid "md" diaktifkan mulai 600px agar kolom tidak menumpuk.
-       ============================================================ */
-    @media (min-width: 600px) {
-        .line-monitoring [class*="col-md-"] {
-            float: left;
-        }
-        .line-monitoring .col-md-1  { width: 12.5% !important; }
-        .line-monitoring .col-md-2  { width: 16.66666667%; }
-        .line-monitoring .col-md-3  { width: 25%; }
-        .line-monitoring .col-md-4  { width: 33.33333333%; }
-        .line-monitoring .col-md-5  { width: 41.66666667%; }
-        .line-monitoring .col-md-6  { width: 50%; }
-        .line-monitoring .col-md-7  { width: 58.33333333%; }
-        .line-monitoring .col-md-8  { width: 66.66666667%; }
-        .line-monitoring .col-md-9  { width: 75%; }
-        .line-monitoring .col-md-10 { width: 83.33333333%; }
-        .line-monitoring .col-md-11 { width: 91.66666667%; }
-        .line-monitoring .col-md-12 { width: 100%; }
-        .line-monitoring .col-md-2-5 { width: 20% !important; }
-        .line-monitoring .col-md-1-5 { width: 14.28% !important; }
-
-        /* ---------- RINGKASAN (Tot Output / Avg Eff / Avg RFT / Tot MP) ---------- */
-        .line-monitoring .summary-info {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.4em;
-            white-space: nowrap;
-        }
-        .line-monitoring .summary-icon {
-            display: flex;
-            align-items: center;
-            flex: 0 0 auto;
-        }
-        .line-monitoring .summary-icon svg {
-            height: 1.5em;
-            width: auto;
-        }
-
-        /* ---------- LEGEND: tiga tabel dirapatkan, tanpa jarak lebar ---------- */
-        .line-monitoring #data-container > .col-sm-12:last-child {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            align-items: flex-start;
-            gap: 10px 14px;
-            float: none !important;
-            clear: both;
-            width: 100% !important;
-            margin-top: 1rem !important;
-            padding: 0 5px;
-        }
-        .line-monitoring #data-container > .col-sm-12:last-child > [class*="col-sm-"] {
-            float: none !important;
-            width: auto !important;
-            flex: 1 1 auto;
-            min-width: 0;
-            padding: 0 !important;
-        }
-        .line-monitoring #data-container > .col-sm-12:last-child table.legend {
-            width: 100%;
-            margin: 0;
-        }
-        .line-monitoring .legend td {
-            padding: 2px 4px;
-            line-height: 1.2;
-            white-space: normal;
-        }
-    }
-
-    /* Tablet kecil & sedang (600px - 991px) */
-    @media (min-width: 600px) and (max-width: 991px) {
-        .datasummary td,
-        .datasummary th {
-            padding: 3px 2px;
-        }
-        .line-monitoring .header-row {
-            grid-template-columns: minmax(3.5rem, 1fr) minmax(0, 2.4fr) minmax(7.5rem, 1.2fr);
-        }
-        .line-monitoring .header-arrows .fa-7x {
-            font-size: clamp(2rem, 6vw, 3.5rem) !important;
-        }
-    }
-
-    /* Tablet kecil/portrait: legend boleh turun baris */
-    @media (min-width: 600px) and (max-width: 899px) {
-        .line-monitoring #data-container > .col-sm-12:last-child > [class*="col-sm-"] {
-            flex: 1 1 260px;
-        }
-    }
-
-    /* Tablet portrait */
-    @media (min-width: 600px) and (orientation: portrait) {
-        .datasummary tr {
-            height: clamp(30px, 4.2vh, 56px);
-        }
-        .border-bottom-side td {
-            height: clamp(22px, 3.2vh, 40px);
-        }
-        .line-monitoring .header-row {
-            margin-bottom: 1rem;
-        }
-    }
-
-    /* Tablet landscape (umum) */
-    @media (min-width: 600px) and (orientation: landscape) {
-        .datasummary tr {
-            height: clamp(28px, 5.5vh, 64px);
-        }
-        .line-monitoring .header-row {
-            margin-bottom: 0.25rem;
-        }
-    }
-
-    /* Tablet besar */
-    @media (min-width: 1200px) {
-        .line-monitoring .header-row {
-            grid-template-columns: minmax(6rem, 1fr) minmax(0, 3fr) minmax(10rem, 1.2fr);
-        }
-        .datasummary td,
-        .datasummary th {
-            padding: 6px 4px;
-        }
-    }
-
-    /* Ponsel (< 600px) */
-    @media (max-width: 599px) {
-        .line-monitoring .header-row {
-            grid-template-columns: 1fr auto;
-            row-gap: 6px;
-        }
-        .line-monitoring .header-title {
-            grid-column: 1 / -1;
-            grid-row: 2;
-            text-align: center;
-        }
-    }
-
-    /* ============================================================
-       MODE PAS SATU LAYAR: TABLET 11" LANDSCAPE
-       (iPad Pro 11" 1194x834, Galaxy Tab S 11" ~1280x800, dll.)
-       Semua ukuran memakai tinggi layar (--u) sehingga header,
-       ringkasan, tabel (maks 11 baris) dan legend muat tanpa scroll.
-
-       Anggaran tinggi (dalam % tinggi layar):
-         padding ......... 1.2
-         header .......... 8.8
-         ringkasan ....... 6.0
-         tabel ........... 6.6 (header) + 11 x 4.9 = 60.5
-         legend .......... 1 + 12.2
-         total ........... ~ 90  (sisa ~10 sebagai cadangan)
-       ============================================================ */
-    @media (min-width: 900px) and (max-width: 1440px) and (orientation: landscape) {
-        body {
-            margin: 0;
-            overflow-x: hidden;
-        }
-        .line-monitoring {
-            padding: calc(var(--u) * 0.6) 10px;
-        }
-
-        /* Header */
-        .line-monitoring .header-row {
-            grid-template-columns: minmax(5rem, 1fr) minmax(0, 2.6fr) minmax(9rem, 1.2fr);
-            height: calc(var(--u) * 8);
-            margin-bottom: calc(var(--u) * 0.8);
-        }
-        .line-monitoring .header-arrows .fa-7x {
-            font-size: calc(var(--u) * 6.5) !important;
-        }
-        .line-monitoring .header-title h3 {
-            font-size: min(calc(var(--u) * 3.6), 2.6vw);
-        }
-        .line-monitoring .timedata .b-subtitle {
-            font-size: min(calc(var(--u) * 2.6), 1.8vw);
-        }
-        .line-monitoring .timedata .b-title {
-            font-size: min(calc(var(--u) * 2.4), 1.7vw);
-        }
-
-        /* Rapatkan gutter kolom data */
-        .line-monitoring #data-container {
-            margin-left: -5px;
-            margin-right: -5px;
-        }
-        .line-monitoring #data-container [class*="col-md-"] {
-            padding-left: 5px;
-            padding-right: 5px;
-        }
-
-        /* Ringkasan */
-        .line-monitoring .summary-metrics {
-            margin-bottom: calc(var(--u) * 0.8) !important;
-        }
-        .line-monitoring .summary-metrics .header-text {
-            font-size: min(calc(var(--u) * 2.8), 1.8vw);
-            line-height: 1.15;
-        }
-        .line-monitoring .summary-icon svg {
-            height: calc(var(--u) * 4.2);
-            width: auto;
-        }
-
-        /* Tabel: ukuran font mengikuti jumlah kolom per baris */
-        .line-monitoring #data-container {
-            --fs: min(calc(var(--u) * 2.3), 1.9vw);
-        }
-        .line-monitoring #data-container .col-md-3   { --fs: min(calc(var(--u) * 2.0), 1.3vw); }
-        .line-monitoring #data-container .col-md-2-5 { --fs: min(calc(var(--u) * 1.9), 1.05vw); }
-        .line-monitoring #data-container .col-md-2   { --fs: min(calc(var(--u) * 1.8), 0.9vw); }
-        .line-monitoring #data-container .col-md-1-5 { --fs: min(calc(var(--u) * 1.7), 0.78vw); }
-        .line-monitoring #data-container .col-md-1   { --fs: min(calc(var(--u) * 1.6), 0.68vw); }
-
-        .line-monitoring .datasummary td,
-        .line-monitoring .datasummary td.line {
-            font-size: max(0.58rem, var(--fs));
-            padding: 0 2px;
-            line-height: 1.1;
-        }
-        .line-monitoring .datasummary th {
-            font-size: max(0.55rem, calc(var(--fs) * 0.85));
-            padding: 0 2px;
-            line-height: 1.1;
-        }
-        .line-monitoring .datasummary thead tr {
-            height: calc(var(--u) * 3.3);
-        }
-        .line-monitoring .datasummary tbody tr {
-            height: calc(var(--u) * 4.9);
-        }
-        .line-monitoring .datasummary th svg {
-            height: calc(var(--u) * 2.8);
-            width: auto;
-            display: inline-block;
-            vertical-align: middle;
-        }
-
-        /* Legend */
-        .line-monitoring #data-container > .col-sm-12:last-child {
-            flex-wrap: nowrap;
-            gap: 0 1.2vw;
-            margin-top: calc(var(--u) * 1) !important;
-        }
-        .line-monitoring #data-container > .col-sm-12:last-child > [class*="col-sm-"] {
-            flex: 1 1 auto;
-        }
-        .line-monitoring .legend td {
-            font-size: min(calc(var(--u) * 1.6), 1.05vw);
-            padding: 0 3px;
-            line-height: 1.15;
-        }
-        .line-monitoring .legend svg {
-            width: calc(var(--u) * 2.6);
-            height: calc(var(--u) * 2.6);
-            display: block;
-            margin: 0 auto;
-        }
-        .line-monitoring .legend tr {
-            height: auto;
-        }
-        .line-monitoring .legend .border-bottom-side td {
-            height: auto;
-            padding-top: calc(var(--u) * 0.3);
-            padding-bottom: calc(var(--u) * 0.3);
-        }
-    }
-</style>
-@endsection
-
-@section('content')
-<div class="container-fluid line-monitoring" style="color: white">
-    <div class="row header-row">
-        <div class="col-sm-2 header-arrows">
-            @if(!session('monitoring'))
-            <a href="{{ url('/mod-tokenmenu/chiefmenu') }}">
-                <i class="fas fa-caret-left fa-7x"></i>
-            </a>
-            @if(isset($nextlink))
-            <a href="{{$nextlink}}" class="sm-float-right"><i class="fas fa-caret-right fa-7x"></i></a>
-            @endif
-            @endif
-        </div>
-        <div class="col-sm-7 text-center header-title">
-            <h3>{{ $db ? $db->keterangan . " - Line Monitoring" : '-'}}</h3>
-        </div>
-        <div class="col-sm-3 text-center header-time" style="margin-top: 1rem">
-            <table class="timedata" style="width: 100%">
-                <tr>
-                    <td>
-                        <b class="b-subtitle">
-                            @if(session('monitoring'))
-                            {{ Carbon\Carbon::now()->format('d F y') }}
-                            @else
-                            {{ Carbon\Carbon::parse(session('endline.date'))->format('d F y') }}
-                                @if(session('endline.shift'))
-                                {{'(Shift '.session('endline.shift').')'}}
-                                @endif
-                            @endif
-                        </b>
-                    </td>
-                </tr>
-                <tr>
-                    <td>
-                        <b class="text-center b-title" id="hours">
-                            @if(session('monitoring'))
-                            {{ Carbon\Carbon::now()->format('H:i:s') }}
-                            @endif
-                        </b>
-                    </td>
-                </tr>
-            </table>
-        </div>
-    </div>
-    <div class="row" id="data-container">
-        {!! $data !!}
-    </div>
-</div>
-@endsection
-
-@section('extrascript')
-<script type="text/javascript">
-    $(document).ready(() => {
-        function set(e) {
-            e = e < 10 ? '0' + e : e;
-            return e;
-        }
-
-        @if(session('monitoring'))
-        setInterval(function() {
-            d = new Date();
-            h = set(d.getHours());
-            m = set(d.getMinutes());
-            s = set(d.getSeconds());
-            $('#hours').text(h + ':' + m + ':' + s);
-        }, 1000);
-        @endif
-
-        function getdata() {
-            $.ajax({
-                type: "get",
-                url: "{!! route('chief_monitoring_endlinesummarydata') !!}",
-                dataType: "html",
-                success: (r) => {
-                    $('#data-container').html(r);
-                },
-                complete: () => {
-                    setTimeout(() => {
-                        getdata();
-                    }, 60000);
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta content="width=device-width, initial-scale=1" name="viewport">
+	    <meta name="csrf-token" content="{{ csrf_token() }}">
+		<title>{{ config('app.shortname') }}</title>
+		<link rel="icon" href="{!! _asset('favicon.ico') !!}">
+	    <link rel="stylesheet" href="{{ _asset('css/all.min.css') }}">
+		<link rel="stylesheet" href="{{ _asset('adminltecomponents/bootstrap/dist/css/bootstrap.css') }}">
+        <link rel="stylesheet" href="{{ _asset('adminltecomponents/select2/dist/css/select2.min.css') }}">
+		<link rel="stylesheet" href="{{ _asset('css/AdminLTE.min.css') }}">
+		<link rel="stylesheet" href="{{ _asset('css/sweetalert.css') }}">
+		<link rel="stylesheet" href="{{ _asset('css/loading.css') }}">
+		<link rel="stylesheet" href="{{ _asset('css/custom.css') }}">
+		<link rel="stylesheet" href="{{ _asset('css/jquery.datetimepicker.css') }}">
+		<style type="text/css">
+            @keyframes blink {
+                0% {
+                    opacity: 1;
                 }
-            });
-        }
 
-        setTimeout(() => {
-            getdata();
-        }, 60000);
+                50% {
+                    opacity: .2;
+                }
 
-        $('body').on('click', '.clickable', (e) => {
-            window.location = $(e.currentTarget).data('href');
-        });
-    });
-</script>
-@endsection
+                100% {
+                    opacity: 1;
+                }
+            }
+
+	        .blink {
+                animation: blink 2s infinite;
+            }
+			td{
+				background: black;
+			}
+
+			#valWip, #wip {
+				padding: 0;
+			}
+			@media screen and (max-height: 768px){
+				body{
+					overflow: auto;
+				}
+			}
+			@media screen and (min-height: 769px){
+				body{
+					overflow: hidden;
+				}
+			}
+			@media screen and (min-width:601px) {
+				.po-table td {
+					font-size: 20pt;
+					font-weight: 300;
+				}
+				.sum-table td {
+					font-size: 20pt;
+					text-align: center;
+					font-weight: bold;
+					padding: 0px;
+				}
+				svg {
+					display: inline-block;
+					max-height: 100%
+				}
+				.table-output th {
+					font-size: 35pt;
+					text-align: center;
+					font-weight: bold;
+				}
+				.table-output td {
+					font-size: 25pt;
+					text-align: center;
+				}
+				.table-output-parent {
+				    max-height: 770px;
+				    overflow-y: auto;
+				    padding-top: 3rem;
+				}
+				.td-ket {
+					height: 16px !important;
+					font-size: 16px !important;
+					font-weight: 0 !important;
+					align-content: center;
+				}
+				.svg-ket {
+					width: 16px !important;
+					height: 16px !important;
+				}
+				.po-table-parent {
+					padding-top: 3rem;
+				}
+				.m-title {
+					font-size: 46pt;
+				}
+				.b-title {
+					font-size: 30pt;
+				}
+				.b-subtitle {
+					font-size: 20pt;
+				}
+				body {
+					color: white;
+					background-color: black;
+				}
+				.sm-float-right {
+					margin-left: 2rem;
+				}
+			}
+
+			@media screen and (max-width:600px) {
+				.po-table td {
+					font-size: 14pt;
+					font-weight: bold;
+				}
+				.sum-table td {
+					font-size: 20pt;
+					text-align: center;
+					font-weight: bold;
+					padding: 0px;
+				}
+				svg {
+					display: inline-block;
+					max-height: 100%
+				}
+				.table-output th {
+					font-size: 14pt;
+					text-align: center;
+					font-weight: bold;
+				}
+				.table-output td {
+					font-size: 12pt;
+					text-align: center;
+				}
+				.table-output-parent {
+				    min-height: 600px;
+				    padding-top: 4rem;
+				}
+				.td-ket {
+					height: 12px !important;
+					font-size: 12px !important;
+					font-weight: 0 !important;
+					align-content: center;
+				}
+				.svg-ket {
+					width: 12px !important;
+					height: 12px !important;
+				}
+				.po-table-parent {
+					padding-top: 2rem;
+				}
+				.m-title {
+					font-size: 25pt;
+				}
+				.b-title {
+					font-size: 20pt;
+				}
+				.b-subtitle {
+					font-size: 15pt;
+				}
+				body {
+					color: white;
+					background-color: black;
+				}
+				.img-responsive {
+					display: none;
+				}
+				.sm-float-right {
+					float: right !important;
+				}
+			}
+
+			thead tr th{
+				text-align: center;
+				vertical-align: middle!important;
+			}
+			.spanlen{
+				width: 139px!important;
+				display: inline-block;
+			}
+			.nowrap{
+				white-space: nowrap;
+			}
+			.header-tb{
+				font-size: 17px;
+			}
+			.machineparent{
+				margin: 10px 0;
+				font-size: 18px;
+			}
+			.header-ta{
+				margin-right: 10px;
+				font-size: 16px;
+			}
+
+		</style>
+	</head>
+	<body>
+		<section class="content">
+			<div class="row">
+				@if(session('tokenmenu'))
+				<div class="col-sm-2">
+					<a href="{{session('db')->home_link}}"><i class="fas fa-caret-left fa-7x"></i></a>
+					@if(isset($nextlink))
+					<a href="{{$nextlink}}" class="sm-float-right"><i class="fas fa-caret-right fa-7x"></i></a>
+					@endif
+				</div>
+				@else
+				<div class="col-sm-2">
+                    @if(isset($prevlink) and !session('monitoring'))
+                    <a href="{{$prevlink}}"><i class="fas fa-caret-left fa-7x"></i></a>
+                    @endif
+                    @if(isset($nextlink))
+                    <a href="{{$nextlink}}" class="sm-float-right"><i class="fas fa-caret-right fa-7x"></i></a>
+                    @endif
+				</div>
+				@endif
+				<div class="col-sm-7">
+					<center><h2 style="margin-top: .5rem"><b class="m-title">{{ $title }}</b></h2></center>
+				</div>
+				<div class="col-sm-3">
+					<center>
+						<h1 style="margin-top: .5rem">
+							<table style="width: 100%">
+								<tr>
+									<td></td>
+									<td rowspan="2" class="text-right">
+                                        <b class="b-subtitle" id="worktime"></b>
+                                    </td>
+                                </tr>
+								<tr>
+                                    <td>
+                                        <b class="b-subtitle">
+                                            @if(session('monitoring'))
+                                            {{ Carbon\Carbon::now()->format('d F y') }}
+                                            @else
+                                            {{ Carbon\Carbon::parse(session('endline.date'))->format('d F y') }}
+                                            @endif
+                                        </b>
+                                    </td>
+                                </tr>
+							</table>
+						</h1>
+					</center>
+                    <div style="display: flex; margin-bottom: 1rem; justify-content: flex-start;">
+                        <table style="border: 1px solid white;">
+                            <tr>
+                                <td style="padding: .5rem;"> </td>
+                                <td> </td>
+                                <td> </td>
+                                <td> </td>
+                                <td> </td>
+                                <td> </td>
+                                <td> </td>
+                            </tr>
+                            <tr>
+                                <td></td>
+                                <td style="padding: 1.7rem; border-radius: 100%; background-color: #37683a;" id="greenlight"> </td>
+                                <td style="padding: .5rem;"></td>
+                                <td style="padding: 1.7rem; border-radius: 100%; background-color: #5e5232;" id="orangelight"> </td>
+                                <td style="padding: .5rem;"></td>
+                                <td style="padding: 1.7rem; border-radius: 100%; background-color: #724f4f;" id="redlight"> </td>
+                                <td></td>
+                            </tr>
+                            <tr>
+                                <td style="padding: .5rem;"></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td style="padding: .5rem;"></td>
+                            </tr>
+                        </table>
+                        <table style="border: 1px solid white;">
+                            <tr>
+                                <td style="padding: .5rem;"></td>
+                                <td style="padding: .5rem;"></td>
+                                <td style="padding: .5rem;"></td>
+                            </tr>
+                            <tr>
+                                <td style="padding: .5rem;"></td>
+                                <td style="padding: 1.7rem; border-radius: 100%; background-color: #272751;" id="soilmon"> </td>
+                                <td style="padding: .5rem;"></td>
+                            </tr>
+                            <tr>
+                                <td style="padding: .5rem;"></td>
+                                <td style="padding: .5rem;"></td>
+                                <td style="padding: .5rem;"></td>
+                            </tr>
+                        </table>
+						<table style="margin-left: auto;">
+							<tr>
+								<td>
+									<b class="text-center b-title" id="hours">
+										@if(session('monitoring'))
+										{{ Carbon\Carbon::now()->format('H:i:s') }}
+										@endif
+									</b>
+								</td>
+							</tr>
+						</table>
+                    </div>
+				</div>
+			</div>
+			<div class="row">
+				<div class="col-sm-12" style="background-color: white; height: 4pt"></div>
+			</div>
+			<div class="row">
+				<div class="col-sm-6 col-xs-12 po-table-parent">
+					<table style="width: 100%" class="po-table">
+						<tr>
+							<td>KP</td>
+							<td>:</td>
+							<td id="td-kp"></td>
+							<td rowspan="6">
+								<img class="img-responsive" id="styleimg" src="" style="max-width: 200px">
+							</td>
+						</tr>
+						<tr>
+							<td>STYLE</td>
+							<td>:</td>
+							<td id="td-style"></td>
+						</tr>
+						<tr>
+							<td>TAKT TIME</td>
+							<td>:</td>
+							<td id="td-taktime"> SEC</td>
+						</tr>
+						<tr>
+							<td>TARGET</td>
+							<td>:</td>
+							<td id="td-target"> PCS / HOUR</td>
+						</tr>
+						<tr>
+							<td>MAN POWER</td>
+							<td>:</td>
+							<td id="td-mp"></td>
+						</tr>
+						<tr>
+							<td>RUN DAYS</td>
+							<td>:</td>
+							<td id="td-runday"> DAYS</td>
+						</tr>
+					</table>
+					<table style="width: 100%; margin-top: 2rem" class="sum-table">
+						<tr>
+							<td>OUTPUT</td>
+							<td>
+								<svg width="70" height="70">
+									<circle cx="50%" cy="50%" r="50%" id="td-output-col"/>
+								</svg>
+							</td>
+							<td width="40%"  id="td-output"></td>
+						</tr>
+						<tr>
+							<td class="td-ket">
+								<svg class="svg-ket">
+									<rect width="100%" height="100%" fill="{!! $param ? $param->where('key', 'line_red')->first()->value : '' !!}"/>
+								</svg>
+								< {!! $param ? $param->where('key', 'line_outputorange')->first()->value : '' !!}%
+							</td>
+							<td class="td-ket">
+								<svg class="svg-ket">
+									<rect width="100%" height="100%" fill="{!! $param ? $param->where('key', 'line_orange')->first()->value : '' !!}"/>
+								</svg>
+								{!! $param ? $param->where('key', 'line_outputorange')->first()->value : '' !!}%-{!! $param ? $param->where('key', 'line_outputgreen')->first()->value : '' !!}%
+							</td>
+							<td class="td-ket">
+								<svg class="svg-ket">
+									<rect width="100%" height="100%" fill="{!! $param ? $param->where('key', 'line_green')->first()->value : '' !!}"/>
+								</svg>
+								> {!! $param ? $param->where('key', 'line_outputgreen')->first()->value : '' !!}%
+							</td>
+						</tr>
+						<tr><td height="20px"></td></tr>
+						<tr>
+							<td>RFT (%)</td>
+							<td>
+								<svg height="70" width="70">
+									<rect width="100%" height="100%" id="td-rft-col"/>
+								</svg>
+							</td>
+							<td width="40%" id="td-rft"></td>
+						</tr>
+						<tr>
+							<td class="td-ket">
+								<svg class="svg-ket">
+									<rect width="100%" height="100%" fill="{!! $param ? $param->where('key', 'line_red')->first()->value : '' !!}"/>
+								</svg>
+								< {!! $param ? $param->where('key', 'line_rftorange')->first()->value : '' !!}%
+							</td>
+							<td class="td-ket">
+								<svg class="svg-ket">
+									<rect width="100%" height="100%" fill="{!! $param ? $param->where('key', 'line_orange')->first()->value : '' !!}"/>
+								</svg>
+								{!! $param ? $param->where('key', 'line_rftorange')->first()->value : '' !!}%-{!! $param ? $param->where('key', 'line_rftgreen')->first()->value : '' !!}%
+							</td>
+							<td class="td-ket">
+								<svg class="svg-ket">
+									<rect width="100%" height="100%" fill="{!! $param ? $param->where('key', 'line_green')->first()->value : '' !!}"/>
+								</svg>
+								> {!! $param ? $param->where('key', 'line_rftgreen')->first()->value : '' !!}%
+							</td>
+						</tr>
+						<tr><td height="20px"></td></tr>
+						<tr>
+							<td>EFF (%)</td>
+							<td>
+								<svg height="100" width="100">
+									<rect width="60%" height="60%" id="td-eff-col" transform="rotate(45 50 50) translate(20 20)" />
+								</svg>
+							</td>
+							<td width="40%" id="td-eff"></td>
+						</tr>
+						<tr>
+							<td class="td-ket">
+								<svg class="svg-ket">
+									<rect width="100%" height="100%" fill="{!! $param ? $param->where('key', 'line_red')->first()->value : '' !!}"/>
+								</svg>
+								@if($ishanger)
+								< {!! $param ? $param->where('key', 'line_hanger_efforange')->first()->value : '' !!}%
+								@else
+								< {!! $param ? $param->where('key', 'line_efforange')->first()->value : '' !!}%
+								@endif
+							</td>
+							<td class="td-ket">
+								<svg class="svg-ket">
+									<rect width="100%" height="100%" fill="{!! $param ? $param->where('key', 'line_orange')->first()->value : '' !!}"/>
+								</svg>
+								@if($ishanger)
+								{!! $param ? $param->where('key', 'line_hanger_efforange')->first()->value : '' !!}%-{!! $param ? $param->where('key', 'line_hanger_effgreen')->first()->value : '' !!}%
+								@else
+								{!! $param ? $param->where('key', 'line_efforange')->first()->value : '' !!}%-{!! $param ? $param->where('key', 'line_effgreen')->first()->value : '' !!}%
+								@endif
+							</td>
+							<td class="td-ket">
+								<svg class="svg-ket">
+									<rect width="100%" height="100%" fill="{!! $param ? $param->where('key', 'line_green')->first()->value : '' !!}"/>
+								</svg>
+								@if($ishanger)
+								> {!! $param ? $param->where('key', 'line_hanger_effgreen')->first()->value : '' !!}%
+								@else
+								> {!! $param ? $param->where('key', 'line_effgreen')->first()->value : '' !!}%
+								@endif
+							</td>
+						</tr>
+						<tr class="block-wip">
+							<td>WIP</td>
+							<td id="wip" style="padding: 2vh">
+                                <svg viewBox="0 0 130 100" class="donut">
+                                    <circle class="donut-ring" cx="65" cy="50" r="15" fill="transparent" stroke="#56bbff" stroke-width="20"></circle>
+                                    <circle class="donut-segment" cx="65" cy="50" r="15" fill="transparent" stroke="#ff7777" stroke-width="20" stroke-dasharray="0 100" stroke-dashoffset="25"></circle>
+                                </svg>
+							</td>
+							<td id="valWip"></td>
+						</tr>
+					</table>
+				</div>
+				<div class="col-sm-6 col-xs-12 table-output-parent">
+					<div class="col-sm-12" id="smvwarning" style="display: none;">
+						<center><b><h1>SMV and Target Not Found.</h1></b></center>
+						<br>
+						<center><small><b>Try to refresh this page</b></small></center>
+					</div>
+					<table style="width: 100%" class="table-output">
+						<thead>
+							<th colspan="2">HOUR</th>
+							<th colspan="2">OUTPUT</th>
+							<th colspan="2">RFT <small>(%)</small></th>
+							<th>EFF <small>(%)</small></th>
+						</thead>
+						<tbody>
+						</tbody>
+					</table>
+				</div>
+			</div>
+			<div class="modal fade" id="detail-operator">
+				<div class="modal-dialog" style="width: 90%; ">
+					<div class="modal-content" style="background-color: black; color: white">
+						<div class="modal-header">
+							<button type="button" class="close" data-dismiss="modal" aria-hidden="true"
+								style="color: white">&times;</button>
+							<h4 class="modal-title" style="font-size: 24px">Data Operator</h4>
+						</div>
+						<div class="modal-body">
+							Data Loading
+						</div>
+					</div>
+				</div>
+			</div>
+			<div class="modal fade" id="detail-modal2" role="dialog">
+				<div class="modal-dialog modal-lg" style="width: 70%">
+					<div class="modal-content" style="background-color:rgb(43, 43, 43);">
+						<div class="modal-header">
+							<button type="button" class="btn btn-default pull-right btn-close-modal">&times;</button>
+							<h4 class="modal-title">Detail</h4>
+						</div>
+						<div class="modal-body" id="detail-body" >
+						</div>
+						<div class="modal-footer">
+							<button type="button" class="btn btn-default pull-right btn-close-modal">Close</button>
+						</div>
+					</div>
+				</div>
+			</div>
+
+		</section>
+	    <script src="{{ _asset('adminltecomponents/jquery/dist/jquery.min.js') }}"></script>
+	    <script src="{{ _asset('adminltecomponents/bootstrap/dist/js/bootstrap.min.js') }}"></script>
+	    <script src="{{ _asset('js/adminlte.min.js') }}"></script>
+	    <script src="{{ _asset('js/jquery.dataTables.min.js') }}"></script>
+	    <script src="{{ _asset('js/dataTables.bootstrap.min.js') }}"></script>
+        <script src="{{ _asset('js/dataTables.fixedColumns.min.js') }}"></script>
+		<script src="{{ _asset('js/adminlte.min.js') }}"></script>
+	    <script src="{{ _asset('adminltecomponents/select2/dist/js/select2.min.js') }}"></script>
+		<script src="{{ _asset('js/sweetalert.min.js') }}"></script>
+		<script src="{{ _asset('adminltecomponents/knob/jquery.knob.js') }}"></script>
+		<script src="{{ _asset('js/jquery.datetimepicker.js') }}"></script>
+		<script src="{{ _asset('js/highchartsv6.js') }}"></script>
+		<script src="{{ _asset('js/variable-pie.js') }}"></script>
+		<script src="{{ _asset('adminltecomponents/round/dist/roundslider.min.js') }}"></script>
+		<script type="text/javascript">
+			$(document).ready(function() {
+				var c_green = '{!! $param ? $param->where('key', 'line_green')->first()->value : '' !!}';
+				var c_orange = '{!! $param ? $param->where('key', 'line_orange')->first()->value : '' !!}';
+				var c_red = '{!! $param ? $param->where('key', 'line_red')->first()->value : '' !!}';
+
+				@if($ishanger)
+				var eff_g = {!! $param ? $param->where('key', 'line_hanger_effgreen')->first()->value : 0 !!};
+				var eff_o = {!! $param ? $param->where('key', 'line_hanger_efforange')->first()->value : 0 !!};
+				@else
+				var eff_g = {!! $param ? $param->where('key', 'line_effgreen')->first()->value : 0 !!};
+				var eff_o = {!! $param ? $param->where('key', 'line_efforange')->first()->value : 0 !!};
+				@endif
+
+				var out_g = {!! $param ? $param->where('key', 'line_outputgreen')->first()->value : 0 !!};
+				var out_o = {!! $param ? $param->where('key', 'line_outputorange')->first()->value : 0 !!};
+
+				var rft_g = {!! $param ? $param->where('key', 'line_rftgreen')->first()->value : 0 !!};
+				var rft_o = {!! $param ? $param->where('key', 'line_rftorange')->first()->value : 0 !!};
+
+				var img_def = '{!! $ishanger ? _asset('img/fff.png') : "" !!}';
+
+				var target_perhour = 40;
+
+				var data_style = '';
+
+                @if(session('monitoring'))
+		        setInterval(function() {
+		            d = new Date();
+		            h = set(d.getHours());
+		            m = set(d.getMinutes());
+		            s = set(d.getSeconds());
+		            $('#hours').text(h + ':' + m + ':' + s);
+		        }, 1000);
+                @endif
+
+		        getheader();
+		        getsumoutput();
+		        getdataoutput();
+		        getimage();
+
+		        function set(e) {
+		            e = e < 10 ? '0' + e : e;
+		            return e;
+		        }
+
+		        function getimage() {
+		        	if(!data_style) {
+		        		setTimeout(function() {
+		        			getimage();
+		        		}, 60000);
+	        			return;
+	        		}
+
+		        	$.ajax({
+		        		url: '{!! $imagelink !!}',
+		        		type: 'GET',
+		        		dataType: 'json',
+		        		data: {
+		        			style: data_style
+		        		},
+		        	})
+		        	.done(function(d) {
+		        		if(d) {
+							if(d.status == 'success') {
+								$('#styleimg').attr('src', d.data);
+							} else {
+		        				$('#styleimg').attr('src', img_def);
+							}
+		        		} else {
+		        			$('#styleimg').attr('src', img_def);
+		        		}
+		        	})
+		        	.fail(function() {
+		        		$('#styleimg').attr('src', img_def);
+		        	})
+		        	.always(function() {
+		        		setTimeout(function() {
+		        			getimage();
+		        		}, 600000);
+		        	});
+		        }
+
+		        function getdataoutput() {
+		        	$.ajax({
+		        		url: '{!! $dataoutputlink !!}',
+		        		type: 'GET',
+		        		dataType: 'json',
+		        	})
+		        	.done(function(data) {
+		        		if(data.status == 'success') {
+			        		$('#smvwarning').hide();
+			        		$('.table-output').show();
+
+		        			$('.table-output').find('tbody').html('');
+		        			$.each(data.data, function(i, v) {
+		        				if(v.status != 'ok')
+		        				{
+			        				$('.table-output').find('tbody').append('<tr>' +
+				        				'<td><small>' + v.stime + '-' + v.ftime + '</small></td>' +
+				        				'<td style="width: 3%"></td>' +
+				        				'<td style="background-color: gray; color: white;" colspan="5">Time Off</td>' +
+				        				'<tr><td height="15px"></td></tr>'
+			        				);
+		        				}
+		        				else
+		        				{
+		        					var _out_percent = (v.output / v.target) * 100;
+		        					var _out_clr = (_out_percent >= out_g ? c_green : (_out_percent >= out_o ? c_orange : c_red));
+		        					var _rft_clr = (v.rft >= rft_g ? c_green : (v.rft >= rft_o ? c_orange : c_red));
+		        					var _eff_clr = (v.eff >= eff_g ? c_green : (v.eff >= eff_o ? c_orange : c_red));
+
+		        					if(v.islast)
+		        					{
+		        						_out_clr = 'gray';
+		        						_rft_clr = 'gray';
+		        						_eff_clr = 'gray';
+		        					}
+
+			        				$('.table-output').find('tbody').append(
+			        					'<tr>' +
+					        				'<td><small>' + v.stime + '-' + v.ftime + '</small></td>' +
+					        				'<td style="width: 3%"></td>' +
+					        				'<td style="background-color: ' + _out_clr + '; color: white;">' + v.output + '</td>' +
+					        				'<td style="width: 3%"></td>' +
+					        				'<td style="background-color: ' + _rft_clr + '; color: white;">' +parseFloat(v.rft).toFixed(2) + '</td>' +
+					        				'<td style="width: 3%"></td>' +
+					        				'<td style="background-color: ' + _eff_clr + '; color: '+ (v.islast && !v.isfull ? 'gray' : (v.islast && v.isfull ? 'white' : 'white')) +';">' + v.eff + '</td>' +
+				        				'</tr>' +
+				        				'<tr><td height="15px"></td></tr>'
+			        				);
+		        				}
+		        			});
+		        		} else {
+			        		$('#smvwarning').show();
+			        		$('.table-output').hide();
+		        		}
+		        	})
+		        	.fail(function(x, h, r) {
+		        		$('#smvwarning').show();
+		        		$('.table-output').hide();
+                        swal('Warning!', x.responseText, 'warning');
+		        	})
+		        	.always(function() {
+		        		setTimeout(function() {
+		        			getdataoutput();
+		        		}, 60000);
+		        	});
+		        }
+
+		        function getheader() {
+		        	$.ajax({
+		        		url: '{!! $headerlink !!}',
+		        		type: 'GET',
+		        		dataType: 'json',
+		        	})
+		        	.done(function(data) {
+		        		if(data.status == 'success') {
+		        			$('#td-kp').text(data.kpno);
+		        			$('#td-style').text(data.style.nmstyle);
+		        			data_style = data.style.idstyle;
+		        			$('#td-taktime').text((3600/data.targetperhour).toFixed(2) + ' SEC');
+		        			$('#td-target').text(data.targetperhour + ' PCS/HOUR');
+		        			$('#td-mp').html(data.mp+" of "+data.target_mp);
+		        			$('#td-runday').text(data.runday + ' DAY(S)');
+		        			target_perhour = data.targetperhour;
+		        		}else{
+							if(data.status == 'warning'){
+								$('#td-mp').html(data.mp+" of "+data.target_mp);
+							}
+						}
+
+						if(data.magicbtn){
+							$('.block-wip').hide();
+						}
+		        	})
+		        	.fail(function(x, h, r) {
+		        		swal('Warning!', x.responseText, 'warning');
+		        	})
+		        	.always(function() {
+		        		setTimeout(function() {
+		        			getheader();
+		        		}, 200000);
+		        	});
+		        }
+
+		        function getsumoutput() {
+		        	$.ajax({
+		        		url: '{!! $sumoutputlink !!}',
+		        		type: 'GET',
+		        		dataType: 'json',
+		        	})
+		        	.done(function(data) {
+		        		if(data.status == 'success' && data.smv > 0) {
+		        			$('#td-output').text(data.output+' / '+data.target);
+		        			$('#td-rft').text(data.rft);
+		        			$('#td-eff').text(data.eff);
+		        			$('#worktime').text((data.tot_worktime).toFixed(2) + ' Hour(s)');
+		        			let _m_output = data.outputpercent;
+		        			let _c_out = _m_output > out_g ? c_green : (_m_output > out_o ? c_orange : c_red);
+		        			let _c_rft = data.rft > rft_g ? c_green : (data.rft > rft_o ? c_orange : c_red);
+		        			let _c_eff = data.eff > eff_g ? c_green : (data.eff > eff_o ? c_orange : c_red);
+		        			$('#td-output-col').attr('fill', _c_out);
+		        			$('#td-rft-col').attr('fill', _c_rft);
+		        			$('#td-eff-col').attr('fill', _c_eff);
+		        			$('#wip').find('svg').find('circle').show();
+                            const rat = data.wip.ratio * 100;
+							const valWip = data.wip.wip;
+							const targetWip = data.wip.wip_target;
+		        			$('#wip').find('svg').find('.donut-segment').attr('stroke-dasharray', `${rat} ${100 - rat}`);
+							$('#valWip').text(valWip+' / '+targetWip);
+                            $('#greenlight').css('background-color', '#37683a');
+                            $('#redlight').css('background-color', '#724f4f');
+                            $('#orangelight').css('background-color', '#5e5232');
+                            $('#greenlight').removeClass('blink');
+                            $('#redlight').removeClass('blink');
+                            $('#orangelight').removeClass('blink');
+                            if (data.defect < 1) {
+                                $('#greenlight').css('background-color', '#0cfc00');
+                                $('#greenlight').addClass('blink');
+                            } else if (data.defect >= 3) {
+                                $('#redlight').css('background-color', c_red);
+                                $('#redlight').addClass('blink');
+                            } else {
+                                $('#orangelight').css('background-color', '#fff200');
+                                $('#orangelight').addClass('blink');
+                            }
+                            $('#soilmon').css('background-color', '#272751');
+                            $('#soilmon').removeClass('blink');
+                            if (data.soil >= 10) {
+                                $('#soilmon').css('background-color', '#00fcfc');
+                                $('#soilmon').addClass('blink');
+                            }
+		        		}
+		        		else
+		        		{
+		        			swal('SMV not Found!', 'Please fill in the SMV and the Target from the web.', 'warning');
+
+		        			$('#td-output').text('-');
+		        			$('#td-rft').text('-');
+		        			$('#td-eff').text('-');
+		        			$('#worktime').text('-');
+		        			$('#td-output-col').attr('fill', '#000000');
+		        			$('#td-rft-col').attr('fill', '#000000');
+		        			$('#td-eff-col').attr('fill', '#000000');
+		        			$('#wip').find('svg').find('circle').hide();
+		        		}
+		        	})
+		        	.fail(function(x, h, r) {
+		        		swal('Warning!', x.responseText, 'warning');
+		        	})
+		        	.always(function() {
+		        		setTimeout(function() {
+		        			getsumoutput();
+		        		}, 60000);
+		        	});
+		        }
+				$('body').on('click', '#mpbtn', function(e) {
+					e.preventDefault();
+					const link = $(this).data('link');
+					$('#loading').show();
+					$.ajax({
+							url: link,
+							type: 'GET',
+							dataType: 'json',
+						})
+						.done(function(data) {
+							$('#detail-operator').modal('show').find('.modal-body').html(data);
+						})
+						.fail((e) => {
+							swal('Warning!', e.responseText, 'warning');
+						})
+						.always(function() {
+							$('#loading').hide();
+						});
+				});
+			});
+
+			$(document).on('click', '.btn-close-modal', function () {
+				$(this).closest('#detail-modal2').modal('hide');
+			});
+
+			$(document).on('click', '.detailbtn', function (e) {
+				e.preventDefault();
+
+				const data = $(this).data('nik');
+				const url = `{!! route('ie_matrixscorereportnikdetail', ['nik' => '']) !!}/${data}`;
+
+				$('#loading').show();
+
+				$.get(url, function (r) {
+					$('#detail-body').html(r);
+
+					$('#detail-modal2').modal({
+						backdrop: 'static',
+						keyboard: false
+					});
+				}).always(() => {
+					$('#loading').hide();
+				});
+			});
+		</script>
+	</body>
+</html>
