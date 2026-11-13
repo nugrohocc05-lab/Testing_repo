@@ -55,12 +55,183 @@
             .fa-caret-left {
                 font-size: 80px;
             }
+
+			/* Tinggi grafik (sebelumnya inline 800px) */
+			.chart-box {
+				height: 800px;
+			}
+
+			/* ============================================================
+			   TAMPILAN TABLET (HANYA CSS, TIDAK MENGUBAH FUNGSI)
+			   --u = 1% tinggi layar yang benar-benar terlihat (dvh),
+			   supaya tidak terpotong address bar browser tablet.
+			   ============================================================ */
+			:root {
+				--u: 1vh;
+			}
+			@supports (height: 1dvh) {
+				:root {
+					--u: 1dvh;
+				}
+			}
+
+			/* ------------------------------------------------------------
+			   TABLET 600px - 1440px (portrait & landscape)
+			   ------------------------------------------------------------ */
+			@media screen and (min-width: 600px) and (max-width: 1440px) {
+				html body {
+					overflow-x: hidden;
+				}
+
+				/* Variabel ukuran: ubah di sini untuk menyetel semuanya */
+				.line-chart {
+					--title-fs: clamp(1.3rem, 3.6vw, 2.6rem);   /* judul */
+					--sub-fs:   clamp(0.85rem, 2.1vw, 1.4rem);  /* tanggal & work time */
+					--clock-fs: clamp(1rem, 2.6vw, 1.8rem);     /* jam */
+					--arrow:    clamp(2.25rem, 6vw, 4.5rem);    /* panah back/next */
+				}
+				.line-chart.content {
+					padding-left: 12px;
+					padding-right: 12px;
+				}
+
+				/* ---------- HEADER ---------- */
+				.line-chart .header-row {
+					display: grid;
+					grid-template-columns: minmax(3.5rem, 0.8fr) minmax(0, 2.4fr) minmax(220px, 1.3fr);
+					column-gap: 8px;
+					align-items: center;
+					margin-left: 0;
+					margin-right: 0;
+				}
+				.line-chart .header-row::before,
+				.line-chart .header-row::after {
+					display: none !important;
+				}
+				.line-chart .header-row > [class*="col-"] {
+					float: none !important;
+					width: auto !important;
+					min-width: 0;
+					padding: 0 !important;
+				}
+				.line-chart .header-arrows {
+					display: flex;
+					align-items: center;
+					gap: 0.5rem;
+				}
+				.line-chart .header-arrows a {
+					display: inline-flex;
+					align-items: center;
+					justify-content: center;
+					float: none !important;
+					margin-left: 0 !important;
+					color: inherit;
+					min-width: 44px;
+					min-height: 44px;
+					padding: 2px 6px;
+				}
+				.line-chart .header-arrows .sm-float-right {
+					float: none !important;
+					margin-left: 0 !important;
+				}
+				.line-chart .fa-caret-left,
+				.line-chart .fa-caret-right {
+					font-size: var(--arrow);
+					line-height: 1;
+				}
+				.line-chart .header-title h2 {
+					margin: 0 !important;
+					font-size: var(--title-fs);
+					line-height: 1.1;
+				}
+				.line-chart .m-title {
+					font-size: var(--title-fs);
+					word-break: break-word;
+				}
+				.line-chart .header-right center h1 {
+					font-size: var(--sub-fs);
+					line-height: 1.2;
+					margin: 0.25rem 0 !important;
+				}
+				.line-chart .header-right td {
+					padding: 0 4px;
+					white-space: nowrap;
+				}
+				.line-chart .b-subtitle {
+					font-size: var(--sub-fs);
+				}
+				.line-chart .b-title {
+					font-size: var(--clock-fs);
+				}
+
+				/* ---------- GARIS PEMISAH & GRAFIK ---------- */
+				.line-chart .line-sep {
+					margin-left: 0;
+					margin-right: 0;
+					margin-top: 0.25rem;
+				}
+				.line-chart .line-sep > .col-sm-12 {
+					padding: 0;
+				}
+				.line-chart > br {
+					display: none;
+				}
+				.line-chart .chart-row {
+					margin-left: 0;
+					margin-right: 0;
+					margin-top: 1rem;
+				}
+				.line-chart .chart-row > .col-sm-12 {
+					padding: 0;
+				}
+				.line-chart .chart-box {
+					height: clamp(380px, calc(var(--u) * 65), 900px);
+				}
+			}
+
+			/* ------------------------------------------------------------
+			   MODE PAS SATU LAYAR: TABLET 11" LANDSCAPE
+			   (iPad Pro 11" 1194x834, Galaxy Tab 11" ~1280x800, dll.)
+
+			   Anggaran tinggi (dalam % tinggi layar):
+			     padding .......... 1.3
+			     header ........... ~7.5
+			     garis ............ ~1
+			     jarak ............ ~1
+			     grafik ........... 82
+			     total ............ ~93  (cadangan ~7)
+			   ------------------------------------------------------------ */
+			@media screen and (min-width: 900px) and (max-width: 1440px) and (orientation: landscape) {
+				html body {
+					margin: 0;
+				}
+				.line-chart.content {
+					padding-top: calc(var(--u) * 0.8);
+					padding-bottom: calc(var(--u) * 0.5);
+				}
+				.line-chart {
+					--title-fs: min(calc(var(--u) * 4.2), 3.1vw);
+					--sub-fs:   min(calc(var(--u) * 2.3), 1.7vw);
+					--clock-fs: min(calc(var(--u) * 3), 2.2vw);
+					--arrow:    calc(var(--u) * 6.5);
+				}
+				.line-chart .header-row {
+					grid-template-columns: minmax(4rem, 0.7fr) minmax(0, 2.4fr) minmax(300px, 1.4fr);
+					margin-bottom: calc(var(--u) * 0.6);
+				}
+				.line-chart .chart-row {
+					margin-top: calc(var(--u) * 1);
+				}
+				.line-chart .chart-box {
+					height: calc(var(--u) * 82);
+				}
+			}
 		</style>
 	</head>
 	<body>
-		<section class="content">
-			<div class="row">
-				<div class="col-sm-2">
+		<section class="content line-chart">
+			<div class="row header-row">
+				<div class="col-sm-2 header-arrows">
                     @if(isset($prevlink))
                     <a href="{{$prevlink}}"><i class="fas fa-caret-left"></i></a>
                     @endif
@@ -68,10 +239,10 @@
                     <a href="{{$nextlink}}" class="sm-float-right"><i class="fas fa-caret-right"></i></a>
                     @endif
 				</div>
-				<div class="col-sm-7">
+				<div class="col-sm-7 header-title">
 					<center><h2 style="margin-top: .5rem"><b class="m-title">{{$title}}</b></h2></center>
 				</div>
-				<div class="col-sm-3">
+				<div class="col-sm-3 header-right">
 					<center>
 						<h1 style="margin-top: .5rem">
 							<table style="width: 100%">
@@ -103,13 +274,13 @@
 					</center>
 				</div>
 			</div>
-			<div class="row">
+			<div class="row line-sep">
 				<div class="col-sm-12" style="background-color: white; height: 4pt"></div>
 			</div>
 			<br>
-			<div class="row">
+			<div class="row chart-row">
 				<div class="col-sm-12">
-					<div id="container" style="height: 800px"></div>
+					<div id="container" class="chart-box"></div>
 				</div>
 			</div>
 		</section>
@@ -208,7 +379,88 @@
                         // shared: true
                     },
 				    responsive: {
-				    	rules: [{
+				    	rules: [
+				    	/* ---- TABLET KECIL / PORTRAIT (lebar grafik 601 - 900px): hanya ukuran font ---- */
+				    	{
+				    		condition: {
+				    			minWidth: 601,
+				    			maxWidth: 900
+				    		},
+				    		chartOptions: {
+				    			xAxis: {
+				    				labels: {
+				    					style: {
+				    						fontSize: '1.1rem'
+				    					}
+				    				}
+				    			},
+				    			tooltip: {
+				    				style: {
+				    					fontSize: '1rem'
+				    				}
+				    			},
+				    			yAxis: [{
+				    				labels: {
+				    					style: {
+				    						fontSize: '1.1rem'
+				    					}
+				    				}
+				    			}],
+				    			series: [{
+				    				dataLabels: {
+				    					style: {
+				    						fontSize: '1.4rem'
+				    					}
+				    				}
+				    			}],
+				    			legend: {
+				    				itemStyle: {
+				    					fontSize: '1.1rem'
+				    				}
+				    			}
+				    		}
+				    	},
+				    	/* ---- TABLET SEDANG / BESAR / LANDSCAPE (lebar grafik 901 - 1420px): hanya ukuran font ---- */
+				    	{
+				    		condition: {
+				    			minWidth: 901,
+				    			maxWidth: 1420
+				    		},
+				    		chartOptions: {
+				    			xAxis: {
+				    				labels: {
+				    					style: {
+				    						fontSize: '1.4rem'
+				    					}
+				    				}
+				    			},
+				    			tooltip: {
+				    				style: {
+				    					fontSize: '1.2rem'
+				    				}
+				    			},
+				    			yAxis: [{
+				    				labels: {
+				    					style: {
+				    						fontSize: '1.4rem'
+				    					}
+				    				}
+				    			}],
+				    			series: [{
+				    				dataLabels: {
+				    					style: {
+				    						fontSize: '1.9rem'
+				    					}
+				    				}
+				    			}],
+				    			legend: {
+				    				itemStyle: {
+				    					fontSize: '1.4rem'
+				    				}
+				    			}
+				    		}
+				    	},
+				    	{
 				    		condition: {
 				    			maxWidth: 600
 				    		},
