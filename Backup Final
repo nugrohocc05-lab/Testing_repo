@@ -195,20 +195,345 @@
 				font-size: 16px;
 			}
 
+			/* ============================================================
+			   TAMPILAN TABLET (HANYA CSS, TIDAK MENGUBAH FUNGSI)
+			   --u = 1% tinggi layar yang benar-benar terlihat (dvh),
+			   supaya tidak terpotong address bar browser tablet.
+			   ============================================================ */
+			:root {
+				--u: 1vh;
+			}
+			@supports (height: 1dvh) {
+				:root {
+					--u: 1dvh;
+				}
+			}
+
+			/* ------------------------------------------------------------
+			   TABLET 600px - 1440px (portrait & landscape)
+			   Ukuran font/ikon memakai clamp() berbasis lebar layar.
+			   ------------------------------------------------------------ */
+			@media screen and (min-width: 600px) and (max-width: 1440px) {
+				html body {
+					overflow-x: hidden;
+					overflow-y: auto;
+				}
+
+				/* Variabel ukuran: ubah di sini untuk menyetel semuanya */
+				.line-detail {
+					--title-fs: clamp(1.3rem, 3.6vw, 2.6rem);   /* judul */
+					--sub-fs:   clamp(0.85rem, 2.1vw, 1.4rem);  /* tanggal & work time */
+					--clock-fs: clamp(1rem, 2.6vw, 1.8rem);     /* jam */
+					--light:    clamp(18px, 2.6vw, 30px);       /* diameter lampu */
+					--ico:      clamp(40px, 6.2vw, 70px);       /* icon output / rft / eff */
+					--fs-body:  clamp(0.85rem, 2.2vw, 1.5rem);  /* teks tabel info & hasil */
+				}
+				.line-detail.content {
+					padding-left: 12px;
+					padding-right: 12px;
+				}
+
+				/* ---------- HEADER ---------- */
+				.line-detail .header-row {
+					display: grid;
+					grid-template-columns: minmax(3.5rem, 0.8fr) minmax(0, 2.4fr) minmax(220px, 1.3fr);
+					column-gap: 8px;
+					align-items: center;
+					margin-left: 0;
+					margin-right: 0;
+				}
+				.line-detail .header-row::before,
+				.line-detail .header-row::after {
+					display: none !important;
+				}
+				.line-detail .header-row > [class*="col-"] {
+					float: none !important;
+					width: auto !important;
+					min-width: 0;
+					padding: 0 !important;
+				}
+				.line-detail .header-arrows {
+					display: flex;
+					align-items: center;
+					gap: 0.5rem;
+				}
+				.line-detail .header-arrows a {
+					display: inline-flex;
+					align-items: center;
+					justify-content: center;
+					float: none !important;
+					margin-left: 0 !important;
+					color: inherit;
+					min-width: 44px;
+					min-height: 44px;
+					padding: 2px 6px;
+				}
+				.line-detail .header-arrows .sm-float-right {
+					float: none !important;
+					margin-left: 0 !important;
+				}
+				.line-detail .header-arrows .fa-7x {
+					font-size: clamp(2.25rem, 6vw, 4.5rem) !important;
+					line-height: 1;
+				}
+				.line-detail .header-title h2 {
+					margin: 0 !important;
+					font-size: var(--title-fs);
+					line-height: 1.1;
+				}
+				.line-detail .m-title {
+					font-size: var(--title-fs);
+					word-break: break-word;
+				}
+				.line-detail .header-right center h1 {
+					font-size: var(--sub-fs);
+					line-height: 1.2;
+					margin: 0.25rem 0 !important;
+				}
+				.line-detail .b-subtitle {
+					font-size: var(--sub-fs);
+				}
+				.line-detail .b-title {
+					font-size: var(--clock-fs);
+				}
+				.line-detail .lights-row {
+					margin-bottom: 0.4rem !important;
+					gap: 6px;
+					align-items: center;
+					flex-wrap: wrap;
+				}
+				.line-detail .light-table td:not(#greenlight):not(#orangelight):not(#redlight):not(#soilmon) {
+					padding: calc(var(--light) * 0.2) !important;
+				}
+				.line-detail .light-table td#greenlight,
+				.line-detail .light-table td#orangelight,
+				.line-detail .light-table td#redlight,
+				.line-detail .light-table td#soilmon {
+					padding: calc(var(--light) / 2) !important;
+				}
+
+				/* ---------- GARIS PEMISAH & KOLOM UTAMA ---------- */
+				.line-detail .line-sep {
+					margin-left: 0;
+					margin-right: 0;
+					margin-top: 0.25rem;
+				}
+				.line-detail .line-sep > .col-sm-12 {
+					padding: 0;
+				}
+				.line-detail .main-row {
+					margin-left: -8px;
+					margin-right: -8px;
+				}
+				.line-detail .main-row > [class*="col-"] {
+					padding-left: 8px;
+					padding-right: 8px;
+				}
+				.line-detail .po-table-parent {
+					padding-top: 1rem;
+				}
+				.line-detail .table-output-parent {
+					padding-top: 1rem;
+					max-height: none;
+					overflow: visible;
+				}
+
+				/* ---------- TABEL INFO (KP, STYLE, dst) ---------- */
+				.line-detail .po-table td {
+					font-size: var(--fs-body);
+					padding: 0.15em 0.3em;
+					line-height: 1.2;
+				}
+				.line-detail .po-table td:first-child {
+					white-space: nowrap;
+				}
+				.line-detail #styleimg {
+					max-width: clamp(60px, 12vw, 200px);
+					height: auto;
+					object-fit: contain;
+				}
+
+				/* ---------- TABEL OUTPUT / RFT / EFF / WIP ---------- */
+				.line-detail .sum-table {
+					margin-top: 1rem !important;
+				}
+				.line-detail .sum-table td {
+					font-size: var(--fs-body);
+					padding: 0.1em 0.2em;
+					line-height: 1.2;
+				}
+				.line-detail .sum-table td[height] {
+					height: 0.6rem;
+					padding: 0;
+				}
+				.line-detail .sum-table .td-ket {
+					height: auto !important;
+					font-size: clamp(0.62rem, 1.55vw, 0.95rem) !important;
+					white-space: nowrap;
+				}
+				.line-detail .sum-table .svg-ket {
+					width: 0.9em !important;
+					height: 0.9em !important;
+					vertical-align: -0.1em;
+				}
+				.line-detail .ico {
+					width: var(--ico);
+					height: var(--ico);
+					display: inline-block;
+					vertical-align: middle;
+				}
+				.line-detail .ico-diamond {
+					width: calc(var(--ico) * 1.25);
+					height: calc(var(--ico) * 1.25);
+				}
+				.line-detail #wip {
+					padding: 0.3rem !important;
+				}
+				.line-detail #wip svg {
+					height: clamp(56px, 10vw, 100px);
+					width: auto;
+				}
+
+				/* ---------- TABEL PER JAM ---------- */
+				.line-detail .table-output th {
+					font-size: clamp(0.9rem, 2.8vw, 2rem);
+					padding: 0.2em 0.2em;
+				}
+				.line-detail .table-output td {
+					font-size: var(--fs-body);
+					padding: 0.25em 0.3em;
+					line-height: 1.2;
+				}
+				.line-detail .table-output td[height] {
+					height: 0.5rem;
+					padding: 0;
+					font-size: 0;
+					line-height: 0;
+				}
+			}
+
+			/* Tablet portrait / kecil: modal lebih lebar */
+			@media screen and (min-width: 600px) and (max-width: 991px) {
+				#detail-modal2 .modal-dialog {
+					width: 92% !important;
+				}
+			}
+
+			/* ------------------------------------------------------------
+			   MODE PAS SATU LAYAR: TABLET 11" LANDSCAPE
+			   (iPad Pro 11" 1194x834, Galaxy Tab 11" ~1280x800, dll.)
+			   Semua ukuran memakai tinggi layar (--u) supaya header,
+			   tabel info, tabel per jam dan legend muat tanpa scroll.
+
+			   Anggaran tinggi (dalam % tinggi layar):
+			     padding .......... 1.3
+			     header ........... ~9.5
+			     garis ............ ~1
+			     kolom kiri ....... ~59   (info 21 + output/rft/eff/wip 36)
+			     kolom kanan ...... ~72   (header 5 + 12 jam x 5.5)
+			     total terbesar ... ~84   (cadangan ~16)
+			   ------------------------------------------------------------ */
+			@media screen and (min-width: 900px) and (max-width: 1440px) and (orientation: landscape) {
+				html body {
+					margin: 0;
+				}
+				.line-detail.content {
+					padding-top: calc(var(--u) * 0.8);
+					padding-bottom: calc(var(--u) * 0.5);
+				}
+				.line-detail {
+					--title-fs: min(calc(var(--u) * 4.2), 3.1vw);
+					--sub-fs:   min(calc(var(--u) * 2.3), 1.7vw);
+					--clock-fs: min(calc(var(--u) * 3), 2.2vw);
+					--light:    calc(var(--u) * 3.4);
+					--ico:      calc(var(--u) * 5);
+					--fs-body:  min(calc(var(--u) * 2.7), 2vw);
+				}
+
+				/* Header */
+				.line-detail .header-row {
+					grid-template-columns: minmax(4rem, 0.7fr) minmax(0, 2.4fr) minmax(300px, 1.4fr);
+					margin-bottom: calc(var(--u) * 0.6);
+				}
+				.line-detail .header-arrows .fa-7x {
+					font-size: calc(var(--u) * 6.5) !important;
+				}
+
+				/* Kolom utama */
+				.line-detail .po-table-parent,
+				.line-detail .table-output-parent {
+					padding-top: calc(var(--u) * 1);
+				}
+				.line-detail .table-output-parent {
+					max-height: calc(var(--u) * 88);
+					overflow-y: auto;
+				}
+
+				/* Tabel info */
+				.line-detail .po-table td {
+					font-size: var(--fs-body);
+					padding: calc(var(--u) * 0.3) 4px;
+					line-height: 1.15;
+				}
+				.line-detail #styleimg {
+					max-height: calc(var(--u) * 19);
+					max-width: min(14vw, 170px);
+				}
+
+				/* Tabel output / rft / eff / wip */
+				.line-detail .sum-table {
+					margin-top: calc(var(--u) * 1.2) !important;
+				}
+				.line-detail .sum-table td {
+					font-size: min(calc(var(--u) * 2.6), 1.9vw);
+					padding: calc(var(--u) * 0.2) 4px;
+					line-height: 1.15;
+				}
+				.line-detail .sum-table td[height] {
+					height: calc(var(--u) * 1);
+				}
+				.line-detail .sum-table .td-ket {
+					font-size: min(calc(var(--u) * 1.9), 1.35vw) !important;
+				}
+				.line-detail #wip {
+					padding: calc(var(--u) * 0.5) !important;
+				}
+				.line-detail #wip svg {
+					height: calc(var(--u) * 8);
+					width: auto;
+				}
+
+				/* Tabel per jam */
+				.line-detail .table-output th {
+					font-size: min(calc(var(--u) * 3.4), 2.4vw);
+					padding: calc(var(--u) * 0.3) 4px;
+					line-height: 1.1;
+				}
+				.line-detail .table-output td {
+					font-size: min(calc(var(--u) * 2.9), 2.1vw);
+					padding: calc(var(--u) * 0.6) 4px;
+					line-height: 1.2;
+				}
+				.line-detail .table-output td[height] {
+					height: calc(var(--u) * 0.8);
+					padding: 0;
+				}
+			}
+
 		</style>
 	</head>
 	<body>
-		<section class="content">
-			<div class="row">
+		<section class="content line-detail">
+			<div class="row header-row">
 				@if(session('tokenmenu'))
-				<div class="col-sm-2">
+				<div class="col-sm-2 header-arrows">
 					<a href="{{session('db')->home_link}}"><i class="fas fa-caret-left fa-7x"></i></a>
 					@if(isset($nextlink))
 					<a href="{{$nextlink}}" class="sm-float-right"><i class="fas fa-caret-right fa-7x"></i></a>
 					@endif
 				</div>
 				@else
-				<div class="col-sm-2">
+				<div class="col-sm-2 header-arrows">
                     @if(isset($prevlink) and !session('monitoring'))
                     <a href="{{$prevlink}}"><i class="fas fa-caret-left fa-7x"></i></a>
                     @endif
@@ -217,10 +542,10 @@
                     @endif
 				</div>
 				@endif
-				<div class="col-sm-7">
+				<div class="col-sm-7 header-title">
 					<center><h2 style="margin-top: .5rem"><b class="m-title">{{ $title }}</b></h2></center>
 				</div>
-				<div class="col-sm-3">
+				<div class="col-sm-3 header-right">
 					<center>
 						<h1 style="margin-top: .5rem">
 							<table style="width: 100%">
@@ -244,8 +569,8 @@
 							</table>
 						</h1>
 					</center>
-                    <div style="display: flex; margin-bottom: 1rem; justify-content: flex-start;">
-                        <table style="border: 1px solid white;">
+                    <div class="lights-row" style="display: flex; margin-bottom: 1rem; justify-content: flex-start;">
+                        <table class="light-table" style="border: 1px solid white;">
                             <tr>
                                 <td style="padding: .5rem;"> </td>
                                 <td> </td>
@@ -274,7 +599,7 @@
                                 <td style="padding: .5rem;"></td>
                             </tr>
                         </table>
-                        <table style="border: 1px solid white;">
+                        <table class="light-table" style="border: 1px solid white;">
                             <tr>
                                 <td style="padding: .5rem;"></td>
                                 <td style="padding: .5rem;"></td>
@@ -291,7 +616,7 @@
                                 <td style="padding: .5rem;"></td>
                             </tr>
                         </table>
-						<table style="margin-left: auto;">
+						<table class="clock-table" style="margin-left: auto;">
 							<tr>
 								<td>
 									<b class="text-center b-title" id="hours">
@@ -305,10 +630,10 @@
                     </div>
 				</div>
 			</div>
-			<div class="row">
+			<div class="row line-sep">
 				<div class="col-sm-12" style="background-color: white; height: 4pt"></div>
 			</div>
-			<div class="row">
+			<div class="row main-row">
 				<div class="col-sm-6 col-xs-12 po-table-parent">
 					<table style="width: 100%" class="po-table">
 						<tr>
@@ -349,7 +674,7 @@
 						<tr>
 							<td>OUTPUT</td>
 							<td>
-								<svg width="70" height="70">
+								<svg class="ico ico-circle" width="70" height="70" viewBox="0 0 70 70">
 									<circle cx="50%" cy="50%" r="50%" id="td-output-col"/>
 								</svg>
 							</td>
@@ -379,7 +704,7 @@
 						<tr>
 							<td>RFT (%)</td>
 							<td>
-								<svg height="70" width="70">
+								<svg class="ico ico-square" height="70" width="70" viewBox="0 0 70 70">
 									<rect width="100%" height="100%" id="td-rft-col"/>
 								</svg>
 							</td>
@@ -409,7 +734,7 @@
 						<tr>
 							<td>EFF (%)</td>
 							<td>
-								<svg height="100" width="100">
+								<svg class="ico ico-diamond" height="100" width="100" viewBox="0 0 100 100">
 									<rect width="60%" height="60%" id="td-eff-col" transform="rotate(45 50 50) translate(20 20)" />
 								</svg>
 							</td>
