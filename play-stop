@@ -1,0 +1,100 @@
+Route::post('intellocutlayerman/{id}/play', 'IntellocutLayermanController@play')->name('intellocutlayerman_play');
+Route::post('intellocutlayerman/{id}/stop', 'IntellocutLayermanController@stop')->name('intellocutlayerman_stop');
+
+/**
+ * Tombol Play: buat (atau ambil) baris lay, lalu set status running.
+ * $id = id IntellocutShellDetail yang dibuka.
+ */
+function play($id)
+{
+    $detail      = IntellocutShellDetail::findOrFail($id);
+    $shellHeader = IntellocutShellHeader::findOrFail($detail->idshellheader);
+    $header      = IntellocutHeader::findOrFail($shellHeader->idheader);
+
+    // Satu baris per (idheader, lay). Kalau sudah ada, dipakai lagi.
+    $lay = IntellocutLayermanLay::firstOrCreate(
+        ['idheader' => $header->id, 'lay' => $detail->lay],
+        [
+            'idshelldetail' => $detail->id,
+            'idtable'       => $detail->idtable,
+            'iduser'        => optional(session('user'))->id ?? auth()->id(),
+        ]
+    );
+
+    $lay->status     = 'running';
+    $lay->started_at = $lay->started_at ?: now();
+    $lay->stopped_at = null;
+    $lay->save();
+
+    return response()->json([
+        'success'      => true,
+        'status'       => $lay->status,
+        'status_label' => $lay->status_label,
+    ]);
+}
+
+/**
+ * Tombol Stop: hanya mengubah status menjadi stopped dan mencatat waktu.
+ * $id = id IntellocutShellDetail yang dibuka.
+ */
+function stop($id)
+{
+    $detail      = IntellocutShellDetail::findOrFail($id);
+    $shellHeader = IntellocutShellHeader::findOrFail($detail->idshellheader);
+    $header      = IntellocutHeader::findOrFail($shellHeader->idheader);
+
+    $lay = IntellocutLayermanLay::where('idheader', $header->id)
+        ->where('lay', $detail->lay)
+        ->first();
+
+    if (!$lay) {
+        return response()->json(['message' => 'Lay belum dimulai. Tekan Play dulu.'], 422);
+    }
+
+    $lay->status     = 'stopped';
+    $lay->stopped_at = now();
+    $lay->save();
+
+    return response()->json([
+        'success'      => true,
+        'status'       => $lay->status,
+        'status_label' => $lay->status_label,
+    ]);
+}
+
+
+var playUrl = "{{ route('intellocutlayerman_play', ['id' => $detail->id]) }}";
+var stopUrl = "{{ route('intellocutlayerman_stop', ['id' => $detail->id]) }}";
+
+$('#btnPlay').on('click', function() {
+    var $btn = $(this).prop('disabled', true);
+    var turningOn = !started;
+
+    $.ajax({
+        url: turningOn ? playUrl : stopUrl,
+        type: 'POST',
+        dataType: 'json',
+        headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
+    }).done(function() {
+        setRunning(turningOn);
+    }).fail(function(xhr) {
+        var msg = (xhr.responseJSON && xhr.responseJSON.message) || 'Gagal. Coba lagi.';
+        alert(msg);
+    }).always(function() {
+        $btn.prop('disabled', false);
+    });
+});
+
+// Kalau halaman dibuka saat status masih running, langsung aktif
+if ("{{ $layStatus ?? 'not_started' }}" === 'running') {
+    setRunning(true);
+}
+
+
+# di laystarted sebelum return view
+$layStatus = optional(
+    IntellocutLayermanLay::where('idheader', $header->id)->where('lay', $detail->lay)->first()
+)->status;
+# Lalu tambahkan 'layStatus' ke compact(...) di return view(...).
+
+
