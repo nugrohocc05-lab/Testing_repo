@@ -12,10 +12,10 @@
 
 @section('content')
     <div class="container-fluid px-4 py-4">
-        {{-- Breadcrumb + actual plies --}}
-        <div class="bg-white rounded-3 shadow-sm px-4 py-3 mb-4 d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div
+            class="bg-white rounded-3 shadow-sm px-4 py-3 mb-4 d-flex flex-wrap justify-content-between align-items-center gap-2">
             <div class="d-flex align-items-center gap-2" style="font-size: 12px;">
-                <a href="{{ route('intellocutlayerman_home') }}" class="text-decoration-none d-inline-flex align-items-center gap-2"
+                <a href="{{route('intellocutlayerman_home')}}" class="text-decoration-none d-inline-flex align-items-center gap-2"
                     style="color: #64748b; font-weight: 500;">
                     <i class="bi bi-grid" style="font-size: 15px;"></i>
                     <span>Dashboard</span>
@@ -33,13 +33,12 @@
             </div>
         </div>
 
-        {{-- Info card --}}
         <div class="bg-white rounded-3 shadow-sm overflow-hidden">
             <div class="d-flex flex-wrap justify-content-between align-items-start pe-4">
                 <div class="position-relative overflow-hidden d-inline-flex align-items-center text-white"
                     style="background: linear-gradient(90deg, #160099 0%, #3719ca 100%); border-bottom-right-radius: 36px; padding: 11px 54px 11px 24px;">
                     <span class="position-relative"
-                        style="z-index: 1; font-size: 17px; font-weight: 700; letter-spacing: 0.3px;">L-{{ $detail->lay }} GROUP {{ $detail->group }}</span>
+                        style="z-index: 1; font-size: 17px; font-weight: 700; letter-spacing: 0.3px;">L - {{ $detail->lay }} GROUP {{ $detail->group }}</span>
                     <span class="position-absolute text-nowrap user-select-none"
                         style="left: 110px; top: -6px; font-size: 36px; font-weight: 800; color: rgba(255, 255, 255, 0.08); line-height: 1; pointer-events: none;">GROUP {{ $detail->group }}</span>
                 </div>
@@ -50,11 +49,12 @@
                 <div class="row g-3">
                     <div class="col-md-3">
                         <div class="mb-1" style="font-size: 11px; color: #64748b; font-weight: 500;">Order</div>
-                        <div style="font-size: 13px; font-weight: 500; color: #475569; line-height: 1.35;">{{ $header->order_number }}</div>
+                        <div style="font-size: 13px; font-weight: 500; color: #475569; line-height: 1.35;">
+                            {{ $header->order_number }}</div>
                     </div>
                     <div class="col-md-3">
                         <div class="mb-1" style="font-size: 11px; color: #64748b; font-weight: 500;">Style</div>
-                        <div style="font-size: 13px; font-weight: 500; color: #475569;">{{ $styleName }}</div>
+                        <div style="font-size: 13px; font-weight: 500; color: #475569;">{{ $styleName}}</div>
                     </div>
                     <div class="col-md-3">
                         <div class="mb-1" style="font-size: 11px; color: #64748b; font-weight: 500;">Part</div>
@@ -62,7 +62,8 @@
                     </div>
                     <div class="col-md-3">
                         <div class="mb-1" style="font-size: 11px; color: #64748b; font-weight: 500;">Cut</div>
-                        <div style="font-size: 13px; font-weight: 500; color: #475569;">{{ $cutQty }}</div>
+                        <div style="font-size: 13px; font-weight: 500; color: #475569;">
+                            {{ $cutQty }}</div>
                     </div>
                 </div>
 
@@ -70,8 +71,17 @@
 
                 <div class="row g-3 mb-4">
                     <div class="col-md-3">
-                        <div class="mb-1" style="font-size: 11px; color: #64748b; font-weight: 500;">Marker</div>
-                        <div style="font-size: 13px; font-weight: 500; color: #475569;">1-32 <span class="mx-1" style="color: #94a3b8;">|</span> 1-40</div>
+                        <div class="mb-1" style="font-size: 11px; color: #64748b; font-weight: 500;">
+                            Marker
+                        </div>
+
+                        <div style="font-size: 13px; font-weight: 500; color: #475569;">
+                            @foreach ($ratioSize as $item)
+                                <span>
+                                    {{ $item['ratio'] }}-{{ $item['nmsize'] }}{{ !$loop->last ? ' | ' : '' }}
+                                </span>
+                            @endforeach
+                        </div>
                     </div>
                     <div class="col-md-2">
                         <div class="mb-1" style="font-size: 11px; color: #64748b; font-weight: 500;">Lay Remarks</div>
@@ -85,48 +95,132 @@
 
                 <div class="row g-4 mb-3 pt-1">
                     <div class="col-lg-4 col-md-6">
-                        <label class="form-label mb-2" style="font-size: 11px; font-weight: 600; color: #475569;">Material Width</label>
+                        <label class="form-label mb-2" style="font-size: 11px; font-weight: 600; color: #475569;">Material
+                            Width</label>
                         <div class="d-flex align-items-center gap-2">
-                            <input type="text" class="form-control shadow-none" value="0" style="{{ $inputStyle }}">
-                            <span class="text-nowrap me-2" style="font-size: 11px; font-weight: 600; color: #64748b;">- Yard</span>
-                            <input type="text" class="form-control shadow-none" value="01" style="{{ $inputStyle }}">
-                            <span class="text-nowrap" style="font-size: 11px; font-weight: 600; color: #64748b;">- Inch</span>
+                            <input type="text" class="form-control shadow-none" value="0"
+                                style="background-color: #f4f7fa; border: 1px solid #d1d9e6; border-radius: 6px; font-size: 12px; color: #475569; height: 34px;">
+                            <span class="text-nowrap me-2" style="font-size: 11px; font-weight: 600; color: #64748b;">-
+                                Yard</span>
+                            <input type="text" class="form-control shadow-none" value="01"
+                                style="background-color: #f4f7fa; border: 1px solid #d1d9e6; border-radius: 6px; font-size: 12px; color: #475569; height: 34px;">
+                            <span class="text-nowrap" style="font-size: 11px; font-weight: 600; color: #64748b;">-
+                                Inch</span>
                         </div>
                     </div>
 
                     <div class="col-lg-4 col-md-6">
-                        <label class="form-label mb-2" style="font-size: 11px; font-weight: 600; color: #475569;">Material Length</label>
+                        <label class="form-label mb-2" style="font-size: 11px; font-weight: 600; color: #475569;">Material
+                            Length</label>
                         <div class="d-flex align-items-center gap-2">
-                            <input type="text" class="form-control shadow-none" value="0" style="{{ $inputStyle }}">
-                            <span class="text-nowrap me-2" style="font-size: 11px; font-weight: 600; color: #64748b;">- Yard</span>
-                            <input type="text" class="form-control shadow-none" value="01" style="{{ $inputStyle }}">
-                            <span class="text-nowrap" style="font-size: 11px; font-weight: 600; color: #64748b;">- Inch</span>
+                            <input type="text" class="form-control shadow-none" value="0"
+                                style="background-color: #f4f7fa; border: 1px solid #d1d9e6; border-radius: 6px; font-size: 12px; color: #475569; height: 34px;">
+                            <span class="text-nowrap me-2" style="font-size: 11px; font-weight: 600; color: #64748b;">-
+                                Yard</span>
+                            <input type="text" class="form-control shadow-none" value="01"
+                                style="background-color: #f4f7fa; border: 1px solid #d1d9e6; border-radius: 6px; font-size: 12px; color: #475569; height: 34px;">
+                            <span class="text-nowrap" style="font-size: 11px; font-weight: 600; color: #64748b;">-
+                                Inch</span>
                         </div>
                     </div>
                 </div>
 
                 <div class="row g-4">
-                    @foreach (['End Loss', 'End Loss'] as $i => $label)
-                        <div class="col-lg-4 col-md-6">
-                            <label class="form-label mb-2" style="font-size: 11px; font-weight: 600; color: #475569;">{{ $label }}</label>
-                            <div class="d-flex align-items-center gap-2">
-                                <input type="text" class="form-control shadow-none" value="0" style="{{ $inputStyleDisabled }}">
-                                <span class="text-nowrap me-2" style="font-size: 11px; font-weight: 600; color: #64748b;">- Yard</span>
-                                <input type="text" class="form-control shadow-none" value="01" style="{{ $inputStyleDisabled }}">
-                                <span class="text-nowrap" style="font-size: 11px; font-weight: 600; color: #64748b;">- Inch</span>
-                            </div>
+                    <div class="col-lg-4 col-md-6">
+                        <label class="form-label mb-2" style="font-size: 11px; font-weight: 600; color: #475569;">End
+                            Loss</label>
+                        <div class="d-flex align-items-center gap-2">
+                            <input type="text" class="form-control shadow-none" value="0"
+                                style="background-color: #e2e4e8; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; color: #475569; height: 34px;">
+                            <span class="text-nowrap me-2" style="font-size: 11px; font-weight: 600; color: #64748b;">-
+                                Yard</span>
+                            <input type="text" class="form-control shadow-none" value="01"
+                                style="background-color: #e2e4e8; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; color: #475569; height: 34px;">
+                            <span class="text-nowrap" style="font-size: 11px; font-weight: 600; color: #64748b;">-
+                                Inch</span>
                         </div>
-                    @endforeach
+                    </div>
+
+                    <div class="col-lg-4 col-md-6">
+                        <label class="form-label mb-2" style="font-size: 11px; font-weight: 600; color: #475569;">End
+                            Loss</label>
+                        <div class="d-flex align-items-center gap-2">
+                            <input type="text" class="form-control shadow-none" value="0"
+                                style="background-color: #e2e4e8; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; color: #475569; height: 34px;">
+                            <span class="text-nowrap me-2" style="font-size: 11px; font-weight: 600; color: #64748b;">-
+                                Yard</span>
+                            <input type="text" class="form-control shadow-none" value="01"
+                                style="background-color: #e2e4e8; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; color: #475569; height: 34px;">
+                            <span class="text-nowrap" style="font-size: 11px; font-weight: 600; color: #64748b;">-
+                                Inch</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-
     <div class="container-fluid px-4 py-4">
-        {{-- Splice details --}}
         <div class="bg-white rounded-3 shadow-sm mb-4">
             <div class="px-4 py-3" style="border-bottom: 1px solid #e2e8f0;">
                 <div style="font-size: 13px; font-weight: 700; color: #1e293b;">Splice Details</div>
+            </div>
+            <div class="row g-3 px-4 py-3 align-items-end">
+                {{-- Heading --}}
+                <div class="col-lg-1 col-md-4">
+                    <label class="form-label mb-2"
+                        style="font-size: 11px; font-weight: 600; color: #475569;">
+                        Heading
+                    </label>
+                    <div class="d-flex align-items-center"
+                        style="height: 38px; font-size: 13px; font-weight: 700; color: #1e293b;">
+                        1
+                    </div>
+                </div>
+
+                {{-- Length --}}
+                <div class="col-lg-4 col-md-4">
+                    <label class="form-label mb-2"
+                        style="font-size: 11px; font-weight: 600; color: #475569;">
+                        Length
+                    </label>
+                    <div class="d-flex align-items-center gap-2">
+                        <input type="text" class="form-control shadow-none"
+                            value="0" style="{{ $inputStyleDisabled }}">
+                        <span class="text-nowrap me-2"
+                            style="font-size: 11px; font-weight: 600; color: #64748b;">
+                            - Yard
+                        </span>
+                        <input type="text" class="form-control shadow-none"
+                            value="01" style="{{ $inputStyleDisabled }}">
+                        <span class="text-nowrap"
+                            style="font-size: 11px; font-weight: 600; color: #64748b;">
+                            - Inch
+                        </span>
+                    </div>
+                </div>
+
+                {{-- Wastage --}}
+                <div class="col-lg-4 col-md-4">
+                    <label class="form-label mb-2"
+                        style="font-size: 11px; font-weight: 600; color: #475569;">
+                        Wastage
+                    </label>
+                    <div class="d-flex align-items-center gap-2">
+                        <input type="text" class="form-control shadow-none"
+                            value="0" style="{{ $inputStyleDisabled }}">
+                        <span class="text-nowrap me-2"
+                            style="font-size: 11px; font-weight: 600; color: #64748b;">
+                            - Yard
+                        </span>
+                        <input type="text" class="form-control shadow-none"
+                            value="01" style="{{ $inputStyleDisabled }}">
+                        <span class="text-nowrap"
+                            style="font-size: 11px; font-weight: 600; color: #64748b;">
+                            - Inch
+                        </span>
+                    </div>
+                </div>
+
             </div>
             <div class="px-4 py-4 d-flex justify-content-center align-items-center">
                 <button type="button" class="btn text-white d-inline-flex align-items-center gap-2 border-0"
@@ -137,102 +231,140 @@
             </div>
         </div>
 
-        {{-- Suggested endbits --}}
         <div class="row g-4 mb-4">
-            @foreach ([1, 2] as $n)
-                <div class="col-md-6">
-                    <div class="bg-white rounded-3 shadow-sm h-100">
-                        <div class="px-4 py-3 d-flex justify-content-between align-items-center" style="border-bottom: 1px solid #e2e8f0;">
-                            <div style="font-size: 13px; font-weight: 700; color: #1e293b;">Use Suggested Endbits (0/0)</div>
-                            <a href="#" class="text-decoration-none" style="font-size: 11px; color: #3b93b8; font-weight: 500;">Refresh</a>
-                        </div>
-                        <div class="p-4">
-                            <div class="d-flex align-items-stretch rounded-2 overflow-hidden"
-                                style="background-color: #e8e9ec; border: 1px solid #d1d5db; height: 36px;">
-                                <div class="flex-grow-1 d-flex align-items-center px-2 gap-1">
-                                    <span class="d-inline-flex align-items-center gap-2 px-2 py-1 rounded-1 bg-white"
-                                        style="font-size: 11px; color: #475569; border: 1px solid #e2e8f0; line-height: 1;">
-                                        <span>All</span>
-                                        <i class="bi bi-x" role="button" style="font-size: 12px; color: #64748b;"></i>
-                                    </span>
-                                </div>
-                                <button type="button" class="btn border-0 rounded-0 d-flex align-items-center justify-content-center px-3"
-                                    style="border-left: 1px solid #d1d5db !important; background-color: #e8e9ec; color: #64748b;">
-                                    <i class="bi bi-chevron-down" style="font-size: 12px;"></i>
-                                </button>
+            <div class="col-md-6">
+                <div class="bg-white rounded-3 shadow-sm h-100">
+                    <div class="px-4 py-3 d-flex justify-content-between align-items-center"
+                        style="border-bottom: 1px solid #e2e8f0;">
+                        <div style="font-size: 13px; font-weight: 700; color: #1e293b;">Use Suggested Endbits (0/0)</div>
+                        <a href="#" class="text-decoration-none"
+                            style="font-size: 11px; color: #3b93b8; font-weight: 500;">Refresh</a>
+                    </div>
+                    <div class="p-4">
+                        <div class="d-flex align-items-stretch rounded-2 overflow-hidden"
+                            style="background-color: #e8e9ec; border: 1px solid #d1d5db; height: 36px;">
+                            <div class="flex-grow-1 d-flex align-items-center px-2 gap-1">
+                                <span class="d-inline-flex align-items-center gap-2 px-2 py-1 rounded-1 bg-white"
+                                    style="font-size: 11px; color: #475569; border: 1px solid #e2e8f0; line-height: 1;">
+                                    <span>All</span>
+                                    <i class="bi bi-x" role="button" style="font-size: 12px; color: #64748b;"></i>
+                                </span>
                             </div>
+                            <button type="button"
+                                class="btn border-0 rounded-0 d-flex align-items-center justify-content-center px-3"
+                                style="border-left: 1px solid #d1d5db !important; background-color: #e8e9ec; color: #64748b;">
+                                <i class="bi bi-chevron-down" style="font-size: 12px;"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
-            @endforeach
+            </div>
+
+            <div class="col-md-6">
+                <div class="bg-white rounded-3 shadow-sm h-100">
+                    <div class="px-4 py-3 d-flex justify-content-between align-items-center"
+                        style="border-bottom: 1px solid #e2e8f0;">
+                        <div style="font-size: 13px; font-weight: 700; color: #1e293b;">Use Suggested Endbits (0/0)</div>
+                        <a href="#" class="text-decoration-none"
+                            style="font-size: 11px; color: #3b93b8; font-weight: 500;">Refresh</a>
+                    </div>
+                    <div class="p-4">
+                        <div class="d-flex align-items-stretch rounded-2 overflow-hidden"
+                            style="background-color: #e8e9ec; border: 1px solid #d1d5db; height: 36px;">
+                            <div class="flex-grow-1 d-flex align-items-center px-2 gap-1">
+                                <span class="d-inline-flex align-items-center gap-2 px-2 py-1 rounded-1 bg-white"
+                                    style="font-size: 11px; color: #475569; border: 1px solid #e2e8f0; line-height: 1;">
+                                    <span>All</span>
+                                    <i class="bi bi-x" role="button" style="font-size: 12px; color: #64748b;"></i>
+                                </span>
+                            </div>
+                            <button type="button"
+                                class="btn border-0 rounded-0 d-flex align-items-center justify-content-center px-3"
+                                style="border-left: 1px solid #d1d5db !important; background-color: #e8e9ec; color: #64748b;">
+                                <i class="bi bi-chevron-down" style="font-size: 12px;"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        {{-- Summary --}}
         <div class="bg-white rounded-3 shadow-sm p-4">
             <div class="row g-3 align-items-center">
                 <div class="col-lg-3 col-md-6">
-                    <div class="rounded-2 px-3 py-2 h-100" style="background-color: #f3f7fa; border-left: 3px solid #3b93b8;">
+                    <div class="rounded-2 px-3 py-2 h-100"
+                        style="background-color: #f3f7fa; border-left: 3px solid #3b93b8;padding-top: 20px">
                         <div style="font-size: 11px; color: #64748b; font-weight: 500;">Color/Fabric</div>
-                        <div style="font-size: 11px; font-weight: 700; color: #1e293b; line-height: 1.35; margin-top: 2px;">
-                            {{ $colorName ?: '-' }} / {{ $order->idfabric ?? '-' }}
-                        </div>
+                        <div
+                            style="font-size: 11px; font-weight: 700; color: #1e293b; line-height: 1.35; margin-top: 2px;">
+                            testing</div>
                     </div>
                 </div>
 
                 <div class="col-lg-2 col-md-6">
-                    <div class="rounded-2 px-3 py-2 h-100" style="background-color: #f3f7fa; border-left: 3px solid #3b93b8;">
+                    <div class="rounded-2 px-3 py-2 h-100"
+                        style="background-color: #f3f7fa; border-left: 3px solid #3b93b8;">
                         <div style="font-size: 11px; color: #64748b; font-weight: 500;">Planned Plies</div>
                         <div style="font-size: 13px; font-weight: 700; color: #1e293b; margin-top: 2px;">0</div>
                     </div>
                 </div>
 
                 <div class="col-lg-2 col-md-6">
-                    <div class="rounded-2 px-3 py-2 h-100" style="background-color: #f3f7fa; border-left: 3px solid #3b93b8;">
+                    <div class="rounded-2 px-3 py-2 h-100"
+                        style="background-color: #f3f7fa; border-left: 3px solid #3b93b8;">
                         <div style="font-size: 11px; color: #64748b; font-weight: 500;">Actual Plies</div>
-                        <div style="font-size: 13px; font-weight: 700; color: #1e293b; margin-top: 2px;"">0</div>
+                        <div style="font-size: 13px; font-weight: 700; color: #1e293b; margin-top: 2px;">0</div>
                     </div>
                 </div>
 
                 <div class="col-lg-5 col-md-6">
                     <div class="ps-lg-2">
-                        <label class="form-label mb-1" style="font-size: 11px; font-weight: 700; color: #1e293b;">Splice Wastage</label>
+                        <label class="form-label mb-1" style="font-size: 11px; font-weight: 700; color: #1e293b;">Splice
+                            Wastage</label>
                         <div class="d-flex align-items-center gap-2">
-                            <input type="text" class="form-control shadow-none" value="0" style="{{ $inputStyle }}">
-                            <span class="text-nowrap me-2" style="font-size: 11px; font-weight: 600; color: #64748b;">- Yard</span>
-                            <input type="text" class="form-control shadow-none" value="01" style="{{ $inputStyle }}">
-                            <span class="text-nowrap" style="font-size: 11px; font-weight: 600; color: #64748b;">- Inch</span>
+                            <input type="text" class="form-control shadow-none" value="0"
+                                style="background-color: #f4f7fa; border: 1px solid #d1d9e6; border-radius: 6px; font-size: 12px; color: #475569; height: 34px;">
+                            <span class="text-nowrap me-2" style="font-size: 11px; font-weight: 600; color: #64748b;">-
+                                Yard</span>
+                            <input type="text" class="form-control shadow-none" value="01"
+                                style="background-color: #f4f7fa; border: 1px solid #d1d9e6; border-radius: 6px; font-size: 12px; color: #475569; height: 34px;">
+                            <span class="text-nowrap" style="font-size: 11px; font-weight: 600; color: #64748b;">-
+                                Inch</span>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-
-    {{-- Shades --}}
     <div class="container-fluid px-4 py-4">
         <div class="bg-white rounded-3 shadow-sm p-4">
             <div id="shadeContainer">
                 <div class="shade-item">
                     <div class="row g-4 mb-4">
                         <div class="col-md-4">
-                            <label class="form-label mb-2" style="font-size: 11px; font-weight: 700; color: #334155;">Shade</label>
+                            <label class="form-label mb-2"
+                                style="font-size: 11px; font-weight: 700; color: #334155;">Shade</label>
                             <input type="text" class="form-control shadow-none input-shade" value="A"
-                                style="{{ $inputStyle }} max-width: 280px;">
+                                style="background-color: #f4f7fa; border: 1px solid #d1d9e6; border-radius: 6px; font-size: 12px; color: #475569; height: 34px; max-width: 280px;">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label mb-2" style="font-size: 11px; font-weight: 700; color: #334155;">Actual Plies</label>
+                            <label class="form-label mb-2"
+                                style="font-size: 11px; font-weight: 700; color: #334155;">Actual Plies</label>
                             <input type="text" class="form-control shadow-none input-actual-plies" value="5"
-                                style="{{ $inputStyle }} max-width: 280px;">
+                                style="background-color: #f4f7fa; border: 1px solid #d1d9e6; border-radius: 6px; font-size: 12px; color: #475569; height: 34px; max-width: 280px;">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label mb-2" style="font-size: 11px; font-weight: 700; color: #334155;">Damages</label>
+                            <label class="form-label mb-2"
+                                style="font-size: 11px; font-weight: 700; color: #334155;">Damages</label>
                             <div class="d-flex align-items-center gap-2">
                                 <input type="text" class="form-control shadow-none input-damages-yard" value="0"
-                                    style="{{ $inputStyle }} max-width: 115px;">
-                                <span class="text-nowrap me-1" style="font-size: 11px; font-weight: 600; color: #64748b;">- Yard</span>
+                                    style="background-color: #f4f7fa; border: 1px solid #d1d9e6; border-radius: 6px; font-size: 12px; color: #475569; height: 34px; max-width: 115px;">
+                                <span class="text-nowrap me-1"
+                                    style="font-size: 11px; font-weight: 600; color: #64748b;">- Yard</span>
                                 <input type="text" class="form-control shadow-none input-damages-inch" value="01"
-                                    style="{{ $inputStyle }} max-width: 115px;">
-                                <span class="text-nowrap" style="font-size: 11px; font-weight: 600; color: #64748b;">- Inch</span>
+                                    style="background-color: #f4f7fa; border: 1px solid #d1d9e6; border-radius: 6px; font-size: 12px; color: #475569; height: 34px; max-width: 115px;">
+                                <span class="text-nowrap" style="font-size: 11px; font-weight: 600; color: #64748b;">-
+                                    Inch</span>
                             </div>
                         </div>
                     </div>
@@ -242,14 +374,22 @@
                         <div class="endbits-list d-flex flex-column gap-2">
                             <div class="endbit-row d-flex align-items-center gap-2">
                                 <input type="text" class="form-control shadow-none input-endbit-yard" value="0"
-                                    style="{{ $inputStyle }} max-width: 115px;">
-                                <span class="text-nowrap me-1" style="font-size: 11px; font-weight: 600; color: #64748b;">- Yard</span>
+                                    style="background-color: #f4f7fa; border: 1px solid #d1d9e6; border-radius: 6px; font-size: 12px; color: #475569; height: 34px; max-width: 115px;">
+                                <span class="text-nowrap me-1"
+                                    style="font-size: 11px; font-weight: 600; color: #64748b;">- Yard</span>
                                 <input type="text" class="form-control shadow-none input-endbit-inch" value="0"
-                                    style="{{ $inputStyle }} max-width: 115px;">
-                                <span class="text-nowrap me-2" style="font-size: 11px; font-weight: 600; color: #64748b;">- Inch</span>
+                                    style="background-color: #f4f7fa; border: 1px solid #d1d9e6; border-radius: 6px; font-size: 12px; color: #475569; height: 34px; max-width: 115px;">
+                                <span class="text-nowrap me-2"
+                                    style="font-size: 11px; font-weight: 600; color: #64748b;">- Inch</span>
                                 <button type="button"
                                     class="btn btn-add-endbit p-0 border-0 rounded-circle d-inline-flex align-items-center justify-content-center text-white"
                                     style="width: 24px; height: 24px; background-color: #3b93b8; flex-shrink: 0;">
+                                    <!-- <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12"
+                                        viewBox="0 0 16 16" fill="none"
+                                        stroke="currentColor" stroke-width="2"
+                                        stroke-linecap="round">
+                                        <path d="M8 3v10M3 8h10"/>
+                                    </svg> -->
                                     <i class="bi bi-plus-lg" style="font-size: 12px;"></i>
                                 </button>
                             </div>
@@ -278,8 +418,6 @@
 @section('extrascript')
     <script>
         $(document).ready(function() {
-            var inputStyle = 'background-color: #f4f7fa; border: 1px solid #d1d9e6; border-radius: 6px; font-size: 12px; color: #475569; height: 34px;';
-
             function updateClock() {
                 var now = new Date();
                 var optionsDate = {
@@ -291,62 +429,18 @@
                 var formattedDate = now.toLocaleDateString('en-US', optionsDate);
                 var parts = formattedDate.replace(',', '').split(' ');
                 var customDate = parts[0] + ', ' + parts[1] + ' ' + parts[2] + ' ' + parts[3];
+
+                var hours = String(now.getHours()).padStart(2, '0');
+                var minutes = String(now.getMinutes()).padStart(2, '0');
+                var seconds = String(now.getSeconds()).padStart(2, '0');
+                var formattedTime = hours + ':' + minutes + ':' + seconds;
+
                 $('#live-date').text(customDate);
+                $('#live-clock').text(formattedTime);
             }
             updateClock();
             setInterval(updateClock, 1000);
 
-            // ---------- Template ----------
-            function endbitRowTemplate() {
-                return `
-                    <div class="endbit-row d-flex align-items-center gap-2">
-                        <input type="text" class="form-control shadow-none input-endbit-yard" value="0" style="${inputStyle} max-width: 115px;">
-                        <span class="text-nowrap me-1" style="font-size: 11px; font-weight: 600; color: #64748b;">- Yard</span>
-                        <input type="text" class="form-control shadow-none input-endbit-inch" value="0" style="${inputStyle} max-width: 115px;">
-                        <span class="text-nowrap me-2" style="font-size: 11px; font-weight: 600; color: #64748b;">- Inch</span>
-                        <button type="button" class="btn btn-add-endbit p-0 border-0 rounded-circle d-inline-flex align-items-center justify-content-center text-white" style="width: 24px; height: 24px; background-color: #3b93b8; flex-shrink: 0;">
-                            <i class="bi bi-plus-lg" style="font-size: 12px;"></i>
-                        </button>
-                    </div>`;
-            }
-
-            function shadeTemplate() {
-                return `
-                    <div class="shade-item pt-4 mt-4" style="border-top: 1px solid #e2e8f0;">
-                        <div class="d-flex justify-content-end mb-2">
-                            <button type="button" class="btn btn-remove-shade p-0 border-0 text-danger" style="font-size: 11px; font-weight: 600;">
-                                <i class="bi bi-trash"></i> Remove Shade
-                            </button>
-                        </div>
-                        <div class="row g-4 mb-4">
-                            <div class="col-md-4">
-                                <label class="form-label mb-2" style="font-size: 11px; font-weight: 700; color: #334155;">Shade</label>
-                                <input type="text" class="form-control shadow-none input-shade" value="" style="${inputStyle} max-width: 280px;">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label mb-2" style="font-size: 11px; font-weight: 700; color: #334155;">Actual Plies</label>
-                                <input type="text" class="form-control shadow-none input-actual-plies" value="0" style="${inputStyle} max-width: 280px;">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label mb-2" style="font-size: 11px; font-weight: 700; color: #334155;">Damages</label>
-                                <div class="d-flex align-items-center gap-2">
-                                    <input type="text" class="form-control shadow-none input-damages-yard" value="0" style="${inputStyle} max-width: 115px;">
-                                    <span class="text-nowrap me-1" style="font-size: 11px; font-weight: 600; color: #64748b;">- Yard</span>
-                                    <input type="text" class="form-control shadow-none input-damages-inch" value="0" style="${inputStyle} max-width: 115px;">
-                                    <span class="text-nowrap" style="font-size: 11px; font-weight: 600; color: #64748b;">- Inch</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="mb-4">
-                            <label class="form-label mb-2" style="font-size: 11px; font-weight: 700; color: #334155;">Endbits Generated</label>
-                            <div class="endbits-list d-flex flex-column gap-2">
-                                ${endbitRowTemplate()}
-                            </div>
-                        </div>
-                    </div>`;
-            }
-
-            // ---------- Endbits ----------
             function syncEndbitButtons($list) {
                 var $rows = $list.find('.endbit-row');
                 $rows.each(function(index) {
@@ -367,7 +461,18 @@
 
             $(document).on('click', '.btn-add-endbit', function() {
                 var $list = $(this).closest('.endbits-list');
-                $list.append(endbitRowTemplate());
+                var endbitRow = `
+                    <div class="endbit-row d-flex align-items-center gap-2">
+                        <input type="text" class="form-control shadow-none input-endbit-yard" value="0" style="background-color: #f4f7fa; border: 1px solid #d1d9e6; border-radius: 6px; font-size: 12px; color: #475569; height: 34px; max-width: 115px;">
+                        <span class="text-nowrap me-1" style="font-size: 11px; font-weight: 600; color: #64748b;">- Yard</span>
+                        <input type="text" class="form-control shadow-none input-endbit-inch" value="0" style="background-color: #f4f7fa; border: 1px solid #d1d9e6; border-radius: 6px; font-size: 12px; color: #475569; height: 34px; max-width: 115px;">
+                        <span class="text-nowrap me-2" style="font-size: 11px; font-weight: 600; color: #64748b;">- Inch</span>
+                        <button type="button" class="btn btn-add-endbit p-0 border-0 rounded-circle d-inline-flex align-items-center justify-content-center text-white" style="width: 24px; height: 24px; background-color: #3b93b8; flex-shrink: 0;">
+                            <i class="bi bi-plus-lg" style="font-size: 12px;"></i>
+                        </button>
+                    </div>
+                `;
+                $list.append(endbitRow);
                 syncEndbitButtons($list);
             });
 
@@ -377,16 +482,31 @@
                 syncEndbitButtons($list);
             });
 
-            // ---------- Shade ----------
             $('#btnAddNewShade').on('click', function() {
-                $('#shadeContainer').append(shadeTemplate());
+                var newShadeBlock = `
+                    <div class="shade-item pt-4 mt-4" style="border-top: 1px solid #e2e8f0;">
+                        <div class="d-flex justify-content-end mb-2">
+                            <button type="button" class="btn btn-remove-shade p-0 border-0 text-danger" style="font-size: 11px; font-weight: 600;">
+                                <i class="bi bi-trash"></i> Remove Shade
+                            </button>
+                        </div>
+                        <div class="row g-4 mb-4">
+                            <div class="col-md-4">
+                                <label class="form-label mb-2" style="font-size: 11px; font-weight: 700; color: #334155;">Shade</label>
+                                <input type="text" class="form-control shadow-none input-shade" value="" style="background-color: #f4f7fa; border: 1px solid #d1d9e6; border-radius: 6px; font-size: 12px; color: #475569; height: 34px; max-width: 280px;">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label mb-2" style="font-size: 11px; font-weight: 700; color: #334155;">Actual Plies</label>
+                                <input type="text" class="form-control shadow-none input-actual-plies" value="0" style="background-color: #f4f7fa; border: 1px solid #d1d9e6; border-radius: 6px; font-size: 12px; color: #475569; height: 34px; max-width: 280px;">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label mb-2" style="font-size: 11px; font-weight: 700; color: #334155;">Damages</label>
+                                `;
+                $('#shadeContainer').append(newShadeBlock);
             });
-
             $(document).on('click', '.btn-remove-shade', function() {
                 $(this).closest('.shade-item').remove();
             });
-
-            // ---------- Save ----------
             $('#btnSaveChanges').on('click', function() {
                 var resultData = [];
                 $('.shade-item').each(function() {
@@ -412,3 +532,8 @@
         });
     </script>
 @endsection
+
+
+sebelum tombol actual plies logo play ditekan, untuk semua inputan di disable dengan warna abu abu, displice details untuk isiannya akan tampil misal 
+ditekan add splice, add splice juga harus ditekan play dulu baru bisa tambah, disamping wastage ada tombol + dan - seperti konsep dibagian end bits 
+dan setelah diplay tombolnya, untuk warna input jadi warna #eef8fc
