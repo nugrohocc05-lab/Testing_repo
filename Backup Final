@@ -24,8 +24,35 @@
             cursor: not-allowed;
         }
 
-        #btnPlay.started {
-            background-color: #16a34a !important;
+        /* Top bar: putih saat stop, ungu saat play */
+        #topBar {
+            transition: background-color .2s;
+        }
+
+        #topBar.running {
+            background-color: #18009e !important;
+        }
+
+        #topBar.running .bar-text {
+            color: #ffffff !important;
+        }
+
+        #btnPlay.playing {
+            background-color: #ffffff !important;
+            color: #18009e !important;
+        }
+
+        /* Use Suggested Endbits: abu saat stop, biru saat play */
+        .suggest-box {
+            background-color: #e8e9ec;
+            border: 1px solid #d1d5db;
+            height: 36px;
+            transition: background-color .2s;
+        }
+
+        .suggest-box.active {
+            background-color: #eef8fc;
+            border-color: #d1d9e6;
         }
     </style>
 @endsection
@@ -38,19 +65,19 @@
 
 @section('content')
     <div class="container-fluid px-4 py-4">
-        <div
+        <div id="topBar"
             class="bg-white rounded-3 shadow-sm px-4 py-3 mb-4 d-flex flex-wrap justify-content-between align-items-center gap-2">
             <div class="d-flex align-items-center gap-2" style="font-size: 12px;">
-                <a href="{{ route('intellocutlayerman_home') }}" class="text-decoration-none d-inline-flex align-items-center gap-2"
+                <a href="{{ route('intellocutlayerman_home') }}" class="bar-text text-decoration-none d-inline-flex align-items-center gap-2"
                     style="color: #64748b; font-weight: 500;">
                     <i class="bi bi-grid" style="font-size: 15px;"></i>
                     <span>Dashboard</span>
                 </a>
-                <i class="bi bi-chevron-right mx-1" style="color: #94a3b8; font-size: 12px;"></i>
-                <span style="color: #16a34a; font-weight: 600;">{{ $header->order_number }}</span>
+                <i class="bar-text bi bi-chevron-right mx-1" style="color: #94a3b8; font-size: 12px;"></i>
+                <span class="bar-text" style="color: #16a34a; font-weight: 600;">{{ $header->order_number }}</span>
             </div>
             <div class="d-flex align-items-center gap-2">
-                <span style="font-size: 15px; font-weight: 700; color: #1e293b;">Actual Plies {{ $actualPlies }}/{{ $plannedPlies }}</span>
+                <span class="bar-text" style="font-size: 15px; font-weight: 700; color: #1e293b;">Actual Plies {{ $actualPlies }}/{{ $plannedPlies }}</span>
                 <button type="button" id="btnPlay"
                     class="btn p-0 border-0 rounded-circle d-inline-flex align-items-center justify-content-center text-white"
                     style="width: 24px; height: 24px; background-color: #18009e;">
@@ -173,8 +200,7 @@
                             <a href="#" class="text-decoration-none" style="font-size: 11px; color: #3b93b8; font-weight: 500;">Refresh</a>
                         </div>
                         <div class="p-4">
-                            <div class="d-flex align-items-stretch rounded-2 overflow-hidden"
-                                style="background-color: #e8e9ec; border: 1px solid #d1d5db; height: 36px;">
+                            <div class="suggest-box d-flex align-items-stretch rounded-2 overflow-hidden">
                                 <div class="flex-grow-1 d-flex align-items-center px-2 gap-1">
                                     <span class="d-inline-flex align-items-center gap-2 px-2 py-1 rounded-1 bg-white"
                                         style="font-size: 11px; color: #475569; border: 1px solid #e2e8f0; line-height: 1;">
@@ -183,7 +209,7 @@
                                     </span>
                                 </div>
                                 <button type="button" class="btn lay-action border-0 rounded-0 d-flex align-items-center justify-content-center px-3"
-                                    style="border-left: 1px solid #d1d5db !important; background-color: #e8e9ec; color: #64748b;" disabled>
+                                    style="border-left: 1px solid #d1d5db !important; background-color: transparent; color: #64748b;" disabled>
                                     <i class="bi bi-chevron-down" style="font-size: 12px;"></i>
                                 </button>
                             </div>
@@ -322,12 +348,20 @@
             updateClock();
             setInterval(updateClock, 1000);
 
-            // ---------- Play: buka semua input ----------
+            // ---------- Play / Stop ----------
+            function setRunning(on) {
+                started = on;
+                $('.lay-input, .lay-action').prop('disabled', !on);
+                $('#topBar').toggleClass('running', on);
+                $('.suggest-box').toggleClass('active', on);
+                $('#btnPlay').toggleClass('playing', on)
+                    .attr('title', on ? 'Stop' : 'Play')
+                    .html(on
+                        ? '<i class="bi bi-stop-fill" style="font-size: 13px;"></i>'
+                        : '<i class="bi bi-play-fill" style="font-size: 13px; margin-left: 2px;"></i>');
+            }
             $('#btnPlay').on('click', function() {
-                if (started) return;
-                started = true;
-                $('.lay-input, .lay-action').prop('disabled', false);
-                $(this).addClass('started').attr('title', 'Started');
+                setRunning(!started);
             });
 
             // ---------- Templates ----------
@@ -356,21 +390,22 @@
 
             function spliceRowTemplate() {
                 return `
-                    <div class="splice-row row g-3 px-4 py-3 align-items-end">
-                        <div class="col-lg-1 col-md-4">
+                    <div class="splice-row d-flex flex-wrap align-items-end gap-4 px-4 py-3" style="border-bottom: 1px solid #f1f5f9;">
+                        <div style="width: 56px;">
                             <label class="form-label mb-2" style="font-size: 11px; font-weight: 600; color: #475569;">Heading</label>
-                            <div class="splice-heading d-flex align-items-center" style="height: 38px; font-size: 13px; font-weight: 700; color: #1e293b;">1</div>
+                            <div class="splice-heading d-flex align-items-center" style="height: 34px; font-size: 13px; font-weight: 700; color: #1e293b;">1</div>
                         </div>
-                        <div class="col-lg-4 col-md-4">
+                        <div>
                             <label class="form-label mb-2" style="font-size: 11px; font-weight: 600; color: #475569;">Length</label>
                             <div class="d-flex align-items-center gap-2">
-                                ${yardInch('input-splice-length-yard', 'input-splice-length-inch', '0', '01', 115)}
+                                ${yardInch('input-splice-length-yard', 'input-splice-length-inch', '0', '01', 90)}
                             </div>
                         </div>
-                        <div class="col-lg-5 col-md-4">
+                        <div>
                             <label class="form-label mb-2" style="font-size: 11px; font-weight: 600; color: #475569;">Wastage</label>
                             <div class="d-flex align-items-center gap-2">
-                                ${yardInch('input-splice-wastage-yard', 'input-splice-wastage-inch', '0', '01', 115)}
+                                ${yardInch('input-splice-wastage-yard', 'input-splice-wastage-inch', '0', '01', 90)}
+                                <span class="ms-1"></span>
                                 ${plusButton('btn-add-splice')}
                             </div>
                         </div>
