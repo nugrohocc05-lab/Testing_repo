@@ -1,43 +1,8 @@
-function laystarted($id)
-{
-    // detail yang diklik
-    $detail = IntellocutShellDetail::findOrFail($id);
-
-    // header
-    $shellHeader = IntellocutShellHeader::findOrFail($detail->idshellheader);
-    $header      = IntellocutHeader::findOrFail($shellHeader->idheader);
-
-    // data dari intellocut_details (qty, fabric, color) untuk shell ini
-    $order = IntellocutDetail::where('idheader', $header->id)
-        ->where('idshell', $detail->idshell)
-        ->first();
-
-    // master
-    $styleName = optional(MasterIntellocutStyle::where('idstyle', $header->idstyle)->first())->nmstyle
-        ?? $header->idstyle;
-    $shellName = optional(MasterIntellocutShell::find($detail->idshell))->nmshell
-        ?? $detail->idshell;
-    $colorName = optional(MasterIntellocutColor::find(optional($order)->idcolor))->nmcolor
-        ?? optional($order)->idcolor;
-
-    return view('cutting::intellocutlayerman.inputlayerman', compact(
-        'header', 'detail', 'order', 'styleName', 'shellName', 'colorName'
-    ));
-}
-
-
-
 @extends('layouts.masternew')
 @section('extracss')
 @endsection
 
 @php
-    // Satuan data diasumsikan inch (1 yard = 36 inch). Sesuaikan jika berbeda.
-    $widthYard  = intdiv((int) ($detail->width ?? 0), 36);
-    $widthInch  = fmod((float) ($detail->width ?? 0), 36);
-    $lengthYard = intdiv((int) ($detail->material_length ?? 0), 36);
-    $lengthInch = fmod((float) ($detail->material_length ?? 0), 36);
-
     $plannedPlies = $detail->plies ?? 0;
     $actualPlies  = $detail->ratio ?? 0;
     $cutQty       = ($order->qty ?? 0) + ($order->qty_allowance ?? 0);
@@ -110,11 +75,11 @@ function laystarted($id)
                     </div>
                     <div class="col-md-2">
                         <div class="mb-1" style="font-size: 11px; color: #64748b; font-weight: 500;">Lay Remarks</div>
-                        <div style="font-size: 13px; font-weight: 500; color: #475569;">{{ $detail->remarks ?? '-' }}</div>
+                        <div style="font-size: 13px; font-weight: 500; color: #475569;">-</div>
                     </div>
                     <div class="col-md-7">
                         <div class="mb-1" style="font-size: 11px; color: #64748b; font-weight: 500;">Order Remarks</div>
-                        <div style="font-size: 13px; font-weight: 500; color: #475569;">{{ $header->remarks ?? '-' }}</div>
+                        <div style="font-size: 13px; font-weight: 500; color: #475569;">-</div>
                     </div>
                 </div>
 
@@ -122,9 +87,9 @@ function laystarted($id)
                     <div class="col-lg-4 col-md-6">
                         <label class="form-label mb-2" style="font-size: 11px; font-weight: 600; color: #475569;">Material Width</label>
                         <div class="d-flex align-items-center gap-2">
-                            <input type="text" class="form-control shadow-none" id="materialWidthYard" value="{{ $widthYard }}" style="{{ $inputStyle }}">
+                            <input type="text" class="form-control shadow-none" value="0" style="{{ $inputStyle }}">
                             <span class="text-nowrap me-2" style="font-size: 11px; font-weight: 600; color: #64748b;">- Yard</span>
-                            <input type="text" class="form-control shadow-none" id="materialWidthInch" value="{{ $widthInch }}" style="{{ $inputStyle }}">
+                            <input type="text" class="form-control shadow-none" value="01" style="{{ $inputStyle }}">
                             <span class="text-nowrap" style="font-size: 11px; font-weight: 600; color: #64748b;">- Inch</span>
                         </div>
                     </div>
@@ -132,9 +97,9 @@ function laystarted($id)
                     <div class="col-lg-4 col-md-6">
                         <label class="form-label mb-2" style="font-size: 11px; font-weight: 600; color: #475569;">Material Length</label>
                         <div class="d-flex align-items-center gap-2">
-                            <input type="text" class="form-control shadow-none" id="materialLengthYard" value="{{ $lengthYard }}" style="{{ $inputStyle }}">
+                            <input type="text" class="form-control shadow-none" value="0" style="{{ $inputStyle }}">
                             <span class="text-nowrap me-2" style="font-size: 11px; font-weight: 600; color: #64748b;">- Yard</span>
-                            <input type="text" class="form-control shadow-none" id="materialLengthInch" value="{{ $lengthInch }}" style="{{ $inputStyle }}">
+                            <input type="text" class="form-control shadow-none" value="01" style="{{ $inputStyle }}">
                             <span class="text-nowrap" style="font-size: 11px; font-weight: 600; color: #64748b;">- Inch</span>
                         </div>
                     </div>
@@ -147,7 +112,7 @@ function laystarted($id)
                             <div class="d-flex align-items-center gap-2">
                                 <input type="text" class="form-control shadow-none" value="0" style="{{ $inputStyleDisabled }}">
                                 <span class="text-nowrap me-2" style="font-size: 11px; font-weight: 600; color: #64748b;">- Yard</span>
-                                <input type="text" class="form-control shadow-none" value="0" style="{{ $inputStyleDisabled }}">
+                                <input type="text" class="form-control shadow-none" value="01" style="{{ $inputStyleDisabled }}">
                                 <span class="text-nowrap" style="font-size: 11px; font-weight: 600; color: #64748b;">- Inch</span>
                             </div>
                         </div>
@@ -217,14 +182,14 @@ function laystarted($id)
                 <div class="col-lg-2 col-md-6">
                     <div class="rounded-2 px-3 py-2 h-100" style="background-color: #f3f7fa; border-left: 3px solid #3b93b8;">
                         <div style="font-size: 11px; color: #64748b; font-weight: 500;">Planned Plies</div>
-                        <div style="font-size: 13px; font-weight: 700; color: #1e293b; margin-top: 2px;">{{ $plannedPlies }}</div>
+                        <div style="font-size: 13px; font-weight: 700; color: #1e293b; margin-top: 2px;">0</div>
                     </div>
                 </div>
 
                 <div class="col-lg-2 col-md-6">
                     <div class="rounded-2 px-3 py-2 h-100" style="background-color: #f3f7fa; border-left: 3px solid #3b93b8;">
                         <div style="font-size: 11px; color: #64748b; font-weight: 500;">Actual Plies</div>
-                        <div style="font-size: 13px; font-weight: 700; color: #1e293b; margin-top: 2px;" id="summaryActualPlies">{{ $actualPlies }}</div>
+                        <div style="font-size: 13px; font-weight: 700; color: #1e293b; margin-top: 2px;"">0</div>
                     </div>
                 </div>
 
@@ -234,7 +199,7 @@ function laystarted($id)
                         <div class="d-flex align-items-center gap-2">
                             <input type="text" class="form-control shadow-none" value="0" style="{{ $inputStyle }}">
                             <span class="text-nowrap me-2" style="font-size: 11px; font-weight: 600; color: #64748b;">- Yard</span>
-                            <input type="text" class="form-control shadow-none" value="0" style="{{ $inputStyle }}">
+                            <input type="text" class="form-control shadow-none" value="01" style="{{ $inputStyle }}">
                             <span class="text-nowrap" style="font-size: 11px; font-weight: 600; color: #64748b;">- Inch</span>
                         </div>
                     </div>
@@ -256,7 +221,7 @@ function laystarted($id)
                         </div>
                         <div class="col-md-4">
                             <label class="form-label mb-2" style="font-size: 11px; font-weight: 700; color: #334155;">Actual Plies</label>
-                            <input type="text" class="form-control shadow-none input-actual-plies" value="{{ $actualPlies }}"
+                            <input type="text" class="form-control shadow-none input-actual-plies" value="5"
                                 style="{{ $inputStyle }} max-width: 280px;">
                         </div>
                         <div class="col-md-4">
@@ -265,7 +230,7 @@ function laystarted($id)
                                 <input type="text" class="form-control shadow-none input-damages-yard" value="0"
                                     style="{{ $inputStyle }} max-width: 115px;">
                                 <span class="text-nowrap me-1" style="font-size: 11px; font-weight: 600; color: #64748b;">- Yard</span>
-                                <input type="text" class="form-control shadow-none input-damages-inch" value="0"
+                                <input type="text" class="form-control shadow-none input-damages-inch" value="01"
                                     style="{{ $inputStyle }} max-width: 115px;">
                                 <span class="text-nowrap" style="font-size: 11px; font-weight: 600; color: #64748b;">- Inch</span>
                             </div>
@@ -419,34 +384,11 @@ function laystarted($id)
 
             $(document).on('click', '.btn-remove-shade', function() {
                 $(this).closest('.shade-item').remove();
-                updateSummaryPlies();
             });
-
-            function updateSummaryPlies() {
-                var total = 0;
-                $('.input-actual-plies').each(function() {
-                    total += parseInt($(this).val(), 10) || 0;
-                });
-                $('#summaryActualPlies').text(total);
-            }
-            $(document).on('input', '.input-actual-plies', updateSummaryPlies);
-            updateSummaryPlies();
 
             // ---------- Save ----------
             $('#btnSaveChanges').on('click', function() {
-                var resultData = {
-                    shell_detail_id: {{ $detail->id }},
-                    material_width: {
-                        yard: $('#materialWidthYard').val(),
-                        inch: $('#materialWidthInch').val()
-                    },
-                    material_length: {
-                        yard: $('#materialLengthYard').val(),
-                        inch: $('#materialLengthInch').val()
-                    },
-                    shades: []
-                };
-
+                var resultData = [];
                 $('.shade-item').each(function() {
                     var endbitsArray = [];
                     $(this).find('.endbit-row').each(function() {
@@ -455,7 +397,7 @@ function laystarted($id)
                             inch: $(this).find('.input-endbit-inch').val()
                         });
                     });
-                    resultData.shades.push({
+                    resultData.push({
                         shade: $(this).find('.input-shade').val(),
                         actual_plies: $(this).find('.input-actual-plies').val(),
                         damages: {
