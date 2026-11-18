@@ -1,198 +1,61 @@
-<?php
-
-namespace Modules\Cutting\Http\Controllers;
-
-use App\Http\Controllers\Controller;
-use App\Http\Models\IntellocutDetail;
-use App\Http\Models\IntellocutHeader;
-use App\Http\Models\IntellocutShellDetail;
-use App\Http\Models\IntellocutShellHeader;
-use App\Http\Models\MasterIntellocutColor;
-use App\Http\Models\MasterIntellocutShell;
-use App\Http\Models\MasterIntellocutStyle;
-use DB;
-
-class IntellocutLayermanController extends Controller
+function index()
 {
-    protected $m_modul = 'cutting';
+    $data = IntellocutHeader::whereIn('id', function ($query) {
+        $query->select('idheader')
+            ->from((new IntellocutShellHeader())->getTable());
+    })->get();
 
-    function __construct()
-    {
-        $this->middleware('auth');
-    }
+    // shell header per header
+    $shellHeaders = IntellocutShellHeader::whereIn('idheader', $data->pluck('id'))
+        ->get()
+        ->groupBy('idheader');
 
-    function index()
-    {
-        $mistyle = (new MasterIntellocutStyle())->getTable();
-        $mishell = (new MasterIntellocutShell())->getTable();
-        $micolor = (new MasterIntellocutColor())->getTable();
+    // shell detail: idshellheader sama dengan id shell header, idtable sudah terisi
+    $shellDetails = IntellocutShellDetail::whereIn(
+            'idshellheader',
+            $shellHeaders->flatten()->pluck('id')
+        )
+        ->whereNotNull('idtable')
+        ->where('idtable', '<>', '')
+        ->orderBy('lay')
+        ->get()
+        ->groupBy('idshellheader');
 
-        $data = IntellocutHeader::whereIn('id', function ($query) {
-            $query->select('idheader')
-                ->from((new IntellocutShellHeader())->getTable());
-        })->get();
+    $data->each(function ($h) use ($shellHeaders, $shellDetails) {
+        $ids = ($shellHeaders[$h->id] ?? collect())->pluck('id');
 
-        return view('cutting::intellocutlayerman.index', compact('data'));
-    }
+        // gabungkan detail, group by lay, ambil satu per group
+        $h->lay_groups = $ids
+            ->flatMap(fn ($id) => $shellDetails[$id] ?? collect())
+            ->groupBy('lay')
+            ->map(fn ($rows) => $rows->first());
+    });
 
-    function layassign()
-    {
-        return view('cutting::intellocutlayerman.layassign');
-    }
-
-    function laystarted($id)
-    {
-        $data = IntellocutDetail::with('header')
-            ->where('id',$id)
-            ->first();
-
-        return view('cutting::intellocutlayerman.inputlayerman', compact('data'));
-    }
+    return view('cutting::intellocutlayerman.index', compact('data'));
 }
 
 
-@extends('layouts.masternew')
-@section('extracss')
 
-@endsection
+@foreach ($data as $d)
+    @php $first = $d->lay_groups->first(); @endphp
+    @continue(!$first)
 
-@section('content')
-    <div class="container-fluid p-5">
-        <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
-            <div>
-                <h1 class="mb-0" style="font-size: 24px; font-weight: 700; color: #475569;">
-                    Good Morning, <span style="color: #18009e;">{{ session('user')->name}}</span>
-                </h1>
-                <p class="mb-0" style="font-size: 13px; color: #475569;">Here what's happening as Layerman in <b>Table X (PSS 1)</b> </p>
+    {{-- header card --}}
+    ... <span ...>{{ $d->lay_groups->count() }}</span> ...
+    ... {{ $first->idshell }} ...
+    ... {{ $first->idcolor }} ...
+
+    {{-- collapse dipindah ke luar loop, supaya id tidak duplikat --}}
+    <div class="collapse" id="orderDetail-{{ $d->id }}">
+        @foreach ($d->lay_groups as $lay => $detail)
+            <div class="d-flex align-items-stretch pb-3">
+                ...
+                <a href="{{ route('intellocutlayerman_lay_started', ['id' => $detail->id]) }}" class="text-decoration-none">
+                    ...
+                    <div style="font-size: 20px; font-weight: 700;">L-{{ $lay }}</div>
+                    ...
+                </a>
             </div>
-            <div class="d-flex align-items-center gap-3">
-                <div class="text-end" style="line-height: 1.2;">
-                    <div style="font-size: 13px; font-weight: 700; color: #475569;"><span id="live-day"></span></div>
-                    <div style="font-size: 12px; color: #64748b;"><span id="live-date"></span></div>
-                </div>
-
-                <div style="font-size: 38px; font-weight: 700; color: #475569; letter-spacing: 0.5px;" id="time-now"><span id="live-clock"></span></div>
-            </div>
-        </div>
-
-        @foreach ($data as $d)
-            <div class="mb-3">
-                <div class="bg-white rounded-3 shadow-sm overflow-hidden" role="button" data-bs-toggle="collapse" data-bs-target="#orderDetail-{{$d->id}}" aria-expanded="true" aria-controls="orderDetail1">
-                    <div class="d-inline-flex align-items-center text-white" style="background-color: #18009e; border-bottom-right-radius: 36px; padding: 6px 42px 6px 24px;">
-                        <span style="font-size: 26px; font-weight: 700; line-height: 1;">{{$d->detail->count()}}</span>
-                        <span class="ms-5" style="font-size: 11px; color: #e2e8f0;">{{$d->created_at}} </span>
-                        {{-- #10:19:27, Nov 5, 2026 --}}
-                    </div>
-                    <div class="row g-3 px-4 py-3 align-items-start">
-                        <div class="col-md-3">
-                            <div style="font-size: 11px; color: #64748b;">Order</div>
-                            <div style="font-size: 13px; font-weight: 500; color: #475569; line-height: 1.3;">{{$d->order_number}}</div>
-                        </div>
-                        <div class="col-md-3">
-                            <div style="font-size: 11px; color: #64748b;">Style</div>
-                            <div style="font-size: 13px; font-weight: 500; color: #475569;">{{$d->idstyle}}</div>
-                        </div>
-                        <div class="col-md-3">
-                            <div style="font-size: 11px; color: #64748b;">Parts</div>
-                            <div style="font-size: 13px; font-weight: 500; color: #475569;">{{$d->detail->first()->idshell}}</div>
-                        </div>
-                        <div class="col-md-3">
-                            <div style="font-size: 11px; color: #64748b;">Colors</div>
-                            <div style="font-size: 13px; font-weight: 500; color: #475569;">{{$d->detail->first()->idcolor}}</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            @foreach ($d->detail as $detail)
-            <div class="collapse" id="orderDetail-{{$d->id}}">
-                <div class="d-flex align-items-stretch pb-3">
-                    <div class="d-flex align-items-center justify-content-center" style="width: 110px; flex-shrink: 0;">
-                        <div class="d-flex flex-column justify-content-between align-items-center py-2"
-                            style="width: 24px; height: 50px; background-color: #dce3ec; border-radius: 12px;">
-                            <span class="rounded-circle" style="width: 12px; height: 12px; background-color: #18009e;"></span>
-                            <span class="rounded-circle" style="width: 5px; height: 5px; background-color: #ffffff;"></span>
-                            <span class="rounded-circle" style="width: 5px; height: 5px; background-color: #ffffff;"></span>
-                            <span class="rounded-circle" style="width: 5px; height: 5px; background-color: #ffffff;"></span>
-                            <span class="rounded-circle" style="width: 12px; height: 12px; background-color: #18009e;"></span>
-                        </div>
-                    </div>
-
-
-                        <div class="flex-grow-1 d-flex flex-column gap-3" class="layerman-detail">
-                            <a href="{{route('intellocutlayerman_lay_started', ['id' => $detail->id])}}" class="text-decoration-none">
-                            <div class="bg-white rounded-3 shadow-sm overflow-hidden d-flex align-items-stretch">
-                                <div class="d-flex flex-column justify-content-center align-items-center text-white text-center px-3 py-3" style="background-color: #18009e; width: 140px; flex-shrink: 0;">
-                                    <div style="font-size: 20px; font-weight: 700; line-height: 1.1;">L-6</div>
-                                    <div style="font-size: 15px; font-weight: 600; margin-top: 2px;">GROUP B</div>
-                                </div>
-                                <div class="row g-2 flex-grow-1 align-items-center px-4 py-3 m-0">
-                                    <div class="col">
-                                        <div style="font-size: 11px; color: #64748b;">Material Lenght</div>
-                                        <div style="font-size: 13px; font-weight: 500; color: #475569;">1.4100</div>
-                                    </div>
-                                    <div class="col">
-                                        <div style="font-size: 11px; color: #64748b;">Material Widht</div>
-                                        <div style="font-size: 13px; font-weight: 500; color: #475569;">64.0008</div>
-                                    </div>
-                                    <div class="col-auto px-4">
-                                        <div style="font-size: 11px; color: #64748b;">Plies</div>
-                                        <div style="font-size: 13px; font-weight: 500; color: #475569;">0/10</div>
-                                    </div>
-                                    <div class="col">
-                                        <div style="font-size: 11px; color: #64748b;">Status</div>
-                                        <div style="font-size: 13px; font-weight: 500; color: #475569;">Not Started Yet</div>
-                                    </div>
-                                    <div class="col-auto text-center px-3">
-                                        <div style="font-size: 13px; color: #94a3b8;">1-32 <span class="mx-1">|</span> 1-40</div>
-                                    </div>
-                                </div>
-                            </div>
-                            </a>
-                        </div>
-
-                </div>
-            </div>
-            @endforeach
         @endforeach
     </div>
-    @include('layouts.loading')
-@endsection
-
-@section('extrascript')
-    <script>
-        $(document).ready(function() {
-            function updateClock() {
-                var now = new Date();
-                var optionsDate = {
-                    weekday: 'long',
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric'
-                };
-                var formattedDate = now.toLocaleDateString('en-US', optionsDate);
-                var parts = formattedDate.replace(',', '').split(' ');
-                var customDay = parts[0];
-                var customDate = parts[1] + ' ' + parts[2] + ' ' + parts[3];
-
-                var hours = String(now.getHours()).padStart(2, '0');
-                var minutes = String(now.getMinutes()).padStart(2, '0');
-                var seconds = String(now.getSeconds()).padStart(2, '0');
-                var formattedTime = hours + ':' + minutes + ':' + seconds;
-
-                $('#live-day').text(customDay);
-                $('#live-date').text(customDate);
-                $('#live-clock').text(formattedTime);
-            }
-            updateClock();
-            setInterval(updateClock, 1000);
-
-            // $('.layerman-detail').on('click', function(){
-            //     location.
-            // });
-        });
-    </script>
-@endsection
-
-
-Detail mengambil dari shell details dengan melihat idshellheader yang sama dengan id di table shell header, lalu cek 
-untuk idtable nya sudah terisi dan cek kolom lay itu adalah jumlah detail yang tampil, tapi nilai nya misal ada yang sama berarti grouping, yang ditampilkan satu saja
+@endforeach
