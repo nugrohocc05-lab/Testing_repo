@@ -1,0 +1,96 @@
+<?php
+
+namespace App\Http\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class IntellocutLayermanLay extends Model
+{
+    protected $table = 'intellocut_layerman_lays';
+    protected $guarded = [];
+    protected $casts = [
+        'started_at' => 'datetime',
+        'stopped_at' => 'datetime',
+    ];
+
+    const STATUS_LABELS = [
+        'not_started' => 'Not Started Yet',
+        'running'     => 'Running',
+        'stopped'     => 'Stopped',
+        'done'        => 'Done',
+    ];
+
+    public function splices()
+    {
+        return $this->hasMany(IntellocutLayermanSplice::class, 'idlayerman');
+    }
+
+    public function shades()
+    {
+        return $this->hasMany(IntellocutLayermanShade::class, 'idlayerman');
+    }
+
+    public function getStatusLabelAttribute()
+    {
+        return self::STATUS_LABELS[$this->status] ?? $this->status;
+    }
+}
+
+<?php
+
+namespace App\Http\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class IntellocutLayermanSplice extends Model
+{
+    protected $table = 'intellocut_layerman_splices';
+    protected $guarded = [];
+    public $timestamps = false;
+
+    public function layerman()
+    {
+        return $this->belongsTo(IntellocutLayermanLay::class, 'idlayerman');
+    }
+}
+
+<?php
+
+namespace App\Http\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class IntellocutLayermanShade extends Model
+{
+    protected $table = 'intellocut_layerman_shades';
+    protected $guarded = [];
+    public $timestamps = false;
+
+    public function layerman()
+    {
+        return $this->belongsTo(IntellocutLayermanLay::class, 'idlayerman');
+    }
+
+    public function endbits()
+    {
+        return $this->hasMany(IntellocutLayermanEndbit::class, 'idshade');
+    }
+}
+
+<?php
+
+namespace App\Http\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class IntellocutLayermanEndbit extends Model
+{
+    protected $table = 'intellocut_layerman_endbits';
+    protected $guarded = [];
+    public $timestamps = false;
+
+    public function shade()
+    {
+        return $this->belongsTo(IntellocutLayermanShade::class, 'idshade');
+    }
+}
