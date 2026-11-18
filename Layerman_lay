@@ -1,0 +1,37 @@
+<?php
+
+namespace App\Http\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class IntellocutLayermanLay extends Model
+{
+    protected $table = 'intellocut_layerman_lays';
+    protected $guarded = [];
+    protected $casts = [
+        'started_at' => 'datetime',
+        'stopped_at' => 'datetime',
+    ];
+
+    const STATUS_LABELS = [
+        'not_started' => 'Not Started Yet',
+        'running'     => 'Running',
+        'stopped'     => 'Stopped',
+        'done'        => 'Done',
+    ];
+
+    public function splices()
+    {
+        return $this->hasMany(IntellocutLayermanSplice::class, 'idlayerman');
+    }
+
+    public function shades()
+    {
+        return $this->hasMany(IntellocutLayermanShade::class, 'idlayerman');
+    }
+
+    public function getStatusLabelAttribute()
+    {
+        return self::STATUS_LABELS[$this->status] ?? $this->status;
+    }
+}
