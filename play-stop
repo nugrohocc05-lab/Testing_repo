@@ -1,17 +1,27 @@
 Route::post('intellocutlayerman/{id}/play', 'IntellocutLayermanController@play')->name('intellocutlayerman_play');
 Route::post('intellocutlayerman/{id}/stop', 'IntellocutLayermanController@stop')->name('intellocutlayerman_stop');
+Route::post('intellocutlayerman/{id}/save', 'IntellocutLayermanController@save')->name('intellocutlayerman_save');
 
-/**
- * Tombol Play: buat (atau ambil) baris lay, lalu set status running.
- * $id = id IntellocutShellDetail yang dibuka.
- */
+$layModel = IntellocutLayermanLay::with('splices', 'shades.endbits')
+    ->where('idheader', $header->id)
+    ->where('lay', $detail->lay)
+    ->first();
+$saved = $this->formatSaved($layModel);
+
 function play($id)
 {
     $detail      = IntellocutShellDetail::findOrFail($id);
     $shellHeader = IntellocutShellHeader::findOrFail($detail->idshellheader);
     $header      = IntellocutHeader::findOrFail($shellHeader->idheader);
 
-    // Satu baris per (idheader, lay). Kalau sudah ada, dipakai lagi.
+    $existing = IntellocutLayermanLay::where('idheader', $header->id)
+        ->where('lay', $detail->lay)
+        ->first();
+
+    if ($existing && $existing->status === 'completed') {
+        return response()->json(['message' => 'Lay ini sudah selesai.'], 422);
+    }
+
     $lay = IntellocutLayermanLay::firstOrCreate(
         ['idheader' => $header->id, 'lay' => $detail->lay],
         [
@@ -33,10 +43,6 @@ function play($id)
     ]);
 }
 
-/**
- * Tombol Stop: hanya mengubah status menjadi stopped dan mencatat waktu.
- * $id = id IntellocutShellDetail yang dibuka.
- */
 function stop($id)
 {
     $detail      = IntellocutShellDetail::findOrFail($id);
@@ -51,6 +57,10 @@ function stop($id)
         return response()->json(['message' => 'Lay belum dimulai. Tekan Play dulu.'], 422);
     }
 
+    if ($lay->status === 'completed') {
+        return response()->json(['message' => 'Lay ini sudah selesai.'], 422);
+    }
+
     $lay->status     = 'stopped';
     $lay->stopped_at = now();
     $lay->save();
@@ -62,39 +72,305 @@ function stop($id)
     ]);
 }
 
+function save(Request $request, $id)
+{
+    $detail      = IntellocutShellDetail::findOrFail($id);
+    $shellHeader = IntellocutShellHeader::findOrFail($detail->idshellheader);
+    $header      = IntellocutHeader::findOrFail($shellHeader->idheader);
 
-var playUrl = "{{ route('intellocutlayerman_play', ['id' => $detail->id]) }}";
-var stopUrl = "{{ route('intellocutlayerman_stop', ['id' => $detail->id]) }}";
+    $lay = IntellocutLayermanLay::where('idheader', $header->id)
+        ->where('lay', $detail->lay)
+        ->first();
 
-$('#btnPlay').on('click', function() {
+    if (!$lay || $lay->status !== 'running') {
+        return response()->json(['message' => 'Tekan Play terlebih dahulu.'], 422);
+    }
+
+    $this->validate($request, $this->payloadRules());
+
+    DB::transaction(function () use ($lay, $request) {
+        $this->persist($lay, $request);
+
+        $lay->status     = 'completed';
+        $lay->stopped_at = now();
+        $lay->save();
+    });
+
+    return response()->json([
+        'success'  => true,
+        'redirect' => route('intellocutlayerman_home'),
+    ]);
+}
+
+private function payloadRules()
+{
+    $rules = [
+        'splices'               => 'nullable|array',
+        'shades'                => 'nullable|array',
+        'shades.*.shade'        => 'nullable|string|max:50',
+        'shades.*.actual_plies' => 'nullable|integer|min:0',
+    ];
+
+    $measures = [
+        'material_width', 'material_length', 'end_loss_1', 'end_loss_2',
+        'splices.*.length', 'splices.*.wastage',
+        'shades.*.damages', 'shades.*.endbits_generated.*',
+    ];
+
+    foreach ($measures as $m) {
+        $rules[$m . '.yard'] = 'nullable|integer|min:0';
+        $rules[$m . '.inch'] = 'nullable|numeric|min:0|max:35.9999';
+    }
+
+    return $rules;
+}
+
+private function yardInch($value)
+{
+    return [
+        (int) data_get($value, 'yard', 0),
+        round((float) data_get($value, 'inch', 0), 4),
+    ];
+}
+
+private function persist($lay, Request $request)
+{
+    foreach (['material_width', 'material_length', 'end_loss_1', 'end_loss_2'] as $f) {
+        if ($request->has($f)) {
+            [$y, $i] = $this->yardInch($request->input($f));
+            $lay->{$f . '_yard'} = $y;
+            $lay->{$f . '_inch'} = $i;
+        }
+    }
+
+    $lay->splices()->delete();
+    foreach (array_values($request->input('splices', [])) as $n => $row) {
+        [$ly, $li] = $this->yardInch(data_get($row, 'length'));
+        [$wy, $wi] = $this->yardInch(data_get($row, 'wastage'));
+
+        $lay->splices()->create([
+            'heading'      => $n + 1,
+            'length_yard'  => $ly,
+            'length_inch'  => $li,
+            'wastage_yard' => $wy,
+            'wastage_inch' => $wi,
+        ]);
+    }
+
+    IntellocutLayermanEndbit::whereIn('idshade', $lay->shades()->pluck('id'))->delete();
+    $lay->shades()->delete();
+
+    $totalPlies = 0;
+    foreach (array_values($request->input('shades', [])) as $row) {
+        $plies = (int) data_get($row, 'actual_plies', 0);
+        $totalPlies += $plies;
+        [$dy, $di] = $this->yardInch(data_get($row, 'damages'));
+
+        $shade = $lay->shades()->create([
+            'shade'        => data_get($row, 'shade'),
+            'actual_plies' => $plies,
+            'damages_yard' => $dy,
+            'damages_inch' => $di,
+        ]);
+
+        foreach (array_values(data_get($row, 'endbits_generated', [])) as $k => $eb) {
+            [$ey, $ei] = $this->yardInch($eb);
+            $shade->endbits()->create([
+                'sort_order'  => $k + 1,
+                'length_yard' => $ey,
+                'length_inch' => $ei,
+            ]);
+        }
+    }
+
+    $lay->actual_plies = $totalPlies;
+    $lay->save();
+}
+
+private function formatSaved($lay)
+{
+    if (!$lay) {
+        return null;
+    }
+
+    $yi = fn ($y, $i) => ['yard' => (int) $y, 'inch' => (float) $i];
+
+    return [
+        'status'          => $lay->status,
+        'actual_plies'    => (int) $lay->actual_plies,
+        'material_width'  => $yi($lay->material_width_yard, $lay->material_width_inch),
+        'material_length' => $yi($lay->material_length_yard, $lay->material_length_inch),
+        'end_loss_1'      => $yi($lay->end_loss_1_yard, $lay->end_loss_1_inch),
+        'end_loss_2'      => $yi($lay->end_loss_2_yard, $lay->end_loss_2_inch),
+        'splices'         => $lay->splices->sortBy('heading')->values()->map(fn ($s) => [
+            'length'  => $yi($s->length_yard, $s->length_inch),
+            'wastage' => $yi($s->wastage_yard, $s->wastage_inch),
+        ])->all(),
+        'shades'          => $lay->shades->sortBy('id')->values()->map(fn ($s) => [
+            'shade'             => $s->shade,
+            'actual_plies'      => (int) $s->actual_plies,
+            'damages'           => $yi($s->damages_yard, $s->damages_inch),
+            'endbits_generated' => $s->endbits->sortBy('sort_order')->values()
+                ->map(fn ($e) => $yi($e->length_yard, $e->length_inch))->all(),
+        ])->all(),
+    ];
+}
+
+var urls = {
+    play: "{{ route('intellocutlayerman_play', ['id' => $detail->id]) }}",
+    stop: "{{ route('intellocutlayerman_stop', ['id' => $detail->id]) }}",
+    save: "{{ route('intellocutlayerman_save', ['id' => $detail->id]) }}"
+};
+var homeUrl  = "{{ route('intellocutlayerman_home') }}";
+var saved    = {!! json_encode($saved ?? null) !!};
+var draftKey = 'layerman_draft_{{ $header->id }}_{{ $detail->lay }}';
+var draftReady = false;
+var draftTimer = null;
+
+function post(url, data) {
+    return $.ajax({
+        url: url, type: 'POST',
+        data: JSON.stringify(data || {}),
+        contentType: 'application/json', dataType: 'json',
+        headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
+    });
+}
+
+function showError(xhr) {
+    var msg = 'Terjadi kesalahan, coba lagi.';
+    if (xhr.responseJSON) {
+        if (xhr.responseJSON.errors) {
+            msg = xhr.responseJSON.errors[Object.keys(xhr.responseJSON.errors)[0]][0];
+        } else if (xhr.responseJSON.message) {
+            msg = xhr.responseJSON.message;
+        }
+    }
+    alert(msg);
+}
+
+// ---------- Draft (hanya di browser) ----------
+function saveDraft() {
+    if (!draftReady) return;
+    try { localStorage.setItem(draftKey, JSON.stringify(collectPayload())); } catch (e) {}
+}
+function readDraft() {
+    try { return JSON.parse(localStorage.getItem(draftKey) || 'null'); } catch (e) { return null; }
+}
+function clearDraft() {
+    try { localStorage.removeItem(draftKey); } catch (e) {}
+}
+
+$(document).on('input change click', '.lay-input, .lay-action', function() {
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(saveDraft, 300);
+});
+
+// ---------- Payload ----------
+function readField(field) {
+    return {
+        yard: $('[data-field="' + field + '"][data-unit="yard"]').val(),
+        inch: $('[data-field="' + field + '"][data-unit="inch"]').val()
+    };
+}
+
+function collectPayload() {
+    var splices = [];
+    $('#spliceList .splice-row').each(function() {
+        splices.push({
+            length:  { yard: $(this).find('.input-splice-length-yard').val(),  inch: $(this).find('.input-splice-length-inch').val() },
+            wastage: { yard: $(this).find('.input-splice-wastage-yard').val(), inch: $(this).find('.input-splice-wastage-inch').val() }
+        });
+    });
+
+    var shades = [];
+    $('.shade-item').each(function() {
+        var endbits = [];
+        $(this).find('.endbit-row').each(function() {
+            endbits.push({
+                yard: $(this).find('.input-endbit-yard').val(),
+                inch: $(this).find('.input-endbit-inch').val()
+            });
+        });
+        shades.push({
+            shade: $(this).find('.input-shade').val(),
+            actual_plies: $(this).find('.input-actual-plies').val(),
+            damages: { yard: $(this).find('.input-damages-yard').val(), inch: $(this).find('.input-damages-inch').val() },
+            endbits_generated: endbits
+        });
+    });
+
+    return {
+        material_width: readField('material_width'),
+        material_length: readField('material_length'),
+        end_loss_1: readField('end_loss_1'),
+        end_loss_2: readField('end_loss_2'),
+        splices: splices,
+        shades: shades
+    };
+}
+
+// ---------- Play / Pause ----------
+$('#btnPlay').off('click').on('click', function() {
     var $btn = $(this).prop('disabled', true);
     var turningOn = !started;
 
-    $.ajax({
-        url: turningOn ? playUrl : stopUrl,
-        type: 'POST',
-        dataType: 'json',
-        headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
-    }).done(function() {
+    if (!turningOn) saveDraft();   // pause: isian tetap di browser, tidak dikirim
+
+    post(turningOn ? urls.play : urls.stop).done(function() {
         setRunning(turningOn);
-    }).fail(function(xhr) {
-        var msg = (xhr.responseJSON && xhr.responseJSON.message) || 'Gagal. Coba lagi.';
-        alert(msg);
-    }).always(function() {
+    }).fail(showError).always(function() {
         $btn.prop('disabled', false);
     });
 });
 
-// Kalau halaman dibuka saat status masih running, langsung aktif
-if ("{{ $layStatus ?? 'not_started' }}" === 'running') {
-    setRunning(true);
+// ---------- Save ----------
+$('#btnSaveChanges').off('click').on('click', function() {
+    if (!started) return;
+    var $btn = $(this).prop('disabled', true);
+
+    post(urls.save, collectPayload())
+        .done(function(res) {
+            clearDraft();
+            window.location.href = res.redirect || homeUrl;
+        })
+        .fail(function(xhr) {
+            showError(xhr);
+            $btn.prop('disabled', false);
+        });
+});
+
+// ---------- Isi form saat halaman dibuka ----------
+function fillField(field, v) {
+    v = v || {};
+    $('[data-field="' + field + '"][data-unit="yard"]').val(v.yard || 0);
+    $('[data-field="' + field + '"][data-unit="inch"]').val(v.inch || 0);
 }
 
+function loadForm() {
+    var isCompleted = !!(saved && saved.status === 'completed');
 
-# di laystarted sebelum return view
-$layStatus = optional(
-    IntellocutLayermanLay::where('idheader', $header->id)->where('lay', $detail->lay)->first()
-)->status;
-# Lalu tambahkan 'layStatus' ke compact(...) di return view(...).
+    if (isCompleted) clearDraft();
 
+    // Lay completed: selalu tampilkan data database, abaikan draft
+    var src = isCompleted ? saved : (readDraft() || saved);
+
+    if (src) {
+        ['material_width', 'material_length', 'end_loss_1', 'end_loss_2'].forEach(function(f) {
+            fillField(f, src[f]);
+        });
+        (src.splices || []).forEach(function(s) { addSpliceRow(s); });
+    }
+
+    var shades = (src && src.shades && src.shades.length) ? src.shades : [{}];
+    renderShades(shades);
+
+    setRunning(!!(saved && saved.status === 'running'));
+
+    if (isCompleted) {
+        $('#btnPlay, #btnSaveChanges, #btnAddNewShade, #btnAddSplice').hide();
+    }
+
+    draftReady = !isCompleted;
+}
+loadForm();
 
