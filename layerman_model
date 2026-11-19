@@ -1,96 +1,35 @@
-<?php
+$layermanLays = IntellocutLayerman::whereIn('idheader', $data->pluck('id'))
+    ->get()
+    ->keyBy(fn ($l) => $l->idheader . '-' . $l->lay);
 
-namespace App\Http\Models;
+->map(function ($rows) use ($shells, $colors, $sizes, $details, $shellCons, $layermanLays, $h) {
 
-use Illuminate\Database\Eloquent\Model;
+$savedLay = $layermanLays->get($h->id . '-' . $row->lay);
 
-class IntellocutLayermanLay extends Model
-{
-    protected $table = 'intellocut_layerman_lays';
-    protected $guarded = [];
-    protected $casts = [
-        'started_at' => 'datetime',
-        'stopped_at' => 'datetime',
-    ];
+$row->layerman_status       = $savedLay->status ?? 'not_started';
+$row->layerman_status_label = $savedLay ? $savedLay->status_label : 'Not Started Yet';
+$row->layerman_plies        = $savedLay->actual_plies ?? 0;
 
-    const STATUS_LABELS = [
-        'not_started' => 'Not Started Yet',
-        'running'     => 'Running',
-        'stopped'     => 'Stopped',
-        'done'        => 'Done',
-    ];
+<div class="col-2">
+    <div style="font-size: 11px; color: #64748b;">Plies</div>
+    <div style="font-size: 13px; font-weight: 500; color: #475569;">{{ $detail->layerman_plies }}/{{ $detail->plies }}</div>
+</div>
+<div class="col-2">
+    <div style="font-size: 11px; color: #64748b;">Status</div>
+    @php
+        $statusColor = [
+            'not_started' => '#94a3b8',
+            'running'     => '#18009e',
+            'stopped'     => '#d97706',
+            'completed'   => '#16a34a',
+        ][$detail->layerman_status] ?? '#475569';
+    @endphp
+    <div style="font-size: 13px; font-weight: 600; color: {{ $statusColor }};">{{ $detail->layerman_status_label }}</div>
+</div>
 
-    public function splices()
-    {
-        return $this->hasMany(IntellocutLayermanSplice::class, 'idlayerman');
-    }
+$layModel = IntellocutLayerman::with('splices', 'shades.endbits')
+    ->where('idheader', $header->id)
+    ->where('lay', $detail->lay)
+    ->first();
+$saved = $this->formatSaved($layModel);
 
-    public function shades()
-    {
-        return $this->hasMany(IntellocutLayermanShade::class, 'idlayerman');
-    }
-
-    public function getStatusLabelAttribute()
-    {
-        return self::STATUS_LABELS[$this->status] ?? $this->status;
-    }
-}
-
-<?php
-
-namespace App\Http\Models;
-
-use Illuminate\Database\Eloquent\Model;
-
-class IntellocutLayermanSplice extends Model
-{
-    protected $table = 'intellocut_layerman_splices';
-    protected $guarded = [];
-    public $timestamps = false;
-
-    public function layerman()
-    {
-        return $this->belongsTo(IntellocutLayermanLay::class, 'idlayerman');
-    }
-}
-
-<?php
-
-namespace App\Http\Models;
-
-use Illuminate\Database\Eloquent\Model;
-
-class IntellocutLayermanShade extends Model
-{
-    protected $table = 'intellocut_layerman_shades';
-    protected $guarded = [];
-    public $timestamps = false;
-
-    public function layerman()
-    {
-        return $this->belongsTo(IntellocutLayermanLay::class, 'idlayerman');
-    }
-
-    public function endbits()
-    {
-        return $this->hasMany(IntellocutLayermanEndbit::class, 'idshade');
-    }
-}
-
-<?php
-
-namespace App\Http\Models;
-
-use Illuminate\Database\Eloquent\Model;
-
-class IntellocutLayermanEndbit extends Model
-{
-    protected $table = 'intellocut_layerman_endbits';
-    protected $guarded = [];
-    public $timestamps = false;
-
-    public function shade()
-    {
-        return $this->belongsTo(IntellocutLayermanShade::class, 'idshade');
-    }
-}
