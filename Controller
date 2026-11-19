@@ -1,0 +1,418 @@
+<?php
+
+namespace Modules\Cutting\Http\Controllers;
+
+use App\Http\Controllers\Controller;
+use App\Http\Models\IntellocutDetail;
+use App\Http\Models\IntellocutHeader;
+use App\Http\Models\IntellocutLayerman;
+use App\Http\Models\IntellocutLayermanEndbit;
+use App\Http\Models\IntellocutShellDetail;
+use App\Http\Models\IntellocutShellGroupFabric;
+use App\Http\Models\IntellocutShellHeader;
+use App\Http\Models\MasterIntellocutColor;
+use App\Http\Models\MasterIntellocutFabric;
+use App\Http\Models\MasterIntellocutShell;
+use App\Http\Models\MasterIntellocutSize;
+use App\Http\Models\MasterIntellocutStyle;
+use DB;
+use Illuminate\Http\Request;
+
+class IntellocutLayermanController extends Controller
+{
+    protected $m_modul = 'cutting';
+
+    function __construct()
+    {
+        $this->middleware('auth');
+    }
+
+    // ------------------------------------------------------------------
+    // Halaman
+    // ------------------------------------------------------------------
+
+    function index()
+    {
+        $data = IntellocutHeader::whereIn('id', function ($query) {
+            $query->select('idheader')->from((new IntellocutShellHeader())->getTable());
+        })->get();
+
+        $shellHeaders = IntellocutShellHeader::whereIn('idheader', $data->pluck('id'))
+            ->get()
+            ->groupBy('idheader');
+
+        $shellCons = $shellHeaders->flatten()->keyBy('id')->map(fn ($item) => $item->cons);
+
+        $shellDetails = IntellocutShellDetail::whereIn('idshellheader', $shellHeaders->flatten()->pluck('id'))
+            ->whereNotNull('idtable')
+            ->where('idtable', '<>', '')
+            ->orderBy('lay')
+            ->get()
+            ->groupBy('idshellheader');
+
+        $styles = MasterIntellocutStyle::get()->keyBy('idstyle');
+        $shells = MasterIntellocutShell::get()->keyBy('id');
+        $colors = MasterIntellocutColor::get()->keyBy('id');
+        $sizes  = MasterIntellocutSize::get()->keyBy('id');
+
+        $intellocutDetails = IntellocutDetail::whereIn('idheader', $data->pluck('id'))
+            ->get()
+            ->groupBy('idheader');
+
+        $layermanLays = IntellocutLayerman::whereIn('idheader', $data->pluck('id'))
+            ->get()
+            ->keyBy(fn ($l) => $l->idheader . '-' . $l->lay);
+
+        $tableIds = $shellDetails->flatten()
+            ->pluck('idtable')
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values();
+
+        $data->each(function ($h) use (
+            $shellHeaders, $shellDetails, $styles, $shells, $colors,
+            $sizes, $shellCons, $intellocutDetails, $layermanLays
+        ) {
+            $shellHeaderIds = ($shellHeaders[$h->id] ?? collect())->pluck('id');
+            $details        = $intellocutDetails[$h->id] ?? collect();
+
+            $h->style_name = optional($styles->get($h->idstyle))->nmstyle ?? $h->idstyle;
+            $h->color_name = optional($colors->get($h->idcolor))->nmcolor ?? $h->idcolor;
+
+            $h->lay_groups = $shellHeaderIds
+                ->flatMap(fn ($id) => $shellDetails[$id] ?? collect())
+                ->groupBy('lay')
+                ->map(function ($rows) use ($shells, $colors, $sizes, $details, $shellCons, $layermanLays, $h) {
+                    $row = $rows->first();
+
+                    $row->shell_name = optional($shells->get($row->idshell))->nmshell ?? $row->idshell;
+
+                    $row->color_name = $details->pluck('idcolor')->unique()->filter()
+                        ->map(fn ($id) => optional($colors->get($id))->nmcolor)
+                        ->filter()
+                        ->unique()
+                        ->implode(', ');
+
+                    $row->ratio_size = $rows->groupBy('idshellheader')->map(function ($shellRows) use ($sizes) {
+                        $marker = $shellRows->first()->marker;
+
+                        return $shellRows->values()->map(fn ($item, $index) => [
+                            'ratio'  => $item->ratio,
+                            'idsize' => $item->idsize,
+                            'marker' => $index === 0 ? $marker : null,
+                            'nmsize' => optional($sizes->get($item->idsize))->nmsize ?? $item->idsize,
+                        ]);
+                    });
+
+                    $row->material_length = $rows->pluck('idshellheader')->unique()
+                        ->map(fn ($id) => $shellCons->get($id))
+                        ->filter()
+                        ->sum();
+
+                    $row->group_count = $rows->count();
+
+                    $savedLay = $layermanLays->get($h->id . '-' . $row->lay);
+
+                    $row->layerman_status       = $savedLay->status ?? 'not_started';
+                    $row->layerman_status_label = $savedLay ? $savedLay->status_label : 'Not Started Yet';
+                    $row->layerman_plies        = $savedLay->actual_plies ?? 0;
+
+                    return $row;
+                });
+        });
+
+        return view('cutting::intellocutlayerman.index', compact('data', 'tableIds'));
+    }
+
+    function layassign()
+    {
+        return view('cutting::intellocutlayerman.layassign');
+    }
+
+    function laystarted($id)
+    {
+        [$detail, $shellHeader, $header] = $this->resolveContext($id);
+
+        $order = IntellocutDetail::where('idheader', $header->id)
+            ->where('idshell', $detail->idshell)
+            ->first();
+
+        $fabricId   = optional(IntellocutShellGroupFabric::where('idshellheader', $shellHeader->id)->first())->idfabric;
+        $fabricName = optional(MasterIntellocutFabric::find($fabricId))->nmfabric ?? '-';
+
+        $styleName = optional(MasterIntellocutStyle::where('idstyle', $header->idstyle)->first())->nmstyle
+            ?? $header->idstyle;
+
+        $shellName = optional(MasterIntellocutShell::find($detail->idshell))->nmshell
+            ?? $detail->idshell;
+
+        $colorName = optional(MasterIntellocutColor::find(optional($order)->idcolor))->nmcolor
+            ?? optional($order)->idcolor;
+
+        $sizes = MasterIntellocutSize::get()->keyBy('id');
+
+        $ratioSize = IntellocutShellDetail::where('idshellheader', $detail->idshellheader)
+            ->where('lay', $detail->lay)
+            ->whereNotNull('idtable')
+            ->where('idtable', '<>', '')
+            ->orderBy('id')
+            ->get()
+            ->map(fn ($item) => [
+                'ratio'  => $item->ratio,
+                'idsize' => $item->idsize,
+                'marker' => $item->marker,
+                'nmsize' => optional($sizes->get($item->idsize))->nmsize ?? $item->idsize,
+            ]);
+
+        $saved = $this->formatSaved(
+            IntellocutLayerman::with('splices', 'shades.endbits')
+                ->where('idheader', $header->id)
+                ->where('lay', $detail->lay)
+                ->first()
+        );
+
+        return view('cutting::intellocutlayerman.inputlayerman', compact(
+            'header',
+            'detail',
+            'order',
+            'styleName',
+            'shellName',
+            'colorName',
+            'fabricName',
+            'ratioSize',
+            'saved'
+        ));
+    }
+
+    // ------------------------------------------------------------------
+    // Aksi
+    // ------------------------------------------------------------------
+
+    function play($id)
+    {
+        [$detail, , $header] = $this->resolveContext($id);
+
+        $existing = $this->findLay($header, $detail);
+
+        if ($existing && $existing->status === 'completed') {
+            return response()->json(['message' => 'Lay ini sudah selesai.'], 422);
+        }
+
+        $lay = DB::transaction(function () use ($header, $detail) {
+            $lay = IntellocutLayerman::firstOrCreate(
+                ['idheader' => $header->id, 'lay' => $detail->lay],
+                [
+                    'idshelldetail' => $detail->id,
+                    'idtable'       => $detail->idtable,
+                    'iduser'        => optional(session('user'))->id ?? auth()->id(),
+                ]
+            );
+
+            $lay->status     = 'running';
+            $lay->started_at = $lay->started_at ?: now();
+            $lay->stopped_at = null;
+            $lay->save();
+
+            if (!$detail->lays_started) {
+                $detail->lays_started = now();
+                $detail->save();
+            }
+
+            return $lay;
+        });
+
+        return $this->statusResponse($lay);
+    }
+
+    function stop($id)
+    {
+        [$detail, , $header] = $this->resolveContext($id);
+
+        $lay = $this->findLay($header, $detail);
+
+        if (!$lay) {
+            return response()->json(['message' => "It hasn't started yet. Press Play first."], 422);
+        }
+
+        if ($lay->status === 'completed') {
+            return response()->json(['message' => 'Lay ini sudah selesai.'], 422);
+        }
+
+        $lay->status     = 'stopped';
+        $lay->stopped_at = now();
+        $lay->save();
+
+        return $this->statusResponse($lay);
+    }
+
+    function save(Request $request, $id)
+    {
+        [$detail, , $header] = $this->resolveContext($id);
+
+        $lay = $this->findLay($header, $detail);
+
+        if (!$lay || $lay->status !== 'running') {
+            return response()->json(['message' => 'Press Play first.'], 422);
+        }
+
+        $this->validate($request, $this->payloadRules());
+
+        DB::transaction(function () use ($lay, $request) {
+            $this->persist($lay, $request);
+
+            $lay->status     = 'completed';
+            $lay->stopped_at = now();
+            $lay->save();
+        });
+
+        return response()->json([
+            'success'  => true,
+            'redirect' => route('intellocutlayerman_home'),
+        ]);
+    }
+
+    // ------------------------------------------------------------------
+    // Helper
+    // ------------------------------------------------------------------
+
+    private function resolveContext($id)
+    {
+        $detail      = IntellocutShellDetail::findOrFail($id);
+        $shellHeader = IntellocutShellHeader::findOrFail($detail->idshellheader);
+        $header      = IntellocutHeader::findOrFail($shellHeader->idheader);
+
+        return [$detail, $shellHeader, $header];
+    }
+
+    private function findLay($header, $detail)
+    {
+        return IntellocutLayerman::where('idheader', $header->id)
+            ->where('lay', $detail->lay)
+            ->first();
+    }
+
+    private function statusResponse($lay)
+    {
+        return response()->json([
+            'success'      => true,
+            'status'       => $lay->status,
+            'status_label' => $lay->status_label,
+        ]);
+    }
+
+    private function payloadRules()
+    {
+        $rules = [
+            'splices'               => 'nullable|array',
+            'shades'                => 'nullable|array',
+            'shades.*.shade'        => 'nullable|string|max:50',
+            'shades.*.actual_plies' => 'nullable|integer|min:0',
+        ];
+
+        $measures = [
+            'material_width', 'material_length', 'end_loss_1', 'end_loss_2',
+            'splices.*.length', 'splices.*.wastage',
+            'shades.*.damages', 'shades.*.endbits_generated.*',
+        ];
+
+        foreach ($measures as $m) {
+            $rules[$m . '.yard'] = 'nullable|integer|min:0';
+            $rules[$m . '.inch'] = 'nullable|numeric|min:0|max:35.9999';
+        }
+
+        return $rules;
+    }
+
+    private function yardInch($value)
+    {
+        return [
+            (int) data_get($value, 'yard', 0),
+            round((float) data_get($value, 'inch', 0), 4),
+        ];
+    }
+
+    private function persist($lay, Request $request)
+    {
+        foreach (['material_width', 'material_length', 'end_loss_1', 'end_loss_2'] as $field) {
+            if ($request->has($field)) {
+                [$yard, $inch] = $this->yardInch($request->input($field));
+                $lay->{$field . '_yard'} = $yard;
+                $lay->{$field . '_inch'} = $inch;
+            }
+        }
+
+        $lay->splices()->delete();
+        foreach (array_values($request->input('splices', [])) as $n => $row) {
+            [$lengthYard, $lengthInch]   = $this->yardInch(data_get($row, 'length'));
+            [$wastageYard, $wastageInch] = $this->yardInch(data_get($row, 'wastage'));
+
+            $lay->splices()->create([
+                'heading'      => $n + 1,
+                'length_yard'  => $lengthYard,
+                'length_inch'  => $lengthInch,
+                'wastage_yard' => $wastageYard,
+                'wastage_inch' => $wastageInch,
+            ]);
+        }
+
+        IntellocutLayermanEndbit::whereIn('idshade', $lay->shades()->pluck('id'))->delete();
+        $lay->shades()->delete();
+
+        $totalPlies = 0;
+        foreach (array_values($request->input('shades', [])) as $row) {
+            $plies = (int) data_get($row, 'actual_plies', 0);
+            $totalPlies += $plies;
+
+            [$damageYard, $damageInch] = $this->yardInch(data_get($row, 'damages'));
+
+            $shade = $lay->shades()->create([
+                'shade'        => data_get($row, 'shade'),
+                'actual_plies' => $plies,
+                'damages_yard' => $damageYard,
+                'damages_inch' => $damageInch,
+            ]);
+
+            foreach (array_values(data_get($row, 'endbits_generated', [])) as $endbit) {
+                [$endbitYard, $endbitInch] = $this->yardInch($endbit);
+
+                $shade->endbits()->create([
+                    'length_yard' => $endbitYard,
+                    'length_inch' => $endbitInch,
+                ]);
+            }
+        }
+
+        $lay->actual_plies = $totalPlies;
+        $lay->save();
+    }
+
+    private function formatSaved($lay)
+    {
+        if (!$lay) {
+            return null;
+        }
+
+        $yi = fn ($yard, $inch) => ['yard' => (int) $yard, 'inch' => (float) $inch];
+
+        return [
+            'status'          => $lay->status,
+            'actual_plies'    => (int) $lay->actual_plies,
+            'material_width'  => $yi($lay->material_width_yard, $lay->material_width_inch),
+            'material_length' => $yi($lay->material_length_yard, $lay->material_length_inch),
+            'end_loss_1'      => $yi($lay->end_loss_1_yard, $lay->end_loss_1_inch),
+            'end_loss_2'      => $yi($lay->end_loss_2_yard, $lay->end_loss_2_inch),
+            'splices'         => $lay->splices->sortBy('heading')->values()->map(fn ($s) => [
+                'length'  => $yi($s->length_yard, $s->length_inch),
+                'wastage' => $yi($s->wastage_yard, $s->wastage_inch),
+            ])->all(),
+            'shades'          => $lay->shades->sortBy('id')->values()->map(fn ($s) => [
+                'shade'             => $s->shade,
+                'actual_plies'      => (int) $s->actual_plies,
+                'damages'           => $yi($s->damages_yard, $s->damages_inch),
+                'endbits_generated' => $s->endbits->values()
+                    ->map(fn ($e) => $yi($e->length_yard, $e->length_inch))->all(),
+            ])->all(),
+        ];
+    }
+}
