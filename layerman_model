@@ -1,35 +1,13 @@
-$layermanLays = IntellocutLayerman::whereIn('idheader', $data->pluck('id'))
-    ->get()
-    ->keyBy(fn ($l) => $l->idheader . '-' . $l->lay);
+$tableIds = $shellDetails->flatten()
+    ->pluck('idtable')
+    ->filter()
+    ->unique()
+    ->sort()
+    ->values();
 
-->map(function ($rows) use ($shells, $colors, $sizes, $details, $shellCons, $layermanLays, $h) {
+return view('cutting::intellocutlayerman.index', compact('data', 'tableIds'));
 
-$savedLay = $layermanLays->get($h->id . '-' . $row->lay);
-
-$row->layerman_status       = $savedLay->status ?? 'not_started';
-$row->layerman_status_label = $savedLay ? $savedLay->status_label : 'Not Started Yet';
-$row->layerman_plies        = $savedLay->actual_plies ?? 0;
-
-<div class="col-2">
-    <div style="font-size: 11px; color: #64748b;">Plies</div>
-    <div style="font-size: 13px; font-weight: 500; color: #475569;">{{ $detail->layerman_plies }}/{{ $detail->plies }}</div>
-</div>
-<div class="col-2">
-    <div style="font-size: 11px; color: #64748b;">Status</div>
-    @php
-        $statusColor = [
-            'not_started' => '#94a3b8',
-            'running'     => '#18009e',
-            'stopped'     => '#d97706',
-            'completed'   => '#16a34a',
-        ][$detail->layerman_status] ?? '#475569';
-    @endphp
-    <div style="font-size: 13px; font-weight: 600; color: {{ $statusColor }};">{{ $detail->layerman_status_label }}</div>
-</div>
-
-$layModel = IntellocutLayerman::with('splices', 'shades.endbits')
-    ->where('idheader', $header->id)
-    ->where('lay', $detail->lay)
-    ->first();
-$saved = $this->formatSaved($layModel);
+<p class="mb-0" style="font-size: 13px; color: #475569;">Overview of Activities at
+    <b>{{ $tableIds->isNotEmpty() ? 'Table ' . $tableIds->implode(', ') : '-' }}</b>
+</p>
 
