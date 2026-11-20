@@ -1,67 +1,63 @@
-Route::get('intellocutlayerman/select-table', 'IntellocutLayermanController@selecttable')->name('intellocutlayerman_select_table');
-Route::post('intellocutlayerman/select-table', 'IntellocutLayermanController@settable')->name('intellocutlayerman_set_table');
+// pastikan ini yang dipakai (bukan whereNotNull lagi)
+$shellDetails = IntellocutShellDetail::whereIn('idshellheader', $shellHeaders->flatten()->pluck('id'))
+    ->where('idtable', $table)
+    ->orderBy('lay')
+    ->get()
+    ->groupBy('idshellheader');
 
-function selecttable()
-{
-    $tables = IntellocutShellDetail::whereNotNull('idtable')
-        ->where('idtable', '<>', '')
-        ->distinct()
-        ->orderBy('idtable')
-        ->pluck('idtable');
+// layerman hanya milik table terpilih, key ditambah idtable
+$layermanLays = IntellocutLayerman::whereIn('idheader', $data->pluck('id'))
+    ->where('idtable', $table)
+    ->get()
+    ->keyBy(fn ($l) => $l->idheader . '-' . $l->idtable . '-' . $l->lay);
 
-    return view('cutting::intellocutlayerman.selecttable', compact('tables'));
-}
-
-function settable(Request $request)
-{
-    $this->validate($request, ['table' => 'required']);
-
-    session(['layerman_table' => $request->table]);
-
-    return redirect()->route('intellocutlayerman_home');
-}
-
-function index()
-{
-    $table = session('layerman_table');
-
-    if (!$table) {
-        return redirect()->route('intellocutlayerman_select_table');
-    }
+$data->each(function ($h) use (
+    $shellHeaders, $shellDetails, $styles, $shells, $colors,
+    $sizes, $shellCons, $intellocutDetails, $layermanLays, $table
+) {
     // ...
+    $h->lay_groups = $shellHeaderIds
+        ->flatMap(fn ($id) => $shellDetails[$id] ?? collect())
+        ->where('idtable', $table)          // jaga-jaga
+        ->groupBy('lay')
+        ->map(function ($rows) use ($shells, $colors, $sizes, $details, $shellCons, $layermanLays, $h, $table) {
+            // ...
+            $savedLay = $layermanLays->get($h->id . '-' . $table . '-' . $row->lay);
 
-$tableIds = collect([$table]);
 
+private function findLay($header, $detail)
+{
+    return IntellocutLayerman::where('idheader', $header->id)
+        ->where('idtable', $detail->idtable)
+        ->where('lay', $detail->lay)
+        ->first();
+}
 
-
-@extends('layouts.masternew')
-
-@section('content')
-    <div class="container-fluid p-5">
-        <h1 style="font-size: 26px; font-weight: 700; color: #475569;">Select Table</h1>
-        <p style="color: #64748b;">Pilih table yang akan dikerjakan.</p>
-
-        <form method="POST" action="{{ route('intellocutlayerman_set_table') }}">
-            @csrf
-            <div class="row g-3">
-                @forelse ($tables as $t)
-                    <div class="col-6 col-md-3 col-lg-2">
-                        <button type="submit" name="table" value="{{ $t }}"
-                            class="btn w-100 bg-white shadow-sm rounded-3 py-4 hover-bg-light"
-                            style="font-size: 22px; font-weight: 700; color: #18009e;">
-                            Table {{ $t }}
-                        </button>
-                    </div>
-                @empty
-                    <p class="text-muted">Belum ada table yang tersedia.</p>
-                @endforelse
-            </div>
-        </form>
-    </div>
-@endsection
+$lay = IntellocutLayerman::firstOrCreate(
+    ['idheader' => $header->id, 'idtable' => $detail->idtable, 'lay' => $detail->lay],
+    [
+        'idshelldetail' => $detail->id,
+        'iduser'        => optional(session('user'))->id ?? auth()->id(),
+    ]
+);
 
 
 
-<a href="{{ route('intellocutlayerman_select_table') }}" class="btn btn-sm btn-outline-secondary">
-    Change Table
-</a>
+$ratioSize = IntellocutShellDetail::where('idshellheader', $detail->idshellheader)
+    ->where('lay', $detail->lay)
+    ->where('idtable', $detail->idtable)   // ganti whereNotNull + <> ''
+    ->orderBy('id')
+    ->get()
+    ->map(/* tetap */);
+
+$saved = $this->formatSaved(
+    IntellocutLayerman::with('splices', 'shades.endbits')
+        ->where('idheader', $header->id)
+        ->where('idtable', $detail->idtable)
+        ->where('lay', $detail->lay)
+        ->first()
+);
+
+
+var draftKey = 'layerman_draft_{{ $header->id }}_{{ $detail->idtable }}_{{ $detail->lay }}';
+
