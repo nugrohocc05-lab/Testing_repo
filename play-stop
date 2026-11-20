@@ -1,11 +1,30 @@
-$h->lay_groups = $shellHeaderIds
-    ->flatMap(fn ($id) => $shellDetails[$id] ?? collect())
-    ->where('idtable', $table)
-    ->groupBy('lay')
-    ->map(function ($rows) use ($shells, $colors, $sizes, $details, $shellCons, $layermanLays, $h, $table) {
-        // ... isi map tetap sama seperti sebelumnya ...
-        return $row;
-    })
-    ->reject(fn ($row) => $row->layerman_status === 'completed');   // <-- tambahan
+$hasActiveLay = $data->contains(fn ($d) => $d->lay_groups->isNotEmpty());
 
-@continue(!$first)
+return view('cutting::intellocutlayerman.index', compact('data', 'tableIds', 'hasActiveLay'));
+
+        @endforeach
+
+        @unless ($hasActiveLay)
+            <div class="d-flex flex-column align-items-center justify-content-center text-center"
+                style="min-height: 60vh;">
+                <div class="d-flex align-items-center justify-content-center rounded-circle mb-3"
+                    style="width: 96px; height: 96px; background-color: #dcfce7;">
+                    <i class="bi bi-check-lg" style="font-size: 56px; color: #16a34a;"></i>
+                </div>
+                <div style="font-size: 22px; font-weight: 700; color: #475569;">
+                    All lays are completed
+                </div>
+                <div class="mt-1" style="font-size: 15px; color: #64748b;">
+                    Tidak ada lay yang tersisa di
+                    {{ $tableIds->isNotEmpty() ? 'Table ' . $tableIds->implode(', ') : 'table ini' }}.
+                </div>
+                <a href="{{ route('intellocutlayerman_select_table') }}"
+                    class="btn mt-4 text-white border-0"
+                    style="background-color: #18009e; font-size: 14px; font-weight: 500; padding: 8px 18px; border-radius: 6px;">
+                    Change Table
+                </a>
+            </div>
+        @endunless
+    </div>
+    @include('layouts.loading')
+
