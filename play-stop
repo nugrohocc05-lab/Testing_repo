@@ -1,17 +1,70 @@
-<div id="addSpliceWrap" class="px-4 py-4 d-flex justify-content-center align-items-center">
-    <button type="button" id="btnAddSplice"
-        class="btn lay-action text-white d-inline-flex align-items-center gap-2 border-0"
-        style="background-color: #3b93b8; font-size: 14px; font-weight: 500; padding: 8px 18px; border-radius: 6px;" disabled>
-        <i class="bi bi-bookmark-plus" style="font-size: 14px;"></i>
-        <span>Add Splice Points</span>
-    </button>
+<!-- Splice -->
+<div class="bg-white rounded-3 shadow-sm mb-4">
+    <div class="px-4 py-3" style="border-bottom: 1px solid #e2e8f0;">
+        <div style="font-size: 15px; font-weight: 700; color: #1e293b;">Splice Details</div>
+    </div>
+
+    <div id="spliceList"></div>
+
+    <div id="addSpliceWrap" class="px-4 py-4 justify-content-center align-items-center" style="display: flex;">
+        <button type="button" id="btnAddSplice"
+            class="btn lay-action text-white d-inline-flex align-items-center gap-2 border-0"
+            style="background-color: #3b93b8; font-size: 14px; font-weight: 500; padding: 8px 18px; border-radius: 6px;" disabled>
+            <i class="bi bi-bookmark-plus" style="font-size: 14px;"></i>
+            <span>Add Splice Points</span>
+        </button>
+    </div>
 </div>
 
-$('#addSpliceWrap').toggleClass('d-none', total > 0);
+function syncSpliceRows() {
+    var $rows = $('#spliceList .splice-row');
+    var total = $rows.length;
 
-<div id="addSpliceWrap" class="px-4 py-4 justify-content-center align-items-center"
-    style="display: flex;">
+    $rows.each(function(index) {
+        $(this).find('.splice-heading').text(index + 1);
 
-$('#addSpliceWrap').toggle(total === 0);
+        var $box = $(this).find('.row-actions').empty();
 
-$('#btnPlay, #btnSaveChanges, #btnAddNewShade, #addSpliceWrap').hide();
+        if (index !== total - 1) return;
+
+        var html = actionButton('btn-remove-splice', '#ef4444', 'dash')
+                 + actionButton('btn-add-splice', '#3b93b8', 'plus');
+
+        $box.html(html).find('.lay-action').prop('disabled', !started);
+    });
+
+    // Tombol besar hanya muncul saat belum ada row splice
+    $('#addSpliceWrap').toggle(total === 0);
+
+    updateSpliceWastage();
+}
+
+function loadForm() {
+    var isCompleted = !!(saved && saved.status === 'completed');
+
+    if (isCompleted) clearDraft();
+
+    // Lay selesai: data database. Selain itu: draft browser diutamakan.
+    var source = isCompleted ? saved : (readDraft() || saved);
+
+    if (source) {
+        MEASURE_FIELDS.forEach(function(field) {
+            fillField(field, source[field]);
+        });
+        (source.splices || []).forEach(addSpliceRow);
+    }
+
+    syncSpliceRows();
+    renderShades(source && source.shades && source.shades.length ? source.shades : [{}]);
+    updateSpliceWastage();
+    updateActualPlies();
+
+    setRunning(!!(saved && saved.status === 'running'));
+
+    if (isCompleted) {
+        $('#btnPlay, #btnSaveChanges, #btnAddNewShade, #addSpliceWrap').hide();
+    }
+
+    draftReady = !isCompleted;
+}
+
