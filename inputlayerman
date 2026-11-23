@@ -17,6 +17,17 @@
             cursor: not-allowed;
         }
 
+        .lay-input.is-invalid {
+            border-color: #ef4444 !important;
+            background-color: #fef2f2 !important;
+        }
+
+        .shade-groups.is-invalid-group {
+            outline: 1px solid #ef4444;
+            border-radius: 6px;
+            background-color: #fef2f2;
+        }
+
         .lay-calc {
             background-color: #e2e4e8 !important;
             border: 1px solid #d1d5db;
@@ -81,7 +92,7 @@
                 <button type="button" id="btnPlay" title="Play"
                     class="btn p-0 border-0 rounded-circle d-inline-flex align-items-center justify-content-center text-white"
                     style="width: 28px; height: 28px; background-color: #18009e;">
-                    <i class="bi bi-play-fill" style="font-size: 25px;"></i>
+                    <i class="bi bi-play-fill" style="font-size: 20px;"></i>
                 </button>
             </div>
         </div>
@@ -93,10 +104,8 @@
                     style="background: linear-gradient(90deg, #160099 0%, #3719ca 100%); border-bottom-right-radius: 36px; padding: 11px 54px 11px 24px;">
                     <span class="position-relative"
                         style="z-index: 1; font-size: 20px; font-weight: 700; letter-spacing: 0.3px;">L - {{ $detail->lay }} GROUP {{ $detail->group }}</span>
-                    <span class="position-absolute text-nowrap user-select-none"
-                        style="left: 110px; top: -6px; font-size: 36px; font-weight: 800; color: rgba(255, 255, 255, 0.08); line-height: 1; pointer-events: none;">GROUP {{ $detail->group }}</span>
                 </div>
-                <div class="pt-3" style="font-size: 14px; color: #cbd5e1; font-weight: 500;"><span id="live-date"></span></div>
+                <div class="pt-3" style="font-size: 14px; color: #787a7c; font-weight: 500;"><span id="live-date"></span></div>
             </div>
 
             <div class="px-4 pt-4 pb-4">
@@ -131,12 +140,8 @@
                         </div>
                     </div>
                     <div class="col">
-                        <div class="mb-1" style="font-size: 13px; color: #64748b; font-weight: 500;">Lay Remarks</div>
-                        <div style="font-size: 15px; font-weight: 700; color: #475569;">-</div>
-                    </div>
-                    <div class="col">
                         <div class="mb-1" style="font-size: 13px; color: #64748b; font-weight: 500;">Order Remarks</div>
-                        <div style="font-size: 15px; font-weight: 700; color: #475569;">-</div>
+                        <div style="font-size: 15px; font-weight: 700; color: #475569;">{{ $orderRemark ?? '-' }}</div>
                     </div>
                     <div class="col">
                         <div class="mb-1" style="font-size: 13px; color: #64748b; font-weight: 500;">Fabric Name</div>
@@ -147,11 +152,11 @@
                 <div class="row g-4 mb-3 pt-1">
                     @foreach (['material_width' => 'Material Width', 'material_length' => 'Material Length'] as $field => $label)
                         <div class="col-lg-4 col-md-6">
-                            <label class="form-label mb-2" style="font-size: 13px; font-weight: 600; color: #475569;">{{ $label }}</label>
+                            <label class="form-label mb-2" style="font-size: 13px; font-weight: 600; color: #475569;">{{ $label }} <span class="text-danger">*</span></label>
                             <div class="d-flex align-items-center gap-2">
-                                <input type="text" class="form-control shadow-none lay-input" data-field="{{ $field }}" data-unit="yard" placeholder="0" disabled>
+                                <input type="text" class="form-control shadow-none lay-input" data-field="{{ $field }}" data-unit="yard" placeholder="0" required disabled>
                                 <span class="text-nowrap me-2" style="font-size: 13px; font-weight: 600; color: #64748b;">- Yard</span>
-                                <input type="text" class="form-control shadow-none lay-input" data-field="{{ $field }}" data-unit="inch" placeholder="0" disabled>
+                                <input type="text" class="form-control shadow-none lay-input" data-field="{{ $field }}" data-unit="inch" placeholder="0" required disabled>
                                 <span class="text-nowrap" style="font-size: 13px; font-weight: 600; color: #64748b;">- Inch</span>
                             </div>
                         </div>
@@ -159,17 +164,13 @@
                 </div>
 
                 <div class="row g-4">
-                    @foreach (['end_loss_1', 'end_loss_2'] as $field)
-                        <div class="col-lg-4 col-md-6">
-                            <label class="form-label mb-2" style="font-size: 13px; font-weight: 600; color: #475569;">End Loss</label>
-                            <div class="d-flex align-items-center gap-2">
-                                <input type="text" class="form-control shadow-none lay-input" data-field="{{ $field }}" data-unit="yard" placeholder="0" disabled>
-                                <span class="text-nowrap me-2" style="font-size: 13px; font-weight: 600; color: #64748b;">- Yard</span>
-                                <input type="text" class="form-control shadow-none lay-input" data-field="{{ $field }}" data-unit="inch" placeholder="0" disabled>
-                                <span class="text-nowrap" style="font-size: 13px; font-weight: 600; color: #64748b;">- Inch</span>
-                            </div>
+                    <div class="col-lg-4 col-md-6">
+                        <label class="form-label mb-2" style="font-size: 13px; font-weight: 600; color: #475569;">End Loss <span class="text-danger">*</span></label>
+                        <div class="d-flex align-items-center gap-2">
+                            <input type="text" class="form-control shadow-none lay-input" data-field="end_loss" data-unit="inch" placeholder="0" required disabled>
+                            <span class="text-nowrap" style="font-size: 13px; font-weight: 600; color: #64748b;">- Inch</span>
                         </div>
-                    @endforeach
+                    </div>
                 </div>
             </div>
         </div>
@@ -185,7 +186,7 @@
 
             <div id="spliceList"></div>
 
-            <div class="px-4 py-4 d-flex justify-content-center align-items-center">
+            <div id="addSpliceWrap" class="px-4 py-4 justify-content-center align-items-center" style="display: flex;">
                 <button type="button" id="btnAddSplice"
                     class="btn lay-action text-white d-inline-flex align-items-center gap-2 border-0"
                     style="background-color: #3b93b8; font-size: 14px; font-weight: 500; padding: 8px 18px; border-radius: 6px;" disabled>
@@ -195,7 +196,7 @@
             </div>
         </div>
 
-        {{-- Ringkasan --}}
+        {{-- Summary --}}
         <div class="bg-white rounded-3 shadow-sm p-4">
             <div class="row g-3 align-items-center">
                 <div class="col-lg-3 col-md-6">
@@ -234,7 +235,7 @@
         </div>
     </div>
 
-    {{-- Shade --}}
+    {{-- Roll --}}
     <div class="container-fluid px-4 py-4">
         <div class="bg-white rounded-3 shadow-sm p-4">
             <div id="shadeContainer"></div>
@@ -244,7 +245,7 @@
                     class="btn lay-action text-white d-inline-flex align-items-center gap-2 border-0"
                     style="background-color: #10a352; font-size: 14px; font-weight: 500; padding: 8px 15px; border-radius: 6px;" disabled>
                     <i class="bi bi-bookmark-plus" style="font-size: 15px;"></i>
-                    <span>Add New Shade</span>
+                    <span>Add New Roll</span>
                 </button>
                 <button type="button" id="btnSaveChanges"
                     class="btn lay-action text-white border-0"
@@ -268,19 +269,49 @@
             };
             var saved      = {!! json_encode($saved ?? null, JSON_HEX_TAG | JSON_HEX_AMP) !!};
             var totalRatio = {{ $ratioSize->sum('ratio') }};
-            var draftKey   = 'layerman_draft_{{ $header->id }}_{{ $detail->lay }}';
+            var draftKey   = 'layerman_draft_{{ $header->id }}_{{ $detail->idtable }}_{{ $detail->lay }}';
 
             var started    = false;
             var draftReady = false;
             var draftTimer = null;
 
-            var MEASURE_FIELDS = ['material_width', 'material_length', 'end_loss_1', 'end_loss_2'];
+            var MEASURE_FIELDS = ['material_width', 'material_length', 'end_loss'];
 
-            // Yard & plies: angka saja. Inch: angka dan satu titik. Shade: bebas.
-            var INT_SEL = '[data-unit="yard"], .input-endbit-yard, .input-splice-length-yard, ' +
-                          '.input-splice-wastage-yard, .input-damages-yard, .input-actual-plies';
-            var DEC_SEL = '[data-unit="inch"], .input-endbit-inch, .input-splice-length-inch, ' +
-                          '.input-splice-wastage-inch, .input-damages-inch';
+            var FIELD_LABELS = {
+                material_width: 'Material Width',
+                material_length: 'Material Length',
+                end_loss: 'End Loss'
+            };
+
+            // Pilihan group untuk checkbox, group lay ini tercentang untuk roll baru
+            var GROUP_OPTIONS = {!! json_encode($groupOptions, JSON_HEX_TAG | JSON_HEX_AMP) !!}.map(String);
+            var DEFAULT_GROUP = "{{ $detail->group }}";
+
+            // Nilai awal dari index. Width masuk ke Yard, Length masuk ke Inch.
+            var DEFAULTS = {
+                material_width:  { yard: {{ $defaultWidth }}, inch: '' },
+                material_length: { yard: '', inch: {{ $defaultLength }} }
+            };
+
+            function isEmptyMeasure(v) {
+                return !v || ((!v.yard || parseFloat(v.yard) === 0) && (!v.inch || parseFloat(v.inch) === 0));
+            }
+
+            // Plies: angka saja. Yard & inch: angka dan satu titik.
+            var INT_SEL = '.input-actual-plies';
+
+            var DEC_SEL = [
+                '[data-unit="yard"]',
+                '[data-unit="inch"]',
+                '.input-endbit-yard',
+                '.input-endbit-inch',
+                '.input-splice-length-yard',
+                '.input-splice-length-inch',
+                '.input-splice-wastage-yard',
+                '.input-splice-wastage-inch',
+                '.input-damages-yard',
+                '.input-damages-inch'
+            ].join(', ');
 
             // ---------- Utilitas ----------
             function esc(value) {
@@ -355,7 +386,11 @@
             $(document).on('input', DEC_SEL, function() {
                 var v = this.value.replace(/[^0-9.]/g, '');
                 var dot = v.indexOf('.');
-                if (dot !== -1) v = v.slice(0, dot + 1) + v.slice(dot + 1).replace(/\./g, '');
+
+                if (dot !== -1) {
+                    v = v.slice(0, dot + 1) + v.slice(dot + 1).replace(/\./g, '');
+                }
+
                 if (v !== this.value) this.value = v;
             });
 
@@ -366,15 +401,24 @@
             $(document).on('focusin', INT_SEL, function() { this.setAttribute('inputmode', 'numeric'); });
             $(document).on('focusin', DEC_SEL, function() { this.setAttribute('inputmode', 'decimal'); });
 
+            // Hilangkan tanda merah saat field diisi
+            $(document).on('input', '.lay-input', function() {
+                $(this).parent().find('.lay-input').removeClass('is-invalid');
+            });
+
+            $(document).on('change', '.input-shade-group', function() {
+                $(this).closest('.shade-groups').removeClass('is-invalid-group');
+            });
+
             // ---------- Play / Pause ----------
             function setRunning(on) {
                 started = on;
 
-                $('.lay-input, .lay-action').prop('disabled', !on);
+                $('.lay-input, .lay-action, .lay-check').prop('disabled', !on);
                 $('#topBar').toggleClass('running', on);
                 $('#btnPlay').toggleClass('playing', on)
                     .attr('title', on ? 'Pause' : 'Play')
-                    .html('<i class="bi bi-' + (on ? 'pause' : 'play') + '-fill" style="font-size: 25px;"></i>');
+                    .html('<i class="bi bi-' + (on ? 'pause' : 'play') + '-fill" style="font-size: 20px;"></i>');
             }
 
             $('#btnPlay').on('click', function() {
@@ -390,38 +434,46 @@
             });
 
             // ---------- Template ----------
-            function yardInch(clsYard, clsInch, value, maxWidth) {
+            function yardInch(clsYard, clsInch, value, maxWidth, req) {
                 value = value || {};
 
                 var width = maxWidth > 0
                     ? 'max-width: ' + maxWidth + 'px;'
                     : 'min-width: 0; width: 100%; flex: 1;';
+                var r = req ? 'required' : '';
 
                 return `
                     <input type="text" inputmode="numeric"
                         class="form-control shadow-none lay-input ${clsYard}"
-                        placeholder="0" value="${numVal(value.yard)}" style="${width}">
+                        placeholder="0" value="${numVal(value.yard)}" style="${width}" ${r}>
                     <span class="text-nowrap me-1" style="font-size: 14px; font-weight: 600; color: #64748b;">- Yard</span>
                     <input type="text" inputmode="decimal"
                         class="form-control shadow-none lay-input ${clsInch}"
-                        placeholder="0" value="${numVal(value.inch)}" style="${width}">
+                        placeholder="0" value="${numVal(value.inch)}" style="${width}" ${r}>
                     <span class="text-nowrap" style="font-size: 14px; font-weight: 600; color: #64748b;">- Inch</span>`;
             }
 
-            function plusButton(cls) {
+            function actionButton(cls, color, icon) {
                 return `
                     <button type="button"
                         class="btn lay-action ${cls} p-0 border-0 rounded-circle d-inline-flex align-items-center justify-content-center text-white"
-                        style="width: 24px; height: 24px; background-color: #3b93b8; flex-shrink: 0;">
-                        <i class="bi bi-plus-lg" style="font-size: 12px;"></i>
+                        style="width: 24px; height: 24px; background-color: ${color}; flex-shrink: 0;">
+                        <i class="bi bi-${icon}-lg" style="font-size: 12px;"></i>
                     </button>`;
+            }
+
+            function rowActions() {
+                return `
+                    <div class="row-actions d-flex align-items-center gap-1"
+                        style="min-width: 52px; flex-shrink: 0;">
+                    </div>`;
             }
 
             function endbitRowTemplate(value) {
                 return `
                     <div class="endbit-row d-flex align-items-center gap-2" style="width: fit-content; flex-shrink: 0;">
                         ${yardInch('input-endbit-yard', 'input-endbit-inch', value, 100)}
-                        ${plusButton('btn-add-endbit')}
+                        ${rowActions()}
                     </div>`;
             }
 
@@ -437,17 +489,17 @@
                         </div>
 
                         <div class="flex-grow-1" style="min-width: 200px;">
-                            <label class="form-label mb-2" style="font-size: 14px; font-weight: 600; color: #475569;">Length</label>
+                            <label class="form-label mb-2" style="font-size: 14px; font-weight: 600; color: #475569;">Length <span class="text-danger">*</span></label>
                             <div class="d-flex align-items-center gap-2 w-100">
-                                ${yardInch('input-splice-length-yard', 'input-splice-length-inch', splice.length, 0)}
+                                ${yardInch('input-splice-length-yard', 'input-splice-length-inch', splice.length, 0, true)}
                             </div>
                         </div>
 
                         <div class="flex-grow-1" style="min-width: 200px;">
-                            <label class="form-label mb-2" style="font-size: 14px; font-weight: 600; color: #475569;">Wastage</label>
+                            <label class="form-label mb-2" style="font-size: 14px; font-weight: 600; color: #475569;">Wastage <span class="text-danger">*</span></label>
                             <div class="d-flex align-items-center gap-2 w-100">
-                                ${yardInch('input-splice-wastage-yard', 'input-splice-wastage-inch', splice.wastage, 0)}
-                                ${plusButton('btn-add-splice')}
+                                ${yardInch('input-splice-wastage-yard', 'input-splice-wastage-inch', splice.wastage, 0, true)}
+                                ${rowActions()}
                             </div>
                         </div>
                     </div>`;
@@ -455,6 +507,22 @@
 
             function shadeTemplate(shade, removable) {
                 shade = shade || {};
+
+                // Roll baru: group lay ini tercentang. Data tersimpan: sesuai isi "1,2".
+                var selected = (shade.shade === undefined)
+                    ? [String(DEFAULT_GROUP)]
+                    : String(shade.shade).split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+
+                var groupChecks = GROUP_OPTIONS.length
+                    ? GROUP_OPTIONS.map(function(g) {
+                        return `
+                            <div class="form-check form-check-inline mb-0">
+                                <input class="form-check-input lay-check input-shade-group" type="checkbox"
+                                    value="${esc(g)}" ${selected.indexOf(g) !== -1 ? 'checked' : ''}>
+                                <label class="form-check-label" style="font-size: 14px; color: #475569;">Group ${esc(g)}</label>
+                            </div>`;
+                    }).join('')
+                    : '<span style="font-size: 13px; color: #94a3b8;">No group available</span>';
 
                 var endbits = (shade.endbits_generated && shade.endbits_generated.length)
                     ? shade.endbits_generated
@@ -465,7 +533,7 @@
                     <div class="d-flex justify-content-end mb-2">
                         <button type="button" class="btn lay-action btn-remove-shade p-0 border-0 text-danger"
                             style="font-size: 14px; font-weight: 600;">
-                            <i class="bi bi-trash"></i> Remove Shade
+                            <i class="bi bi-trash"></i> Remove Roll
                         </button>
                     </div>` : '';
 
@@ -478,16 +546,17 @@
 
                         <div class="row g-4 mb-4">
                             <div class="col-md-4">
-                                <label class="form-label mb-2" style="font-size: 14px; font-weight: 700; color: #334155;">Shade</label>
-                                <input type="text" class="form-control shadow-none lay-input input-shade w-100"
-                                    value="${esc(shade.shade || '')}">
+                                <label class="form-label mb-2" style="font-size: 14px; font-weight: 700; color: #334155;">Group <span class="text-danger">*</span></label>
+                                <div class="shade-groups d-flex flex-wrap gap-2 align-items-center px-2" style="min-height: 34px;">
+                                    ${groupChecks}
+                                </div>
                             </div>
 
                             <div class="col-md-4">
-                                <label class="form-label mb-2" style="font-size: 14px; font-weight: 700; color: #334155;">Actual Plies</label>
+                                <label class="form-label mb-2" style="font-size: 14px; font-weight: 700; color: #334155;">Actual Plies <span class="text-danger">*</span></label>
                                 <input type="text" inputmode="numeric"
                                     class="form-control shadow-none lay-input input-actual-plies w-100"
-                                    placeholder="0" value="${numVal(shade.actual_plies)}">
+                                    placeholder="0" value="${numVal(shade.actual_plies)}" required>
                             </div>
 
                             <div class="col-md-4">
@@ -505,16 +574,23 @@
                     </div>`;
             }
 
-            // Baris terakhir memakai tombol +, baris lain tombol -
+            // Hanya baris terakhir yang punya tombol: - (jika baris > 1) dan +
             function syncRowButtons($rows, addClass, removeClass) {
                 $rows.each(function(index) {
-                    var $btn = $(this).find('.lay-action').last();
                     var isLast = index === $rows.length - 1;
+                    var $box = $(this).find('.row-actions').empty();
 
-                    $btn.removeClass(isLast ? removeClass : addClass)
-                        .addClass(isLast ? addClass : removeClass)
-                        .css('background-color', isLast ? '#3b93b8' : '#ef4444')
-                        .html('<i class="bi bi-' + (isLast ? 'plus' : 'dash') + '-lg" style="font-size: 12px;"></i>');
+                    if (!isLast) return;
+
+                    var html = '';
+
+                    if ($rows.length > 1) {
+                        html += actionButton(removeClass, '#ef4444', 'dash');
+                    }
+
+                    html += actionButton(addClass, '#3b93b8', 'plus');
+
+                    $box.html(html).find('.lay-action').prop('disabled', !started);
                 });
             }
 
@@ -552,12 +628,24 @@
 
             function syncSpliceRows() {
                 var $rows = $('#spliceList .splice-row');
+                var total = $rows.length;
 
                 $rows.each(function(index) {
                     $(this).find('.splice-heading').text(index + 1);
+
+                    var $box = $(this).find('.row-actions').empty();
+
+                    if (index !== total - 1) return;
+
+                    var html = actionButton('btn-remove-splice', '#ef4444', 'dash')
+                             + actionButton('btn-add-splice', '#3b93b8', 'plus');
+
+                    $box.html(html).find('.lay-action').prop('disabled', !started);
                 });
 
-                syncRowButtons($rows, 'btn-add-splice', 'btn-remove-splice');
+                // Tombol besar hanya muncul saat belum ada row splice
+                $('#addSpliceWrap').toggle(total === 0);
+
                 updateSpliceWastage();
             }
 
@@ -578,11 +666,13 @@
 
             $(document).on('click', '.btn-remove-splice', function() {
                 if (!started) return;
+
                 $(this).closest('.splice-row').remove();
+
                 syncSpliceRows();
             });
 
-            // ---------- Shade & plies ----------
+            // ---------- Roll & plies ----------
             function updateActualPlies() {
                 var total = 0;
 
@@ -655,7 +745,7 @@
                     }).get();
 
                     return {
-                        shade: $item.find('.input-shade').val(),
+                        shade: $item.find('.input-shade-group:checked').map(function() { return this.value; }).get().join(','),
                         actual_plies: $item.find('.input-actual-plies').val(),
                         damages: {
                             yard: $item.find('.input-damages-yard').val(),
@@ -688,14 +778,91 @@
                 try { localStorage.removeItem(draftKey); } catch (e) {}
             }
 
-            $(document).on('input change click', '.lay-input, .lay-action', function() {
+            $(document).on('input change click', '.lay-input, .lay-action, .lay-check', function() {
                 clearTimeout(draftTimer);
                 draftTimer = setTimeout(saveDraft, 300);
             });
 
+            // ---------- Validasi ----------
+            function validateForm() {
+                var errors = [];
+
+                $('.lay-input').removeClass('is-invalid');
+                $('.shade-groups').removeClass('is-invalid-group');
+
+                function mark($els, msg) {
+                    $els.addClass('is-invalid');
+                    errors.push({ msg: msg, $el: $els.first() });
+                }
+
+                // Pasangan yard/inch: minimal salah satu terisi
+                function checkPair($yard, $inch, msg) {
+                    var y = $yard.length ? $.trim($yard.val()) : '';
+                    var i = $inch.length ? $.trim($inch.val()) : '';
+
+                    if (y === '' && i === '') {
+                        mark($yard.add($inch), msg);
+                    }
+                }
+
+                MEASURE_FIELDS.forEach(function(field) {
+                    checkPair(
+                        $('[data-field="' + field + '"][data-unit="yard"]'),
+                        $('[data-field="' + field + '"][data-unit="inch"]'),
+                        FIELD_LABELS[field] + ' is required.'
+                    );
+                });
+
+                $('#spliceList .splice-row').each(function(index) {
+                    var $row = $(this);
+                    var n = index + 1;
+
+                    checkPair(
+                        $row.find('.input-splice-length-yard'),
+                        $row.find('.input-splice-length-inch'),
+                        'Splice ' + n + ': Length is required.'
+                    );
+                    checkPair(
+                        $row.find('.input-splice-wastage-yard'),
+                        $row.find('.input-splice-wastage-inch'),
+                        'Splice ' + n + ': Wastage is required.'
+                    );
+                });
+
+                $('.shade-item').each(function(index) {
+                    var $item = $(this);
+                    var n = index + 1;
+                    var $plies = $item.find('.input-actual-plies');
+
+                    if ($item.find('.input-shade-group:checked').length === 0) {
+                        var $groups = $item.find('.shade-groups').addClass('is-invalid-group');
+                        errors.push({ msg: 'Roll ' + n + ': select at least one group.', $el: $groups });
+                    }
+
+                    if ($.trim($plies.val()) === '') mark($plies, 'Roll ' + n + ': Actual Plies is required.');
+                });
+
+                if (errors.length) {
+                    var first = errors[0];
+                    var text = errors.length > 1
+                        ? first.msg + ' (+' + (errors.length - 1) + ' other fields)'
+                        : first.msg;
+
+                    alertBox('warning', 'Incomplete Data', text, function() {
+                        first.$el.focus();
+                        $('html, body').animate({ scrollTop: first.$el.offset().top - 150 }, 200);
+                    });
+
+                    return false;
+                }
+
+                return true;
+            }
+
             // ---------- Save ----------
             $('#btnSaveChanges').on('click', function() {
                 if (!started) return;
+                if (!validateForm()) return;
 
                 var $btn = $(this).prop('disabled', true);
 
@@ -728,13 +895,22 @@
                 // Lay selesai: data database. Selain itu: draft browser diutamakan.
                 var source = isCompleted ? saved : (readDraft() || saved);
 
+                MEASURE_FIELDS.forEach(function(field) {
+                    var value = source ? source[field] : null;
+
+                    // Kosong dan lay belum selesai: pakai nilai dari index
+                    if (!isCompleted && isEmptyMeasure(value) && DEFAULTS[field]) {
+                        value = DEFAULTS[field];
+                    }
+
+                    fillField(field, value);
+                });
+
                 if (source) {
-                    MEASURE_FIELDS.forEach(function(field) {
-                        fillField(field, source[field]);
-                    });
                     (source.splices || []).forEach(addSpliceRow);
                 }
 
+                syncSpliceRows();
                 renderShades(source && source.shades && source.shades.length ? source.shades : [{}]);
                 updateSpliceWastage();
                 updateActualPlies();
@@ -742,7 +918,7 @@
                 setRunning(!!(saved && saved.status === 'running'));
 
                 if (isCompleted) {
-                    $('#btnPlay, #btnSaveChanges, #btnAddNewShade, #btnAddSplice').hide();
+                    $('#btnPlay, #btnSaveChanges, #btnAddNewShade, #addSpliceWrap').hide();
                 }
 
                 draftReady = !isCompleted;
