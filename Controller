@@ -10,11 +10,13 @@ use App\Http\Models\IntellocutLayermanEndbit;
 use App\Http\Models\IntellocutShellDetail;
 use App\Http\Models\IntellocutShellGroupFabric;
 use App\Http\Models\IntellocutShellHeader;
+use App\Http\Models\Main\ApprovalUser;
 use App\Http\Models\MasterIntellocutColor;
 use App\Http\Models\MasterIntellocutFabric;
 use App\Http\Models\MasterIntellocutShell;
 use App\Http\Models\MasterIntellocutSize;
 use App\Http\Models\MasterIntellocutStyle;
+use App\Http\Models\MasterIntellocutTable;
 use DB;
 use Illuminate\Http\Request;
 
@@ -27,102 +29,96 @@ class IntellocutLayermanController extends Controller
         $this->middleware('auth');
     }
 
-    // ------------------------------------------------------------------
-    // Halaman
-    // ------------------------------------------------------------------
-
+    /**
+     * Dashboard: 1 order = 1 kartu induk,
+     * anak = 1 part (idshell) + 1 lay. Semua size digabung jadi teks ratio.
+     */
     function index()
     {
-        $data = IntellocutHeader::whereIn('id', function ($query) {
-            $query->select('idheader')->from((new IntellocutShellHeader())->getTable());
-        })->get();
+        preconnect(session('db'));
 
-        $shellHeaders = IntellocutShellHeader::whereIn('idheader', $data->pluck('id'))
-            ->get()
-            ->groupBy('idheader');
+        $access = $this->getAccess();
 
-        $shellCons = $shellHeaders->flatten()->keyBy('id')->map(fn ($item) => $item->cons);
+        if (!str_contains($access, 'intellocut_layerman')) {
+            return redirect(route('home'));
+        }
 
-        $shellDetails = IntellocutShellDetail::whereIn('idshellheader', $shellHeaders->flatten()->pluck('id'))
-            ->whereNotNull('idtable')
-            ->where('idtable', '<>', '')
-            ->orderBy('lay')
-            ->get()
-            ->groupBy('idshellheader');
+        $table = session('layerman_table');
 
-        $styles = MasterIntellocutStyle::get()->keyBy('idstyle');
-        $shells = MasterIntellocutShell::get()->keyBy('id');
-        $colors = MasterIntellocutColor::get()->keyBy('id');
-        $sizes  = MasterIntellocutSize::get()->keyBy('id');
+        if (!$table) {
+            return redirect()->route('intellocutlayerman_select_table');
+        }
 
-        $intellocutDetails = IntellocutDetail::whereIn('idheader', $data->pluck('id'))
-            ->get()
-            ->groupBy('idheader');
+        $tableName = MasterIntellocutTable::where('id', $table)->value('nmtable');
 
-        $layermanLays = IntellocutLayerman::whereIn('idheader', $data->pluck('id'))
-            ->get()
-            ->keyBy(fn ($l) => $l->idheader . '-' . $l->lay);
+        // Nama tabel diambil dari model
+        $sd     = (new IntellocutShellDetail())->getTable();
+        $sh     = (new IntellocutShellHeader())->getTable();
+        $hd     = (new IntellocutHeader())->getTable();
+        $detail = (new IntellocutDetail())->getTable();
+        $lay    = (new IntellocutLayerman())->getTable();
+        $style  = (new MasterIntellocutStyle())->getTable();
+        $shell  = (new MasterIntellocutShell())->getTable();
+        $size   = (new MasterIntellocutSize())->getTable();
+        $color  = (new MasterIntellocutColor())->getTable();
 
-        $tableIds = $shellDetails->flatten()
-            ->pluck('idtable')
-            ->filter()
-            ->unique()
-            ->sort()
-            ->values();
+        $rows = DB::table("$sd as sd")
+            ->join("$sh as sh", 'sh.id', '=', 'sd.idshellheader')
+            ->join("$hd as h", 'h.id', '=', 'sh.idheader')
+            ->leftJoin("$style as st", 'st.idstyle', '=', 'h.idstyle')
+            ->leftJoin("$shell as ms", 'ms.id', '=', 'sd.idshell')
+            ->leftJoin("$size as sz", 'sz.id', '=', 'sd.idsize')
+            // status layerman: header + table + lay + part
+            ->leftJoin("$lay as l", function ($join) {
+                $join->on('l.idheader', '=', 'sh.idheader')
+                    ->on('l.idtable', '=', 'sd.idtable')
+                    ->on('l.lay', '=', 'sd.lay')
+                    ->on('l.idshell', '=', 'sd.idshell');
+            })
+            ->where('sd.idtable', $table)
+            // sembunyikan lay yang sudah selesai
+            ->where(function ($q) {
+                $q->whereNull('l.status')->orWhere('l.status', '<>', 'completed');
+            })
+            // 1 baris = 1 part + 1 lay
+            ->groupBy(
+                'h.id', 'h.order_number', 'h.created_at', 'st.nmstyle',
+                'sd.idshellheader', 'sd.lay', 'sd.idshell', 'ms.nmshell',
+                'l.status', 'l.actual_plies'
+            )
+            ->orderBy('h.id')
+            ->orderBy('sd.lay')
+            ->orderBy('sd.idshell')
+            ->selectRaw("
+                h.id                    as idheader,
+                h.order_number,
+                h.created_at,
+                COALESCE(st.nmstyle, h.idstyle) as style_name,
+                COALESCE(ms.nmshell, sd.idshell) as shell_name,
+                sd.idshellheader,
+                sd.lay,
+                sd.idshell,
+                MIN(sd.id)              as id,
+                GROUP_CONCAT(DISTINCT sd.`group` ORDER BY sd.`group` SEPARATOR ',') as grp,
+                MAX(sd.marker)          as marker,
+                MAX(sd.marker_length)   as marker_length,
+                MAX(sd.width)           as width,
+                MAX(sd.plies)           as plies,
+                COALESCE(l.status, 'not_started') as layerman_status,
+                COALESCE(l.actual_plies, 0)       as layerman_plies,
+                GROUP_CONCAT(CONCAT(sd.ratio, '-', COALESCE(sz.nmsize, sd.idsize)) ORDER BY sd.id SEPARATOR ' | ') as ratio_text,
+                (SELECT GROUP_CONCAT(DISTINCT c.nmcolor SEPARATOR ', ')
+                   FROM $detail d
+                   JOIN $color c ON c.id = d.idcolor
+                  WHERE d.idheader = h.id AND d.idshell = sd.idshell) as color_name
+            ")
+            ->get();
 
-        $data->each(function ($h) use (
-            $shellHeaders, $shellDetails, $styles, $shells, $colors,
-            $sizes, $shellCons, $intellocutDetails, $layermanLays
-        ) {
-            $shellHeaderIds = ($shellHeaders[$h->id] ?? collect())->pluck('id');
-            $details        = $intellocutDetails[$h->id] ?? collect();
+        // 1 order = 1 kartu induk
+        $orders       = $rows->groupBy('idheader');
+        $hasActiveLay = $rows->isNotEmpty();
 
-            $h->style_name = optional($styles->get($h->idstyle))->nmstyle ?? $h->idstyle;
-            $h->color_name = optional($colors->get($h->idcolor))->nmcolor ?? $h->idcolor;
-
-            $h->lay_groups = $shellHeaderIds
-                ->flatMap(fn ($id) => $shellDetails[$id] ?? collect())
-                ->groupBy('lay')
-                ->map(function ($rows) use ($shells, $colors, $sizes, $details, $shellCons, $layermanLays, $h) {
-                    $row = $rows->first();
-
-                    $row->shell_name = optional($shells->get($row->idshell))->nmshell ?? $row->idshell;
-
-                    $row->color_name = $details->pluck('idcolor')->unique()->filter()
-                        ->map(fn ($id) => optional($colors->get($id))->nmcolor)
-                        ->filter()
-                        ->unique()
-                        ->implode(', ');
-
-                    $row->ratio_size = $rows->groupBy('idshellheader')->map(function ($shellRows) use ($sizes) {
-                        $marker = $shellRows->first()->marker;
-
-                        return $shellRows->values()->map(fn ($item, $index) => [
-                            'ratio'  => $item->ratio,
-                            'idsize' => $item->idsize,
-                            'marker' => $index === 0 ? $marker : null,
-                            'nmsize' => optional($sizes->get($item->idsize))->nmsize ?? $item->idsize,
-                        ]);
-                    });
-
-                    $row->material_length = $rows->pluck('idshellheader')->unique()
-                        ->map(fn ($id) => $shellCons->get($id))
-                        ->filter()
-                        ->sum();
-
-                    $row->group_count = $rows->count();
-
-                    $savedLay = $layermanLays->get($h->id . '-' . $row->lay);
-
-                    $row->layerman_status       = $savedLay->status ?? 'not_started';
-                    $row->layerman_status_label = $savedLay ? $savedLay->status_label : 'Not Started Yet';
-                    $row->layerman_plies        = $savedLay->actual_plies ?? 0;
-
-                    return $row;
-                });
-        });
-
-        return view('cutting::intellocutlayerman.index', compact('data', 'tableIds'));
+        return view('cutting::intellocutlayerman.index', compact('orders', 'access', 'hasActiveLay', 'tableName'));
     }
 
     function layassign()
@@ -132,11 +128,21 @@ class IntellocutLayermanController extends Controller
 
     function laystarted($id)
     {
+        preconnect(session('db'));
+
+        $access = $this->getAccess();
+
+        if (!str_contains($access, 'intellocut_layerman')) {
+            return redirect(route('home'));
+        }
+
         [$detail, $shellHeader, $header] = $this->resolveContext($id);
 
         $order = IntellocutDetail::where('idheader', $header->id)
             ->where('idshell', $detail->idshell)
             ->first();
+
+        $orderRemark = $header->remark;
 
         $fabricId   = optional(IntellocutShellGroupFabric::where('idshellheader', $shellHeader->id)->first())->idfabric;
         $fabricName = optional(MasterIntellocutFabric::find($fabricId))->nmfabric ?? '-';
@@ -152,10 +158,11 @@ class IntellocutLayermanController extends Controller
 
         $sizes = MasterIntellocutSize::get()->keyBy('id');
 
+        // Ratio hanya untuk part + lay ini (idshell ikut difilter)
         $ratioSize = IntellocutShellDetail::where('idshellheader', $detail->idshellheader)
             ->where('lay', $detail->lay)
-            ->whereNotNull('idtable')
-            ->where('idtable', '<>', '')
+            ->where('idtable', $detail->idtable)
+            ->where('idshell', $detail->idshell)
             ->orderBy('id')
             ->get()
             ->map(fn ($item) => [
@@ -168,26 +175,36 @@ class IntellocutLayermanController extends Controller
         $saved = $this->formatSaved(
             IntellocutLayerman::with('splices', 'shades.endbits')
                 ->where('idheader', $header->id)
+                ->where('idtable', $detail->idtable)
                 ->where('lay', $detail->lay)
+                ->where('idshell', $detail->idshell)
                 ->first()
         );
 
+        $headerShellIds = IntellocutShellHeader::where('idheader', $header->id)->pluck('id');
+
+        $defaultWidth      = (float) $detail->width;
+        $defaultWidthInch  = (float) $detail->width_inch;
+        $defaultLength     = (float) $detail->marker_length;
+        $defaultLengthInch = (float) $detail->marker_length_inch;
+        $defaultEndLoss    = (float) $detail->end_loss;
+
+        // Pilihan checkbox group (dari shell detail order + table ini)
+        $groupOptions = IntellocutShellDetail::where('idtable', $detail->idtable)
+            ->whereIn('idshellheader', $headerShellIds)
+            ->whereNotNull('group')
+            ->where('group', '<>', '')
+            ->distinct()
+            ->orderBy('group')
+            ->pluck('group')
+            ->values();
+
         return view('cutting::intellocutlayerman.inputlayerman', compact(
-            'header',
-            'detail',
-            'order',
-            'styleName',
-            'shellName',
-            'colorName',
-            'fabricName',
-            'ratioSize',
-            'saved'
+            'access', 'header', 'detail', 'order', 'orderRemark', 'styleName', 'shellName', 'colorName',
+            'fabricName', 'ratioSize', 'saved', 'defaultWidth', 'defaultWidthInch', 'defaultLength',
+            'defaultLengthInch', 'defaultEndLoss', 'groupOptions'
         ));
     }
-
-    // ------------------------------------------------------------------
-    // Aksi
-    // ------------------------------------------------------------------
 
     function play($id)
     {
@@ -196,15 +213,20 @@ class IntellocutLayermanController extends Controller
         $existing = $this->findLay($header, $detail);
 
         if ($existing && $existing->status === 'completed') {
-            return response()->json(['message' => 'Lay ini sudah selesai.'], 422);
+            return response()->json(['message' => 'This lay is finished.'], 422);
         }
 
         $lay = DB::transaction(function () use ($header, $detail) {
             $lay = IntellocutLayerman::firstOrCreate(
-                ['idheader' => $header->id, 'lay' => $detail->lay],
+                [
+                    'idheader' => $header->id,
+                    'idtable'  => $detail->idtable,
+                    'lay'      => $detail->lay,
+                    'idshell'  => $detail->idshell,
+                ],
                 [
                     'idshelldetail' => $detail->id,
-                    'idtable'       => $detail->idtable,
+                    'marker'        => $detail->marker,
                     'iduser'        => optional(session('user'))->id ?? auth()->id(),
                 ]
             );
@@ -214,10 +236,10 @@ class IntellocutLayermanController extends Controller
             $lay->stopped_at = null;
             $lay->save();
 
-            if (!$detail->lays_started) {
-                $detail->lays_started = now();
-                $detail->save();
-            }
+            // Tandai semua baris size milik part + lay ini
+            $this->partDetailsQuery($header, $detail)
+                ->whereNull('lays_started')
+                ->update(['lays_started' => now()]);
 
             return $lay;
         });
@@ -236,7 +258,7 @@ class IntellocutLayermanController extends Controller
         }
 
         if ($lay->status === 'completed') {
-            return response()->json(['message' => 'Lay ini sudah selesai.'], 422);
+            return response()->json(['message' => 'This lay is finished.'], 422);
         }
 
         $lay->status     = 'stopped';
@@ -258,12 +280,19 @@ class IntellocutLayermanController extends Controller
 
         $this->validate($request, $this->payloadRules());
 
-        DB::transaction(function () use ($lay, $request) {
+        DB::transaction(function () use ($lay, $request, $detail, $header) {
             $this->persist($lay, $request);
 
             $lay->status     = 'completed';
             $lay->stopped_at = now();
             $lay->save();
+
+            // Hanya part + lay ini yang ditandai selesai
+            $this->partDetailsQuery($header, $detail)
+                ->update([
+                    'actual_plies'   => $lay->actual_plies,
+                    'lays_completed' => now(),
+                ]);
         });
 
         return response()->json([
@@ -272,9 +301,49 @@ class IntellocutLayermanController extends Controller
         ]);
     }
 
-    // ------------------------------------------------------------------
-    // Helper
-    // ------------------------------------------------------------------
+    function selecttable()
+    {
+        preconnect(session('db'));
+
+        $access = $this->getAccess();
+
+        if (!str_contains($access, 'intellocut_layerman')) {
+            return redirect(route('home'));
+        }
+
+        $tables = IntellocutShellDetail::whereNotNull('idtable')
+            ->where('idtable', '<>', '')
+            ->distinct()
+            ->orderBy('idtable')
+            ->pluck('idtable');
+
+        $nmtable = MasterIntellocutTable::whereIn('id', $tables)
+            ->pluck('nmtable', 'id');
+
+        return view('cutting::intellocutlayerman.selecttable',
+            compact('tables', 'nmtable', 'access')
+        );
+    }
+
+    function settable(Request $request)
+    {
+        $this->validate($request, ['table' => 'required']);
+
+        session(['layerman_table' => $request->table]);
+
+        return redirect()->route('intellocutlayerman_home');
+    }
+
+    private function getAccess()
+    {
+        $user = ApprovalUser::select('approval_type')
+            ->where('userid_approval', session('user')->nik)
+            ->where('factory_id', session('db')->iddb)
+            ->where('approval_type', 'LIKE', 'intellocut%')
+            ->get();
+
+        return $user->pluck('approval_type')->implode('-');
+    }
 
     private function resolveContext($id)
     {
@@ -285,11 +354,26 @@ class IntellocutLayermanController extends Controller
         return [$detail, $shellHeader, $header];
     }
 
+    // Record layerman = header + table + lay + part
     private function findLay($header, $detail)
     {
         return IntellocutLayerman::where('idheader', $header->id)
+            ->where('idtable', $detail->idtable)
             ->where('lay', $detail->lay)
+            ->where('idshell', $detail->idshell)
             ->first();
+    }
+
+    // Semua baris shell detail (semua size) milik part + lay yang sedang dikerjakan
+    private function partDetailsQuery($header, $detail)
+    {
+        return IntellocutShellDetail::where('idtable', $detail->idtable)
+            ->where('lay', $detail->lay)
+            ->where('idshell', $detail->idshell)
+            ->whereIn(
+                'idshellheader',
+                IntellocutShellHeader::where('idheader', $header->id)->pluck('id')
+            );
     }
 
     private function statusResponse($lay)
@@ -305,20 +389,25 @@ class IntellocutLayermanController extends Controller
     {
         $rules = [
             'splices'               => 'nullable|array',
-            'shades'                => 'nullable|array',
-            'shades.*.shade'        => 'nullable|string|max:50',
-            'shades.*.actual_plies' => 'nullable|integer|min:0',
+            'shades'                => 'required|array|min:1',
+            'shades.*.shade'        => 'required|string|max:50',
+            'shades.*.actual_plies' => 'required|integer|min:0',
         ];
 
         $measures = [
-            'material_width', 'material_length', 'end_loss_1', 'end_loss_2',
+            'material_width', 'material_length',
             'splices.*.length', 'splices.*.wastage',
             'shades.*.damages', 'shades.*.endbits_generated.*',
         ];
 
         foreach ($measures as $m) {
-            $rules[$m . '.yard'] = 'nullable|integer|min:0';
-            $rules[$m . '.inch'] = 'nullable|numeric|min:0|max:35.9999';
+            $rules[$m . '.yard'] = 'nullable|numeric|min:0';
+            $rules[$m . '.inch'] = 'nullable|numeric|min:0';
+        }
+
+        foreach (['material_width', 'material_length', 'splices.*.length', 'splices.*.wastage'] as $m) {
+            $rules[$m . '.yard'] = 'required_without:' . $m . '.inch|nullable|numeric|min:0';
+            $rules[$m . '.inch'] = 'required_without:' . $m . '.yard|nullable|numeric|min:0';
         }
 
         return $rules;
@@ -327,19 +416,23 @@ class IntellocutLayermanController extends Controller
     private function yardInch($value)
     {
         return [
-            (int) data_get($value, 'yard', 0),
+            round((float) data_get($value, 'yard', 0), 4),
             round((float) data_get($value, 'inch', 0), 4),
         ];
     }
 
     private function persist($lay, Request $request)
     {
-        foreach (['material_width', 'material_length', 'end_loss_1', 'end_loss_2'] as $field) {
+        foreach (['material_width', 'material_length'] as $field) {
             if ($request->has($field)) {
                 [$yard, $inch] = $this->yardInch($request->input($field));
                 $lay->{$field . '_yard'} = $yard;
                 $lay->{$field . '_inch'} = $inch;
             }
+        }
+
+        if ($request->has('end_loss')) {
+            $lay->end_loss = round((float) $request->input('end_loss.inch', 0), 4);
         }
 
         $lay->splices()->delete();
@@ -393,15 +486,17 @@ class IntellocutLayermanController extends Controller
             return null;
         }
 
-        $yi = fn ($yard, $inch) => ['yard' => (int) $yard, 'inch' => (float) $inch];
+        $yi = fn ($yard, $inch) => [
+            'yard' => (float) $yard,
+            'inch' => (float) $inch,
+        ];
 
         return [
             'status'          => $lay->status,
             'actual_plies'    => (int) $lay->actual_plies,
             'material_width'  => $yi($lay->material_width_yard, $lay->material_width_inch),
             'material_length' => $yi($lay->material_length_yard, $lay->material_length_inch),
-            'end_loss_1'      => $yi($lay->end_loss_1_yard, $lay->end_loss_1_inch),
-            'end_loss_2'      => $yi($lay->end_loss_2_yard, $lay->end_loss_2_inch),
+            'end_loss'        => ['yard' => 0, 'inch' => (float) $lay->end_loss],
             'splices'         => $lay->splices->sortBy('heading')->values()->map(fn ($s) => [
                 'length'  => $yi($s->length_yard, $s->length_inch),
                 'wastage' => $yi($s->wastage_yard, $s->wastage_inch),
