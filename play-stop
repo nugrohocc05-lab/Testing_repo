@@ -81,31 +81,64 @@ class IntellocutLayermanController extends Controller
         $tableIds = collect([$table]);
 
         $data->each(function ($h) use (
-            $shellHeaders, $shellDetails, $styles, $shells, $colors,
-            $sizes, $shellCons, $intellocutDetails, $layermanLays, $table
+            $shellHeaders,
+            $shellDetails,
+            $styles,
+            $shells,
+            $colors,
+            $sizes,
+            $shellCons,
+            $intellocutDetails,
+            $layermanLays,
+            $table
         ) {
             $shellHeaderIds = ($shellHeaders[$h->id] ?? collect())->pluck('id');
-            $details        = $intellocutDetails[$h->id] ?? collect();
+            $details = $intellocutDetails[$h->id] ?? collect();
 
             $h->style_name = optional($styles->get($h->idstyle))->nmstyle ?? $h->idstyle;
             $h->color_name = optional($colors->get($h->idcolor))->nmcolor ?? $h->idcolor;
 
             $h->lay_groups = $shellHeaderIds
-                ->flatMap(fn ($id) => $shellDetails[$id] ?? collect())
-                ->where('idtable', $table)
-                ->groupBy('lay', 'idshell')
-                ->map(function ($rows) use ($shells, $colors, $sizes, $details, $shellCons, $layermanLays, $h, $table) {
-                    $row = $rows->first();
+            ->flatMap(fn ($id) => $shellDetails[$id] ?? collect())
+            ->where('idtable', $table)
+            ->groupBy('idshellheader', 'lay', 'marker', 'idshell')
+            ->flatMap(function ($rows) use (
+                $shells,
+                $colors,
+                $sizes,
+                $details,
+                $shellCons,
+                $layermanLays,
+                $h,
+                $table
+            ) {
+
+                return $rows->map(function ($row) use (
+                    $shells,
+                    $colors,
+                    $sizes,
+                    $details,
+                    $shellCons,
+                    $layermanLays,
+                    $h,
+                    $table
+                ) {
 
                     $row->shell_name = optional($shells->get($row->idshell))->nmshell ?? $row->idshell;
 
                     $row->color_name = $details->where('idshell', $row->idshell)
-                        ->pluck('idcolor')->unique()->filter()
+                        ->pluck('idcolor')
+                        ->unique()
+                        ->filter()
                         ->map(fn ($id) => optional($colors->get($id))->nmcolor)
-                        ->filter()->unique()
+                        ->filter()
+                        ->unique()
                         ->implode(', ');
 
-                    $row->ratio_size = $rows->groupBy('idshellheader')->map(function ($shellRows) use ($sizes) {
+                    $row->ratio_size = collect([
+                        $row
+                    ])->groupBy('idshellheader')->map(function ($shellRows) use ($sizes) {
+
                         $marker = $shellRows->first()->marker;
 
                         return $shellRows->values()->map(fn ($item, $index) => [
@@ -116,23 +149,29 @@ class IntellocutLayermanController extends Controller
                         ]);
                     });
 
-                    $row->material_length = $rows->pluck('idshellheader')->unique()
-                        ->map(fn ($id) => $shellCons->get($id))
-                        ->filter()
-                        ->sum();
+                    $row->material_length = $shellCons->get($row->idshellheader) ?? 0;
 
-                    $row->group_count = $rows->count();
+                    $row->group_count = 1;
 
-                    $savedLay = $layermanLays->get($h->id . '-' . $table . '-' . $row->lay);
+                    $savedLay = $layermanLays->get(
+                        $h->id . '-' . $table . '-' . $row->lay
+                    );
 
-                    $row->layerman_status       = $savedLay->status ?? 'not_started';
-                    $row->layerman_status_label = $savedLay ? $savedLay->status_label : 'Not Started Yet';
-                    $row->layerman_plies        = $savedLay->actual_plies ?? 0;
+                    $row->layerman_status = $savedLay->status ?? 'not_started';
+
+                    $row->layerman_status_label = $savedLay
+                        ? $savedLay->status_label
+                        : 'Not Started Yet';
+
+                    $row->layerman_plies = $savedLay->actual_plies ?? 0;
 
                     return $row;
-                })
-                ->reject(fn ($row) => $row->layerman_status === 'completed');
+                });
+            })
+            ->reject(fn ($row) => $row->layerman_status === 'completed')
+            ->values();
         });
+
 
         $hasActiveLay = $data->contains(fn ($d) => $d->lay_groups->isNotEmpty());
 
@@ -519,261 +558,6 @@ class IntellocutLayermanController extends Controller
 }
 
 
-@extends('layouts.masternew')
-@section('extracss')
-    <style>
-        .hover-bg-light:hover {
-            background-color: #eef8fc !important;
-        }
-        .btn-change-table {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 11px 22px;
-            background: linear-gradient(135deg, #4f46e5, #7c3aed);
-            color: #fff !important;
-            font-size: 14px;
-            font-weight: 600;
-            text-decoration: none;
-            border-radius: 10px;
-            border: none;
-            box-shadow: 0 4px 12px rgba(79, 70, 229, .22);
-            transition: all .3s ease;
-        }
-
-        .btn-change-table:hover {
-            background: linear-gradient(135deg, #4338ca, #6d28d9);
-            transform: translateY(-2px);
-            box-shadow: 0 7px 18px rgba(79, 70, 229, .3);
-            color: #fff !important;
-        }
-
-        .btn-change-table .arrow-icon {
-            font-size: 11px;
-            transition: transform .3s ease;
-        }
-
-        .btn-change-table:hover .arrow-icon {
-            transform: translateX(4px);
-        }
-    </style>
-@endsection
-
-@section('content')
-    <div class="container-fluid p-5">
-        <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
-            <div>
-                <h1 class="mb-0" style="font-size: 26px; font-weight: 700; color: #475569;">
-                    <span id="greeting"></span>,
-                    <span style="color: #18009e;">{{ session('user')->name }}</span>
-                </h1>
-                <p class="mb-0" style="font-size: 15px; color: #475569;">
-                    Overview of Activities at
-                    <b>{{ $tableName ?? '-' }}</b>
-                    ({{ str_replace('GMS ', '', session('factoryname')) }})
-                </p>
-            </div>
-            <div class="d-flex align-items-center gap-3">
-                <div class="text-end" style="line-height: 1.2;">
-                    <div style="font-size: 16px; font-weight: 700; color: #475569;"><span id="live-day"></span></div>
-                    <div style="font-size: 15px; color: #64748b;"><span id="live-date"></span></div>
-                </div>
-                <div style="font-size: 38px; font-weight: 700; color: #475569; letter-spacing: 0.5px;">
-                    <span id="live-clock"></span>
-                </div>
-            </div>
-        </div>
-        <a href="{{ route('intellocutlayerman_select_table') }}"
-        class="btn-change-table mb-3">
-            <i class="bi bi-arrow-left-right me-2"></i>
-            Change Table
-        </a>
-
-        @foreach ($data as $d)
-            @php $first = $d->lay_groups->first(); @endphp
-            @continue(!$first)
-
-            <div class="mb-3">
-                <div class="bg-white rounded-3 shadow-sm overflow-hidden hover-bg-light"
-                    role="button"
-                    data-bs-toggle="collapse"
-                    data-bs-target="#orderDetail-{{ $d->id }}"
-                    aria-expanded="false"
-                    aria-controls="orderDetail-{{ $d->id }}">
-                    <div class="d-inline-flex align-items-center text-white"
-                        style="background-color: #18009e; border-bottom-right-radius: 36px; padding: 6px 42px 6px 24px;">
-                        <span style="font-size: 30px; font-weight: 700; line-height: 1;">{{ $d->lay_groups->count() }}</span>
-                        <span class="ms-5" style="font-size: 14px; color: #e2e8f0;">{{ $d->created_at }}</span>
-                    </div>
-
-                    <div class="row g-3 px-4 py-3 align-items-start">
-                        <div class="col-md-4">
-                            <div style="font-size: 14px; color: #64748b; font-weight: bold;">Order</div>
-                            <div style="font-size: 16px; font-weight: 500; color: #475569; line-height: 1.3;">{{ $d->order_number }}</div>
-                        </div>
-                        <div class="col-md-3">
-                            <div style="font-size: 14px; color: #64748b; font-weight: bold;">Style</div>
-                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ $d->style_name }}</div>
-                        </div>
-                        <div class="col-md-3">
-                            <div style="font-size: 14px; color: #64748b; font-weight: bold;">Parts</div>
-                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ $d->lay_groups->pluck('shell_name')->unique()->implode(', ') }}</div>
-                        </div>
-                        <div class="col-md-2">
-                            <div style="font-size: 14px; color: #64748b; font-weight: bold;">Colors</div>
-                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ $d->lay_groups->pluck('color_name')->filter()->unique()->implode(', ') }}</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="collapse" id="orderDetail-{{ $d->id }}">
-                @foreach ($d->lay_groups as $lay => $detail)
-                    <div class="d-flex align-items-stretch pb-3">
-                        <div class="d-flex align-items-center justify-content-center" style="width: 110px; flex-shrink: 0;">
-                            <div class="d-flex flex-column justify-content-between align-items-center py-2"
-                                style="width: 24px; height: 50px; background-color: #dce3ec; border-radius: 12px;">
-                                <span class="rounded-circle" style="width: 12px; height: 12px; background-color: #18009e;"></span>
-                                <span class="rounded-circle" style="width: 5px; height: 5px; background-color: #ffffff;"></span>
-                                <span class="rounded-circle" style="width: 5px; height: 5px; background-color: #ffffff;"></span>
-                                <span class="rounded-circle" style="width: 5px; height: 5px; background-color: #ffffff;"></span>
-                                <span class="rounded-circle" style="width: 12px; height: 12px; background-color: #18009e;"></span>
-                            </div>
-                        </div>
-
-                        <div class="flex-grow-1 d-flex flex-column gap-3 layerman-detail">
-                            <a href="{{ route('intellocutlayerman_lay_started', ['id' => $detail->id]) }}"
-                                class="text-decoration-none btn-page-loading">
-                                <div class="bg-white rounded-3 shadow-sm overflow-hidden d-flex align-items-stretch hover-bg-light">
-                                    <div class="d-flex flex-column justify-content-center align-items-center text-white text-center px-3 py-3"
-                                        style="background-color: #18009e; width: 140px; flex-shrink: 0;">
-                                        <div style="font-size: 20px; font-weight: 700; line-height: 1.1;">L - {{ $lay }}</div>
-                                        <div style="font-size: 15px; font-weight: 600; margin-top: 2px;">GROUP {{ $detail->group }}</div>
-                                    </div>
-
-                                    <div class="row g-2 flex-grow-1 align-items-center px-4 py-3 m-0">
-                                        <div class="col-2">
-                                            <div style="font-size: 14px; color: #64748b; font-weight: bold;">Material Length</div>
-                                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ number_format($detail->marker_length, 4) }}</div>
-                                        </div>
-                                        <div class="col-2">
-                                            <div style="font-size: 14px; color: #64748b; font-weight: bold;">Material Width</div>
-                                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ number_format($detail->width, 4) }}</div>
-                                        </div>
-                                        <div class="col-2">
-                                            <div style="font-size: 14px; color: #64748b; font-weight: bold;">Plies</div>
-                                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ $detail->layerman_plies }}/{{ $detail->plies }}</div>
-                                        </div>
-                                        <div class="col-2">
-                                            <div style="font-size: 14px; color: #64748b; font-weight: bold;">Status</div>
-                                            <div style="font-size: 16px; font-weight: 600; color: #475569;">{{ $detail->layerman_status_label }}</div>
-                                        </div>
-                                        <div class="col text-end px-3">
-                                            <div style="font-size: 16px; color: #94a3b8;">
-                                                @foreach ($detail->ratio_size as $items)
-                                                    @php
-                                                        $marker = $items->first()['marker'] ?? '';
-                                                        $sizes  = $items
-                                                            ->map(fn ($item) => $item['ratio'] . '-' . $item['nmsize'])
-                                                            ->implode(' | ');
-                                                    @endphp
-                                                    <span>M{{ $marker }} ({{ $sizes }})</span>
-                                                @endforeach
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </a>
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        @endforeach
-        @unless ($hasActiveLay)
-            <div class="d-flex align-items-center justify-content-center" style="min-height: 40vh;">
-                <div class="text-center p-5" style="max-width: 480px; width: 100%;">
-
-                    {{-- Success Icon --}}
-                    <div class="d-flex align-items-center justify-content-center rounded-circle mx-auto mb-4"
-                        style="width: 100px; height: 100px; background: #dcfce7;">
-                        <i class="bi bi-check2-all"
-                            style="font-size: 58px; color: #16a34a;"></i>
-                    </div>
-
-                    {{-- Title --}}
-                    <h3 class="fw-bold mb-2" style="color: #166534;">
-                        All Lays Completed!
-                    </h3>
-
-                    <hr class="my-3">
-
-                    {{-- Table Information --}}
-                    <p class="text-muted mb-2">
-                        No layers remaining in
-                    </p>
-
-                    <h2 class="fw-bold mb-3" style="color: #334155;">
-                        {{ $tableName ?? 'No Table' }}
-                    </h2>
-
-                </div>
-            </div>
-        @endunless
-    </div>
-    @include('layouts.loading')
-@endsection
-
-@section('extrascript')
-    <script>
-        $(document).ready(function() {
-            $("#layerman-bar-menu").addClass('active');
-
-            function updateClock() {
-                var now = new Date();
-                var formatted = now.toLocaleDateString('en-US', {
-                    weekday: 'long',
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric'
-                });
-                var parts = formatted.replace(',', '').split(' ');
-
-                $('#live-day').text(parts[0]);
-                $('#live-date').text(parts[1] + ' ' + parts[2] + ' ' + parts[3]);
-                $('#live-clock').text(now.toTimeString().slice(0, 8));
-            }
-
-            function updateGreeting() {
-                var hour = new Date().getHours();
-                var greeting = 'Good Night';
-
-                if (hour >= 5 && hour < 11) greeting = 'Good Morning';
-                else if (hour >= 12 && hour < 15) greeting = 'Good Afternoon';
-                else if (hour >= 15 && hour < 18) greeting = 'Good Evening';
-
-                $('#greeting').text(greeting);
-            }
-
-            updateClock();
-            updateGreeting();
-            setInterval(updateClock, 1000);
-            setInterval(updateGreeting, 60000);
-
-            $(document).on('click', '.btn-page-loading', function(e) {
-                e.preventDefault();
-                var url = $(this).attr('href');
-
-                $('#loading').show();
-                setTimeout(function() {
-                    window.location.href = url;
-                }, 100);
-            });
-        });
-    </script>
-@endsection
-
-
-inputlayerman
 @extends('layouts.masternew')
 @section('extracss')
     <style>
@@ -1766,6 +1550,259 @@ inputlayerman
             }
 
             loadForm();
+        });
+    </script>
+@endsection
+
+@extends('layouts.masternew')
+@section('extracss')
+    <style>
+        .hover-bg-light:hover {
+            background-color: #eef8fc !important;
+        }
+        .btn-change-table {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 11px 22px;
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            color: #fff !important;
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            border-radius: 10px;
+            border: none;
+            box-shadow: 0 4px 12px rgba(79, 70, 229, .22);
+            transition: all .3s ease;
+        }
+
+        .btn-change-table:hover {
+            background: linear-gradient(135deg, #4338ca, #6d28d9);
+            transform: translateY(-2px);
+            box-shadow: 0 7px 18px rgba(79, 70, 229, .3);
+            color: #fff !important;
+        }
+
+        .btn-change-table .arrow-icon {
+            font-size: 11px;
+            transition: transform .3s ease;
+        }
+
+        .btn-change-table:hover .arrow-icon {
+            transform: translateX(4px);
+        }
+    </style>
+@endsection
+
+@section('content')
+    <div class="container-fluid p-5">
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="mb-0" style="font-size: 26px; font-weight: 700; color: #475569;">
+                    <span id="greeting"></span>,
+                    <span style="color: #18009e;">{{ session('user')->name }}</span>
+                </h1>
+                <p class="mb-0" style="font-size: 15px; color: #475569;">
+                    Overview of Activities at
+                    <b>{{ $tableName ?? '-' }}</b>
+                    ({{ str_replace('GMS ', '', session('factoryname')) }})
+                </p>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <div class="text-end" style="line-height: 1.2;">
+                    <div style="font-size: 16px; font-weight: 700; color: #475569;"><span id="live-day"></span></div>
+                    <div style="font-size: 15px; color: #64748b;"><span id="live-date"></span></div>
+                </div>
+                <div style="font-size: 38px; font-weight: 700; color: #475569; letter-spacing: 0.5px;">
+                    <span id="live-clock"></span>
+                </div>
+            </div>
+        </div>
+        <a href="{{ route('intellocutlayerman_select_table') }}"
+        class="btn-change-table mb-3">
+            <i class="bi bi-arrow-left-right me-2"></i>
+            Change Table
+        </a>
+
+        @foreach ($data as $d)
+            @php $first = $d->lay_groups->first(); @endphp
+            @continue(!$first)
+
+            <div class="mb-3">
+                <div class="bg-white rounded-3 shadow-sm overflow-hidden hover-bg-light"
+                    role="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#orderDetail-{{ $d->id }}"
+                    aria-expanded="false"
+                    aria-controls="orderDetail-{{ $d->id }}">
+                    <div class="d-inline-flex align-items-center text-white"
+                        style="background-color: #18009e; border-bottom-right-radius: 36px; padding: 6px 42px 6px 24px;">
+                        <span style="font-size: 30px; font-weight: 700; line-height: 1;">{{ $d->lay_groups->count() }}</span>
+                        <span class="ms-5" style="font-size: 14px; color: #e2e8f0;">{{ $d->created_at }}</span>
+                    </div>
+
+                    <div class="row g-3 px-4 py-3 align-items-start">
+                        <div class="col-md-4">
+                            <div style="font-size: 14px; color: #64748b; font-weight: bold;">Order</div>
+                            <div style="font-size: 16px; font-weight: 500; color: #475569; line-height: 1.3;">{{ $d->order_number }}</div>
+                        </div>
+                        <div class="col-md-3">
+                            <div style="font-size: 14px; color: #64748b; font-weight: bold;">Style</div>
+                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ $d->style_name }}</div>
+                        </div>
+                        <div class="col-md-3">
+                            <div style="font-size: 14px; color: #64748b; font-weight: bold;">Parts</div>
+                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ $d->lay_groups->pluck('shell_name')->unique()->implode(', ') }}</div>
+                        </div>
+                        <div class="col-md-2">
+                            <div style="font-size: 14px; color: #64748b; font-weight: bold;">Colors</div>
+                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ $d->lay_groups->pluck('color_name')->filter()->unique()->implode(', ') }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="collapse" id="orderDetail-{{ $d->id }}">
+                @foreach ($d->lay_groups as $lay => $detail)
+                    <div class="d-flex align-items-stretch pb-3">
+                        <div class="d-flex align-items-center justify-content-center" style="width: 110px; flex-shrink: 0;">
+                            <div class="d-flex flex-column justify-content-between align-items-center py-2"
+                                style="width: 24px; height: 50px; background-color: #dce3ec; border-radius: 12px;">
+                                <span class="rounded-circle" style="width: 12px; height: 12px; background-color: #18009e;"></span>
+                                <span class="rounded-circle" style="width: 5px; height: 5px; background-color: #ffffff;"></span>
+                                <span class="rounded-circle" style="width: 5px; height: 5px; background-color: #ffffff;"></span>
+                                <span class="rounded-circle" style="width: 5px; height: 5px; background-color: #ffffff;"></span>
+                                <span class="rounded-circle" style="width: 12px; height: 12px; background-color: #18009e;"></span>
+                            </div>
+                        </div>
+
+                        <div class="flex-grow-1 d-flex flex-column gap-3 layerman-detail">
+                            <a href="{{ route('intellocutlayerman_lay_started', ['id' => $detail->id]) }}"
+                                class="text-decoration-none btn-page-loading">
+                                <div class="bg-white rounded-3 shadow-sm overflow-hidden d-flex align-items-stretch hover-bg-light">
+                                    <div class="d-flex flex-column justify-content-center align-items-center text-white text-center px-3 py-3"
+                                        style="background-color: #18009e; width: 140px; flex-shrink: 0;">
+                                        <div style="font-size: 20px; font-weight: 700; line-height: 1.1;">L - {{ $lay }}</div>
+                                        <div style="font-size: 15px; font-weight: 600; margin-top: 2px;">GROUP {{ $detail->group }}</div>
+                                    </div>
+
+                                    <div class="row g-2 flex-grow-1 align-items-center px-4 py-3 m-0">
+                                        <div class="col-2">
+                                            <div style="font-size: 14px; color: #64748b; font-weight: bold;">Material Length</div>
+                                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ number_format($detail->marker_length, 4) }}</div>
+                                        </div>
+                                        <div class="col-2">
+                                            <div style="font-size: 14px; color: #64748b; font-weight: bold;">Material Width</div>
+                                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ number_format($detail->width, 4) }}</div>
+                                        </div>
+                                        <div class="col-2">
+                                            <div style="font-size: 14px; color: #64748b; font-weight: bold;">Plies</div>
+                                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ $detail->layerman_plies }}/{{ $detail->plies }}</div>
+                                        </div>
+                                        <div class="col-2">
+                                            <div style="font-size: 14px; color: #64748b; font-weight: bold;">Status</div>
+                                            <div style="font-size: 16px; font-weight: 600; color: #475569;">{{ $detail->layerman_status_label }}</div>
+                                        </div>
+                                        <div class="col text-end px-3">
+                                            <div style="font-size: 16px; color: #94a3b8;">
+                                                @foreach ($detail->ratio_size as $items)
+                                                    @php
+                                                        $marker = $items->first()['marker'] ?? '';
+                                                        $sizes  = $items
+                                                            ->map(fn ($item) => $item['ratio'] . '-' . $item['nmsize'])
+                                                            ->implode(' | ');
+                                                    @endphp
+                                                    <span>M{{ $marker }} ({{ $sizes }})</span>
+                                                @endforeach
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        @endforeach
+        @unless ($hasActiveLay)
+            <div class="d-flex align-items-center justify-content-center" style="min-height: 40vh;">
+                <div class="text-center p-5" style="max-width: 480px; width: 100%;">
+
+                    {{-- Success Icon --}}
+                    <div class="d-flex align-items-center justify-content-center rounded-circle mx-auto mb-4"
+                        style="width: 100px; height: 100px; background: #dcfce7;">
+                        <i class="bi bi-check2-all"
+                            style="font-size: 58px; color: #16a34a;"></i>
+                    </div>
+
+                    {{-- Title --}}
+                    <h3 class="fw-bold mb-2" style="color: #166534;">
+                        All Lays Completed!
+                    </h3>
+
+                    <hr class="my-3">
+
+                    {{-- Table Information --}}
+                    <p class="text-muted mb-2">
+                        No layers remaining in
+                    </p>
+
+                    <h2 class="fw-bold mb-3" style="color: #334155;">
+                        {{ $tableName ?? 'No Table' }}
+                    </h2>
+
+                </div>
+            </div>
+        @endunless
+    </div>
+    @include('layouts.loading')
+@endsection
+
+@section('extrascript')
+    <script>
+        $(document).ready(function() {
+            $("#layerman-bar-menu").addClass('active');
+
+            function updateClock() {
+                var now = new Date();
+                var formatted = now.toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                });
+                var parts = formatted.replace(',', '').split(' ');
+
+                $('#live-day').text(parts[0]);
+                $('#live-date').text(parts[1] + ' ' + parts[2] + ' ' + parts[3]);
+                $('#live-clock').text(now.toTimeString().slice(0, 8));
+            }
+
+            function updateGreeting() {
+                var hour = new Date().getHours();
+                var greeting = 'Good Night';
+
+                if (hour >= 5 && hour < 11) greeting = 'Good Morning';
+                else if (hour >= 12 && hour < 15) greeting = 'Good Afternoon';
+                else if (hour >= 15 && hour < 18) greeting = 'Good Evening';
+
+                $('#greeting').text(greeting);
+            }
+
+            updateClock();
+            updateGreeting();
+            setInterval(updateClock, 1000);
+            setInterval(updateGreeting, 60000);
+
+            $(document).on('click', '.btn-page-loading', function(e) {
+                e.preventDefault();
+                var url = $(this).attr('href');
+
+                $('#loading').show();
+                setTimeout(function() {
+                    window.location.href = url;
+                }, 100);
+            });
         });
     </script>
 @endsection
