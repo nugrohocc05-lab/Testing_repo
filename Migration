@@ -1,67 +1,47 @@
--- 1. intellocut_layerman_lays
-CREATE TABLE intellocut_layerman_lays (
-    id                   BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    idheader             BIGINT UNSIGNED NOT NULL,
-    idshelldetail        BIGINT UNSIGNED NOT NULL,
-    lay                  INT             NOT NULL,
-    idtable              VARCHAR(50)     NULL,
-    material_width_yard  INT UNSIGNED    NOT NULL DEFAULT 0,
-    material_width_inch  DECIMAL(8,4)    NOT NULL DEFAULT 0,
-    material_length_yard INT UNSIGNED    NOT NULL DEFAULT 0,
-    material_length_inch DECIMAL(8,4)    NOT NULL DEFAULT 0,
-    end_loss_1_yard      INT UNSIGNED    NOT NULL DEFAULT 0,
-    end_loss_1_inch      DECIMAL(8,4)    NOT NULL DEFAULT 0,
-    end_loss_2_yard      INT UNSIGNED    NOT NULL DEFAULT 0,
-    end_loss_2_inch      DECIMAL(8,4)    NOT NULL DEFAULT 0,
-    actual_plies         INT             NOT NULL DEFAULT 0,
-    status               VARCHAR(20)     NOT NULL DEFAULT 'not_started',
-    started_at           DATETIME        NULL,
-    stopped_at           DATETIME        NULL,
-    iduser               BIGINT UNSIGNED NULL,
-    created_at           TIMESTAMP       NULL DEFAULT NULL,
-    updated_at           TIMESTAMP       NULL DEFAULT NULL,
-    PRIMARY KEY (id),
-    UNIQUE KEY uq_layerman_header_lay (idheader, lay),
-    KEY idx_layerman_shelldetail (idshelldetail)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+-- =====================================================
+-- MIGRATION: pisahkan record layerman per PART (idshell)
+-- Jalankan di database tiap factory. BACKUP DULU.
+-- =====================================================
 
--- 2. intellocut_layerman_splices
-CREATE TABLE intellocut_layerman_splices (
-    id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    idlayerman    BIGINT UNSIGNED NOT NULL,
-    heading       INT UNSIGNED    NOT NULL,
-    length_yard   INT UNSIGNED    NOT NULL DEFAULT 0,
-    length_inch   DECIMAL(8,4)    NOT NULL DEFAULT 0,
-    wastage_yard  INT UNSIGNED    NOT NULL DEFAULT 0,
-    wastage_inch  DECIMAL(8,4)    NOT NULL DEFAULT 0,
-    PRIMARY KEY (id),
-    KEY idx_splices_layerman (idlayerman),
-    CONSTRAINT fk_splices_layerman FOREIGN KEY (idlayerman)
-        REFERENCES intellocut_layerman_lays (id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+-- 0. (Opsional) cek tipe kolom idshell di shell detail,
+--    sesuaikan tipe di langkah 1 jika bukan BIGINT UNSIGNED
+-- SHOW COLUMNS FROM intellocut_shell_details LIKE 'idshell';
 
--- 3. intellocut_layerman_shades
-CREATE TABLE intellocut_layerman_shades (
-    id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    idlayerman    BIGINT UNSIGNED NOT NULL,
-    shade         VARCHAR(50)     NULL,
-    actual_plies  INT             NOT NULL DEFAULT 0,
-    damages_yard  INT UNSIGNED    NOT NULL DEFAULT 0,
-    damages_inch  DECIMAL(8,4)    NOT NULL DEFAULT 0,
-    PRIMARY KEY (id),
-    KEY idx_shades_layerman (idlayerman),
-    CONSTRAINT fk_shades_layerman FOREIGN KEY (idlayerman)
-        REFERENCES intellocut_layerman_lays (id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+-- 1. Tambah kolom idshell
+ALTER TABLE intellocut_layerman_lays
+    ADD COLUMN idshell BIGINT UNSIGNED NULL AFTER idtable;
 
--- 4. intellocut_layerman_endbits
-CREATE TABLE intellocut_layerman_endbits (
-    id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    idshade      BIGINT UNSIGNED NOT NULL,
-    length_yard  INT UNSIGNED    NOT NULL DEFAULT 0,
-    length_inch  DECIMAL(8,4)    NOT NULL DEFAULT 0,
-    PRIMARY KEY (id),
-    KEY idx_endbits_shade (idshade),
-    CONSTRAINT fk_endbits_shade FOREIGN KEY (idshade)
-        REFERENCES intellocut_layerman_shades (id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+-- 2. Isi data lama dari shell detail
+UPDATE intellocut_layerman_lays l
+JOIN intellocut_shell_details d ON d.id = l.idshelldetail
+SET l.idshell = d.idshell;
+
+-- 3. Ganti unique key lama (idheader, lay, marker)
+--    menjadi (idheader, idtable, lay, idshell)
+ALTER TABLE intellocut_layerman_lays
+    DROP INDEX uq_layerman_header_lay_marker,
+    ADD UNIQUE KEY uq_layerman_header_table_lay_shell (idheader, idtable, lay, idshell);
+
+-- 4. (Opsional tapi disarankan) yard boleh desimal, sebelumnya INT UNSIGNED
+--    sehingga 1.5 yard terpotong jadi 1. Lewati jika yard memang selalu bulat.
+ALTER TABLE intellocut_layerman_splices
+    MODIFY length_yard  DECIMAL(8,4) NOT NULL DEFAULT 0,
+    MODIFY wastage_yard DECIMAL(8,4) NOT NULL DEFAULT 0;
+
+ALTER TABLE intellocut_layerman_shades
+    MODIFY damages_yard DECIMAL(8,4) NOT NULL DEFAULT 0;
+
+ALTER TABLE intellocut_layerman_endbits
+    MODIFY length_yard DECIMAL(8,4) NOT NULL DEFAULT 0;
+
+-- 5. Verifikasi
+-- SELECT id, idheader, idtable, lay, idshell, marker, status
+-- FROM intellocut_layerman_lays ORDER BY idheader, lay, idshell;
+
+-- =====================================================
+-- ROLLBACK (jika perlu)
+-- =====================================================
+-- ALTER TABLE intellocut_layerman_lays
+--     DROP INDEX uq_layerman_header_table_lay_shell,
+--     ADD UNIQUE KEY uq_layerman_header_lay_marker (idheader, lay, marker);
+-- ALTER TABLE intellocut_layerman_lays DROP COLUMN idshell;
