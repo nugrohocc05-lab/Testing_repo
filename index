@@ -4,8 +4,47 @@
         .hover-bg-light:hover {
             background-color: #eef8fc !important;
         }
+        .btn-change-table {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 11px 22px;
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            color: #fff !important;
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            border-radius: 10px;
+            border: none;
+            box-shadow: 0 4px 12px rgba(79, 70, 229, .22);
+            transition: all .3s ease;
+        }
+
+        .btn-change-table:hover {
+            background: linear-gradient(135deg, #4338ca, #6d28d9);
+            transform: translateY(-2px);
+            box-shadow: 0 7px 18px rgba(79, 70, 229, .3);
+            color: #fff !important;
+        }
+
+        .btn-change-table .arrow-icon {
+            font-size: 11px;
+            transition: transform .3s ease;
+        }
+
+        .btn-change-table:hover .arrow-icon {
+            transform: translateX(4px);
+        }
     </style>
 @endsection
+
+@php
+    $statusLabels = [
+        'not_started' => 'Not Started Yet',
+        'running'     => 'Running',
+        'stopped'     => 'Stopped',
+    ];
+@endphp
 
 @section('content')
     <div class="container-fluid p-5">
@@ -15,8 +54,9 @@
                     <span id="greeting"></span>,
                     <span style="color: #18009e;">{{ session('user')->name }}</span>
                 </h1>
-                <p class="mb-0" style="font-size: 15px; color: #475569;">Overview of Activities at
-                    <b>{{ $tableIds->isNotEmpty() ? 'Table ' . $tableIds->implode(', ') : '-' }}</b>
+                <p class="mb-0" style="font-size: 15px; color: #475569;">
+                    Overview of Activities at
+                    <b>{{ $tableName ?? '-' }}</b>
                     ({{ str_replace('GMS ', '', session('factoryname')) }})
                 </p>
             </div>
@@ -30,21 +70,33 @@
                 </div>
             </div>
         </div>
+        <a href="{{ route('intellocutlayerman_select_table') }}"
+        class="btn-change-table mb-3">
+            <i class="bi bi-arrow-left-right me-2"></i>
+            Change Table
+        </a>
 
-        @foreach ($data as $d)
-            @php $first = $d->lay_groups->first(); @endphp
-            @continue(!$first)
+        @foreach ($orders as $idheader => $cards)
+            @php
+                $d = $cards->first();
+                $colors = $cards->pluck('color_name')
+                    ->filter()
+                    ->flatMap(fn ($c) => explode(', ', $c))
+                    ->unique()
+                    ->implode(', ');
+            @endphp
 
+            {{-- KARTU INDUK: 1 order --}}
             <div class="mb-3">
                 <div class="bg-white rounded-3 shadow-sm overflow-hidden hover-bg-light"
                     role="button"
                     data-bs-toggle="collapse"
-                    data-bs-target="#orderDetail-{{ $d->id }}"
+                    data-bs-target="#orderDetail-{{ $idheader }}"
                     aria-expanded="false"
-                    aria-controls="orderDetail-{{ $d->id }}">
+                    aria-controls="orderDetail-{{ $idheader }}">
                     <div class="d-inline-flex align-items-center text-white"
                         style="background-color: #18009e; border-bottom-right-radius: 36px; padding: 6px 42px 6px 24px;">
-                        <span style="font-size: 30px; font-weight: 700; line-height: 1;">{{ $d->lay_groups->count() }}</span>
+                        <span style="font-size: 30px; font-weight: 700; line-height: 1;">{{ $cards->count() }}</span>
                         <span class="ms-5" style="font-size: 14px; color: #e2e8f0;">{{ $d->created_at }}</span>
                     </div>
 
@@ -59,18 +111,19 @@
                         </div>
                         <div class="col-md-3">
                             <div style="font-size: 14px; color: #64748b; font-weight: bold;">Parts</div>
-                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ $first->shell_name }}</div>
+                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ $cards->pluck('shell_name')->unique()->implode(', ') }}</div>
                         </div>
                         <div class="col-md-2">
                             <div style="font-size: 14px; color: #64748b; font-weight: bold;">Colors</div>
-                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ $first->color_name }}</div>
+                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ $colors }}</div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="collapse" id="orderDetail-{{ $d->id }}">
-                @foreach ($d->lay_groups as $lay => $detail)
+            {{-- KARTU ANAK: 1 part + 1 lay --}}
+            <div class="collapse" id="orderDetail-{{ $idheader }}">
+                @foreach ($cards as $card)
                     <div class="d-flex align-items-stretch pb-3">
                         <div class="d-flex align-items-center justify-content-center" style="width: 110px; flex-shrink: 0;">
                             <div class="d-flex flex-column justify-content-between align-items-center py-2"
@@ -84,43 +137,39 @@
                         </div>
 
                         <div class="flex-grow-1 d-flex flex-column gap-3 layerman-detail">
-                            <a href="{{ route('intellocutlayerman_lay_started', ['id' => $detail->id]) }}"
+                            <a href="{{ route('intellocutlayerman_lay_started', ['id' => $card->id]) }}"
                                 class="text-decoration-none btn-page-loading">
                                 <div class="bg-white rounded-3 shadow-sm overflow-hidden d-flex align-items-stretch hover-bg-light">
                                     <div class="d-flex flex-column justify-content-center align-items-center text-white text-center px-3 py-3"
                                         style="background-color: #18009e; width: 140px; flex-shrink: 0;">
-                                        <div style="font-size: 20px; font-weight: 700; line-height: 1.1;">L - {{ $lay }}</div>
-                                        <div style="font-size: 15px; font-weight: 600; margin-top: 2px;">GROUP {{ $detail->group }}</div>
+                                        <div style="font-size: 20px; font-weight: 700; line-height: 1.1;">L - {{ $card->lay }}</div>
+                                        <div style="font-size: 15px; font-weight: 600; margin-top: 2px;">GROUP {{ $card->grp }}</div>
                                     </div>
 
                                     <div class="row g-2 flex-grow-1 align-items-center px-4 py-3 m-0">
                                         <div class="col-2">
+                                            <div style="font-size: 14px; color: #64748b; font-weight: bold;">Part</div>
+                                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ $card->shell_name }}</div>
+                                        </div>
+                                        <div class="col-2">
                                             <div style="font-size: 14px; color: #64748b; font-weight: bold;">Material Length</div>
-                                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ number_format($detail->material_length, 4) }}</div>
+                                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ number_format($card->marker_length, 4) }}</div>
                                         </div>
                                         <div class="col-2">
                                             <div style="font-size: 14px; color: #64748b; font-weight: bold;">Material Width</div>
-                                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ number_format($detail->width, 4) }}</div>
+                                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ number_format($card->width, 4) }}</div>
                                         </div>
-                                        <div class="col-2">
+                                        <div class="col-1">
                                             <div style="font-size: 14px; color: #64748b; font-weight: bold;">Plies</div>
-                                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ $detail->layerman_plies }}/{{ $detail->plies }}</div>
+                                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ $card->layerman_plies }}/{{ $card->plies }}</div>
                                         </div>
                                         <div class="col-2">
                                             <div style="font-size: 14px; color: #64748b; font-weight: bold;">Status</div>
-                                            <div style="font-size: 16px; font-weight: 600; color: #475569;">{{ $detail->layerman_status_label }}</div>
+                                            <div style="font-size: 16px; font-weight: 600; color: #475569;">{{ $statusLabels[$card->layerman_status] ?? $card->layerman_status }}</div>
                                         </div>
                                         <div class="col text-end px-3">
                                             <div style="font-size: 16px; color: #94a3b8;">
-                                                @foreach ($detail->ratio_size as $items)
-                                                    @php
-                                                        $marker = $items->first()['marker'] ?? '';
-                                                        $sizes  = $items
-                                                            ->map(fn ($item) => $item['ratio'] . '-' . $item['nmsize'])
-                                                            ->implode(' | ');
-                                                    @endphp
-                                                    <span>M{{ $marker }} ({{ $sizes }})</span>
-                                                @endforeach
+                                                <span>M{{ $card->marker }} ({{ $card->ratio_text }})</span>
                                             </div>
                                         </div>
                                     </div>
@@ -131,6 +180,37 @@
                 @endforeach
             </div>
         @endforeach
+
+        @unless ($hasActiveLay)
+            <div class="d-flex align-items-center justify-content-center" style="min-height: 40vh;">
+                <div class="text-center p-5" style="max-width: 480px; width: 100%;">
+
+                    {{-- Success Icon --}}
+                    <div class="d-flex align-items-center justify-content-center rounded-circle mx-auto mb-4"
+                        style="width: 100px; height: 100px; background: #dcfce7;">
+                        <i class="bi bi-check2-all"
+                            style="font-size: 58px; color: #16a34a;"></i>
+                    </div>
+
+                    {{-- Title --}}
+                    <h3 class="fw-bold mb-2" style="color: #166534;">
+                        All Lays Completed!
+                    </h3>
+
+                    <hr class="my-3">
+
+                    {{-- Table Information --}}
+                    <p class="text-muted mb-2">
+                        No layers remaining in
+                    </p>
+
+                    <h2 class="fw-bold mb-3" style="color: #334155;">
+                        {{ $tableName ?? 'No Table' }}
+                    </h2>
+
+                </div>
+            </div>
+        @endunless
     </div>
     @include('layouts.loading')
 @endsection
@@ -138,6 +218,8 @@
 @section('extrascript')
     <script>
         $(document).ready(function() {
+            $("#layerman-bar-menu").addClass('active');
+
             function updateClock() {
                 var now = new Date();
                 var formatted = now.toLocaleDateString('en-US', {
@@ -157,8 +239,8 @@
                 var hour = new Date().getHours();
                 var greeting = 'Good Night';
 
-                if (hour >= 5 && hour < 11) greeting = 'Good Morning';
-                else if (hour >= 11 && hour < 15) greeting = 'Good Afternoon';
+                if (hour >= 5 && hour < 12) greeting = 'Good Morning';
+                else if (hour >= 12 && hour < 15) greeting = 'Good Afternoon';
                 else if (hour >= 15 && hour < 18) greeting = 'Good Evening';
 
                 $('#greeting').text(greeting);
