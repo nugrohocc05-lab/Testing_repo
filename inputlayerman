@@ -152,22 +152,28 @@
                 <div class="row g-4 mb-3 pt-1">
                     @foreach (['material_width' => 'Material Width', 'material_length' => 'Material Length'] as $field => $label)
                         <div class="col-lg-4 col-md-6">
-                            <label class="form-label mb-2" style="font-size: 13px; font-weight: 600; color: #475569;">{{ $label }} <span class="text-danger">*</span></label>
+                            <label class="form-label mb-2" style="font-size: 13px; font-weight: 600; color: #475569;">
+                                {{ $label }} <span class="text-danger">*</span>
+                            </label>
                             <div class="d-flex align-items-center gap-2">
-                                <input type="text" class="form-control shadow-none lay-input" data-field="{{ $field }}" data-unit="yard" placeholder="0" required disabled>
+                                <input type="text" class="form-control shadow-none lay-input"
+                                    data-field="{{ $field }}" data-unit="yard" placeholder="0" required disabled>
                                 <span class="text-nowrap me-2" style="font-size: 13px; font-weight: 600; color: #64748b;">- Yard</span>
-                                <input type="text" class="form-control shadow-none lay-input" data-field="{{ $field }}" data-unit="inch" placeholder="0" required disabled>
+
+                                <input type="text" class="form-control shadow-none lay-input"
+                                    data-field="{{ $field }}" data-unit="inch" placeholder="0" required disabled>
                                 <span class="text-nowrap" style="font-size: 13px; font-weight: 600; color: #64748b;">- Inch</span>
                             </div>
                         </div>
                     @endforeach
-                </div>
 
-                <div class="row g-4">
                     <div class="col-lg-4 col-md-6">
-                        <label class="form-label mb-2" style="font-size: 13px; font-weight: 600; color: #475569;">End Loss <span class="text-danger">*</span></label>
+                        <label class="form-label mb-2" style="font-size: 13px; font-weight: 600; color: #475569;">
+                            End Loss <span class="text-danger">*</span>
+                        </label>
                         <div class="d-flex align-items-center gap-2">
-                            <input type="text" class="form-control shadow-none lay-input" data-field="end_loss" data-unit="inch" placeholder="0" required disabled>
+                            <input type="text" class="form-control shadow-none lay-input"
+                                data-field="end_loss" data-unit="inch" placeholder="0" disabled>
                             <span class="text-nowrap" style="font-size: 13px; font-weight: 600; color: #64748b;">- Inch</span>
                         </div>
                     </div>
@@ -194,6 +200,28 @@
                     <span>Add Splice Points</span>
                 </button>
             </div>
+        </div>
+
+        {{-- Use Endbits --}}
+        <div class="row g-4 mb-4">
+            @foreach (['Suggested' => 'Use Suggested Endbits', 'Other' => 'Use Endbits'] as $key => $title)
+                <div class="col-md-6">
+                    <div class="bg-white rounded-3 shadow-sm h-100">
+                        <div class="px-4 py-3 d-flex justify-content-between align-items-center"
+                            style="border-bottom: 1px solid #e2e8f0;">
+                            <div style="font-size: 13px; font-weight: 700; color: #1e293b;">
+                                {{ $title }} (<span id="cnt{{ $key }}">0/0</span>)
+                            </div>
+                            <button type="button"
+                                class="btn btn-link p-0 lay-action btn-refresh-endbits text-decoration-none"
+                                style="font-size: 11px; color: #3b93b8; font-weight: 500;" disabled>Refresh</button>
+                        </div>
+                        <div class="p-3" id="list{{ $key }}" style="max-height: 200px; overflow-y: auto;">
+                            <span style="font-size: 12px; color: #94a3b8;">No endbits available</span>
+                        </div>
+                    </div>
+                </div>
+            @endforeach
         </div>
 
         {{-- Summary --}}
@@ -265,15 +293,21 @@
                 play: "{{ route('intellocutlayerman_play', ['id' => $detail->id]) }}",
                 stop: "{{ route('intellocutlayerman_stop', ['id' => $detail->id]) }}",
                 save: "{{ route('intellocutlayerman_save', ['id' => $detail->id]) }}",
+                endbits: "{{ route('intellocutlayerman_endbits', ['id' => $detail->id]) }}",
                 home: "{{ route('intellocutlayerman_home') }}"
             };
             var saved      = {!! json_encode($saved ?? null, JSON_HEX_TAG | JSON_HEX_AMP) !!};
             var totalRatio = {{ $ratioSize->sum('ratio') }};
-            var draftKey   = 'layerman_draft_{{ $header->id }}_{{ $detail->idtable }}_{{ $detail->lay }}';
+            var draftKey   = 'layerman_draft_{{ $header->id }}_{{ $detail->idtable }}_{{ $detail->lay }}_{{ $detail->idshell }}';
 
             var started    = false;
             var draftReady = false;
             var draftTimer = null;
+
+            // Use Endbits
+            var usedIds    = [];   // id endbit yang dipilih
+            var endbitData = {};   // id -> data endbit (hasil fetch)
+            var EMPTY_LIST = '<span style="font-size: 12px; color: #94a3b8;">No endbits available</span>';
 
             var MEASURE_FIELDS = ['material_width', 'material_length', 'end_loss'];
 
@@ -283,21 +317,22 @@
                 end_loss: 'End Loss'
             };
 
-            // Pilihan group untuk checkbox, group lay ini tercentang untuk roll baru
             var GROUP_OPTIONS = {!! json_encode($groupOptions, JSON_HEX_TAG | JSON_HEX_AMP) !!}.map(String);
             var DEFAULT_GROUP = "{{ $detail->group }}";
 
-            // Nilai awal dari index. Width masuk ke Yard, Length masuk ke Inch.
             var DEFAULTS = {
-                material_width:  { yard: {{ $defaultWidth }}, inch: '' },
-                material_length: { yard: '', inch: {{ $defaultLength }} }
+                material_width:  { yard: {{ $defaultWidth }}, inch: {{ $defaultWidthInch }} },
+                material_length: { yard: {{ $defaultLength }}, inch: {{ $defaultLengthInch }} },
+                end_loss: {
+                    yard: '',
+                    inch: {{ $defaultEndLoss ?? 0 }}
+                }
             };
 
             function isEmptyMeasure(v) {
                 return !v || ((!v.yard || parseFloat(v.yard) === 0) && (!v.inch || parseFloat(v.inch) === 0));
             }
 
-            // Plies: angka saja. Yard & inch: angka dan satu titik.
             var INT_SEL = '.input-actual-plies';
 
             var DEC_SEL = [
@@ -406,8 +441,11 @@
                 $(this).parent().find('.lay-input').removeClass('is-invalid');
             });
 
+            // Group roll berubah: hapus tanda merah, dan pindahkan baris endbit auto-isi ke roll yang cocok
             $(document).on('change', '.input-shade-group', function() {
                 $(this).closest('.shade-groups').removeClass('is-invalid-group');
+                $(this).removeClass('is-invalid');
+                applyUsedEndbits();
             });
 
             // ---------- Play / Pause ----------
@@ -415,7 +453,12 @@
                 started = on;
 
                 $('.lay-input, .lay-action, .lay-check').prop('disabled', !on);
+
+                $('[data-field="material_width"], [data-field="material_length"], [data-field="end_loss"]')
+                    .prop('disabled', true);
+
                 $('#topBar').toggleClass('running', on);
+
                 $('#btnPlay').toggleClass('playing', on)
                     .attr('title', on ? 'Pause' : 'Play')
                     .html('<i class="bi bi-' + (on ? 'pause' : 'play') + '-fill" style="font-size: 20px;"></i>');
@@ -443,11 +486,11 @@
                 var r = req ? 'required' : '';
 
                 return `
-                    <input type="text" inputmode="numeric"
+                    <input type="text" inputmode="numeric" maxlength="10"
                         class="form-control shadow-none lay-input ${clsYard}"
                         placeholder="0" value="${numVal(value.yard)}" style="${width}" ${r}>
                     <span class="text-nowrap me-1" style="font-size: 14px; font-weight: 600; color: #64748b;">- Yard</span>
-                    <input type="text" inputmode="decimal"
+                    <input type="text" inputmode="decimal" maxlength="10"
                         class="form-control shadow-none lay-input ${clsInch}"
                         placeholder="0" value="${numVal(value.inch)}" style="${width}" ${r}>
                     <span class="text-nowrap" style="font-size: 14px; font-weight: 600; color: #64748b;">- Inch</span>`;
@@ -508,21 +551,21 @@
             function shadeTemplate(shade, removable) {
                 shade = shade || {};
 
-                // Roll baru: group lay ini tercentang. Data tersimpan: sesuai isi "1,2".
+                // Roll baru: group lay ini terpilih. Data tersimpan: sesuai isi shade.
                 var selected = (shade.shade === undefined)
                     ? [String(DEFAULT_GROUP)]
                     : String(shade.shade).split(',').map(function(s) { return s.trim(); }).filter(Boolean);
 
-                var groupChecks = GROUP_OPTIONS.length
-                    ? GROUP_OPTIONS.map(function(g) {
-                        return `
-                            <div class="form-check form-check-inline mb-0">
-                                <input class="form-check-input lay-check input-shade-group" type="checkbox"
-                                    value="${esc(g)}" ${selected.indexOf(g) !== -1 ? 'checked' : ''}>
-                                <label class="form-check-label" style="font-size: 14px; color: #475569;">Group ${esc(g)}</label>
-                            </div>`;
-                    }).join('')
-                    : '<span style="font-size: 13px; color: #94a3b8;">No group available</span>';
+                var groupChecks = `
+                    <select class="form-select shadow-none lay-input input-shade-group"
+                        style="width: 100%; min-width: 120px; font-size: 14px;">
+                        ${GROUP_OPTIONS.map(function(g) {
+                            return `
+                                <option value="${esc(g)}" ${selected.indexOf(g) !== -1 ? 'selected' : ''}>
+                                    ${esc(g)}
+                                </option>`;
+                        }).join('')}
+                    </select>`;
 
                 var endbits = (shade.endbits_generated && shade.endbits_generated.length)
                     ? shade.endbits_generated
@@ -546,8 +589,8 @@
 
                         <div class="row g-4 mb-4">
                             <div class="col-md-4">
-                                <label class="form-label mb-2" style="font-size: 14px; font-weight: 700; color: #334155;">Group <span class="text-danger">*</span></label>
-                                <div class="shade-groups d-flex flex-wrap gap-2 align-items-center px-2" style="min-height: 34px;">
+                                <label class="form-label mb-2" style="font-size: 14px; font-weight: 700; color: #334155;">Shade <span class="text-danger">*</span></label>
+                                <div class="shade-groups d-flex flex-wrap gap-2 align-items-center" style="min-height: 34px;">
                                     ${groupChecks}
                                 </div>
                             </div>
@@ -594,9 +637,10 @@
                 });
             }
 
-            // ---------- Endbits ----------
+            // ---------- Endbits Generated ----------
+            // Baris auto-isi (.endbit-from-used) tidak ikut dihitung tombol +/-
             function syncEndbitButtons($list) {
-                syncRowButtons($list.find('.endbit-row'), 'btn-add-endbit', 'btn-remove-endbit');
+                syncRowButtons($list.find('.endbit-row:not(.endbit-from-used)'), 'btn-add-endbit', 'btn-remove-endbit');
             }
 
             $(document).on('click', '.btn-add-endbit', function() {
@@ -613,17 +657,126 @@
                 syncEndbitButtons($list);
             });
 
+            // ---------- Use Endbits ----------
+            function fmtLen(e) {
+                return (parseFloat(e.length_yard) || 0) + ' yd ' + (parseFloat(e.length_inch) || 0) + ' in';
+            }
+
+            function endbitCheckHtml(e) {
+                return `
+                    <label class="d-flex align-items-center gap-2 px-2 py-1 mb-1 rounded-1" style="font-size: 13px; color: #475569; cursor: pointer;">
+                        <input type="checkbox" class="form-check-input lay-check chk-use-endbit" value="${e.id}"
+                            ${usedIds.indexOf(e.id) !== -1 ? 'checked' : ''} ${started ? '' : 'disabled'}>
+                        <span>L-${esc(e.lay)} · ${esc(e.part)} · Shade ${esc(e.shade)} · ${fmtLen(e)}</span>
+                    </label>`;
+            }
+
+            function usedEndbitRowTemplate(e) {
+                return `
+                    <div class="endbit-row endbit-from-used d-flex align-items-center gap-2"
+                        data-source-id="${e.id}" style="width: fit-content; flex-shrink: 0;"
+                        title="From L-${esc(e.lay)} · Shade ${esc(e.shade)}">
+                        <input type="text" class="form-control shadow-none lay-calc" style="max-width: 100px;" value="${numVal(e.length_yard)}" readonly>
+                        <span class="text-nowrap me-1" style="font-size: 14px; font-weight: 600; color: #64748b;">- Yard</span>
+                        <input type="text" class="form-control shadow-none lay-calc" style="max-width: 100px;" value="${numVal(e.length_inch)}" readonly>
+                        <span class="text-nowrap" style="font-size: 14px; font-weight: 600; color: #64748b;">- Inch</span>
+                        <span class="badge bg-secondary">L-${esc(e.lay)}</span>
+                        <div style="min-width: 52px; flex-shrink: 0;"></div>
+                    </div>`;
+            }
+
+            function updateEndbitCounts() {
+                ['Suggested', 'Other'].forEach(function(key) {
+                    var $all = $('#list' + key + ' .chk-use-endbit');
+                    $('#cnt' + key).text($all.filter(':checked').length + '/' + $all.length);
+                });
+            }
+
+            // Roll tujuan: yang group-nya sama dengan shade endbit, kalau tidak ada: roll pertama
+            function targetList(shadeStr) {
+                var tokens = String(shadeStr || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+                var $target = null;
+
+                $('.shade-item').each(function() {
+                    var group = String($(this).find('.input-shade-group').val() || '');
+                    if (!$target && tokens.indexOf(group) !== -1) {
+                        $target = $(this);
+                    }
+                });
+
+                return ($target || $('.shade-item').first()).find('.endbits-list');
+            }
+
+            // Isi otomatis baris Endbits Generated dari endbit yang dipilih
+            function applyUsedEndbits() {
+                $('.endbit-from-used').remove();
+
+                usedIds.slice().reverse().forEach(function(id) {
+                    var e = endbitData[id];
+                    if (e) targetList(e.shade).prepend(usedEndbitRowTemplate(e));
+                });
+
+                $('.endbits-list').each(function() { syncEndbitButtons($(this)); });
+            }
+
+            function renderEndbitLists(list) {
+                var sug = list.filter(function(e) { return e.suggested; });
+
+                $('#listSuggested').html(sug.length ? sug.map(endbitCheckHtml).join('') : EMPTY_LIST);
+                // Use Endbits = semua endbit satu order (termasuk yang Suggested)
+                $('#listOther').html(list.length ? list.map(endbitCheckHtml).join('') : EMPTY_LIST);
+
+                updateEndbitCounts();
+            }
+
+            function loadEndbits() {
+                return $.getJSON(urls.endbits)
+                    .done(function(res) {
+                        endbitData = {};
+                        (res.endbits || []).forEach(function(e) { endbitData[e.id] = e; });
+
+                        // Buang pilihan yang sudah tidak tersedia
+                        var before = usedIds.length;
+                        usedIds = usedIds.filter(function(id) { return !!endbitData[id]; });
+
+                        if (started && usedIds.length < before) {
+                            alertBox('warning', 'Warning!', 'Some selected endbits are no longer available.');
+                        }
+
+                        renderEndbitLists(res.endbits || []);
+                        applyUsedEndbits();
+                    })
+                    .fail(showError);
+            }
+
+            $(document).on('click', '.btn-refresh-endbits', function() {
+                if (started) loadEndbits();
+            });
+
+            $(document).on('change', '.chk-use-endbit', function() {
+                // Endbit yang sama bisa ada di dua kartu: samakan statusnya
+                $('.chk-use-endbit[value="' + this.value + '"]').prop('checked', this.checked);
+
+                // Hilangkan id ganda karena checkbox yang sama muncul di dua kartu
+                var ids = $('.chk-use-endbit:checked').map(function() { return parseInt(this.value, 10); }).get();
+                usedIds = ids.filter(function(id, i) { return ids.indexOf(id) === i; });
+
+                updateEndbitCounts();
+                applyUsedEndbits();
+            });
+
             // ---------- Splice ----------
             function updateSpliceWastage() {
+                var totalYard = 0;
                 var totalInch = 0;
 
                 $('#spliceList .splice-row').each(function() {
-                    totalInch += (parseFloat($(this).find('.input-splice-wastage-yard').val()) || 0) * 36
-                        + (parseFloat($(this).find('.input-splice-wastage-inch').val()) || 0);
+                    totalYard += parseFloat($(this).find('.input-splice-wastage-yard').val()) || 0;
+                    totalInch += parseFloat($(this).find('.input-splice-wastage-inch').val()) || 0;
                 });
 
-                $('#sumWastageYard').val(Math.floor(totalInch / 36));
-                $('#sumWastageInch').val(+(totalInch % 36).toFixed(4));
+                $('#sumWastageYard').val(+totalYard.toFixed(4));
+                $('#sumWastageInch').val(+totalInch.toFixed(4));
             }
 
             function syncSpliceRows() {
@@ -643,7 +796,6 @@
                     $box.html(html).find('.lay-action').prop('disabled', !started);
                 });
 
-                // Tombol besar hanya muncul saat belum ada row splice
                 $('#addSpliceWrap').toggle(total === 0);
 
                 updateSpliceWastage();
@@ -703,12 +855,14 @@
                 var $shade = $(shadeTemplate({}, true));
                 $('#shadeContainer').append($shade);
                 syncEndbitButtons($shade.find('.endbits-list'));
+                applyUsedEndbits();
             });
 
             $(document).on('click', '.btn-remove-shade', function() {
                 if (!started) return;
                 $(this).closest('.shade-item').remove();
                 updateActualPlies();
+                applyUsedEndbits();
             });
 
             // ---------- Payload ----------
@@ -737,7 +891,8 @@
                 var shades = $('.shade-item').map(function() {
                     var $item = $(this);
 
-                    var endbits = $item.find('.endbit-row').map(function() {
+                    // Baris auto-isi tidak dikirim sebagai endbit baru, hanya sebagai used_endbits
+                    var endbits = $item.find('.endbit-row:not(.endbit-from-used)').map(function() {
                         return {
                             yard: $(this).find('.input-endbit-yard').val(),
                             inch: $(this).find('.input-endbit-inch').val()
@@ -745,7 +900,7 @@
                     }).get();
 
                     return {
-                        shade: $item.find('.input-shade-group:checked').map(function() { return this.value; }).get().join(','),
+                        shade: $item.find('.input-shade-group').val() || '',
                         actual_plies: $item.find('.input-actual-plies').val(),
                         damages: {
                             yard: $item.find('.input-damages-yard').val(),
@@ -755,7 +910,7 @@
                     };
                 }).get();
 
-                var payload = { splices: splices, shades: shades };
+                var payload = { splices: splices, shades: shades, used_endbits: usedIds };
 
                 MEASURE_FIELDS.forEach(function(field) {
                     payload[field] = readField(field);
@@ -805,7 +960,7 @@
                     }
                 }
 
-                MEASURE_FIELDS.forEach(function(field) {
+                ['material_width', 'material_length'].forEach(function(field) {
                     checkPair(
                         $('[data-field="' + field + '"][data-unit="yard"]'),
                         $('[data-field="' + field + '"][data-unit="inch"]'),
@@ -834,9 +989,9 @@
                     var n = index + 1;
                     var $plies = $item.find('.input-actual-plies');
 
-                    if ($item.find('.input-shade-group:checked').length === 0) {
+                    if (!$item.find('.input-shade-group').val()) {
                         var $groups = $item.find('.shade-groups').addClass('is-invalid-group');
-                        errors.push({ msg: 'Roll ' + n + ': select at least one group.', $el: $groups });
+                        errors.push({ msg: 'Roll ' + n + ': select a group.', $el: $groups });
                     }
 
                     if ($.trim($plies.val()) === '') mark($plies, 'Roll ' + n + ': Actual Plies is required.');
@@ -915,11 +1070,16 @@
                 updateSpliceWastage();
                 updateActualPlies();
 
+                // Endbit yang dipilih sebelumnya (dari database atau draft)
+                usedIds = (source && source.used_endbits) ? source.used_endbits.map(Number) : [];
+
                 setRunning(!!(saved && saved.status === 'running'));
 
                 if (isCompleted) {
-                    $('#btnPlay, #btnSaveChanges, #btnAddNewShade, #addSpliceWrap').hide();
+                    $('#btnPlay, #btnSaveChanges, #btnAddNewShade, #addSpliceWrap, .btn-refresh-endbits').hide();
                 }
+
+                loadEndbits();
 
                 draftReady = !isCompleted;
             }
