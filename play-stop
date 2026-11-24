@@ -19,6 +19,7 @@ use App\Http\Models\MasterIntellocutStyle;
 use App\Http\Models\MasterIntellocutTable;
 use DB;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class IntellocutLayermanController extends Controller
 {
@@ -29,6 +30,10 @@ class IntellocutLayermanController extends Controller
         $this->middleware('auth');
     }
 
+    /**
+     * Dashboard: 1 order = 1 kartu induk,
+     * anak = 1 part (idshell) + 1 lay. Semua size digabung jadi teks ratio.
+     */
     function index()
     {
         preconnect(session('db'));
@@ -45,137 +50,73 @@ class IntellocutLayermanController extends Controller
             return redirect()->route('intellocutlayerman_select_table');
         }
 
-        $tableName = MasterIntellocutTable::where('id', $table)
-            ->value('nmtable');
+        $tableName = MasterIntellocutTable::where('id', $table)->value('nmtable');
 
-        $data = IntellocutHeader::whereIn('id', function ($query) {
-            $query->select('idheader')->from((new IntellocutShellHeader())->getTable());
-        })->get();
+        $sd     = (new IntellocutShellDetail())->getTable();
+        $sh     = (new IntellocutShellHeader())->getTable();
+        $hd     = (new IntellocutHeader())->getTable();
+        $detail = (new IntellocutDetail())->getTable();
+        $lay    = (new IntellocutLayerman())->getTable();
+        $style  = (new MasterIntellocutStyle())->getTable();
+        $shell  = (new MasterIntellocutShell())->getTable();
+        $size   = (new MasterIntellocutSize())->getTable();
+        $color  = (new MasterIntellocutColor())->getTable();
 
-        $shellHeaders = IntellocutShellHeader::whereIn('idheader', $data->pluck('id'))
-            ->get()
-            ->groupBy('idheader');
-
-        $shellCons = $shellHeaders->flatten()->keyBy('id')->map(fn ($item) => $item->cons);
-
-        $shellDetails = IntellocutShellDetail::whereIn('idshellheader', $shellHeaders->flatten()->pluck('id'))
-            ->where('idtable', $table)
-            ->orderBy('lay')
-            ->get()
-            ->groupBy('idshellheader');
-
-        $styles = MasterIntellocutStyle::get()->keyBy('idstyle');
-        $shells = MasterIntellocutShell::get()->keyBy('id');
-        $colors = MasterIntellocutColor::get()->keyBy('id');
-        $sizes  = MasterIntellocutSize::get()->keyBy('id');
-
-        $intellocutDetails = IntellocutDetail::whereIn('idheader', $data->pluck('id'))
-            ->get()
-            ->groupBy('idheader');
-
-        $layermanLays = IntellocutLayerman::whereIn('idheader', $data->pluck('id'))
-            ->where('idtable', $table)
-            ->get()
-            ->keyBy(fn ($l) => $l->idheader . '-' . $l->idtable . '-' . $l->lay);
-
-        $tableIds = collect([$table]);
-
-        $data->each(function ($h) use (
-            $shellHeaders,
-            $shellDetails,
-            $styles,
-            $shells,
-            $colors,
-            $sizes,
-            $shellCons,
-            $intellocutDetails,
-            $layermanLays,
-            $table
-        ) {
-            $shellHeaderIds = ($shellHeaders[$h->id] ?? collect())->pluck('id');
-            $details = $intellocutDetails[$h->id] ?? collect();
-
-            $h->style_name = optional($styles->get($h->idstyle))->nmstyle ?? $h->idstyle;
-            $h->color_name = optional($colors->get($h->idcolor))->nmcolor ?? $h->idcolor;
-
-            $h->lay_groups = $shellHeaderIds
-            ->flatMap(fn ($id) => $shellDetails[$id] ?? collect())
-            ->where('idtable', $table)
-            ->groupBy('idshellheader', 'lay', 'marker', 'idshell')
-            ->flatMap(function ($rows) use (
-                $shells,
-                $colors,
-                $sizes,
-                $details,
-                $shellCons,
-                $layermanLays,
-                $h,
-                $table
-            ) {
-
-                return $rows->map(function ($row) use (
-                    $shells,
-                    $colors,
-                    $sizes,
-                    $details,
-                    $shellCons,
-                    $layermanLays,
-                    $h,
-                    $table
-                ) {
-
-                    $row->shell_name = optional($shells->get($row->idshell))->nmshell ?? $row->idshell;
-
-                    $row->color_name = $details->where('idshell', $row->idshell)
-                        ->pluck('idcolor')
-                        ->unique()
-                        ->filter()
-                        ->map(fn ($id) => optional($colors->get($id))->nmcolor)
-                        ->filter()
-                        ->unique()
-                        ->implode(', ');
-
-                    $row->ratio_size = collect([
-                        $row
-                    ])->groupBy('idshellheader')->map(function ($shellRows) use ($sizes) {
-
-                        $marker = $shellRows->first()->marker;
-
-                        return $shellRows->values()->map(fn ($item, $index) => [
-                            'ratio'  => $item->ratio,
-                            'idsize' => $item->idsize,
-                            'marker' => $index === 0 ? $marker : null,
-                            'nmsize' => optional($sizes->get($item->idsize))->nmsize ?? $item->idsize,
-                        ]);
-                    });
-
-                    $row->material_length = $shellCons->get($row->idshellheader) ?? 0;
-
-                    $row->group_count = 1;
-
-                    $savedLay = $layermanLays->get(
-                        $h->id . '-' . $table . '-' . $row->lay
-                    );
-
-                    $row->layerman_status = $savedLay->status ?? 'not_started';
-
-                    $row->layerman_status_label = $savedLay
-                        ? $savedLay->status_label
-                        : 'Not Started Yet';
-
-                    $row->layerman_plies = $savedLay->actual_plies ?? 0;
-
-                    return $row;
-                });
+        $rows = DB::table("$sd as sd")
+            ->join("$sh as sh", 'sh.id', '=', 'sd.idshellheader')
+            ->join("$hd as h", 'h.id', '=', 'sh.idheader')
+            ->leftJoin("$style as st", 'st.idstyle', '=', 'h.idstyle')
+            ->leftJoin("$shell as ms", 'ms.id', '=', 'sd.idshell')
+            ->leftJoin("$size as sz", 'sz.id', '=', 'sd.idsize')
+            ->leftJoin("$lay as l", function ($join) {
+                $join->on('l.idheader', '=', 'sh.idheader')
+                    ->on('l.idtable', '=', 'sd.idtable')
+                    ->on('l.lay', '=', 'sd.lay')
+                    ->on('l.idshell', '=', 'sd.idshell');
             })
-            ->reject(fn ($row) => $row->layerman_status === 'completed')
-            ->values();
-        });
+            ->where('sd.idtable', $table)
+            // sembunyikan lay yang sudah selesai
+            ->where(function ($q) {
+                $q->whereNull('l.status')->orWhere('l.status', '<>', 'completed');
+            })
+            // 1 baris = 1 part + 1 lay
+            ->groupBy(
+                'h.id', 'h.order_number', 'h.created_at', 'st.nmstyle',
+                'sd.idshellheader', 'sd.lay', 'sd.idshell', 'ms.nmshell',
+                'l.status', 'l.actual_plies'
+            )
+            ->orderBy('h.id')
+            ->orderBy('sd.lay')
+            ->orderBy('sd.idshell')
+            ->selectRaw("
+                h.id                    as idheader,
+                h.order_number,
+                h.created_at,
+                COALESCE(st.nmstyle, h.idstyle) as style_name,
+                COALESCE(ms.nmshell, sd.idshell) as shell_name,
+                sd.idshellheader,
+                sd.lay,
+                sd.idshell,
+                MIN(sd.id)              as id,
+                GROUP_CONCAT(DISTINCT sd.`group` ORDER BY sd.`group` SEPARATOR ',') as grp,
+                MAX(sd.marker)          as marker,
+                MAX(sd.marker_length)   as marker_length,
+                MAX(sd.width)           as width,
+                MAX(sd.plies)           as plies,
+                COALESCE(l.status, 'not_started') as layerman_status,
+                COALESCE(l.actual_plies, 0)       as layerman_plies,
+                GROUP_CONCAT(CONCAT(sd.ratio, '-', COALESCE(sz.nmsize, sd.idsize)) ORDER BY sd.id SEPARATOR ' | ') as ratio_text,
+                (SELECT GROUP_CONCAT(DISTINCT c.nmcolor SEPARATOR ', ')
+                   FROM $detail d
+                   JOIN $color c ON c.id = d.idcolor
+                  WHERE d.idheader = h.id AND d.idshell = sd.idshell) as color_name
+            ")
+            ->get();
 
+        $orders       = $rows->groupBy('idheader');
+        $hasActiveLay = $rows->isNotEmpty();
 
-        $hasActiveLay = $data->contains(fn ($d) => $d->lay_groups->isNotEmpty());
-
-        return view('cutting::intellocutlayerman.index', compact('data', 'tableIds', 'access', 'hasActiveLay', 'tableName'));
+        return view('cutting::intellocutlayerman.index', compact('orders', 'access', 'hasActiveLay', 'tableName'));
     }
 
     function layassign()
@@ -215,9 +156,11 @@ class IntellocutLayermanController extends Controller
 
         $sizes = MasterIntellocutSize::get()->keyBy('id');
 
+        // Ratio hanya untuk part + lay ini
         $ratioSize = IntellocutShellDetail::where('idshellheader', $detail->idshellheader)
             ->where('lay', $detail->lay)
             ->where('idtable', $detail->idtable)
+            ->where('idshell', $detail->idshell)
             ->orderBy('id')
             ->get()
             ->map(fn ($item) => [
@@ -232,25 +175,18 @@ class IntellocutLayermanController extends Controller
                 ->where('idheader', $header->id)
                 ->where('idtable', $detail->idtable)
                 ->where('lay', $detail->lay)
+                ->where('idshell', $detail->idshell)
                 ->first()
         );
 
         $headerShellIds = IntellocutShellHeader::where('idheader', $header->id)->pluck('id');
 
-        // Nilai awal Material Width / Length (sama dengan yang tampil di index)
-        $shellHeaderIds = IntellocutShellDetail::where('idtable', $detail->idtable)
-            ->where('lay', $detail->lay)
-            ->whereIn('idshellheader', $headerShellIds)
-            ->pluck('idshellheader')
-            ->unique();
-
-        $defaultWidth  = (float) $detail->width;
+        $defaultWidth      = (float) $detail->width;
         $defaultWidthInch  = (float) $detail->width_inch;
-        $defaultLength  = (float) $detail->marker_length;
-        $defaultLengthInch  = (float) $detail->marker_length_inch;
-        $defaultEndloss  = (float) $detail->end_loss;
+        $defaultLength     = (float) $detail->marker_length;
+        $defaultLengthInch = (float) $detail->marker_length_inch;
+        $defaultEndLoss    = (float) $detail->end_loss;
 
-        // Pilihan checkbox group (dari shell detail order + table ini)
         $groupOptions = IntellocutShellDetail::where('idtable', $detail->idtable)
             ->whereIn('idshellheader', $headerShellIds)
             ->whereNotNull('group')
@@ -262,7 +198,8 @@ class IntellocutLayermanController extends Controller
 
         return view('cutting::intellocutlayerman.inputlayerman', compact(
             'access', 'header', 'detail', 'order', 'orderRemark', 'styleName', 'shellName', 'colorName',
-            'fabricName', 'ratioSize', 'saved', 'defaultWidth', 'defaultWidthInch', 'defaultLength', 'defaultLengthInch', 'defaultEndloss', 'groupOptions'
+            'fabricName', 'ratioSize', 'saved', 'defaultWidth', 'defaultWidthInch', 'defaultLength',
+            'defaultLengthInch', 'defaultEndLoss', 'groupOptions'
         ));
     }
 
@@ -278,7 +215,12 @@ class IntellocutLayermanController extends Controller
 
         $lay = DB::transaction(function () use ($header, $detail) {
             $lay = IntellocutLayerman::firstOrCreate(
-                ['idheader' => $header->id, 'idtable' => $detail->idtable, 'lay' => $detail->lay],
+                [
+                    'idheader' => $header->id,
+                    'idtable'  => $detail->idtable,
+                    'lay'      => $detail->lay,
+                    'idshell'  => $detail->idshell,
+                ],
                 [
                     'idshelldetail' => $detail->id,
                     'marker'        => $detail->marker,
@@ -291,10 +233,10 @@ class IntellocutLayermanController extends Controller
             $lay->stopped_at = null;
             $lay->save();
 
-            if (!$detail->lays_started) {
-                $detail->lays_started = now();
-                $detail->save();
-            }
+            // Tandai semua baris size milik part + lay ini
+            $this->partDetailsQuery($header, $detail)
+                ->whereNull('lays_started')
+                ->update(['lays_started' => now()]);
 
             return $lay;
         });
@@ -342,14 +284,10 @@ class IntellocutLayermanController extends Controller
             $lay->stopped_at = now();
             $lay->save();
 
-            IntellocutShellDetail::where('idtable', $detail->idtable)
-                ->where('lay', $detail->lay)
-                ->whereIn(
-                    'idshellheader',
-                    IntellocutShellHeader::where('idheader', $header->id)->pluck('id')
-                )
+            // Hanya part + lay ini yang ditandai selesai
+            $this->partDetailsQuery($header, $detail)
                 ->update([
-                    'actual_plies'  => $lay->actual_plies,
+                    'actual_plies'   => $lay->actual_plies,
                     'lays_completed' => now(),
                 ]);
         });
@@ -358,6 +296,68 @@ class IntellocutLayermanController extends Controller
             'success'  => true,
             'redirect' => route('intellocutlayerman_home'),
         ]);
+    }
+
+    /**
+     * Daftar endbit yang bisa dipakai lay ini.
+     * Sumber: lay completed di order yang sama, belum terpakai, bukan dari lay ini.
+     * Suggested = panjang endbit lebih besar dari marker length lay ini.
+     */
+    function endbits($id)
+    {
+        [$detail, , $header] = $this->resolveContext($id);
+
+        $lay  = $this->findLay($header, $detail);
+        $myId = optional($lay)->id ?? 0;
+
+        $conn = (new IntellocutLayermanEndbit())->getConnection();
+
+        $eT = (new IntellocutLayermanEndbit())->getTable();
+        $sT = (new IntellocutLayerman())->shades()->getRelated()->getTable();
+        $lT = (new IntellocutLayerman())->getTable();
+
+        // Marker length lay ini dalam inch.
+        // Jika marker_length_inch ternyata sudah panjang TOTAL dalam inch, ganti jadi:
+        //   $markerInch = (float) $detail->marker_length_inch;
+        $markerInch = ((float) $detail->marker_length * 36) + (float) $detail->marker_length_inch;
+
+        $shells = MasterIntellocutShell::pluck('nmshell', 'id');
+
+        $rows = $conn->table("$eT as e")
+            ->join("$sT as s", 's.id', '=', 'e.idshade')
+            ->join("$lT as l", 'l.id', '=', 's.idlayerman')
+            ->where('l.idheader', $header->id)
+            ->where('l.status', 'completed')
+            ->where('l.id', '<>', $myId)
+            ->where(function ($q) use ($myId) {
+                $q->whereNull('e.used_by_layerman');
+                if ($myId) {
+                    $q->orWhere('e.used_by_layerman', $myId); // sudah dipilih lay ini
+                }
+            })
+            // abaikan endbit kosong (panjang 0)
+            ->where(function ($q) {
+                $q->where('e.length_yard', '>', 0)->orWhere('e.length_inch', '>', 0);
+            })
+            ->orderBy('l.lay')
+            ->orderBy('e.id')
+            ->get(['e.id', 'e.length_yard', 'e.length_inch', 's.shade', 'l.lay', 'l.idshell']);
+
+        $endbits = $rows->map(function ($r) use ($markerInch, $shells) {
+            $endbitInch = ((float) $r->length_yard * 36) + (float) $r->length_inch;
+
+            return [
+                'id'          => (int) $r->id,
+                'lay'         => $r->lay,
+                'part'        => $shells[$r->idshell] ?? $r->idshell,
+                'shade'       => $r->shade,
+                'length_yard' => (float) $r->length_yard,
+                'length_inch' => (float) $r->length_inch,
+                'suggested'   => $endbitInch > $markerInch,
+            ];
+        })->values();
+
+        return response()->json(['success' => true, 'endbits' => $endbits]);
     }
 
     function selecttable()
@@ -413,12 +413,26 @@ class IntellocutLayermanController extends Controller
         return [$detail, $shellHeader, $header];
     }
 
+    // Record layerman = header + table + lay + part
     private function findLay($header, $detail)
     {
         return IntellocutLayerman::where('idheader', $header->id)
             ->where('idtable', $detail->idtable)
             ->where('lay', $detail->lay)
+            ->where('idshell', $detail->idshell)
             ->first();
+    }
+
+    // Semua baris shell detail (semua size) milik part + lay yang sedang dikerjakan
+    private function partDetailsQuery($header, $detail)
+    {
+        return IntellocutShellDetail::where('idtable', $detail->idtable)
+            ->where('lay', $detail->lay)
+            ->where('idshell', $detail->idshell)
+            ->whereIn(
+                'idshellheader',
+                IntellocutShellHeader::where('idheader', $header->id)->pluck('id')
+            );
     }
 
     private function statusResponse($lay)
@@ -437,6 +451,8 @@ class IntellocutLayermanController extends Controller
             'shades'                => 'required|array|min:1',
             'shades.*.shade'        => 'required|string|max:50',
             'shades.*.actual_plies' => 'required|integer|min:0',
+            'used_endbits'          => 'nullable|array',
+            'used_endbits.*'        => 'integer',
         ];
 
         $measures = [
@@ -514,6 +530,11 @@ class IntellocutLayermanController extends Controller
             foreach (array_values(data_get($row, 'endbits_generated', [])) as $endbit) {
                 [$endbitYard, $endbitInch] = $this->yardInch($endbit);
 
+                // Lewati baris kosong, supaya tidak tersimpan endbit panjang 0
+                if ($endbitYard <= 0 && $endbitInch <= 0) {
+                    continue;
+                }
+
                 $shade->endbits()->create([
                     'length_yard' => $endbitYard,
                     'length_inch' => $endbitInch,
@@ -521,8 +542,51 @@ class IntellocutLayermanController extends Controller
             }
         }
 
+        $this->syncUsedEndbits($lay, $request);
+
         $lay->actual_plies = $totalPlies;
         $lay->save();
+    }
+
+    /**
+     * Catat endbit yang dipakai lay ini (kolom used_by_layerman).
+     * Dipanggil di dalam transaksi save().
+     */
+    private function syncUsedEndbits($lay, Request $request)
+    {
+        $ids = array_values(array_unique(array_map('intval', $request->input('used_endbits', []))));
+
+        // Lepas pemakaian lama lay ini
+        IntellocutLayermanEndbit::where('used_by_layerman', $lay->id)
+            ->update(['used_by_layerman' => null]);
+
+        if (!$ids) {
+            return;
+        }
+
+        $eT = (new IntellocutLayermanEndbit())->getTable();
+        $sT = $lay->shades()->getRelated()->getTable();
+        $lT = $lay->getTable();
+
+        // Kunci baris dan pastikan: satu order, lay completed, bukan milik lay ini, belum terpakai
+        $allowed = $lay->getConnection()->table("$eT as e")
+            ->join("$sT as s", 's.id', '=', 'e.idshade')
+            ->join("$lT as l", 'l.id', '=', 's.idlayerman')
+            ->whereIn('e.id', $ids)
+            ->where('l.idheader', $lay->idheader)
+            ->where('l.status', 'completed')
+            ->where('l.id', '<>', $lay->id)
+            ->whereNull('e.used_by_layerman')
+            ->lockForUpdate()
+            ->pluck('e.id');
+
+        if ($allowed->count() !== count($ids)) {
+            throw ValidationException::withMessages([
+                'used_endbits' => 'Some selected endbits are no longer available. Press Refresh and select again.',
+            ]);
+        }
+
+        IntellocutLayermanEndbit::whereIn('id', $ids)->update(['used_by_layerman' => $lay->id]);
     }
 
     private function formatSaved($lay)
@@ -553,1256 +617,8 @@ class IntellocutLayermanController extends Controller
                 'endbits_generated' => $s->endbits->values()
                     ->map(fn ($e) => $yi($e->length_yard, $e->length_inch))->all(),
             ])->all(),
+            'used_endbits'    => IntellocutLayermanEndbit::where('used_by_layerman', $lay->id)
+                ->pluck('id')->map(fn ($v) => (int) $v)->all(),
         ];
     }
 }
-
-
-@extends('layouts.masternew')
-@section('extracss')
-    <style>
-        .lay-input {
-            background-color: #eef8fc !important;
-            border: 1px solid #d1d9e6;
-            border-radius: 6px;
-            font-size: 12px;
-            color: #475569;
-            height: 34px;
-        }
-
-        .lay-input:disabled {
-            background-color: #e2e4e8 !important;
-            border-color: #d1d5db;
-            color: #94a3b8;
-            cursor: not-allowed;
-        }
-
-        .lay-input.is-invalid {
-            border-color: #ef4444 !important;
-            background-color: #fef2f2 !important;
-        }
-
-        .shade-groups.is-invalid-group {
-            outline: 1px solid #ef4444;
-            border-radius: 6px;
-            background-color: #fef2f2;
-        }
-
-        .lay-calc {
-            background-color: #e2e4e8 !important;
-            border: 1px solid #d1d5db;
-            border-radius: 6px;
-            font-size: 12px;
-            color: #475569;
-            height: 34px;
-        }
-
-        .lay-action:disabled {
-            opacity: .5;
-            cursor: not-allowed;
-        }
-
-        #topBar {
-            transition: background-color .2s;
-        }
-
-        #topBar.running {
-            background-color: #18009e !important;
-        }
-
-        #topBar.running .bar-text {
-            color: #ffffff !important;
-        }
-
-        #btnPlay.playing {
-            background-color: #ffffff !important;
-            color: #18009e !important;
-        }
-    </style>
-@endsection
-
-@php
-    $plannedPlies = $detail->plies ?? 0;
-    $actualPlies  = $saved['actual_plies'] ?? 0;
-    $totalRatio   = $ratioSize->sum('ratio');
-    $cutQty       = $totalRatio * $actualPlies;
-@endphp
-
-@section('content')
-    <div class="container-fluid px-4 py-4">
-
-        {{-- Top bar --}}
-        <div id="topBar"
-            class="bg-white rounded-3 shadow-sm px-4 py-3 mb-4 d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <div class="d-flex align-items-center gap-2" style="font-size: 14px;">
-                <a href="{{ route('intellocutlayerman_home') }}"
-                    class="bar-text text-decoration-none d-inline-flex align-items-center gap-2"
-                    style="color: #64748b; font-weight: 500;">
-                    <i class="bi bi-grid" style="font-size: 15px;"></i>
-                    <b>Dashboard</b>
-                </a>
-                <i class="bar-text bi bi-chevron-right mx-1" style="color: #94a3b8; font-size: 14px;"></i>
-                <span class="bar-text" style="color: #16a34a; font-weight: 600;">{{ $header->order_number }}</span>
-            </div>
-
-            <div class="d-flex align-items-center gap-2">
-                <span class="bar-text" style="font-size: 20px; font-weight: 700; color: #1e293b;">
-                    Actual Plies <span id="topActualPlies">{{ $actualPlies }}</span>/{{ $plannedPlies }}
-                </span>
-                <button type="button" id="btnPlay" title="Play"
-                    class="btn p-0 border-0 rounded-circle d-inline-flex align-items-center justify-content-center text-white"
-                    style="width: 28px; height: 28px; background-color: #18009e;">
-                    <i class="bi bi-play-fill" style="font-size: 20px;"></i>
-                </button>
-            </div>
-        </div>
-
-        {{-- Info lay --}}
-        <div class="bg-white rounded-3 shadow-sm overflow-hidden">
-            <div class="d-flex flex-wrap justify-content-between align-items-start pe-4">
-                <div class="position-relative overflow-hidden d-inline-flex align-items-center text-white"
-                    style="background: linear-gradient(90deg, #160099 0%, #3719ca 100%); border-bottom-right-radius: 36px; padding: 11px 54px 11px 24px;">
-                    <span class="position-relative"
-                        style="z-index: 1; font-size: 20px; font-weight: 700; letter-spacing: 0.3px;">L - {{ $detail->lay }} GROUP {{ $detail->group }}</span>
-                </div>
-                <div class="pt-3" style="font-size: 14px; color: #787a7c; font-weight: 500;"><span id="live-date"></span></div>
-            </div>
-
-            <div class="px-4 pt-4 pb-4">
-                <div class="row g-3">
-                    <div class="col-md-4">
-                        <div class="mb-1" style="font-size: 13px; color: #64748b; font-weight: 500;">Order</div>
-                        <div style="font-size: 15px; font-weight: 700; color: #475569; line-height: 1.35;">{{ $header->order_number }}</div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="mb-1" style="font-size: 13px; color: #64748b; font-weight: 500;">Style</div>
-                        <div style="font-size: 15px; font-weight: 700; color: #475569;">{{ $styleName }}</div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="mb-1" style="font-size: 13px; color: #64748b; font-weight: 500;">Part</div>
-                        <div style="font-size: 15px; font-weight: 700; color: #475569;">{{ $shellName }}</div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="mb-1" style="font-size: 13px; color: #64748b; font-weight: 500;">Cut</div>
-                        <div id="topCutQty" style="font-size: 15px; font-weight: 700; color: #475569;">{{ $cutQty }}</div>
-                    </div>
-                </div>
-
-                <hr class="my-4" style="border-color: #cbd5e1; opacity: 0.8;">
-
-                <div class="row g-3 mb-4">
-                    <div class="col">
-                        <div class="mb-1" style="font-size: 13px; color: #64748b; font-weight: 500;">Marker</div>
-                        <div style="font-size: 15px; font-weight: 700; color: #475569;">
-                            @if ($ratioSize->isNotEmpty())
-                                M{{ $ratioSize->first()['marker'] }}({{ $ratioSize->map(fn ($item) => $item['ratio'] . '-' . $item['nmsize'])->implode(' | ') }})
-                            @endif
-                        </div>
-                    </div>
-                    <div class="col">
-                        <div class="mb-1" style="font-size: 13px; color: #64748b; font-weight: 500;">Order Remarks</div>
-                        <div style="font-size: 15px; font-weight: 700; color: #475569;">{{ $orderRemark ?? '-' }}</div>
-                    </div>
-                    <div class="col">
-                        <div class="mb-1" style="font-size: 13px; color: #64748b; font-weight: 500;">Fabric Name</div>
-                        <div style="font-size: 15px; font-weight: 700; color: #475569;">{{ $fabricName ?? '-' }}</div>
-                    </div>
-                </div>
-
-                <div class="row g-4 mb-3 pt-1">
-                    @foreach (['material_width' => 'Material Width', 'material_length' => 'Material Length'] as $field => $label)
-                        <div class="col-lg-4 col-md-6">
-                            <label class="form-label mb-2" style="font-size: 13px; font-weight: 600; color: #475569;">{{ $label }} <span class="text-danger">*</span></label>
-                            <div class="d-flex align-items-center gap-2">
-                                <input type="text" class="form-control shadow-none lay-input" data-field="{{ $field }}" data-unit="yard" placeholder="0" required disabled>
-                                <span class="text-nowrap me-2" style="font-size: 13px; font-weight: 600; color: #64748b;">- Yard</span>
-                                <input type="text" class="form-control shadow-none lay-input" data-field="{{ $field }}" data-unit="inch" placeholder="0" required disabled>
-                                <span class="text-nowrap" style="font-size: 13px; font-weight: 600; color: #64748b;">- Inch</span>
-                            </div>
-                        </div>
-                    @endforeach
-                </div>
-
-                <div class="row g-4">
-                    <div class="col-lg-4 col-md-6">
-                        <label class="form-label mb-2" style="font-size: 13px; font-weight: 600; color: #475569;">End Loss <span class="text-danger">*</span></label>
-                        <div class="d-flex align-items-center gap-2">
-                            <input type="text" class="form-control shadow-none lay-input" data-field="end_loss" data-unit="inch" placeholder="0" disabled>
-                            <span class="text-nowrap" style="font-size: 13px; font-weight: 600; color: #64748b;">- Inch</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="container-fluid px-4 py-4">
-
-        {{-- Splice --}}
-        <div class="bg-white rounded-3 shadow-sm mb-4">
-            <div class="px-4 py-3" style="border-bottom: 1px solid #e2e8f0;">
-                <div style="font-size: 15px; font-weight: 700; color: #1e293b;">Splice Details</div>
-            </div>
-
-            <div id="spliceList"></div>
-
-            <div id="addSpliceWrap" class="px-4 py-4 justify-content-center align-items-center" style="display: flex;">
-                <button type="button" id="btnAddSplice"
-                    class="btn lay-action text-white d-inline-flex align-items-center gap-2 border-0"
-                    style="background-color: #3b93b8; font-size: 14px; font-weight: 500; padding: 8px 18px; border-radius: 6px;" disabled>
-                    <i class="bi bi-bookmark-plus" style="font-size: 14px;"></i>
-                    <span>Add Splice Points</span>
-                </button>
-            </div>
-        </div>
-
-        <!-- <div class="row g-4 mb-4">
-            <div class="col-md-6">
-                <div class="bg-white rounded-3 shadow-sm h-100">
-                    <div class="px-4 py-3 d-flex justify-content-between align-items-center"
-                        style="border-bottom: 1px solid #e2e8f0;">
-                        <div style="font-size: 13px; font-weight: 700; color: #1e293b;">Use Suggested Endbits (0/0)</div>
-                        <a href="#" class="text-decoration-none"
-                            style="font-size: 11px; color: #3b93b8; font-weight: 500;">Refresh</a>
-                    </div>
-                    <div class="p-4">
-                        <div class="d-flex align-items-stretch rounded-2 overflow-hidden"
-                            style="background-color: #e8e9ec; border: 1px solid #d1d5db; height: 36px;">
-                            <div class="flex-grow-1 d-flex align-items-center px-2 gap-1">
-                                <span class="d-inline-flex align-items-center gap-2 px-2 py-1 rounded-1 bg-white"
-                                    style="font-size: 11px; color: #475569; border: 1px solid #e2e8f0; line-height: 1;">
-                                    <span>All</span>
-                                    <i class="bi bi-x" role="button" style="font-size: 12px; color: #64748b;"></i>
-                                </span>
-                            </div>
-                            <button type="button"
-                                class="btn border-0 rounded-0 d-flex align-items-center justify-content-center px-3"
-                                style="border-left: 1px solid #d1d5db !important; background-color: #e8e9ec; color: #64748b;">
-                                <i class="bi bi-chevron-down" style="font-size: 12px;"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-6">
-                <div class="bg-white rounded-3 shadow-sm h-100">
-                    <div class="px-4 py-3 d-flex justify-content-between align-items-center"
-                        style="border-bottom: 1px solid #e2e8f0;">
-                        <div style="font-size: 13px; font-weight: 700; color: #1e293b;">Use Endbits (0/0)</div>
-                        <a href="#" class="text-decoration-none"
-                            style="font-size: 11px; color: #3b93b8; font-weight: 500;">Refresh</a>
-                    </div>
-                    <div class="p-4">
-                        <div class="d-flex align-items-stretch rounded-2 overflow-hidden"
-                            style="background-color: #e8e9ec; border: 1px solid #d1d5db; height: 36px;">
-                            <div class="flex-grow-1 d-flex align-items-center px-2 gap-1">
-                                <span class="d-inline-flex align-items-center gap-2 px-2 py-1 rounded-1 bg-white"
-                                    style="font-size: 11px; color: #475569; border: 1px solid #e2e8f0; line-height: 1;">
-                                    <span>All</span>
-                                    <i class="bi bi-x" role="button" style="font-size: 12px; color: #64748b;"></i>
-                                </span>
-                            </div>
-                            <button type="button"
-                                class="btn border-0 rounded-0 d-flex align-items-center justify-content-center px-3"
-                                style="border-left: 1px solid #d1d5db !important; background-color: #e8e9ec; color: #64748b;">
-                                <i class="bi bi-chevron-down" style="font-size: 12px;"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div> -->
-
-        {{-- Summary --}}
-        <div class="bg-white rounded-3 shadow-sm p-4">
-            <div class="row g-3 align-items-center">
-                <div class="col-lg-3 col-md-6">
-                    <div class="rounded-2 px-3 py-3 h-100" style="background-color: #f3f7fa; border-left: 3px solid #3b93b8;">
-                        <div style="font-size: 14px; color: #64748b; font-weight: 500;">Color/Fabric</div>
-                        <div style="font-size: 14px; font-weight: 700; color: #1e293b; line-height: 1.35; margin-top: 2px;">{{ $colorName ?? '-' }}/{{ $fabricName ?? '-' }}</div>
-                    </div>
-                </div>
-
-                <div class="col-lg-2 col-md-6">
-                    <div class="rounded-2 px-3 py-3 h-100" style="background-color: #f3f7fa; border-left: 3px solid #3b93b8;">
-                        <div style="font-size: 14px; color: #64748b; font-weight: 500;">Planned Plies</div>
-                        <div style="font-size: 16px; font-weight: 700; color: #1e293b; margin-top: 2px;">{{ $plannedPlies }}</div>
-                    </div>
-                </div>
-
-                <div class="col-lg-2 col-md-6">
-                    <div class="rounded-2 px-3 py-3 h-100" style="background-color: #f3f7fa; border-left: 3px solid #3b93b8;">
-                        <div style="font-size: 14px; color: #64748b; font-weight: 500;">Actual Plies</div>
-                        <div id="summaryActualPlies" style="font-size: 16px; font-weight: 700; color: #1e293b; margin-top: 2px;">{{ $actualPlies }}</div>
-                    </div>
-                </div>
-
-                <div class="col-lg-5 col-md-6">
-                    <div class="ps-lg-2">
-                        <label class="form-label mb-1" style="font-size: 14px; font-weight: 700; color: #1e293b;">Splice Wastage</label>
-                        <div class="d-flex align-items-center gap-2">
-                            <input type="text" id="sumWastageYard" class="form-control shadow-none lay-calc" value="0" readonly>
-                            <span class="text-nowrap me-2" style="font-size: 14px; font-weight: 600; color: #64748b;">- Yard</span>
-                            <input type="text" id="sumWastageInch" class="form-control shadow-none lay-calc" value="0" readonly>
-                            <span class="text-nowrap" style="font-size: 14px; font-weight: 600; color: #64748b;">- Inch</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    {{-- Roll --}}
-    <div class="container-fluid px-4 py-4">
-        <div class="bg-white rounded-3 shadow-sm p-4">
-            <div id="shadeContainer"></div>
-
-            <div class="d-flex justify-content-end align-items-center gap-2 pt-2">
-                <button type="button" id="btnAddNewShade"
-                    class="btn lay-action text-white d-inline-flex align-items-center gap-2 border-0"
-                    style="background-color: #10a352; font-size: 14px; font-weight: 500; padding: 8px 15px; border-radius: 6px;" disabled>
-                    <i class="bi bi-bookmark-plus" style="font-size: 15px;"></i>
-                    <span>Add New Roll</span>
-                </button>
-                <button type="button" id="btnSaveChanges"
-                    class="btn lay-action text-white border-0"
-                    style="background-color: #3b93b8; font-size: 14px; font-weight: 500; padding: 8px 18px; border-radius: 6px;" disabled>
-                    Save Changes
-                </button>
-            </div>
-        </div>
-    </div>
-    @include('layouts.loading')
-@endsection
-
-@section('extrascript')
-    <script>
-        $(document).ready(function() {
-            var urls = {
-                play: "{{ route('intellocutlayerman_play', ['id' => $detail->id]) }}",
-                stop: "{{ route('intellocutlayerman_stop', ['id' => $detail->id]) }}",
-                save: "{{ route('intellocutlayerman_save', ['id' => $detail->id]) }}",
-                home: "{{ route('intellocutlayerman_home') }}"
-            };
-            var saved      = {!! json_encode($saved ?? null, JSON_HEX_TAG | JSON_HEX_AMP) !!};
-            var totalRatio = {{ $ratioSize->sum('ratio') }};
-            var draftKey   = 'layerman_draft_{{ $header->id }}_{{ $detail->idtable }}_{{ $detail->lay }}';
-
-            var started    = false;
-            var draftReady = false;
-            var draftTimer = null;
-
-            var MEASURE_FIELDS = ['material_width', 'material_length', 'end_loss'];
-
-            var FIELD_LABELS = {
-                material_width: 'Material Width',
-                material_length: 'Material Length',
-                end_loss: 'End Loss'
-            };
-
-            var GROUP_OPTIONS = {!! json_encode($groupOptions, JSON_HEX_TAG | JSON_HEX_AMP) !!}.map(String);
-            var DEFAULT_GROUP = "{{ $detail->group }}";
-
-            var DEFAULTS = {
-                material_width:  { yard: {{ $defaultWidth }}, inch: {{ $defaultWidthInch }}},
-                material_length: { yard: {{ $defaultLength }}, inch: {{ $defaultLengthInch }} },
-                end_loss: {
-                    yard: '',
-                    inch: {{ $defaultEndLoss ?? 0 }}
-                }
-            };
-
-            function isEmptyMeasure(v) {
-                return !v || ((!v.yard || parseFloat(v.yard) === 0) && (!v.inch || parseFloat(v.inch) === 0));
-            }
-
-            // Plies: angka saja. Yard & inch: angka dan satu titik.
-            var INT_SEL = '.input-actual-plies';
-
-            var DEC_SEL = [
-                '[data-unit="yard"]',
-                '[data-unit="inch"]',
-                '.input-endbit-yard',
-                '.input-endbit-inch',
-                '.input-splice-length-yard',
-                '.input-splice-length-inch',
-                '.input-splice-wastage-yard',
-                '.input-splice-wastage-inch',
-                '.input-damages-yard',
-                '.input-damages-inch'
-            ].join(', ');
-
-            // ---------- Utilitas ----------
-            function esc(value) {
-                return String(value === null || value === undefined ? '' : value)
-                    .replace(/&/g, '&amp;')
-                    .replace(/"/g, '&quot;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;');
-            }
-
-            function numVal(n) {
-                return (n && parseFloat(n) !== 0) ? esc(n) : '';
-            }
-
-            function post(url, data) {
-                return $.ajax({
-                    url: url,
-                    type: 'POST',
-                    data: JSON.stringify(data || {}),
-                    contentType: 'application/json',
-                    dataType: 'json',
-                    headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
-                });
-            }
-
-            function alertBox(icon, title, text, onClose) {
-                swal({
-                    title: title,
-                    text: text,
-                    icon: icon,
-                    buttons: {
-                        confirm: { text: 'Close', value: true, visible: true, closeModal: true }
-                    }
-                }).then(function() {
-                    if (onClose) onClose();
-                });
-            }
-
-            function showError(xhr) {
-                var message = 'An error occurred. Please try again.';
-
-                if (xhr.responseJSON && xhr.responseJSON.errors) {
-                    message = xhr.responseJSON.errors[Object.keys(xhr.responseJSON.errors)[0]][0];
-                } else if (xhr.responseJSON && xhr.responseJSON.message) {
-                    message = xhr.responseJSON.message;
-                }
-
-                $('#loading').hide();
-                alertBox('warning', 'Warning!', message);
-            }
-
-            // ---------- Jam ----------
-            function updateClock() {
-                var formatted = new Date().toLocaleDateString('en-US', {
-                    weekday: 'long',
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric'
-                });
-                var p = formatted.replace(',', '').split(' ');
-                $('#live-date').text(p[0] + ', ' + p[1] + ' ' + p[2] + ' ' + p[3]);
-            }
-            updateClock();
-            setInterval(updateClock, 1000);
-
-            // ---------- Pembatasan input ----------
-            $(document).on('input', INT_SEL, function() {
-                var v = this.value.replace(/[^0-9]/g, '');
-                if (v !== this.value) this.value = v;
-            });
-
-            $(document).on('input', DEC_SEL, function() {
-                var v = this.value.replace(/[^0-9.]/g, '');
-                var dot = v.indexOf('.');
-
-                if (dot !== -1) {
-                    v = v.slice(0, dot + 1) + v.slice(dot + 1).replace(/\./g, '');
-                }
-
-                if (v !== this.value) this.value = v;
-            });
-
-            $(document).on('blur', DEC_SEL, function() {
-                if (this.value === '.') this.value = '';
-            });
-
-            $(document).on('focusin', INT_SEL, function() { this.setAttribute('inputmode', 'numeric'); });
-            $(document).on('focusin', DEC_SEL, function() { this.setAttribute('inputmode', 'decimal'); });
-
-            // Hilangkan tanda merah saat field diisi
-            $(document).on('input', '.lay-input', function() {
-                $(this).parent().find('.lay-input').removeClass('is-invalid');
-            });
-
-            $(document).on('change', '.input-shade-group', function() {
-                $(this).closest('.shade-groups').removeClass('is-invalid-group');
-            });
-
-            // ---------- Play / Pause ----------
-            function setRunning(on) {
-                started = on;
-
-                $('.lay-input, .lay-action, .lay-check').prop('disabled', !on);
-
-                $('[data-field="material_width"], [data-field="material_length"], [data-field="end_loss"]')
-                    .prop('disabled', true);
-
-                $('#topBar').toggleClass('running', on);
-
-                $('#btnPlay').toggleClass('playing', on)
-                    .attr('title', on ? 'Pause' : 'Play')
-                    .html('<i class="bi bi-' + (on ? 'pause' : 'play') + '-fill" style="font-size: 20px;"></i>');
-            }
-
-            $('#btnPlay').on('click', function() {
-                var $btn = $(this).prop('disabled', true);
-                var turningOn = !started;
-
-                if (!turningOn) saveDraft();
-
-                post(turningOn ? urls.play : urls.stop)
-                    .done(function() { setRunning(turningOn); })
-                    .fail(showError)
-                    .always(function() { $btn.prop('disabled', false); });
-            });
-
-            // ---------- Template ----------
-            function yardInch(clsYard, clsInch, value, maxWidth, req) {
-                value = value || {};
-
-                var width = maxWidth > 0
-                    ? 'max-width: ' + maxWidth + 'px;'
-                    : 'min-width: 0; width: 100%; flex: 1;';
-                var r = req ? 'required' : '';
-
-                return `
-                    <input type="text" inputmode="numeric"
-                        class="form-control shadow-none lay-input ${clsYard}"
-                        placeholder="0" value="${numVal(value.yard)}" style="${width}" ${r}>
-                    <span class="text-nowrap me-1" style="font-size: 14px; font-weight: 600; color: #64748b;">- Yard</span>
-                    <input type="text" inputmode="decimal"
-                        class="form-control shadow-none lay-input ${clsInch}"
-                        placeholder="0" value="${numVal(value.inch)}" style="${width}" ${r}>
-                    <span class="text-nowrap" style="font-size: 14px; font-weight: 600; color: #64748b;">- Inch</span>`;
-            }
-
-            function actionButton(cls, color, icon) {
-                return `
-                    <button type="button"
-                        class="btn lay-action ${cls} p-0 border-0 rounded-circle d-inline-flex align-items-center justify-content-center text-white"
-                        style="width: 24px; height: 24px; background-color: ${color}; flex-shrink: 0;">
-                        <i class="bi bi-${icon}-lg" style="font-size: 12px;"></i>
-                    </button>`;
-            }
-
-            function rowActions() {
-                return `
-                    <div class="row-actions d-flex align-items-center gap-1"
-                        style="min-width: 52px; flex-shrink: 0;">
-                    </div>`;
-            }
-
-            function endbitRowTemplate(value) {
-                return `
-                    <div class="endbit-row d-flex align-items-center gap-2" style="width: fit-content; flex-shrink: 0;">
-                        ${yardInch('input-endbit-yard', 'input-endbit-inch', value, 100)}
-                        ${rowActions()}
-                    </div>`;
-            }
-
-            function spliceRowTemplate(splice) {
-                splice = splice || {};
-
-                return `
-                    <div class="splice-row d-flex flex-wrap align-items-end gap-4 px-4 py-3" style="border-bottom: 1px solid #f1f5f9;">
-                        <div style="width: 56px; flex-shrink: 0;">
-                            <label class="form-label mb-2" style="font-size: 14px; font-weight: 600; color: #475569;">Heading</label>
-                            <div class="splice-heading d-flex align-items-center"
-                                style="height: 34px; font-size: 13px; font-weight: 700; color: #1e293b;">1</div>
-                        </div>
-
-                        <div class="flex-grow-1" style="min-width: 200px;">
-                            <label class="form-label mb-2" style="font-size: 14px; font-weight: 600; color: #475569;">Length <span class="text-danger">*</span></label>
-                            <div class="d-flex align-items-center gap-2 w-100">
-                                ${yardInch('input-splice-length-yard', 'input-splice-length-inch', splice.length, 0, true)}
-                            </div>
-                        </div>
-
-                        <div class="flex-grow-1" style="min-width: 200px;">
-                            <label class="form-label mb-2" style="font-size: 14px; font-weight: 600; color: #475569;">Wastage <span class="text-danger">*</span></label>
-                            <div class="d-flex align-items-center gap-2 w-100">
-                                ${yardInch('input-splice-wastage-yard', 'input-splice-wastage-inch', splice.wastage, 0, true)}
-                                ${rowActions()}
-                            </div>
-                        </div>
-                    </div>`;
-            }
-
-            function shadeTemplate(shade, removable) {
-                shade = shade || {};
-
-                // Roll baru: group lay ini tercentang. Data tersimpan: sesuai isi "1,2".
-                var selected = (shade.shade === undefined)
-                    ? [String(DEFAULT_GROUP)]
-                    : String(shade.shade).split(',').map(function(s) { return s.trim(); }).filter(Boolean);
-
-                var groupChecks = GROUP_OPTIONS.length
-                    ? GROUP_OPTIONS.map(function(g) {
-                        return `
-                            <div class="form-check form-check-inline mb-0">
-                                <input class="form-check-input lay-check input-shade-group" type="checkbox"
-                                    value="${esc(g)}" ${selected.indexOf(g) !== -1 ? 'checked' : ''}>
-                                <label class="form-check-label" style="font-size: 14px; color: #475569;">${esc(g)}</label>
-                            </div>`;
-                    }).join('')
-                    : '<span style="font-size: 13px; color: #94a3b8;">No group available</span>';
-
-                var endbits = (shade.endbits_generated && shade.endbits_generated.length)
-                    ? shade.endbits_generated
-                    : [{}];
-                var endbitRows = endbits.map(endbitRowTemplate).join('');
-
-                var removeButton = removable ? `
-                    <div class="d-flex justify-content-end mb-2">
-                        <button type="button" class="btn lay-action btn-remove-shade p-0 border-0 text-danger"
-                            style="font-size: 14px; font-weight: 600;">
-                            <i class="bi bi-trash"></i> Remove Roll
-                        </button>
-                    </div>` : '';
-
-                var itemClass = removable ? 'shade-item pt-4 mt-4' : 'shade-item';
-                var itemStyle = removable ? 'border-top: 1px solid #e2e8f0;' : '';
-
-                return `
-                    <div class="${itemClass}" style="${itemStyle}">
-                        ${removeButton}
-
-                        <div class="row g-4 mb-4">
-                            <div class="col-md-4">
-                                <label class="form-label mb-2" style="font-size: 14px; font-weight: 700; color: #334155;">Shade <span class="text-danger">*</span></label>
-                                <div class="shade-groups d-flex flex-wrap gap-2 align-items-center px-2" style="min-height: 34px;">
-                                    ${groupChecks}
-                                </div>
-                            </div>
-
-                            <div class="col-md-4">
-                                <label class="form-label mb-2" style="font-size: 14px; font-weight: 700; color: #334155;">Actual Plies <span class="text-danger">*</span></label>
-                                <input type="text" inputmode="numeric"
-                                    class="form-control shadow-none lay-input input-actual-plies w-100"
-                                    placeholder="0" value="${numVal(shade.actual_plies)}" required>
-                            </div>
-
-                            <div class="col-md-4">
-                                <label class="form-label mb-2" style="font-size: 14px; font-weight: 700; color: #334155;">Damages</label>
-                                <div class="d-flex align-items-center gap-2 w-75">
-                                    ${yardInch('input-damages-yard', 'input-damages-inch', shade.damages, 0)}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="mb-4">
-                            <label class="form-label mb-2" style="font-size: 14px; font-weight: 700; color: #334155;">Endbits Generated</label>
-                            <div class="endbits-list d-flex flex-wrap align-items-center gap-2">${endbitRows}</div>
-                        </div>
-                    </div>`;
-            }
-
-            // Hanya baris terakhir yang punya tombol: - (jika baris > 1) dan +
-            function syncRowButtons($rows, addClass, removeClass) {
-                $rows.each(function(index) {
-                    var isLast = index === $rows.length - 1;
-                    var $box = $(this).find('.row-actions').empty();
-
-                    if (!isLast) return;
-
-                    var html = '';
-
-                    if ($rows.length > 1) {
-                        html += actionButton(removeClass, '#ef4444', 'dash');
-                    }
-
-                    html += actionButton(addClass, '#3b93b8', 'plus');
-
-                    $box.html(html).find('.lay-action').prop('disabled', !started);
-                });
-            }
-
-            // ---------- Endbits ----------
-            function syncEndbitButtons($list) {
-                syncRowButtons($list.find('.endbit-row'), 'btn-add-endbit', 'btn-remove-endbit');
-            }
-
-            $(document).on('click', '.btn-add-endbit', function() {
-                if (!started) return;
-                var $list = $(this).closest('.endbits-list');
-                $list.append(endbitRowTemplate());
-                syncEndbitButtons($list);
-            });
-
-            $(document).on('click', '.btn-remove-endbit', function() {
-                if (!started) return;
-                var $list = $(this).closest('.endbits-list');
-                $(this).closest('.endbit-row').remove();
-                syncEndbitButtons($list);
-            });
-
-            // ---------- Splice ----------
-            function updateSpliceWastage() {
-                var totalInch = 0;
-
-                $('#spliceList .splice-row').each(function() {
-                    totalInch += (parseFloat($(this).find('.input-splice-wastage-yard').val()) || 0) * 36
-                        + (parseFloat($(this).find('.input-splice-wastage-inch').val()) || 0);
-                });
-
-                $('#sumWastageYard').val(Math.floor(totalInch / 36));
-                $('#sumWastageInch').val(+(totalInch % 36).toFixed(4));
-            }
-
-            function syncSpliceRows() {
-                var $rows = $('#spliceList .splice-row');
-                var total = $rows.length;
-
-                $rows.each(function(index) {
-                    $(this).find('.splice-heading').text(index + 1);
-
-                    var $box = $(this).find('.row-actions').empty();
-
-                    if (index !== total - 1) return;
-
-                    var html = actionButton('btn-remove-splice', '#ef4444', 'dash')
-                             + actionButton('btn-add-splice', '#3b93b8', 'plus');
-
-                    $box.html(html).find('.lay-action').prop('disabled', !started);
-                });
-
-                // Tombol besar hanya muncul saat belum ada row splice
-                $('#addSpliceWrap').toggle(total === 0);
-
-                updateSpliceWastage();
-            }
-
-            function addSpliceRow(splice) {
-                $('#spliceList').append(spliceRowTemplate(splice));
-                syncSpliceRows();
-            }
-
-            $(document).on('input', '.input-splice-wastage-yard, .input-splice-wastage-inch', updateSpliceWastage);
-
-            $('#btnAddSplice').on('click', function() {
-                if (started) addSpliceRow();
-            });
-
-            $(document).on('click', '.btn-add-splice', function() {
-                if (started) addSpliceRow();
-            });
-
-            $(document).on('click', '.btn-remove-splice', function() {
-                if (!started) return;
-
-                $(this).closest('.splice-row').remove();
-
-                syncSpliceRows();
-            });
-
-            // ---------- Roll & plies ----------
-            function updateActualPlies() {
-                var total = 0;
-
-                $('.input-actual-plies').each(function() {
-                    total += parseFloat($(this).val()) || 0;
-                });
-
-                $('#topActualPlies, #summaryActualPlies').text(total);
-                $('#topCutQty').text(totalRatio * total);
-            }
-
-            $(document).on('input', '.input-actual-plies', updateActualPlies);
-
-            function renderShades(list) {
-                $('#shadeContainer').empty();
-
-                list.forEach(function(shade, index) {
-                    $('#shadeContainer').append(shadeTemplate(shade, index > 0));
-                });
-
-                $('.endbits-list').each(function() {
-                    syncEndbitButtons($(this));
-                });
-            }
-
-            $('#btnAddNewShade').on('click', function() {
-                if (!started) return;
-                var $shade = $(shadeTemplate({}, true));
-                $('#shadeContainer').append($shade);
-                syncEndbitButtons($shade.find('.endbits-list'));
-            });
-
-            $(document).on('click', '.btn-remove-shade', function() {
-                if (!started) return;
-                $(this).closest('.shade-item').remove();
-                updateActualPlies();
-            });
-
-            // ---------- Payload ----------
-            function readField(field) {
-                return {
-                    yard: $('[data-field="' + field + '"][data-unit="yard"]').val(),
-                    inch: $('[data-field="' + field + '"][data-unit="inch"]').val()
-                };
-            }
-
-            function collectPayload() {
-                var splices = $('#spliceList .splice-row').map(function() {
-                    var $row = $(this);
-                    return {
-                        length: {
-                            yard: $row.find('.input-splice-length-yard').val(),
-                            inch: $row.find('.input-splice-length-inch').val()
-                        },
-                        wastage: {
-                            yard: $row.find('.input-splice-wastage-yard').val(),
-                            inch: $row.find('.input-splice-wastage-inch').val()
-                        }
-                    };
-                }).get();
-
-                var shades = $('.shade-item').map(function() {
-                    var $item = $(this);
-
-                    var endbits = $item.find('.endbit-row').map(function() {
-                        return {
-                            yard: $(this).find('.input-endbit-yard').val(),
-                            inch: $(this).find('.input-endbit-inch').val()
-                        };
-                    }).get();
-
-                    return {
-                        shade: $item.find('.input-shade-group:checked').map(function() { return this.value; }).get().join(','),
-                        actual_plies: $item.find('.input-actual-plies').val(),
-                        damages: {
-                            yard: $item.find('.input-damages-yard').val(),
-                            inch: $item.find('.input-damages-inch').val()
-                        },
-                        endbits_generated: endbits
-                    };
-                }).get();
-
-                var payload = { splices: splices, shades: shades };
-
-                MEASURE_FIELDS.forEach(function(field) {
-                    payload[field] = readField(field);
-                });
-
-                return payload;
-            }
-
-            // ---------- Draft (hanya di browser, tidak dikirim ke server) ----------
-            function saveDraft() {
-                if (!draftReady) return;
-                try { localStorage.setItem(draftKey, JSON.stringify(collectPayload())); } catch (e) {}
-            }
-
-            function readDraft() {
-                try { return JSON.parse(localStorage.getItem(draftKey) || 'null'); } catch (e) { return null; }
-            }
-
-            function clearDraft() {
-                try { localStorage.removeItem(draftKey); } catch (e) {}
-            }
-
-            $(document).on('input change click', '.lay-input, .lay-action, .lay-check', function() {
-                clearTimeout(draftTimer);
-                draftTimer = setTimeout(saveDraft, 300);
-            });
-
-            // ---------- Validasi ----------
-            function validateForm() {
-                var errors = [];
-
-                $('.lay-input').removeClass('is-invalid');
-                $('.shade-groups').removeClass('is-invalid-group');
-
-                function mark($els, msg) {
-                    $els.addClass('is-invalid');
-                    errors.push({ msg: msg, $el: $els.first() });
-                }
-
-                // Pasangan yard/inch: minimal salah satu terisi
-                function checkPair($yard, $inch, msg) {
-                    var y = $yard.length ? $.trim($yard.val()) : '';
-                    var i = $inch.length ? $.trim($inch.val()) : '';
-
-                    if (y === '' && i === '') {
-                        mark($yard.add($inch), msg);
-                    }
-                }
-
-                ['material_width', 'material_length'].forEach(function(field) {
-                    checkPair(
-                        $('[data-field="' + field + '"][data-unit="yard"]'),
-                        $('[data-field="' + field + '"][data-unit="inch"]'),
-                        FIELD_LABELS[field] + ' is required.'
-                    );
-                });
-
-                $('#spliceList .splice-row').each(function(index) {
-                    var $row = $(this);
-                    var n = index + 1;
-
-                    checkPair(
-                        $row.find('.input-splice-length-yard'),
-                        $row.find('.input-splice-length-inch'),
-                        'Splice ' + n + ': Length is required.'
-                    );
-                    checkPair(
-                        $row.find('.input-splice-wastage-yard'),
-                        $row.find('.input-splice-wastage-inch'),
-                        'Splice ' + n + ': Wastage is required.'
-                    );
-                });
-
-                $('.shade-item').each(function(index) {
-                    var $item = $(this);
-                    var n = index + 1;
-                    var $plies = $item.find('.input-actual-plies');
-
-                    if ($item.find('.input-shade-group:checked').length === 0) {
-                        var $groups = $item.find('.shade-groups').addClass('is-invalid-group');
-                        errors.push({ msg: 'Roll ' + n + ': select at least one group.', $el: $groups });
-                    }
-
-                    if ($.trim($plies.val()) === '') mark($plies, 'Roll ' + n + ': Actual Plies is required.');
-                });
-
-                if (errors.length) {
-                    var first = errors[0];
-                    var text = errors.length > 1
-                        ? first.msg + ' (+' + (errors.length - 1) + ' other fields)'
-                        : first.msg;
-
-                    alertBox('warning', 'Incomplete Data', text, function() {
-                        first.$el.focus();
-                        $('html, body').animate({ scrollTop: first.$el.offset().top - 150 }, 200);
-                    });
-
-                    return false;
-                }
-
-                return true;
-            }
-
-            // ---------- Save ----------
-            $('#btnSaveChanges').on('click', function() {
-                if (!started) return;
-                if (!validateForm()) return;
-
-                var $btn = $(this).prop('disabled', true);
-
-                post(urls.save, collectPayload())
-                    .done(function(res) {
-                        clearDraft();
-                        alertBox('success', 'Success!', 'Data has been successfully saved.', function() {
-                            $('#loading').show();
-                            window.location.href = res.redirect || urls.home;
-                        });
-                    })
-                    .fail(function(xhr) {
-                        showError(xhr);
-                        $btn.prop('disabled', false);
-                    });
-            });
-
-            // ---------- Isi form saat halaman dibuka ----------
-            function fillField(field, value) {
-                value = value || {};
-                $('[data-field="' + field + '"][data-unit="yard"]').val(numVal(value.yard));
-                $('[data-field="' + field + '"][data-unit="inch"]').val(numVal(value.inch));
-            }
-
-            function loadForm() {
-                var isCompleted = !!(saved && saved.status === 'completed');
-
-                if (isCompleted) clearDraft();
-
-                // Lay selesai: data database. Selain itu: draft browser diutamakan.
-                var source = isCompleted ? saved : (readDraft() || saved);
-
-                MEASURE_FIELDS.forEach(function(field) {
-                    var value = source ? source[field] : null;
-
-                    // Kosong dan lay belum selesai: pakai nilai dari index
-                    if (!isCompleted && isEmptyMeasure(value) && DEFAULTS[field]) {
-                        value = DEFAULTS[field];
-                    }
-
-                    fillField(field, value);
-                });
-
-                if (source) {
-                    (source.splices || []).forEach(addSpliceRow);
-                }
-
-                syncSpliceRows();
-                renderShades(source && source.shades && source.shades.length ? source.shades : [{}]);
-                updateSpliceWastage();
-                updateActualPlies();
-
-                setRunning(!!(saved && saved.status === 'running'));
-
-                if (isCompleted) {
-                    $('#btnPlay, #btnSaveChanges, #btnAddNewShade, #addSpliceWrap').hide();
-                }
-
-                draftReady = !isCompleted;
-            }
-
-            loadForm();
-        });
-    </script>
-@endsection
-
-@extends('layouts.masternew')
-@section('extracss')
-    <style>
-        .hover-bg-light:hover {
-            background-color: #eef8fc !important;
-        }
-        .btn-change-table {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 11px 22px;
-            background: linear-gradient(135deg, #4f46e5, #7c3aed);
-            color: #fff !important;
-            font-size: 14px;
-            font-weight: 600;
-            text-decoration: none;
-            border-radius: 10px;
-            border: none;
-            box-shadow: 0 4px 12px rgba(79, 70, 229, .22);
-            transition: all .3s ease;
-        }
-
-        .btn-change-table:hover {
-            background: linear-gradient(135deg, #4338ca, #6d28d9);
-            transform: translateY(-2px);
-            box-shadow: 0 7px 18px rgba(79, 70, 229, .3);
-            color: #fff !important;
-        }
-
-        .btn-change-table .arrow-icon {
-            font-size: 11px;
-            transition: transform .3s ease;
-        }
-
-        .btn-change-table:hover .arrow-icon {
-            transform: translateX(4px);
-        }
-    </style>
-@endsection
-
-@section('content')
-    <div class="container-fluid p-5">
-        <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
-            <div>
-                <h1 class="mb-0" style="font-size: 26px; font-weight: 700; color: #475569;">
-                    <span id="greeting"></span>,
-                    <span style="color: #18009e;">{{ session('user')->name }}</span>
-                </h1>
-                <p class="mb-0" style="font-size: 15px; color: #475569;">
-                    Overview of Activities at
-                    <b>{{ $tableName ?? '-' }}</b>
-                    ({{ str_replace('GMS ', '', session('factoryname')) }})
-                </p>
-            </div>
-            <div class="d-flex align-items-center gap-3">
-                <div class="text-end" style="line-height: 1.2;">
-                    <div style="font-size: 16px; font-weight: 700; color: #475569;"><span id="live-day"></span></div>
-                    <div style="font-size: 15px; color: #64748b;"><span id="live-date"></span></div>
-                </div>
-                <div style="font-size: 38px; font-weight: 700; color: #475569; letter-spacing: 0.5px;">
-                    <span id="live-clock"></span>
-                </div>
-            </div>
-        </div>
-        <a href="{{ route('intellocutlayerman_select_table') }}"
-        class="btn-change-table mb-3">
-            <i class="bi bi-arrow-left-right me-2"></i>
-            Change Table
-        </a>
-
-        @foreach ($data as $d)
-            @php $first = $d->lay_groups->first(); @endphp
-            @continue(!$first)
-
-            <div class="mb-3">
-                <div class="bg-white rounded-3 shadow-sm overflow-hidden hover-bg-light"
-                    role="button"
-                    data-bs-toggle="collapse"
-                    data-bs-target="#orderDetail-{{ $d->id }}"
-                    aria-expanded="false"
-                    aria-controls="orderDetail-{{ $d->id }}">
-                    <div class="d-inline-flex align-items-center text-white"
-                        style="background-color: #18009e; border-bottom-right-radius: 36px; padding: 6px 42px 6px 24px;">
-                        <span style="font-size: 30px; font-weight: 700; line-height: 1;">{{ $d->lay_groups->count() }}</span>
-                        <span class="ms-5" style="font-size: 14px; color: #e2e8f0;">{{ $d->created_at }}</span>
-                    </div>
-
-                    <div class="row g-3 px-4 py-3 align-items-start">
-                        <div class="col-md-4">
-                            <div style="font-size: 14px; color: #64748b; font-weight: bold;">Order</div>
-                            <div style="font-size: 16px; font-weight: 500; color: #475569; line-height: 1.3;">{{ $d->order_number }}</div>
-                        </div>
-                        <div class="col-md-3">
-                            <div style="font-size: 14px; color: #64748b; font-weight: bold;">Style</div>
-                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ $d->style_name }}</div>
-                        </div>
-                        <div class="col-md-3">
-                            <div style="font-size: 14px; color: #64748b; font-weight: bold;">Parts</div>
-                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ $d->lay_groups->pluck('shell_name')->unique()->implode(', ') }}</div>
-                        </div>
-                        <div class="col-md-2">
-                            <div style="font-size: 14px; color: #64748b; font-weight: bold;">Colors</div>
-                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ $d->lay_groups->pluck('color_name')->filter()->unique()->implode(', ') }}</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="collapse" id="orderDetail-{{ $d->id }}">
-                @foreach ($d->lay_groups as $lay => $detail)
-                    <div class="d-flex align-items-stretch pb-3">
-                        <div class="d-flex align-items-center justify-content-center" style="width: 110px; flex-shrink: 0;">
-                            <div class="d-flex flex-column justify-content-between align-items-center py-2"
-                                style="width: 24px; height: 50px; background-color: #dce3ec; border-radius: 12px;">
-                                <span class="rounded-circle" style="width: 12px; height: 12px; background-color: #18009e;"></span>
-                                <span class="rounded-circle" style="width: 5px; height: 5px; background-color: #ffffff;"></span>
-                                <span class="rounded-circle" style="width: 5px; height: 5px; background-color: #ffffff;"></span>
-                                <span class="rounded-circle" style="width: 5px; height: 5px; background-color: #ffffff;"></span>
-                                <span class="rounded-circle" style="width: 12px; height: 12px; background-color: #18009e;"></span>
-                            </div>
-                        </div>
-
-                        <div class="flex-grow-1 d-flex flex-column gap-3 layerman-detail">
-                            <a href="{{ route('intellocutlayerman_lay_started', ['id' => $detail->id]) }}"
-                                class="text-decoration-none btn-page-loading">
-                                <div class="bg-white rounded-3 shadow-sm overflow-hidden d-flex align-items-stretch hover-bg-light">
-                                    <div class="d-flex flex-column justify-content-center align-items-center text-white text-center px-3 py-3"
-                                        style="background-color: #18009e; width: 140px; flex-shrink: 0;">
-                                        <div style="font-size: 20px; font-weight: 700; line-height: 1.1;">L - {{ $lay }}</div>
-                                        <div style="font-size: 15px; font-weight: 600; margin-top: 2px;">GROUP {{ $detail->group }}</div>
-                                    </div>
-
-                                    <div class="row g-2 flex-grow-1 align-items-center px-4 py-3 m-0">
-                                        <div class="col-2">
-                                            <div style="font-size: 14px; color: #64748b; font-weight: bold;">Material Length</div>
-                                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ number_format($detail->marker_length, 4) }}</div>
-                                        </div>
-                                        <div class="col-2">
-                                            <div style="font-size: 14px; color: #64748b; font-weight: bold;">Material Width</div>
-                                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ number_format($detail->width, 4) }}</div>
-                                        </div>
-                                        <div class="col-2">
-                                            <div style="font-size: 14px; color: #64748b; font-weight: bold;">Plies</div>
-                                            <div style="font-size: 16px; font-weight: 500; color: #475569;">{{ $detail->layerman_plies }}/{{ $detail->plies }}</div>
-                                        </div>
-                                        <div class="col-2">
-                                            <div style="font-size: 14px; color: #64748b; font-weight: bold;">Status</div>
-                                            <div style="font-size: 16px; font-weight: 600; color: #475569;">{{ $detail->layerman_status_label }}</div>
-                                        </div>
-                                        <div class="col text-end px-3">
-                                            <div style="font-size: 16px; color: #94a3b8;">
-                                                @foreach ($detail->ratio_size as $items)
-                                                    @php
-                                                        $marker = $items->first()['marker'] ?? '';
-                                                        $sizes  = $items
-                                                            ->map(fn ($item) => $item['ratio'] . '-' . $item['nmsize'])
-                                                            ->implode(' | ');
-                                                    @endphp
-                                                    <span>M{{ $marker }} ({{ $sizes }})</span>
-                                                @endforeach
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </a>
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        @endforeach
-        @unless ($hasActiveLay)
-            <div class="d-flex align-items-center justify-content-center" style="min-height: 40vh;">
-                <div class="text-center p-5" style="max-width: 480px; width: 100%;">
-
-                    {{-- Success Icon --}}
-                    <div class="d-flex align-items-center justify-content-center rounded-circle mx-auto mb-4"
-                        style="width: 100px; height: 100px; background: #dcfce7;">
-                        <i class="bi bi-check2-all"
-                            style="font-size: 58px; color: #16a34a;"></i>
-                    </div>
-
-                    {{-- Title --}}
-                    <h3 class="fw-bold mb-2" style="color: #166534;">
-                        All Lays Completed!
-                    </h3>
-
-                    <hr class="my-3">
-
-                    {{-- Table Information --}}
-                    <p class="text-muted mb-2">
-                        No layers remaining in
-                    </p>
-
-                    <h2 class="fw-bold mb-3" style="color: #334155;">
-                        {{ $tableName ?? 'No Table' }}
-                    </h2>
-
-                </div>
-            </div>
-        @endunless
-    </div>
-    @include('layouts.loading')
-@endsection
-
-@section('extrascript')
-    <script>
-        $(document).ready(function() {
-            $("#layerman-bar-menu").addClass('active');
-
-            function updateClock() {
-                var now = new Date();
-                var formatted = now.toLocaleDateString('en-US', {
-                    weekday: 'long',
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric'
-                });
-                var parts = formatted.replace(',', '').split(' ');
-
-                $('#live-day').text(parts[0]);
-                $('#live-date').text(parts[1] + ' ' + parts[2] + ' ' + parts[3]);
-                $('#live-clock').text(now.toTimeString().slice(0, 8));
-            }
-
-            function updateGreeting() {
-                var hour = new Date().getHours();
-                var greeting = 'Good Night';
-
-                if (hour >= 5 && hour < 11) greeting = 'Good Morning';
-                else if (hour >= 12 && hour < 15) greeting = 'Good Afternoon';
-                else if (hour >= 15 && hour < 18) greeting = 'Good Evening';
-
-                $('#greeting').text(greeting);
-            }
-
-            updateClock();
-            updateGreeting();
-            setInterval(updateClock, 1000);
-            setInterval(updateGreeting, 60000);
-
-            $(document).on('click', '.btn-page-loading', function(e) {
-                e.preventDefault();
-                var url = $(this).attr('href');
-
-                $('#loading').show();
-                setTimeout(function() {
-                    window.location.href = url;
-                }, 100);
-            });
-        });
-    </script>
-@endsection
