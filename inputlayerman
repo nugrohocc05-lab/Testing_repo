@@ -17,6 +17,11 @@
             cursor: not-allowed;
         }
 
+        .lay-input[readonly] {
+            background-color: #e2e4e8 !important;
+            cursor: default;
+        }
+
         .lay-input.is-invalid {
             border-color: #ef4444 !important;
             background-color: #fef2f2 !important;
@@ -35,6 +40,13 @@
             font-size: 12px;
             color: #475569;
             height: 34px;
+        }
+
+        /* Card paling atas tidak perlu garis & jarak atas */
+        #shadeContainer > .shade-item:first-child {
+            border-top: 0 !important;
+            margin-top: 0 !important;
+            padding-top: 0 !important;
         }
 
         .lay-action:disabled {
@@ -203,7 +215,7 @@
         </div>
 
         {{-- Use Endbits --}}
-        <div class="row g-4 mb-4">
+        <div class="row g-4 mb-4" id="endbitCards">
             @foreach (['Suggested' => 'Use Suggested Endbits', 'Other' => 'Use Endbits'] as $key => $title)
                 <div class="col-md-6">
                     <div class="bg-white rounded-3 shadow-sm h-100">
@@ -300,13 +312,13 @@
             var totalRatio = {{ $ratioSize->sum('ratio') }};
             var draftKey   = 'layerman_draft_{{ $header->id }}_{{ $detail->idtable }}_{{ $detail->lay }}_{{ $detail->idshell }}';
 
+            var PLANNED_PLIES = {{ (int) $plannedPlies }};
+
             var started    = false;
             var draftReady = false;
             var draftTimer = null;
 
-            // Use Endbits
-            var usedIds    = [];   // id endbit yang dipilih
-            var endbitData = {};   // id -> data endbit (hasil fetch)
+            var endbitData = {};   // id endbit -> data (hasil fetch)
             var EMPTY_LIST = '<span style="font-size: 12px; color: #94a3b8;">No endbits available</span>';
 
             var MEASURE_FIELDS = ['material_width', 'material_length', 'end_loss'];
@@ -441,11 +453,9 @@
                 $(this).parent().find('.lay-input').removeClass('is-invalid');
             });
 
-            // Group roll berubah: hapus tanda merah, dan pindahkan baris endbit auto-isi ke roll yang cocok
             $(document).on('change', '.input-shade-group', function() {
                 $(this).closest('.shade-groups').removeClass('is-invalid-group');
                 $(this).removeClass('is-invalid');
-                applyUsedEndbits();
             });
 
             // ---------- Play / Pause ----------
@@ -462,6 +472,9 @@
                 $('#btnPlay').toggleClass('playing', on)
                     .attr('title', on ? 'Pause' : 'Play')
                     .html('<i class="bi bi-' + (on ? 'pause' : 'play') + '-fill" style="font-size: 20px;"></i>');
+
+                // Checkbox endbit ikut aktif/nonaktif sesuai status Play
+                syncEndbitChecks();
             }
 
             $('#btnPlay').on('click', function() {
@@ -512,10 +525,19 @@
                     </div>`;
             }
 
-            function endbitRowTemplate(value) {
+            // sourceId diisi untuk baris yang terisi otomatis dari endbit pilihan.
+            // Baris itu terkunci (readonly) dan tidak disimpan sebagai endbit baru.
+            function endbitRowTemplate(value, sourceId) {
+                var attr = sourceId ? ' data-source-id="' + esc(sourceId) + '"' : '';
+                var fields = yardInch('input-endbit-yard', 'input-endbit-inch', value, 100);
+
+                if (sourceId) {
+                    fields = fields.replace(/<input /g, '<input readonly ');
+                }
+
                 return `
-                    <div class="endbit-row d-flex align-items-center gap-2" style="width: fit-content; flex-shrink: 0;">
-                        ${yardInch('input-endbit-yard', 'input-endbit-inch', value, 100)}
+                    <div class="endbit-row d-flex align-items-center gap-2"${attr} style="width: fit-content; flex-shrink: 0;">
+                        ${fields}
                         ${rowActions()}
                     </div>`;
             }
@@ -548,15 +570,30 @@
                     </div>`;
             }
 
+            /**
+             * shade.auto:
+             *   ''           kartu manual (Shade = dropdown group)
+             *   'suggested'  kartu dari 1 endbit Suggested (shade.source_id = id endbit)
+             *   'merged'     kartu gabungan dari Use Endbits (Shade = gabungan, dipisah koma)
+             *
+             * Kartu manual pertama (removable = false) diberi data-base="1".
+             * Kartu ini dihapus saat ada kartu endbit, dan dibuat lagi saat semua endbit dilepas.
+             */
             function shadeTemplate(shade, removable) {
                 shade = shade || {};
+                var auto = shade.auto || '';
 
-                // Roll baru: group lay ini terpilih. Data tersimpan: sesuai isi shade.
+                // Roll baru: group lay ini. Data tersimpan: sesuai isi shade, bisa "1,2".
                 var selected = (shade.shade === undefined)
                     ? [String(DEFAULT_GROUP)]
                     : String(shade.shade).split(',').map(function(s) { return s.trim(); }).filter(Boolean);
 
-                var groupChecks = `
+                // Dropdown hanya untuk kartu manual dengan satu group yang ada di daftar.
+                // Selain itu (otomatis / gabungan koma) tampil sebagai teks terkunci.
+                var useSelect = !auto && (shade.shade === undefined
+                    || (selected.length === 1 && GROUP_OPTIONS.indexOf(selected[0]) !== -1));
+
+                var shadeField = useSelect ? `
                     <select class="form-select shadow-none lay-input input-shade-group"
                         style="width: 100%; min-width: 120px; font-size: 14px;">
                         ${GROUP_OPTIONS.map(function(g) {
@@ -565,14 +602,19 @@
                                     ${esc(g)}
                                 </option>`;
                         }).join('')}
-                    </select>`;
+                    </select>` : `
+                    <input type="text" class="form-control shadow-none lay-input input-shade-group w-100"
+                        value="${esc(selected.join(','))}" placeholder="Auto" readonly>`;
 
                 var endbits = (shade.endbits_generated && shade.endbits_generated.length)
                     ? shade.endbits_generated
                     : [{}];
-                var endbitRows = endbits.map(endbitRowTemplate).join('');
+                var endbitRows = endbits.map(function(v) {
+                    return endbitRowTemplate(v, v.source_id);
+                }).join('');
 
-                var removeButton = removable ? `
+                // Kartu otomatis dihapus lewat uncheck, bukan tombol Remove
+                var removeButton = (removable && !auto) ? `
                     <div class="d-flex justify-content-end mb-2">
                         <button type="button" class="btn lay-action btn-remove-shade p-0 border-0 text-danger"
                             style="font-size: 14px; font-weight: 600;">
@@ -580,18 +622,21 @@
                         </button>
                     </div>` : '';
 
+                var isBase = !removable && !auto;
                 var itemClass = removable ? 'shade-item pt-4 mt-4' : 'shade-item';
                 var itemStyle = removable ? 'border-top: 1px solid #e2e8f0;' : '';
+                var sourceAttr = (auto === 'suggested' && shade.source_id)
+                    ? ' data-source-id="' + esc(shade.source_id) + '"' : '';
 
                 return `
-                    <div class="${itemClass}" style="${itemStyle}">
+                    <div class="${itemClass}" style="${itemStyle}" data-auto="${esc(auto)}"${sourceAttr}${isBase ? ' data-base="1"' : ''}>
                         ${removeButton}
 
                         <div class="row g-4 mb-4">
                             <div class="col-md-4">
                                 <label class="form-label mb-2" style="font-size: 14px; font-weight: 700; color: #334155;">Shade <span class="text-danger">*</span></label>
                                 <div class="shade-groups d-flex flex-wrap gap-2 align-items-center" style="min-height: 34px;">
-                                    ${groupChecks}
+                                    ${shadeField}
                                 </div>
                             </div>
 
@@ -638,9 +683,10 @@
             }
 
             // ---------- Endbits Generated ----------
-            // Baris auto-isi (.endbit-from-used) tidak ikut dihitung tombol +/-
+            // Baris yang terisi dari endbit pilihan (data-source-id) tidak punya tombol +/-.
+            // Baris manual tetap bisa ditambah/dihapus.
             function syncEndbitButtons($list) {
-                syncRowButtons($list.find('.endbit-row:not(.endbit-from-used)'), 'btn-add-endbit', 'btn-remove-endbit');
+                syncRowButtons($list.find('.endbit-row:not([data-source-id])'), 'btn-add-endbit', 'btn-remove-endbit');
             }
 
             $(document).on('click', '.btn-add-endbit', function() {
@@ -658,75 +704,232 @@
             });
 
             // ---------- Use Endbits ----------
+            // Status pilihan dibaca dari DOM, jadi otomatis ikut draft dan tidak bisa selisih.
+            function sugIds() {
+                return $('.shade-item[data-auto="suggested"]').map(function() {
+                    return parseInt($(this).attr('data-source-id'), 10);
+                }).get();
+            }
+
+            function mergeIds() {
+                return $('.shade-item[data-auto="merged"] .endbit-row[data-source-id]').map(function() {
+                    return parseInt($(this).attr('data-source-id'), 10);
+                }).get();
+            }
+
+            function usedIds() {
+                return sugIds().concat(mergeIds());
+            }
+
             function fmtLen(e) {
                 return (parseFloat(e.length_yard) || 0) + ' yd ' + (parseFloat(e.length_inch) || 0) + ' in';
             }
 
-            function endbitCheckHtml(e) {
+            function markerText(e) {
+                return (e.marker !== null && e.marker !== undefined && e.marker !== '') ? 'M' + e.marker : '-';
+            }
+
+            function endbitCheckHtml(e, cls, checkedIds) {
                 return `
                     <label class="d-flex align-items-center gap-2 px-2 py-1 mb-1 rounded-1" style="font-size: 13px; color: #475569; cursor: pointer;">
-                        <input type="checkbox" class="form-check-input lay-check chk-use-endbit" value="${e.id}"
-                            ${usedIds.indexOf(e.id) !== -1 ? 'checked' : ''} ${started ? '' : 'disabled'}>
-                        <span>L-${esc(e.lay)} · ${esc(e.part)} · Shade ${esc(e.shade)} · ${fmtLen(e)}</span>
+                        <input type="checkbox" class="form-check-input lay-check ${cls}" value="${e.id}"
+                            ${checkedIds.indexOf(e.id) !== -1 ? 'checked' : ''} ${started ? '' : 'disabled'}>
+                        <span>L-${esc(e.lay)} · ${esc(e.part)} · ${esc(markerText(e))} · Shade ${esc(e.shade)} · ${fmtLen(e)}</span>
                     </label>`;
             }
 
-            function usedEndbitRowTemplate(e) {
-                return `
-                    <div class="endbit-row endbit-from-used d-flex align-items-center gap-2"
-                        data-source-id="${e.id}" style="width: fit-content; flex-shrink: 0;"
-                        title="From L-${esc(e.lay)} · Shade ${esc(e.shade)}">
-                        <input type="text" class="form-control shadow-none lay-calc" style="max-width: 100px;" value="${numVal(e.length_yard)}" readonly>
-                        <span class="text-nowrap me-1" style="font-size: 14px; font-weight: 600; color: #64748b;">- Yard</span>
-                        <input type="text" class="form-control shadow-none lay-calc" style="max-width: 100px;" value="${numVal(e.length_inch)}" readonly>
-                        <span class="text-nowrap" style="font-size: 14px; font-weight: 600; color: #64748b;">- Inch</span>
-                        <span class="badge bg-secondary">L-${esc(e.lay)}</span>
-                        <div style="min-width: 52px; flex-shrink: 0;"></div>
-                    </div>`;
-            }
+            // Samakan status centang dan counter dengan kartu yang ada di DOM.
+            // Dua daftar tidak punya endbit yang sama, jadi tidak perlu saling mengunci.
+            function syncEndbitChecks() {
+                var sug = sugIds();
+                var mer = mergeIds();
 
-            function updateEndbitCounts() {
-                ['Suggested', 'Other'].forEach(function(key) {
-                    var $all = $('#list' + key + ' .chk-use-endbit');
-                    $('#cnt' + key).text($all.filter(':checked').length + '/' + $all.length);
-                });
-            }
-
-            // Roll tujuan: yang group-nya sama dengan shade endbit, kalau tidak ada: roll pertama
-            function targetList(shadeStr) {
-                var tokens = String(shadeStr || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
-                var $target = null;
-
-                $('.shade-item').each(function() {
-                    var group = String($(this).find('.input-shade-group').val() || '');
-                    if (!$target && tokens.indexOf(group) !== -1) {
-                        $target = $(this);
-                    }
+                $('.chk-sug').each(function() {
+                    $(this).prop('checked', sug.indexOf(parseInt(this.value, 10)) !== -1)
+                        .prop('disabled', !started);
                 });
 
-                return ($target || $('.shade-item').first()).find('.endbits-list');
-            }
-
-            // Isi otomatis baris Endbits Generated dari endbit yang dipilih
-            function applyUsedEndbits() {
-                $('.endbit-from-used').remove();
-
-                usedIds.slice().reverse().forEach(function(id) {
-                    var e = endbitData[id];
-                    if (e) targetList(e.shade).prepend(usedEndbitRowTemplate(e));
+                $('.chk-merge').each(function() {
+                    $(this).prop('checked', mer.indexOf(parseInt(this.value, 10)) !== -1)
+                        .prop('disabled', !started);
                 });
 
-                $('.endbits-list').each(function() { syncEndbitButtons($(this)); });
+                $('#cntSuggested').text(sug.length + '/' + $('.chk-sug').length);
+                $('#cntOther').text(mer.length + '/' + $('.chk-merge').length);
             }
+
+            // Shade kartu gabungan = gabungan shade semua endbit terpilih, unik, dipisah koma
+            function refreshMergedShade($card) {
+                var out = [];
+
+                $card.find('.endbit-row[data-source-id]').each(function() {
+                    var e = endbitData[parseInt($(this).attr('data-source-id'), 10)];
+                    if (!e) return;
+
+                    String(e.shade).split(',').forEach(function(t) {
+                        t = t.trim();
+                        if (t && out.indexOf(t) === -1) out.push(t);
+                    });
+                });
+
+                $card.find('.input-shade-group').val(out.join(','));
+            }
+
+            // --- Suggested: 1 endbit = 1 kartu Shade ---
+            function addSuggestedCard(id) {
+                var e = endbitData[id];
+                if (!e) return;
+                if ($('.shade-item[data-auto="suggested"][data-source-id="' + id + '"]').length) return;
+
+                var $card = $(shadeTemplate({
+                    auto: 'suggested',
+                    source_id: id,
+                    shade: e.shade,
+                    endbits_generated: [
+                        { yard: e.length_yard, inch: e.length_inch, source_id: id },
+                        {}
+                    ]
+                }, true));
+
+                $('#shadeContainer').append($card);
+                syncEndbitButtons($card.find('.endbits-list'));
+            }
+
+            function removeSuggestedCard(id) {
+                $('.shade-item[data-auto="suggested"][data-source-id="' + id + '"]').remove();
+            }
+
+            // --- Use Endbits: semua pilihan masuk ke 1 kartu ---
+            function addToMerged(id) {
+                var e = endbitData[id];
+                if (!e) return;
+
+                var $card = $('.shade-item[data-auto="merged"]');
+
+                if (!$card.length) {
+                    $card = $(shadeTemplate({ auto: 'merged', shade: '', endbits_generated: [{}] }, true));
+                    $('#shadeContainer').append($card);
+                }
+
+                var $list = $card.find('.endbits-list');
+
+                if ($list.find('.endbit-row[data-source-id="' + id + '"]').length) return;
+
+                var row = endbitRowTemplate({ yard: e.length_yard, inch: e.length_inch }, id);
+                var $firstManual = $list.find('.endbit-row:not([data-source-id])').first();
+
+                if ($firstManual.length) {
+                    $firstManual.before(row);
+                } else {
+                    $list.append(row);
+                }
+
+                syncEndbitButtons($list);
+                refreshMergedShade($card);
+            }
+
+            function removeFromMerged(id) {
+                var $card = $('.shade-item[data-auto="merged"]');
+                if (!$card.length) return;
+
+                $card.find('.endbit-row[data-source-id="' + id + '"]').remove();
+
+                if (!$card.find('.endbit-row[data-source-id]').length) {
+                    $card.remove();
+                    return;
+                }
+
+                syncEndbitButtons($card.find('.endbits-list'));
+                refreshMergedShade($card);
+            }
+
+            // Ada card endbit  -> card manual pertama dihapus.
+            // Tidak ada        -> card manual pertama dibuat lagi.
+            function ensureBaseCard() {
+                var hasAuto = $('.shade-item[data-auto="suggested"], .shade-item[data-auto="merged"]').length > 0;
+                var $base = $('.shade-item[data-base="1"]');
+
+                if (hasAuto && $base.length) {
+                    $base.remove();
+                } else if (!hasAuto && !$base.length) {
+                    var $card = $(shadeTemplate({}, false));
+                    $('#shadeContainer').prepend($card);
+                    syncEndbitButtons($card.find('.endbits-list'));
+                }
+            }
+
+            function afterEndbitChange() {
+                ensureBaseCard();
+                syncEndbitChecks();
+                updateActualPlies();
+            }
+
+            $(document).on('change', '.chk-sug', function() {
+                if (!started) return;
+
+                var id = parseInt(this.value, 10);
+
+                if (this.checked) addSuggestedCard(id);
+                else removeSuggestedCard(id);
+
+                afterEndbitChange();
+            });
+
+            $(document).on('change', '.chk-merge', function() {
+                if (!started) return;
+
+                var id = parseInt(this.value, 10);
+
+                if (this.checked) addToMerged(id);
+                else removeFromMerged(id);
+
+                afterEndbitChange();
+            });
 
             function renderEndbitLists(list) {
                 var sug = list.filter(function(e) { return e.suggested; });
+                var sugChecked = sugIds();
+                var merChecked = mergeIds();
 
-                $('#listSuggested').html(sug.length ? sug.map(endbitCheckHtml).join('') : EMPTY_LIST);
-                // Use Endbits = semua endbit satu order (termasuk yang Suggested)
-                $('#listOther').html(list.length ? list.map(endbitCheckHtml).join('') : EMPTY_LIST);
+                $('#listSuggested').html(sug.length
+                    ? sug.map(function(e) { return endbitCheckHtml(e, 'chk-sug', sugChecked); }).join('')
+                    : EMPTY_LIST);
 
-                updateEndbitCounts();
+                // Use Endbits = endbit satu order yang TIDAK masuk Suggested
+                var oth = list.filter(function(e) { return !e.suggested; });
+
+                $('#listOther').html(oth.length
+                    ? oth.map(function(e) { return endbitCheckHtml(e, 'chk-merge', merChecked); }).join('')
+                    : EMPTY_LIST);
+
+                syncEndbitChecks();
+            }
+
+            // Buang kartu/baris yang endbit sumbernya sudah tidak tersedia (diambil lay lain)
+            function pruneMissing() {
+                var removed = false;
+
+                sugIds().forEach(function(id) {
+                    if (!endbitData[id]) {
+                        removeSuggestedCard(id);
+                        removed = true;
+                    }
+                });
+
+                mergeIds().forEach(function(id) {
+                    if (!endbitData[id]) {
+                        removeFromMerged(id);
+                        removed = true;
+                    }
+                });
+
+                if (removed) {
+                    ensureBaseCard();
+                    updateActualPlies();
+                    if (started) {
+                        alertBox('warning', 'Warning!', 'Some selected endbits are no longer available and were removed.');
+                    }
+                }
             }
 
             function loadEndbits() {
@@ -735,34 +938,14 @@
                         endbitData = {};
                         (res.endbits || []).forEach(function(e) { endbitData[e.id] = e; });
 
-                        // Buang pilihan yang sudah tidak tersedia
-                        var before = usedIds.length;
-                        usedIds = usedIds.filter(function(id) { return !!endbitData[id]; });
-
-                        if (started && usedIds.length < before) {
-                            alertBox('warning', 'Warning!', 'Some selected endbits are no longer available.');
-                        }
-
+                        pruneMissing();
                         renderEndbitLists(res.endbits || []);
-                        applyUsedEndbits();
                     })
                     .fail(showError);
             }
 
             $(document).on('click', '.btn-refresh-endbits', function() {
                 if (started) loadEndbits();
-            });
-
-            $(document).on('change', '.chk-use-endbit', function() {
-                // Endbit yang sama bisa ada di dua kartu: samakan statusnya
-                $('.chk-use-endbit[value="' + this.value + '"]').prop('checked', this.checked);
-
-                // Hilangkan id ganda karena checkbox yang sama muncul di dua kartu
-                var ids = $('.chk-use-endbit:checked').map(function() { return parseInt(this.value, 10); }).get();
-                usedIds = ids.filter(function(id, i) { return ids.indexOf(id) === i; });
-
-                updateEndbitCounts();
-                applyUsedEndbits();
             });
 
             // ---------- Splice ----------
@@ -841,8 +1024,11 @@
             function renderShades(list) {
                 $('#shadeContainer').empty();
 
+                // Kalau sudah ada card endbit, tidak ada card manual pertama
+                var hasAuto = list.some(function(s) { return !!s.auto; });
+
                 list.forEach(function(shade, index) {
-                    $('#shadeContainer').append(shadeTemplate(shade, index > 0));
+                    $('#shadeContainer').append(shadeTemplate(shade, hasAuto || index > 0));
                 });
 
                 $('.endbits-list').each(function() {
@@ -855,14 +1041,12 @@
                 var $shade = $(shadeTemplate({}, true));
                 $('#shadeContainer').append($shade);
                 syncEndbitButtons($shade.find('.endbits-list'));
-                applyUsedEndbits();
             });
 
             $(document).on('click', '.btn-remove-shade', function() {
                 if (!started) return;
                 $(this).closest('.shade-item').remove();
                 updateActualPlies();
-                applyUsedEndbits();
             });
 
             // ---------- Payload ----------
@@ -891,16 +1075,18 @@
                 var shades = $('.shade-item').map(function() {
                     var $item = $(this);
 
-                    // Baris auto-isi tidak dikirim sebagai endbit baru, hanya sebagai used_endbits
-                    var endbits = $item.find('.endbit-row:not(.endbit-from-used)').map(function() {
+                    var endbits = $item.find('.endbit-row').map(function() {
                         return {
                             yard: $(this).find('.input-endbit-yard').val(),
-                            inch: $(this).find('.input-endbit-inch').val()
+                            inch: $(this).find('.input-endbit-inch').val(),
+                            source_id: $(this).attr('data-source-id') || ''
                         };
                     }).get();
 
                     return {
                         shade: $item.find('.input-shade-group').val() || '',
+                        auto: $item.attr('data-auto') || '',
+                        source_id: $item.attr('data-source-id') || '',
                         actual_plies: $item.find('.input-actual-plies').val(),
                         damages: {
                             yard: $item.find('.input-damages-yard').val(),
@@ -910,7 +1096,7 @@
                     };
                 }).get();
 
-                var payload = { splices: splices, shades: shades, used_endbits: usedIds };
+                var payload = { splices: splices, shades: shades, used_endbits: usedIds() };
 
                 MEASURE_FIELDS.forEach(function(field) {
                     payload[field] = readField(field);
@@ -984,6 +1170,8 @@
                     );
                 });
 
+                var blankPlies = false;
+
                 $('.shade-item').each(function(index) {
                     var $item = $(this);
                     var n = index + 1;
@@ -991,11 +1179,28 @@
 
                     if (!$item.find('.input-shade-group').val()) {
                         var $groups = $item.find('.shade-groups').addClass('is-invalid-group');
-                        errors.push({ msg: 'Roll ' + n + ': select a group.', $el: $groups });
+                        errors.push({ msg: 'Roll ' + n + ': Shade is required.', $el: $groups });
                     }
 
-                    if ($.trim($plies.val()) === '') mark($plies, 'Roll ' + n + ': Actual Plies is required.');
+                    if ($.trim($plies.val()) === '') {
+                        blankPlies = true;
+                        mark($plies, 'Roll ' + n + ': Actual Plies is required.');
+                    }
                 });
+
+                // Total Actual Plies semua roll harus sama dengan Planned Plies
+                if (!blankPlies && PLANNED_PLIES > 0) {
+                    var totalPlies = 0;
+
+                    $('.input-actual-plies').each(function() {
+                        totalPlies += parseInt($(this).val(), 10) || 0;
+                    });
+
+                    if (totalPlies !== PLANNED_PLIES) {
+                        mark($('.input-actual-plies'),
+                            'Total Actual Plies (' + totalPlies + ') must equal Planned Plies (' + PLANNED_PLIES + ').');
+                    }
+                }
 
                 if (errors.length) {
                     var first = errors[0];
@@ -1070,16 +1275,14 @@
                 updateSpliceWastage();
                 updateActualPlies();
 
-                // Endbit yang dipilih sebelumnya (dari database atau draft)
-                usedIds = (source && source.used_endbits) ? source.used_endbits.map(Number) : [];
-
                 setRunning(!!(saved && saved.status === 'running'));
 
                 if (isCompleted) {
-                    $('#btnPlay, #btnSaveChanges, #btnAddNewShade, #addSpliceWrap, .btn-refresh-endbits').hide();
+                    $('#btnPlay, #btnSaveChanges, #btnAddNewShade, #addSpliceWrap, #endbitCards').hide();
+                } else {
+                    // Pilihan endbit dipulihkan dari kartu draft (data-auto / data-source-id)
+                    loadEndbits();
                 }
-
-                loadEndbits();
 
                 draftReady = !isCompleted;
             }
