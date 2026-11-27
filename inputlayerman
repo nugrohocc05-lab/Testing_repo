@@ -1,24 +1,31 @@
-// Kolom dan nilai status di tabel intellocut_header. Sesuaikan dengan database.
-private const HEADER_STATUS_COLUMN = 'status';
-private const HEADER_STATUS_DONE   = 'completed';
 
-// Kalau semua lay di order ini sudah selesai, tandai header completed
-$this->completeHeaderIfFinished($header);
-
-// Header ditandai completed hanya kalau SEMUA baris shell detail order ini sudah selesai.
-private function completeHeaderIfFinished($header)
+// Gabungan shade dari semua card, unik, dipisah koma. Contoh: "1,2"
+// Card dengan Actual Plies 0 tidak dihitung.
+private function shadeText(Request $request)
 {
-    $shellHeaderIds = IntellocutShellHeader::where('idheader', $header->id)->pluck('id');
+    $shades = [];
 
-    $hasUnfinished = IntellocutShellDetail::whereIn('idshellheader', $shellHeaderIds)
-        ->whereNull('lays_completed')
-        ->exists();
+    foreach ($request->input('shades', []) as $row) {
+        if ((int) data_get($row, 'actual_plies', 0) <= 0) {
+            continue;
+        }
 
-    if ($hasUnfinished) {
-        return;
+        foreach (explode(',', (string) data_get($row, 'shade', '')) as $s) {
+            $s = trim($s);
+
+            if ($s !== '' && !in_array($s, $shades, true)) {
+                $shades[] = $s;
+            }
+        }
     }
 
-    IntellocutHeader::where('id', $header->id)
-        ->update([self::HEADER_STATUS_COLUMN => self::HEADER_STATUS_DONE]);
+    return implode(',', $shades);
 }
+
+$this->partDetailsQuery($header, $detail)
+    ->update([
+        'actual_plies'   => $lay->actual_plies,
+        'shade'          => $this->shadeText($request),
+        'lays_completed' => now(),
+    ]);
 
